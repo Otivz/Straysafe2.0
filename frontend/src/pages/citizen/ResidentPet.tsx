@@ -4,6 +4,8 @@ import axios from 'axios';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
+import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
+import { type PetRecord } from '../../components/PetRecords/types';
 
 const ResidentPet = () => {
     const navigate = useNavigate();
@@ -12,6 +14,29 @@ const ResidentPet = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [pets, setPets] = useState<any[]>([]);
     const [editingPetId, setEditingPetId] = useState<number | null>(null);
+    const [selectedPet, setSelectedPet] = useState<PetRecord | null>(null);
+
+    const transformToPetRecord = (pet: any): PetRecord => {
+        let statusMap: any = {
+            'Healthy': 'VACCINATED',
+            'Under Treatment': 'MEDICAL ALERT',
+            'Critical': 'MEDICAL ALERT'
+        };
+        return {
+            id: pet.pet_id?.toString() || '0',
+            name: pet.pet_name || 'Unknown',
+            gender: pet.gender || 'Male',
+            age: pet.estimated_age || 'Unknown',
+            breed: pet.breed || pet.pet_type || 'Unknown',
+            species: pet.pet_type || 'Unknown',
+            ownerName: currentUser ? currentUser.name : 'Unknown Owner',
+            ownerEmail: currentUser ? currentUser.email : 'No Email',
+            idNumber: `P-${(pet.pet_id || 0).toString().padStart(5, '0')}`,
+            status: statusMap[pet.status] || 'PENDING DOCS',
+            avatar: pet.photo_url || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?q=80&w=400&auto=format&fit=crop',
+            weight: pet.weight || 'Unknown'
+        };
+    };
 
     const [formData, setFormData] = useState({
         name: '',
@@ -54,22 +79,6 @@ const ResidentPet = () => {
             (pet.pet_type || '').toLowerCase().includes(query)
         );
     });
-
-    const handleEditClick = (pet: any) => {
-        setFormData({
-            name: pet.pet_name,
-            species: pet.pet_type,
-            breed: pet.breed || '',
-            gender: pet.gender || 'Male',
-            color: pet.color_markings || '',
-            age: pet.estimated_age || '',
-            status: pet.status || 'Healthy',
-            condition: pet.health_condition || '',
-            mediaFiles: []
-        });
-        setEditingPetId(pet.pet_id);
-        setIsAddPetModalOpen(true);
-    };
 
     const handleDeletePet = async (id: number) => {
         if (window.confirm('Are you sure you want to remove this pet?')) {
@@ -258,10 +267,10 @@ const ResidentPet = () => {
                                     </div>
                                     <div className="pt-4 flex gap-3 border-t border-gray-50">
                                         <button 
-                                            onClick={() => handleEditClick(pet)}
+                                            onClick={() => setSelectedPet(transformToPetRecord(pet))}
                                             className="flex-1 py-3 bg-orange-50 text-[#F97316] text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-orange-100 transition-colors"
                                         >
-                                            Update Records
+                                            View Profile
                                         </button>
                                         <button 
                                             onClick={() => handleDeletePet(pet.pet_id)}
@@ -426,6 +435,15 @@ const ResidentPet = () => {
                 onSearchClick={() => setIsMobileSearchOpen(true)}
                 onAddReportClick={() => navigate('/resident-home', { state: { openAddModal: true, from: '/resident/pets' } })}
             />
+
+            {/* Centered Modal Popup */}
+            {selectedPet && (
+                <div className="fixed inset-0 z-[400] flex items-center justify-center p-6 sm:p-12 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="w-full max-w-6xl rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-300 bg-white overflow-hidden flex flex-col max-h-[90vh]">
+                        <PetDetailPanel pet={selectedPet} onClose={() => setSelectedPet(null)} hideRegisteredPets={true} />
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

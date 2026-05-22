@@ -508,7 +508,16 @@ const BrgyRescueRequests = () => {
                                         { label: 'Condition', value: viewingRequest.report?.condition || 'Unknown', color: 'red' },
                                         { label: 'Priority', value: viewingRequest.report?.priority_level || 'Normal', color: 'orange' },
                                         { label: 'Count', value: viewingRequest.report?.animal_count || '1', color: 'gray' }
-                                    ].map((spec, i) => (
+                                    ].filter(spec => {
+                                        if (spec.label === 'Animal' && viewingRequest.report?.ai_animal_type) {
+                                            return viewingRequest.report.ai_animal_type.toLowerCase() !== viewingRequest.report.animal_type?.toLowerCase();
+                                        }
+                                        if (spec.label === 'Priority' && viewingRequest.report?.ai_suggested_priority) {
+                                            const cleanPrio = (p: string) => p.toLowerCase().replace('priority', '').replace('level', '').trim();
+                                            return cleanPrio(viewingRequest.report.ai_suggested_priority) !== cleanPrio(viewingRequest.report.priority_level);
+                                        }
+                                        return true;
+                                    }).map((spec, i) => (
                                         <div key={i} className="bg-white border border-gray-100 p-4 rounded-2xl">
                                             <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.15em] mb-1">{spec.label}</p>
                                             <p className={`text-xs font-black text-gray-900 uppercase tracking-widest`}>{spec.value}</p>

@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import Button from '../Button';
+
 import { type PetRecord } from './types';
 
 interface PetDetailPanelProps {
     pet: PetRecord | null;
     onClose?: () => void;
+    hideRegisteredPets?: boolean;
 }
 
-const PetDetailPanel: React.FC<PetDetailPanelProps> = ({ pet, onClose }) => {
+const PetDetailPanel: React.FC<PetDetailPanelProps> = ({ pet, onClose, hideRegisteredPets = false }) => {
     const [activeTab, setActiveTab] = useState<'vaccination' | 'case' | 'ownership'>('vaccination');
 
     if (!pet) return null;
@@ -66,12 +67,14 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({ pet, onClose }) => {
                         </div>
 
                         {/* Contact Button */}
+                        {!hideRegisteredPets && (
                         <button className="w-full py-5 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-orange-900/10 flex items-center justify-center gap-3 transition-all">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                             </svg>
                             Contact Owner
                         </button>
+                        )}
 
                     </div>
                 </div>
@@ -79,7 +82,9 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({ pet, onClose }) => {
                 {/* Tabs & Content */}
                 <div className="space-y-10">
                     <div className="flex items-center gap-12 border-b border-gray-100">
-                        {['Vaccination', 'Case History', 'Ownership'].map((tab) => (
+                        {['Vaccination', 'Case History', 'Ownership']
+                            .filter(tab => !(hideRegisteredPets && tab === 'Ownership'))
+                            .map((tab) => (
                             <button 
                                 key={tab}
                                 onClick={() => setActiveTab(tab.toLowerCase().split(' ')[0] as any)}
@@ -243,6 +248,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({ pet, onClose }) => {
                                 </div>
 
                                 {/* Registered Pets Section */}
+                                {!hideRegisteredPets && (
                                 <div className="space-y-8">
                                     <div className="flex justify-between items-center">
                                         <h4 className="text-2xl font-black text-gray-900 tracking-tight">Registered Pets</h4>
@@ -292,6 +298,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({ pet, onClose }) => {
                                         </div>
                                     </div>
                                 </div>
+                                )}
                             </div>
                         )}
                     </div>
