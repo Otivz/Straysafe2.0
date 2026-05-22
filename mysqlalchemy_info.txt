@@ -1,0 +1,18 @@
+# Database Stack: MySQLAlchemy (SQLAlchemy + MySQL)
+
+You are using **SQLAlchemy** as your Object Relational Mapper (ORM) on top of a **MySQL** database. This combination is often referred to as "MySQLAlchemy" in this project context to highlight the tight integration.
+
+### Original Plan vs. Current Implementation
+- **Original Plan:** MySQL only (Direct SQL queries).
+- **Current implementation:** MySQL + SQLAlchemy (ORM).
+
+### Why SQLAlchemy is used:
+1. **Abstraction:** You can interact with the database using Python objects (Models) instead of writing raw SQL strings for every operation.
+2. **Safety:** SQLAlchemy handles SQL injection protection and parameter binding automatically.
+3. **Session Management:** It manages database connections and transactions efficiently via `SessionLocal`.
+4. **Validation:** It works seamlessly with **Pydantic** for data validation.
+
+### Stack Components:
+- **Engine:** `mysql+pymysql` (Tells SQLAlchemy to use the PyMySQL driver to talk to MySQL).
+- **Driver:** `PyMySQL` (The actual library that connects to the MySQL server).
+- **ORM:** `SQLAlchemy` (The layer that maps your Python classes to MySQL tables).
