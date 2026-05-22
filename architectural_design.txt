@@ -1,0 +1,74 @@
+STRAYSAFE: SYSTEM ARCHITECTURAL DESIGN
+==========================================
+Capstone Project - Chapter 2: Technical Specification
+
+1. OVERVIEW
+-----------
+StraySafe is designed as a multi-tier web application using a decoupled Client-Server architecture. The system facilitates real-time incident reporting, rescue coordination, and data visualization for stray animal management within local communities.
+
+2. SYSTEM ARCHITECTURE
+----------------------
+The system follows a 3-tier architecture:
+- Presentation Tier (Frontend): React-based Web Application.
+- Logic Tier (Backend): FastAPI RESTful API.
+- Data Tier (Database): MySQL Relational Database.
+
+3. FRONTEND ARCHITECTURE (Presentation Layer)
+---------------------------------------------
+Built using React 19 and Vite for high-performance rendering and development efficiency.
+
+- Framework: React (TypeScript)
+- Styling: Tailwind CSS 4 (Utility-first design for responsive UI)
+- State Management: React Hooks (useState, useEffect) for component-level state and Context API for global authentication state.
+- Navigation: React Router DOM (Role-based protected routes).
+- Mapping Engine: Leaflet.js and React-Leaflet for interactive incident maps and heatmaps.
+- API Client: Axios (Centralized interceptors for handling JWT authorization headers).
+
+Key Components:
+- Resident Dashboard: Incident reporting and status tracking.
+- Staff Dashboard: Rescue request management and personnel assignment.
+- Admin Panel: System-wide analytics, user management, and configuration.
+- Shared Components: Navigation bars, sidebars, interactive maps, and data tables.
+
+4. BACKEND ARCHITECTURE (Application Layer)
+-------------------------------------------
+Built using FastAPI (Python 3.12+) to provide a high-performance, asynchronous REST API.
+
+- Web Framework: FastAPI (Asynchronous request handling).
+- ORM: SQLAlchemy 2.0 (Relational mapping for MySQL).
+- Data Validation: Pydantic v2 (Strict schema enforcement for incoming/outgoing data).
+- Authentication: JWT (JSON Web Tokens) with Jose and Passlib (Bcrypt) for secure, stateless session management.
+- Media Management: Integration with Cloudinary SDK for cloud-based storage of incident evidence (images/videos).
+
+Module Structure:
+- main.py: API entry point and middleware configuration.
+- routers/: Endpoint definitions grouped by feature (reports, users, rescues).
+- models/: SQLAlchemy database schemas.
+- schemas/: Pydantic models for request/response validation.
+- core/: Security configurations and shared utilities.
+
+5. DATABASE DESIGN (Data Layer)
+-------------------------------
+A relational MySQL database is utilized to ensure data integrity and complex relationship management.
+
+Primary Entities:
+- Users: Stores credentials and roles (Admin, Barangay Staff, Leader, Resident).
+- Reports: Stores incident data (location, animal type, condition, priority).
+- RescueRequests: Links reports to operational tasks.
+- StatusHistory: Tracks the lifecycle of reports for transparency.
+- Media: Stores metadata and URLs for evidence files.
+
+6. INTEGRATION & FLOW
+---------------------
+1. Client Request: User interacts with the React UI (e.g., submits a report).
+2. API Gateway: Axios sends an HTTP request with a JWT token to the FastAPI backend.
+3. Logic Processing: FastAPI validates the request, processes business logic, and interacts with MySQL via SQLAlchemy.
+4. Response: Backend returns JSON data; React updates the Virtual DOM to reflect changes.
+5. Third-Party Services: Map tiles are served via OpenStreetMap; images are uploaded/fetched via Cloudinary.
+
+7. SECURITY DESIGN
+------------------
+- Authentication: Role-Based Access Control (RBAC) enforced at both frontend and backend levels.
+- Encryption: Passwords hashed using Bcrypt; sensitive communication secured via HTTPS.
+- Integrity: Pydantic models prevent injection and malformed data from reaching the database.
+- Authorization: JWT tokens ensure that only verified users can access specific operational endpoints.

@@ -1,0 +1,48 @@
+# StraySafe Full Project Structure (Consolidated)
+
+Straysafe/
+├── .venv/                      # Shared Virtual Environment (Consolidated)
+├── .vscode/                    # VS Code workspace settings
+│   └── settings.json           # Python interpreter and editor config
+├── backend/                    # Python FastAPI Backend
+│   ├── app/                    # Main Application Logic
+│   │   ├── database/           # DB Session management
+│   │   ├── models/             # SQLAlchemy Models
+│   │   ├── routes/             # API Endpoints
+│   │   ├── schemas/            # Pydantic Validation
+│   │   ├── utils/              # Helper functions
+│   │   └── main.py             # FastAPI entry point
+│   ├── scripts/                # Database and Setup Scripts
+│   ├── uploads/                # Local media storage
+│   └── requirements.txt        # Backend dependencies
+├── frontend/                   # React + Vite + TypeScript Frontend
+│   ├── public/                 # Static assets
+│   ├── src/                    # Source code
+│   │   ├── components/         # UI Components
+│   │   ├── pages/              # Role-based views
+│   │   ├── routes/             # Frontend routing
+│   │   ├── App.tsx             # Main React component
+│   │   └── main.tsx            # React entry point
+│   ├── package.json            # Frontend dependencies
+│   └── vite.config.ts          # Vite configuration
+├── uploads/                    # Root media storage directory
+├── .env                        # Environment variables (Secrets)
+├── .gitignore                  # Git excluded files
+├── database_query.md           # Raw SQL schema/queries
+├── mysqlalchemy_info.txt       # Database stack clarification
+├── project_structure.txt       # This file
+├── purpose_of_files.txt        # Description of project files
+├── setup.md                    # Project setup instructions
+├── SYSTEM_FLOW_DOCUMENTATION.md # Logic and user flow docs
+├── SYSTEM_WIREFRAME.md         # UI/UX layout planning
+└── tech_stack_details.txt      # Technology stack overview
+
+------------------------------------------------------------------
+Consolidation Note:
+- All redundant virtual environments (backend/.venv, backend/venv) have been removed.
+- The project now uses a single shared .venv in the root directory.
+------------------------------------------------------------------
+Current Tech Stack Summary:
+- Frontend: React 19 | Vite | TypeScript | Tailwind CSS 4
+- Backend: FastAPI | MySQLAlchemy (SQLAlchemy + MySQL) | Pydantic
+------------------------------------------------------------------

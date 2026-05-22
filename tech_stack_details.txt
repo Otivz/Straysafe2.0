@@ -1,0 +1,36 @@
+# StraySafe Tech Stack Details
+
+## 🎨 Frontend
+- **Framework:** React 19 (via Vite)
+- **Language:** TypeScript
+- **Styling:** Tailwind CSS 4
+- **Mapping:** Leaflet & React-Leaflet (with Leaflet.heat)
+- **API Client:** Axios
+- **Routing:** React Router DOM
+
+## ⚙️ Backend
+- **Framework:** FastAPI
+- **Language:** Python 3.12+
+- **ORM:** SQLAlchemy 2.0
+- **Validation:** Pydantic v2
+- **Auth:** Passlib (Bcrypt) & Jose (JWT)
+- **Media:** Cloudinary SDK & local storage
+
+## 🗄️ Database
+- **Type:** MySQL (8.0+)
+- **Driver:** PyMySQL
+- **Migration/Seeding:** Custom Python scripts
+
+## 🛠️ Tools & Environment
+- **Environment:** Unified Python .venv (Root level)
+- **Package Managers:** npm & pip
+- **IDE:** VS Code (Custom workspace settings)
+
+## 🛡️ Security Enhancements (Recommended)
+- **JWT Implementation (HIGH PRIORITY):** Your current system returns user data directly. You should switch to signed JWT tokens for secure session management.
+- **Rate Limiting:** Implement `slowapi` to prevent Brute Force/DDoS.
+- **Security Headers:** Add `X-Content-Type-Options`, `X-Frame-Options`, and `CSP` middleware.
+- **Environment Management:** Use strict `.env` exclusion in `.gitignore`.
+- **Dependency Auditing:** Regularly run `pip-audit` and `npm audit`.
+- **CORS Policy:** Strict origin white-listing (Production-only).
+- **Least Privilege:** Use a dedicated MySQL user with limited permissions (not root).
