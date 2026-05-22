@@ -35,6 +35,7 @@ interface Report {
     ai_estimated_size?: string | null;
     ai_suggested_risk_level?: string | null;
     ai_suggested_priority?: string | null;
+    ai_possible_breed?: string | null;
 }
 
 const statusMap: Record<number, string> = {
@@ -647,12 +648,15 @@ const SubdReports = () => {
                                                 <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Category</span>
                                                 <span className="text-sm font-semibold text-gray-900">{categoryMap[viewReport.category_id] || 'Other'}</span>
                                             </div>
-                                            <div>
-                                                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Priority</span>
-                                                <span className={`text-sm font-bold ${getPriorityColor(viewReport.priority_level).replace('bg-', 'text-').replace('-50', '-600')}`}>
-                                                    {viewReport.priority_level}
-                                                </span>
-                                            </div>
+                                            {!(viewReport.ai_suggested_priority && 
+                                               ((p1, p2) => p1.toLowerCase().replace('priority', '').replace('level', '').trim() === p2.toLowerCase().replace('priority', '').replace('level', '').trim())(viewReport.ai_suggested_priority, viewReport.priority_level)) && (
+                                                <div>
+                                                    <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Priority</span>
+                                                    <span className={`text-sm font-bold ${getPriorityColor(viewReport.priority_level).replace('bg-', 'text-').replace('-50', '-600')}`}>
+                                                        {viewReport.priority_level}
+                                                    </span>
+                                                </div>
+                                            )}
                                             <div>
                                                 <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Rescue Status</span>
                                                 <span className={`text-sm font-bold ${viewReport.status_id >= 5 ? 'text-blue-600' : 'text-gray-400'}`}>
@@ -674,14 +678,14 @@ const SubdReports = () => {
                                         </div>
 
                                         {/* AI Suggestion Panel */}
-                                        <AISuggestionPanel
-                                            animalType={viewReport.ai_animal_type}
-                                            dominantColor={viewReport.ai_dominant_color}
-                                            estimatedSize={viewReport.ai_estimated_size}
-                                            suggestedRiskLevel={viewReport.ai_suggested_risk_level}
-                                            suggestedPriority={viewReport.ai_suggested_priority}
-
-                                        />
+                                         <AISuggestionPanel
+                                             animalType={viewReport.ai_animal_type}
+                                             dominantColor={viewReport.ai_dominant_color}
+                                             estimatedSize={viewReport.ai_estimated_size}
+                                             suggestedRiskLevel={viewReport.ai_suggested_risk_level}
+                                             suggestedPriority={viewReport.ai_suggested_priority}
+                                             possibleBreed={viewReport.ai_possible_breed}
+                                         />
 
                                         {/* Map Location */}
                                         <div>

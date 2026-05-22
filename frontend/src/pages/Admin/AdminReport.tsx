@@ -14,6 +14,7 @@ import L from 'leaflet';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+import ReturnToSeleraButton from '../../components/MapControls/ReturnToSeleraButton';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -99,20 +100,21 @@ interface Report {
     ai_estimated_size?: string | null;
     ai_suggested_risk_level?: string | null;
     ai_suggested_priority?: string | null;
+    ai_possible_breed?: string | null;
 }
 
 const statusMap: Record<number, string> = {
-    1: 'Reported', 
-    2: 'Verified', 
+    1: 'Reported',
+    2: 'Verified',
     3: 'Rejected',
-    4: 'Escalated to Barangay', 
-    5: 'Rescue In Progress', 
+    4: 'Escalated to Barangay',
+    5: 'Rescue In Progress',
     6: 'Picked Up',
-    7: 'Under Observation', 
-    8: 'Impounded', 
-    9: 'Claimed by Owner', 
-    10: 'Released', 
-    11: 'Resolved', 
+    7: 'Under Observation',
+    8: 'Impounded',
+    9: 'Claimed by Owner',
+    10: 'Released',
+    11: 'Resolved',
     12: 'Deceased',
     13: 'Approved'
 };
@@ -706,22 +708,35 @@ const AdminReport = () => {
                                                     <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Category</span>
                                                     <span className="text-sm font-semibold text-gray-900">{categoryMap[viewReport.category_id] || 'Other'}</span>
                                                 </div>
-                                                <div>
-                                                    <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Priority</span>
-                                                    <span className={`text-sm font-bold ${getPriorityColor(viewReport.priority_level).replace('bg-', 'text-').replace('-50', '-600')}`}>
-                                                        {viewReport.priority_level}
-                                                    </span>
-                                                </div>
-                                                <div>
-                                                    <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Rescue Status</span>
-                                                    <span className={`text-sm font-bold ${viewReport.status_id >= 5 ? 'text-blue-600' : 'text-gray-400'}`}>
-                                                        {viewReport.status_id >= 5 ? statusMap[viewReport.status_id] : 'Not Yet Initiated'}
-                                                    </span>
-                                                </div>
-                                                <div>
-                                                    <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Breed</span>
-                                                    <span className="text-sm font-semibold text-gray-900">{(viewReport as any).breed || 'Not specified'}</span>
-                                                </div>
+                                                {!(viewReport.ai_suggested_priority && 
+                                                    ((p1, p2) => p1.toLowerCase().replace('priority', '').replace('level', '').trim() === p2.toLowerCase().replace('priority', '').replace('level', '').trim())(viewReport.ai_suggested_priority, viewReport.priority_level)) && (
+                                                     <div>
+                                                         <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Priority</span>
+                                                         <span className={`text-sm font-bold ${getPriorityColor(viewReport.priority_level).replace('bg-', 'text-').replace('-50', '-600')}`}>
+                                                             {viewReport.priority_level}
+                                                         </span>
+                                                     </div>
+                                                 )}
+                                                 <div>
+                                                     <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Rescue Status</span>
+                                                     <span className={`text-sm font-bold ${viewReport.status_id >= 5 ? 'text-blue-600' : 'text-gray-400'}`}>
+                                                         {viewReport.status_id >= 5 ? statusMap[viewReport.status_id] : 'Not Yet Initiated'}
+                                                     </span>
+                                                 </div>
+                                                 {(() => {
+                                                     const breedVal = (viewReport as any).breed;
+                                                     const hasBreed = breedVal && 
+                                                         breedVal.toLowerCase() !== 'unknown' && 
+                                                         breedVal.toLowerCase() !== 'not specified' && 
+                                                         breedVal.trim() !== '';
+                                                     if (!hasBreed) return null;
+                                                     return (
+                                                         <div>
+                                                             <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Breed</span>
+                                                             <span className="text-sm font-semibold text-gray-900">{breedVal}</span>
+                                                         </div>
+                                                     );
+                                                 })()}
                                                 <div>
                                                     <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Condition</span>
                                                     <span className="text-sm font-semibold text-gray-900">{(viewReport as any).condition || 'Unknown'}</span>
@@ -745,14 +760,14 @@ const AdminReport = () => {
                                             </div>
 
                                             {/* AI Suggestion Panel */}
-                                            <AISuggestionPanel
-                                                animalType={viewReport.ai_animal_type}
-                                                dominantColor={viewReport.ai_dominant_color}
-                                                estimatedSize={viewReport.ai_estimated_size}
-                                                suggestedRiskLevel={viewReport.ai_suggested_risk_level}
-                                                suggestedPriority={viewReport.ai_suggested_priority}
-                                                possibleBreed={viewReport.ai_possible_breed}
-                                            />
+                                             <AISuggestionPanel
+                                                 animalType={viewReport.ai_animal_type}
+                                                 dominantColor={viewReport.ai_dominant_color}
+                                                 estimatedSize={viewReport.ai_estimated_size}
+                                                 suggestedRiskLevel={viewReport.ai_suggested_risk_level}
+                                                 suggestedPriority={viewReport.ai_suggested_priority}
+                                                 possibleBreed={viewReport.ai_possible_breed}
+                                             />
 
                                             {/* Behavior Tags */}
                                             {viewReport.behavior_tags && (
@@ -1459,6 +1474,7 @@ const AdminReport = () => {
                                                     dashArray: '5, 10'
                                                 }}
                                             />
+                                            <ReturnToSeleraButton />
                                         </MapContainer>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">

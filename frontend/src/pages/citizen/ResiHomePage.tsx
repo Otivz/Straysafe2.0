@@ -15,6 +15,7 @@ import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import RescueTimeline from '../../components/RescueTimeline';
 import AISuggestionPanel from '../../components/AISuggestionPanel';
+import ReturnToSeleraButton from '../../components/MapControls/ReturnToSeleraButton';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -1008,7 +1009,7 @@ const ResiHomePage = () => {
                                 {/* Interactive Map Picker */}
                                 <div>
                                     <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4 block">Pinpoint Location</label>
-                                    <div className="w-full h-64 rounded-[2rem] overflow-hidden border-2 border-gray-50 shadow-sm relative group mb-6">
+                                    <div className="w-full h-64 rounded-[2rem] overflow-visible border-2 border-gray-50 shadow-sm relative group mb-6">
                                         <MapContainer
                                             center={[formData.latitude, formData.longitude]}
                                             zoom={15}
@@ -1034,6 +1035,7 @@ const ResiHomePage = () => {
                                                     dashArray: '5, 10'
                                                 }}
                                             />
+                                            <ReturnToSeleraButton />
                                         </MapContainer>
                                         <div className="absolute top-4 right-4 z-[20] bg-white/90 backdrop-blur-sm px-4 py-2 rounded-xl border border-gray-100 shadow-sm pointer-events-none">
                                             <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest">{isViewMode ? 'Sighting Location' : 'Click map to move pin'}</p>
@@ -1710,6 +1712,7 @@ const ResiHomePage = () => {
                                             >
                                                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                                                 <Marker position={[report.latitude, report.longitude]} />
+                                                <ReturnToSeleraButton />
                                             </MapContainer>
                                             <div className="absolute bottom-3 sm:bottom-4 left-3 sm:left-4 bg-white/90 backdrop-blur-sm px-3 sm:px-4 py-1 sm:py-1.5 rounded-full border border-gray-100 shadow-sm z-[10]">
                                                 <p className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
@@ -2048,14 +2051,19 @@ const ResiHomePage = () => {
                                             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date Reported</p>
                                             <p className="text-sm font-black text-gray-900 uppercase">{new Date(viewingDetailedReport.created_at).toLocaleDateString()}</p>
                                         </div>
-                                        <div className="bg-white p-6 rounded-3xl border border-gray-100">
-                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Animal Type</p>
-                                            <p className="text-sm font-black text-gray-900 uppercase">{viewingDetailedReport.animal_type}</p>
-                                        </div>
-                                        <div className="bg-white p-6 rounded-3xl border border-gray-100">
-                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Priority</p>
-                                            <p className="text-sm font-black text-red-600 uppercase">{viewingDetailedReport.priority_level}</p>
-                                        </div>
+                                        {!(viewingDetailedReport.ai_animal_type && viewingDetailedReport.ai_animal_type.toLowerCase() === viewingDetailedReport.animal_type?.toLowerCase()) && (
+                                            <div className="bg-white p-6 rounded-3xl border border-gray-100">
+                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Animal Type</p>
+                                                <p className="text-sm font-black text-gray-900 uppercase">{viewingDetailedReport.animal_type}</p>
+                                            </div>
+                                        )}
+                                        {!(viewingDetailedReport.ai_suggested_priority && 
+                                           ((p1, p2) => p1.toLowerCase().replace('priority', '').replace('level', '').trim() === p2.toLowerCase().replace('priority', '').replace('level', '').trim())(viewingDetailedReport.ai_suggested_priority, viewingDetailedReport.priority_level)) && (
+                                            <div className="bg-white p-6 rounded-3xl border border-gray-100">
+                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Priority</p>
+                                                <p className="text-sm font-black text-red-600 uppercase">{viewingDetailedReport.priority_level}</p>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* AI Suggestion Panel */}
@@ -2069,31 +2077,48 @@ const ResiHomePage = () => {
                                     />
 
                                     {/* Subject Identification */}
-                                    <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100">
-                                        <h4 className="text-[10px] font-black text-gray-900 uppercase tracking-[0.2em] mb-6">Subject Identification</h4>
-                                        <div className="space-y-4">
-                                            <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Breed / Variety</span>
-                                                <span className="text-xs font-black text-gray-900 uppercase">{viewingDetailedReport.animal_breed || 'Unknown'}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Coat Color</span>
-                                                <span className="text-xs font-black text-gray-900 uppercase">{viewingDetailedReport.animal_color || 'Unknown'}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center py-2">
-                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Estimated Size</span>
-                                                <span className="text-xs font-black text-gray-900 uppercase">{viewingDetailedReport.estimated_size || 'Medium'}</span>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    {(() => {
+                                        const hasAIData = !!(viewingDetailedReport.ai_animal_type || viewingDetailedReport.ai_dominant_color || viewingDetailedReport.ai_estimated_size);
+                                        const showBreed = !!(viewingDetailedReport.animal_breed && 
+                                            viewingDetailedReport.animal_breed.toLowerCase() !== 'unknown' && 
+                                            viewingDetailedReport.animal_breed.toLowerCase() !== 'not specified');
+                                        const showColor = !!(viewingDetailedReport.animal_color && 
+                                            viewingDetailedReport.animal_color.toLowerCase() !== 'unknown' && 
+                                            (!viewingDetailedReport.ai_dominant_color || 
+                                             viewingDetailedReport.animal_color.toLowerCase() !== viewingDetailedReport.ai_dominant_color.toLowerCase()));
+                                        const showSize = !!(viewingDetailedReport.estimated_size && 
+                                            (!viewingDetailedReport.ai_estimated_size || 
+                                             viewingDetailedReport.estimated_size.toLowerCase() !== viewingDetailedReport.ai_estimated_size.toLowerCase()));
+                                        const showSubjectIdCard = !hasAIData || showBreed || showColor || showSize;
 
-                                    {/* Description */}
-                                    <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100">
-                                        <h4 className="text-[10px] font-black text-gray-900 uppercase tracking-[0.2em] mb-4">Case Description</h4>
-                                        <p className="text-sm text-gray-600 font-medium leading-relaxed italic">
-                                            "{viewingDetailedReport.description}"
-                                        </p>
-                                    </div>
+                                        if (!showSubjectIdCard) return null;
+                                        return (
+                                            <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100">
+                                                <h4 className="text-[10px] font-black text-gray-900 uppercase tracking-[0.2em] mb-6">Subject Identification</h4>
+                                                <div className="space-y-4">
+                                                    {(!hasAIData || showBreed) && (
+                                                        <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Breed / Variety</span>
+                                                            <span className="text-xs font-black text-gray-900 uppercase">{viewingDetailedReport.animal_breed || 'Unknown'}</span>
+                                                        </div>
+                                                    )}
+                                                    {(!hasAIData || showColor) && (
+                                                        <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Coat Color</span>
+                                                            <span className="text-xs font-black text-gray-900 uppercase">{viewingDetailedReport.animal_color || 'Unknown'}</span>
+                                                        </div>
+                                                    )}
+                                                    {(!hasAIData || showSize) && (
+                                                        <div className="flex justify-between items-center py-2">
+                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Estimated Size</span>
+                                                            <span className="text-xs font-black text-gray-900 uppercase">{viewingDetailedReport.estimated_size || 'Medium'}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
 
                                     {/* Endorsement Letter / Evidence Files */}
                                     {(() => {
@@ -2161,6 +2186,7 @@ const ResiHomePage = () => {
                                                 <MapContainer center={[viewingDetailedReport.latitude, viewingDetailedReport.longitude]} zoom={16} className="h-full w-full">
                                                     <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                                                     <Marker position={[viewingDetailedReport.latitude, viewingDetailedReport.longitude]} />
+                                                    <ReturnToSeleraButton />
                                                 </MapContainer>
                                             </div>
                                         </div>
@@ -2179,6 +2205,16 @@ const ResiHomePage = () => {
                                             <span className="text-[9px] font-black text-green-600 uppercase tracking-widest">Live Syncing</span>
                                         </div>
                                     </div>
+
+                                    {/* Case Description */}
+                                    {viewingDetailedReport.description && (
+                                        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Case Description</h4>
+                                            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                                                "{viewingDetailedReport.description}"
+                                            </p>
+                                        </div>
+                                    )}
 
                                     {/* The Timeline Component */}
                                     <RescueTimeline

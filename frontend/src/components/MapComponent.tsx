@@ -133,6 +133,7 @@ document.head.appendChild(style);
 
 import HeatmapLayer from './HeatmapLayer';
 import RoutingControl from './RoutingControl';
+import ReturnToSeleraButton from './MapControls/ReturnToSeleraButton';
 
 interface MapComponentProps {
     height?: string;
@@ -314,6 +315,8 @@ const MapComponent = ({
                     </Popup>
                 </Marker>
             )}
+
+            <ReturnToSeleraButton />
         </MapContainer>
     );
 };
