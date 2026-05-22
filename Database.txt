@@ -430,8 +430,15 @@ CREATE TABLE reports(
 
     resolved_at TIMESTAMP NULL,
 
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- AI Suggestions Columns
+    ai_animal_type VARCHAR(50) NULL,
+    ai_dominant_color VARCHAR(100) NULL,
+    ai_estimated_size VARCHAR(50) NULL,
+    ai_possible_breed VARCHAR(100) NULL,
+    ai_suggested_risk_level VARCHAR(50) NULL,
+    ai_suggested_priority VARCHAR(50) NULL,
 
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ON UPDATE CURRENT_TIMESTAMP,
 
@@ -762,9 +769,39 @@ CREATE TABLE report_media(
     history_id INT NULL,
     file_url VARCHAR(255) NOT NULL,
     media_type VARCHAR(50) DEFAULT 'image',
+    animal_type ENUM('Dog', 'Cat', 'Unknown') DEFAULT 'Unknown',
+    dominant_color VARCHAR(100) NULL,
     is_evidence BOOLEAN DEFAULT FALSE,
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY(report_id) REFERENCES reports(report_id) ON DELETE CASCADE,
     FOREIGN KEY(history_id) REFERENCES status_history(history_id) ON DELETE SET NULL
 );
+
+-- =========================================
+-- STATUS-BASED POST ROUTING & FILTERING
+-- =========================================
+-- StraySafe routes reports dynamically depending on their current `status_id` in the `reports` table.
+--
+-- 1. Community / Resident Public Feed (Normal Posts):
+--    - Displays reports containing public visibility where the status is active community-related.
+--    - Allowed Statuses:
+--      - 1: 'Reported' (Pending Verification)
+--      - 2: 'Verified'
+--      - 3: 'Rejected'
+--      - 13: 'Approved'
+--
+-- 2. Rescue Case Intelligence (Active Escalated Rescues):
+--    - Reports which have been verified and escalated to subdivision/barangay responders for dispatch, care, or resolution.
+--    - Allowed Statuses:
+--      - 4: 'Escalated to Barangay'
+--      - 5: 'Team Dispatched' (Rescue In Progress)
+--      - 6: 'Picked Up'
+--      - 7: 'Under Observation'
+--      - 8: 'Impounded'
+--      - 9: 'Claimed by Owner'
+--      - 10: 'Released'
+--      - 11: 'Resolved'
+--      - 12: 'Deceased'
+--
+-- Note: Original reporter name and profile pictures remain attached to reports at all times.

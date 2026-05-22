@@ -8,6 +8,7 @@ import SuccessModal from '../../components/Modals/SuccessModal';
 import Select from '../../components/Dropdown';
 import MapComponent from '../../components/MapComponent';
 import DataTable from '../../components/DataTable';
+import AISuggestionPanel from '../../components/AISuggestionPanel';
 
 interface Report {
     report_id: number;
@@ -29,21 +30,26 @@ interface Report {
     reporter_name?: string;
     media?: any[];
     comments?: any[];
+    ai_animal_type?: string | null;
+    ai_dominant_color?: string | null;
+    ai_estimated_size?: string | null;
+    ai_suggested_risk_level?: string | null;
+    ai_suggested_priority?: string | null;
 }
 
 const statusMap: Record<number, string> = {
-    1: 'Reported', 
-    2: 'Verified', 
+    1: 'Reported',
+    2: 'Verified',
     3: 'Rejected',
-    4: 'Escalated to Barangay', 
+    4: 'Escalated to Barangay',
     13: 'Approved',
-    5: 'Rescue In Progress', 
+    5: 'Rescue In Progress',
     6: 'Picked Up',
-    7: 'Under Observation', 
-    8: 'Impounded', 
-    9: 'Claimed by Owner', 
-    10: 'Released', 
-    11: 'Resolved', 
+    7: 'Under Observation',
+    8: 'Impounded',
+    9: 'Claimed by Owner',
+    10: 'Released',
+    11: 'Resolved',
     12: 'Deceased'
 };
 const categoryMap: Record<number, string> = {
@@ -212,6 +218,7 @@ const SubdReports = () => {
             // 1. Upload the letter
             const formData = new FormData();
             formData.append('file', endorsementFile);
+            formData.append('is_evidence', 'true'); // Mark as evidence so it does NOT appear in the public feed
             await axios.post(`${API_URL}/${escalatingReportId}/media`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
@@ -366,9 +373,9 @@ const SubdReports = () => {
             case 'ongoing':
             case 'rescue in progress':
                 return 'bg-orange-50 text-orange-600 border-orange-100';
-            case 'resolved': 
+            case 'resolved':
                 return 'bg-green-50 text-green-600 border-green-100';
-            default: 
+            default:
                 return 'bg-gray-50 text-gray-600 border-gray-100';
         }
     };
@@ -665,6 +672,16 @@ const SubdReports = () => {
                                                 <span className="text-xs font-mono text-gray-600">{viewReport.latitude}, {viewReport.longitude}</span>
                                             </div>
                                         </div>
+
+                                        {/* AI Suggestion Panel */}
+                                        <AISuggestionPanel
+                                            animalType={viewReport.ai_animal_type}
+                                            dominantColor={viewReport.ai_dominant_color}
+                                            estimatedSize={viewReport.ai_estimated_size}
+                                            suggestedRiskLevel={viewReport.ai_suggested_risk_level}
+                                            suggestedPriority={viewReport.ai_suggested_priority}
+
+                                        />
 
                                         {/* Map Location */}
                                         <div>

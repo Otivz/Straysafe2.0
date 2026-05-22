@@ -47,6 +47,14 @@ class Report(Base):
 
     is_possible_owned: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # AI Suggestions
+    ai_animal_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    ai_dominant_color: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    ai_estimated_size: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    ai_possible_breed: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    ai_suggested_risk_level: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    ai_suggested_priority: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
     # DB column is current_status_id (not status_id)
     current_status_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("report_status.status_id"), nullable=True)
 
@@ -79,6 +87,7 @@ class ReportMedia(Base):
     # DB ENUM: 'Image','Video','Document'
     media_type = Column(Enum('Image', 'Video', 'Document'), nullable=False)
     animal_type = Column(Enum('Dog', 'Cat', 'Unknown'), nullable=True, default='Unknown')
+    dominant_color = Column(String(100), nullable=True)  # e.g., 'Brown', 'Black and White', 'Golden'
     is_evidence = Column(Boolean, default=False)
     uploaded_at = Column(DateTime, server_default=func.now())
 

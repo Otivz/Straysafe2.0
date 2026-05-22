@@ -14,6 +14,7 @@ import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import RescueTimeline from '../../components/RescueTimeline';
+import AISuggestionPanel from '../../components/AISuggestionPanel';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -33,6 +34,32 @@ const SELERA_POLYGON = [
     { lat: 14.800634, lng: 121.002228 },
     { lat: 14.802461, lng: 121.003280 }
 ];
+
+const getColorHex = (colorName: string): string => {
+    const name = colorName.trim().toLowerCase();
+    if (name.includes('brown')) return '#8B5A2B';
+    if (name.includes('black')) return '#18181B';
+    if (name.includes('white')) return '#FAFAFA';
+    if (name.includes('gray') || name.includes('grey')) return '#71717A';
+    if (name.includes('golden')) return '#F59E0B';
+    if (name.includes('orange') || name.includes('ginger')) return '#EA580C';
+    if (name.includes('yellow') || name.includes('cream')) return '#EAB308';
+    if (name.includes('red')) return '#EF4444';
+    if (name.includes('tan')) return '#D2B48C';
+    if (name.includes('blue')) return '#3B82F6';
+    if (name.includes('green')) return '#10B981';
+    return '#71717A'; // fallback gray
+};
+
+const getSwatchStyle = (colorStr?: string | null): string => {
+    const colors = (colorStr || 'Brown').split(',').map(c => c.trim()).filter(Boolean);
+    if (colors.length === 0) return '#8B5A2B';
+    if (colors.length === 1) return getColorHex(colors[0]);
+    // Beautiful split linear gradient for multiple colors
+    const hex1 = getColorHex(colors[0]);
+    const hex2 = getColorHex(colors[1]);
+    return `linear-gradient(135deg, ${hex1} 50%, ${hex2} 50%)`;
+};
 
 const isInsideSeleraHomes = (lat: number, lng: number) => {
     let n = SELERA_POLYGON.length;
@@ -59,17 +86,17 @@ const isInsideSeleraHomes = (lat: number, lng: number) => {
 };
 
 const reportStatusMap: Record<number, string> = {
-    1: 'Reported', 
-    2: 'Verified', 
+    1: 'Reported',
+    2: 'Verified',
     3: 'Rejected',
-    4: 'Escalated to Barangay', 
-    5: 'Rescue In Progress', 
+    4: 'Escalated to Barangay',
+    5: 'Rescue In Progress',
     6: 'Picked Up',
-    7: 'Under Observation', 
-    8: 'Impounded', 
-    9: 'Claimed by Owner', 
-    10: 'Released', 
-    11: 'Resolved', 
+    7: 'Under Observation',
+    8: 'Impounded',
+    9: 'Claimed by Owner',
+    10: 'Released',
+    11: 'Resolved',
     12: 'Deceased',
     13: 'Approved'
 };
@@ -154,6 +181,20 @@ const ResiHomePage = () => {
     const [editingReportId, setEditingReportId] = useState<number | null>(null);
     const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
     const [selectedStage, setSelectedStage] = useState<Record<number, number | null>>({});
+    const [animalTypeValidation, setAnimalTypeValidation] = useState<{
+        show: boolean;
+        reportId: number;
+        ai_animal_type: string;
+        ai_dominant_color: string;
+        ai_estimated_size: string;
+        ai_possible_breed: string;
+        ai_suggested_priority: string;
+        ai_suggested_risk_level: string;
+        user_animal_type: string;
+        user_dominant_color: string;
+        user_estimated_size: string;
+        user_possible_breed: string;
+    } | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -294,6 +335,126 @@ const ResiHomePage = () => {
         mediaIdsToDelete: [] as number[]
     });
 
+    const validateAISuggestions = (reportId: number, suggestions: any) => {
+        if (!suggestions || !suggestions.ai_animal_type) return false;
+
+        const userType = formData.animalType;
+        const userColor = formData.animalColor || '';
+        const userSize = formData.estimatedSize || 'Medium';
+
+        // Check if there is an inconsistency or missing info (excluding breed)
+        const isTypeMismatched = userType !== 'Unknown' && userType !== suggestions.ai_animal_type;
+        const isColorMissing = !userColor.trim();
+
+        if (isTypeMismatched || isColorMissing) {
+            setAnimalTypeValidation({
+                show: true,
+                reportId,
+                ai_animal_type: suggestions.ai_animal_type,
+                ai_dominant_color: suggestions.ai_dominant_color,
+                ai_estimated_size: suggestions.ai_estimated_size,
+                ai_possible_breed: '',
+                ai_suggested_priority: suggestions.ai_suggested_priority,
+                ai_suggested_risk_level: suggestions.ai_suggested_risk_level || 'Medium Risk',
+                user_animal_type: userType,
+                user_dominant_color: userColor,
+                user_estimated_size: userSize,
+                user_possible_breed: ''
+            });
+            return true;
+        }
+        return false;
+    };
+
+    const handleApplyAISuggestion = async () => {
+        if (!animalTypeValidation) return;
+        try {
+            const priorityMapped = animalTypeValidation.ai_suggested_priority ? (
+                animalTypeValidation.ai_suggested_priority.includes('High') ? 'High' :
+                    animalTypeValidation.ai_suggested_priority.includes('Low') ? 'Low' : 'Regular'
+            ) : 'Regular';
+
+            await axios.patch(`http://localhost:8000/reports/${animalTypeValidation.reportId}`, {
+                animal_type: animalTypeValidation.ai_animal_type,
+                animal_color: animalTypeValidation.ai_dominant_color,
+                estimated_size: animalTypeValidation.ai_estimated_size,
+                priority_level: priorityMapped
+            });
+
+            alert('Report updated with AI suggestions successfully!');
+        } catch (error) {
+            console.error('Failed to apply AI suggestions:', error);
+            alert('Failed to apply suggestions automatically, but your original report is saved.');
+        } finally {
+            // Standard cleanup
+            setAnimalTypeValidation(null);
+            handleCloseModal();
+            setEditingReportId(null);
+            fetchReports();
+            setFormData({
+                category: 'Injured Animal',
+                category_id: 1,
+                animalCount: 1,
+                landmark: '',
+                visibility: 'Public',
+                priorityLevel: 'Regular',
+                isPossibleOwned: false,
+                animalType: 'Dog',
+                animalBreed: '',
+                animalColor: '',
+                estimatedSize: 'Medium',
+                description: '',
+                latitude: 14.801313,
+                longitude: 121.003109,
+                mediaFiles: [],
+                existingMedia: [],
+                mediaIdsToDelete: []
+            });
+        }
+    };
+
+    const handleKeepOriginalInput = () => {
+        alert('Report submitted successfully!');
+        setAnimalTypeValidation(null);
+        handleCloseModal();
+        setEditingReportId(null);
+        fetchReports();
+        setFormData({
+            category: 'Injured Animal',
+            category_id: 1,
+            animalCount: 1,
+            landmark: '',
+            visibility: 'Public',
+            priorityLevel: 'Regular',
+            isPossibleOwned: false,
+            animalType: 'Dog',
+            animalBreed: '',
+            animalColor: '',
+            estimatedSize: 'Medium',
+            description: '',
+            latitude: 14.801313,
+            longitude: 121.003109,
+            mediaFiles: [],
+            existingMedia: [],
+            mediaIdsToDelete: []
+        });
+    };
+
+    const handleGoBackToReport = async () => {
+        if (!animalTypeValidation) return;
+        try {
+            const isEdit = editingReportId !== null;
+            if (!isEdit) {
+                await axios.delete(`http://localhost:8000/reports/${animalTypeValidation.reportId}`);
+            }
+        } catch (error) {
+            console.error('Failed to cancel temporary report:', error);
+        } finally {
+            setAnimalTypeValidation(null);
+            setIsAddReportModalOpen(true);
+        }
+    };
+
     const handleSubmit = async () => {
         if (isSubmitting) return;
 
@@ -358,9 +519,12 @@ const ResiHomePage = () => {
                     }
                 }
 
+                let hasWarnings = false;
+
                 // Upload media if present
                 if (formData.mediaFiles && formData.mediaFiles.length > 0) {
                     let failCount = 0;
+                    let firstSuggestions: any = null;
                     // Link media to the initial 'Reported' history entry
                     const initialHistoryId = resultData.history?.find((h: any) => h.report_status_id === 1)?.history_id;
 
@@ -374,9 +538,21 @@ const ResiHomePage = () => {
                         mediaData.append("is_evidence", "false"); // Initial photos are not evidence
 
                         try {
-                            await axios.post(`${API_URL}/${actualReportId}/media`, mediaData, {
+                            const uploadResponse = await axios.post(`${API_URL}/${actualReportId}/media`, mediaData, {
                                 headers: { 'Content-Type': 'multipart/form-data' }
                             });
+
+                            // Capture AI suggestion metadata from the first successfully processed image
+                            if (uploadResponse.data && uploadResponse.data.ai_animal_type && !firstSuggestions) {
+                                firstSuggestions = {
+                                    ai_animal_type: uploadResponse.data.ai_animal_type,
+                                    ai_dominant_color: uploadResponse.data.ai_dominant_color,
+                                    ai_estimated_size: uploadResponse.data.ai_estimated_size,
+                                    ai_possible_breed: uploadResponse.data.ai_possible_breed,
+                                    ai_suggested_priority: uploadResponse.data.ai_suggested_priority,
+                                    ai_suggested_risk_level: uploadResponse.data.ai_suggested_risk_level
+                                };
+                            }
                         } catch (err: any) {
                             const errorMsg = err.response?.data?.detail || err.message;
                             console.error('Failed to upload media:', errorMsg);
@@ -384,34 +560,40 @@ const ResiHomePage = () => {
                         }
                     }
 
+                    if (firstSuggestions) {
+                        hasWarnings = validateAISuggestions(actualReportId, firstSuggestions);
+                    }
+
                     if (failCount > 0) {
                         alert(`${failCount} media files failed to upload. The report was saved otherwise.`);
                     }
                 }
 
-                alert(isEditing ? 'Report updated successfully!' : 'Report submitted successfully!');
-                handleCloseModal();
-                setEditingReportId(null);
-                fetchReports(); // Refresh the feed
-                setFormData({
-                    category: 'Injured Animal',
-                    category_id: 1,
-                    animalCount: 1,
-                    landmark: '',
-                    visibility: 'Public',
-                    priorityLevel: 'Regular',
-                    isPossibleOwned: false,
-                    animalType: 'Dog',
-                    animalBreed: '',
-                    animalColor: '',
-                    estimatedSize: 'Medium',
-                    description: '',
-                    latitude: 14.801313,
-                    longitude: 121.003109,
-                    mediaFiles: [],
-                    existingMedia: [],
-                    mediaIdsToDelete: []
-                });
+                if (!hasWarnings) {
+                    alert(isEditing ? 'Report updated successfully!' : 'Report submitted successfully!');
+                    handleCloseModal();
+                    setEditingReportId(null);
+                    fetchReports(); // Refresh the feed
+                    setFormData({
+                        category: 'Injured Animal',
+                        category_id: 1,
+                        animalCount: 1,
+                        landmark: '',
+                        visibility: 'Public',
+                        priorityLevel: 'Regular',
+                        isPossibleOwned: false,
+                        animalType: 'Dog',
+                        animalBreed: '',
+                        animalColor: '',
+                        estimatedSize: 'Medium',
+                        description: '',
+                        latitude: 14.801313,
+                        longitude: 121.003109,
+                        mediaFiles: [],
+                        existingMedia: [],
+                        mediaIdsToDelete: []
+                    });
+                }
             }
         } catch (error) {
             console.error('Error saving report:', error);
@@ -435,6 +617,9 @@ const ResiHomePage = () => {
             (r.animal_type && r.animal_type.toLowerCase().includes(q)) ||
             (categoryName.toLowerCase().includes(q));
     });
+
+    // Show all reports in the feed; the endorsement letter photo is hidden via is_evidence=true
+    const currentTabReports = filteredReports;
 
     return (
         <div className="min-h-screen bg-[#F7F7F7] font-sans pb-24">
@@ -1001,26 +1186,126 @@ const ResiHomePage = () => {
                     </div>
                 )}
 
+                {/* AI Animal Type Validation Warning Modal */}
+                {animalTypeValidation?.show && (
+                    <div className="fixed inset-0 z-[350] flex items-center justify-center p-4">
+                        {/* Backdrop */}
+                        <div
+                            className="absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300"
+                            onClick={handleGoBackToReport}
+                        />
+
+                        {/* Modal Content */}
+                        <div className="relative w-full max-w-md bg-white rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 p-10 text-[#1a1208] border border-gray-50">
+                            {/* Header */}
+                            <div className="mb-8">
+                                <div className="w-16 h-16 bg-orange-50 text-[#F97316] rounded-2xl flex items-center justify-center mb-6 mx-auto border border-orange-100">
+                                    <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                </div>
+                                <h3 className="text-2xl font-black text-center mb-2 uppercase tracking-tight text-[#1a1208]">
+                                    AI Suggestions
+                                </h3>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center max-w-[280px] mx-auto leading-relaxed">
+                                    The uploaded image may not match the selected animal type.
+                                </p>
+                            </div>
+
+                            {/* Content */}
+                            <div className="bg-[#FAFAF9] border border-gray-100 rounded-3xl p-6 space-y-4 mb-8">
+                                <div className="space-y-3 font-semibold text-[#1a1208]">
+                                    <div className="flex items-center gap-3 py-1.5 border-b border-gray-100/50">
+                                        <span className="text-[#F97316] font-black text-sm">✓</span>
+                                        <span className="text-xs">
+                                            Animal Type: <strong className="uppercase font-black text-[#F97316] ml-1">{animalTypeValidation.ai_animal_type}</strong>
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 py-1.5 border-b border-gray-100/50">
+                                        <span className="text-[#F97316] font-black text-sm">✓</span>
+                                        <span className="text-xs flex items-center gap-2">
+                                            Colors Detected:
+                                            <span className="inline-block w-3.5 h-3.5 rounded-full border border-gray-200 shadow-sm shrink-0" style={{ background: getSwatchStyle(animalTypeValidation.ai_dominant_color) }} />
+                                            <strong className="uppercase font-black text-[#F97316]">{animalTypeValidation.ai_dominant_color}</strong>
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 py-1.5 border-b border-gray-100/50">
+                                        <span className="text-[#F97316] font-black text-sm">✓</span>
+                                        <span className="text-xs">
+                                            Size: <strong className="uppercase font-black text-[#F97316] ml-1">{animalTypeValidation.ai_estimated_size}</strong>
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 py-1.5 border-b border-gray-100/50">
+                                        <span className="text-[#F97316] font-black text-sm">✓</span>
+                                        <span className="text-xs">
+                                            Suggested Risk Level: <strong className="uppercase font-black text-[#F97316] ml-1">{animalTypeValidation.ai_suggested_risk_level}</strong>
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 py-1.5">
+                                        <span className="text-[#F97316] font-black text-sm">✓</span>
+                                        <span className="text-xs">
+                                            Suggested Priority: <strong className="uppercase font-black text-[#F97316] ml-1">{animalTypeValidation.ai_suggested_priority}</strong>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="space-y-3">
+                                <button
+                                    onClick={handleApplyAISuggestion}
+                                    className="w-full py-5 bg-[#F97316] hover:bg-orange-600 text-white text-[11px] font-black uppercase tracking-[0.15em] rounded-2xl shadow-lg shadow-orange-100 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                >
+                                    Apply AI Suggestion
+                                </button>
+                                <button
+                                    onClick={handleKeepOriginalInput}
+                                    className="w-full py-4 text-[10px] font-black text-gray-400 hover:text-gray-600 uppercase tracking-widest transition-all"
+                                >
+                                    Keep Original Input
+                                </button>
+                                <button
+                                    onClick={handleGoBackToReport}
+                                    className="w-full py-3 text-[10px] font-black text-red-500 hover:text-red-700 uppercase tracking-widest transition-all block text-center border-t border-gray-100/50 mt-1 pt-3"
+                                >
+                                    Go Back to Report
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Real Report Posts */}
-                {filteredReports.length === 0 ? (
-                    <div className="text-center py-20 text-gray-400 font-medium">
-                        {reports.length === 0 ? "No reports found. Be the first to submit one!" : "No reports match your search."}
+                {currentTabReports.length === 0 ? (
+                    <div className="max-w-md mx-auto text-center py-20 px-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm animate-in fade-in slide-in-from-bottom-5 duration-500">
+                        <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 mx-auto mb-6 border border-gray-100/50">
+                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0a2 2 0 01-2 2H6a2 2 0 01-2-2m16 0V9a2 2 0 00-2-2H6a2 2 0 00-2 2v2.5" />
+                            </svg>
+                        </div>
+                        <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-2">
+                            No Community Reports
+                        </h3>
+                        <p className="text-xs text-gray-400 leading-relaxed max-w-xs mx-auto">
+                            No public stray sighting reports found in your subdivision. Be the first to report!
+                        </p>
                     </div>
                 ) : (
-                    filteredReports.map((report) => {
+                    currentTabReports.map((report) => {
                         const statusMap: Record<number, string> = {
-                            1: 'Pending Verification', 
-                            2: 'Verified', 
+                            1: 'Pending Verification',
+                            2: 'Verified',
                             3: 'Rejected',
-                            4: 'Approved', 
-                            5: 'Rescue In Progress', 
+                            4: 'Escalated to Barangay',
+                            5: 'Rescue In Progress',
                             6: 'Picked Up',
-                            7: 'Under Observation', 
-                            8: 'Impounded', 
-                            9: 'Claimed by Owner', 
-                            10: 'Released', 
-                            11: 'Resolved', 
-                            12: 'Deceased'
+                            7: 'Under Observation',
+                            8: 'Impounded',
+                            9: 'Claimed by Owner',
+                            10: 'Released',
+                            11: 'Resolved',
+                            12: 'Deceased',
+                            13: 'Approved'
                         };
                         const categoryMap: Record<number, string> = {
                             1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
@@ -1131,12 +1416,12 @@ const ResiHomePage = () => {
                                             </div>
                                             <span className={`px-3 py-1 shrink-0 text-[9px] font-black uppercase tracking-widest rounded-full border shadow-sm ${report.status_id === 1 ? 'bg-orange-50 text-[#F97316] border-orange-100' :
                                                 report.status_id === 2 ? 'bg-cyan-50 text-cyan-600 border-cyan-100' :
-                                                report.status_id === 4 ? 'bg-purple-50 text-purple-600 border-purple-100' :
-                                                report.status_id === 13 ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
-                                                report.status_id === 11 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                                report.status_id === 7 || report.status_id === 8 ? 'bg-purple-50 text-purple-600 border-purple-100' :
-                                                report.status_id === 9 || report.status_id === 10 ? 'bg-teal-50 text-teal-600 border-teal-100' :
-                                                'bg-blue-50 text-blue-600 border-blue-100'
+                                                    report.status_id === 4 ? 'bg-purple-50 text-purple-600 border-purple-100' :
+                                                        report.status_id === 13 ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
+                                                            report.status_id === 11 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                                                report.status_id === 7 || report.status_id === 8 ? 'bg-purple-50 text-purple-600 border-purple-100' :
+                                                                    report.status_id === 9 || report.status_id === 10 ? 'bg-teal-50 text-teal-600 border-teal-100' :
+                                                                        'bg-blue-50 text-blue-600 border-blue-100'
                                                 }`}>
                                                 {statusName}
                                             </span>
@@ -1773,6 +2058,16 @@ const ResiHomePage = () => {
                                         </div>
                                     </div>
 
+                                    {/* AI Suggestion Panel */}
+                                    <AISuggestionPanel
+                                        animalType={viewingDetailedReport.ai_animal_type}
+                                        dominantColor={viewingDetailedReport.ai_dominant_color}
+                                        estimatedSize={viewingDetailedReport.ai_estimated_size}
+                                        suggestedRiskLevel={viewingDetailedReport.ai_suggested_risk_level}
+                                        suggestedPriority={viewingDetailedReport.ai_suggested_priority}
+                                        possibleBreed={viewingDetailedReport.ai_possible_breed}
+                                    />
+
                                     {/* Subject Identification */}
                                     <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100">
                                         <h4 className="text-[10px] font-black text-gray-900 uppercase tracking-[0.2em] mb-6">Subject Identification</h4>
@@ -1799,6 +2094,54 @@ const ResiHomePage = () => {
                                             "{viewingDetailedReport.description}"
                                         </p>
                                     </div>
+
+                                    {/* Endorsement Letter / Evidence Files */}
+                                    {(() => {
+                                        const evidenceFiles = viewingDetailedReport.media?.filter((m: any) => m.is_evidence) || [];
+                                        if (evidenceFiles.length === 0) return null;
+                                        return (
+                                            <div className="bg-white p-8 rounded-[2.5rem] border border-orange-100">
+                                                <h4 className="text-[10px] font-black text-orange-600 uppercase tracking-[0.2em] mb-5">Endorsement Letter / Evidence</h4>
+                                                <div className="space-y-3">
+                                                    {evidenceFiles.map((m: any, idx: number) => {
+                                                        const url: string = m.file_url || '';
+                                                        const urlLower = url.toLowerCase();
+                                                        const isDoc = urlLower.endsWith('.pdf') || urlLower.endsWith('.doc') || urlLower.endsWith('.docx');
+                                                        const isImg = m.media_type === 'Image' || (!isDoc && (urlLower.endsWith('.jpg') || urlLower.endsWith('.jpeg') || urlLower.endsWith('.png') || urlLower.endsWith('.webp')));
+                                                        return (
+                                                            <div key={m.media_id}>
+                                                                {isImg ? (
+                                                                    <a href={url} target="_blank" rel="noopener noreferrer" className="block rounded-2xl overflow-hidden border border-orange-50 hover:opacity-90 transition-opacity shadow-sm">
+                                                                        <img src={url} className="w-full max-h-64 object-cover" alt={`Endorsement ${idx + 1}`} />
+                                                                    </a>
+                                                                ) : (
+                                                                    <a
+                                                                        href={url}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="flex items-center gap-4 p-5 bg-orange-50/60 rounded-2xl border border-orange-100 hover:bg-orange-50 transition-all group"
+                                                                    >
+                                                                        <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600 shrink-0 group-hover:bg-orange-200 transition-colors">
+                                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                            </svg>
+                                                                        </div>
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-0.5">Official Document</p>
+                                                                            <p className="text-xs font-bold text-gray-700 truncate">{url.split('/').pop()}</p>
+                                                                        </div>
+                                                                        <svg className="w-4 h-4 text-orange-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                                        </svg>
+                                                                    </a>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
 
                                     {/* Location Card */}
                                     <div className="bg-gray-900 text-white p-8 rounded-[2.5rem] shadow-xl relative overflow-hidden group">

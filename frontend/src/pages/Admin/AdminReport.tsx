@@ -69,6 +69,10 @@ const LocationPicker = ({ onLocationSelect, position }: { onLocationSelect: (lat
     return position ? <Marker position={position} /> : null;
 };
 
+import DataTable from '../../components/DataTable';
+import RescueTimeline from '../../components/RescueTimeline';
+import AISuggestionPanel from '../../components/AISuggestionPanel';
+
 interface Report {
     report_id: number;
     category_id: number;
@@ -90,10 +94,12 @@ interface Report {
     media?: any[];
     comments?: any[];
     history?: any[];
+    ai_animal_type?: string | null;
+    ai_dominant_color?: string | null;
+    ai_estimated_size?: string | null;
+    ai_suggested_risk_level?: string | null;
+    ai_suggested_priority?: string | null;
 }
-
-import DataTable from '../../components/DataTable';
-import RescueTimeline from '../../components/RescueTimeline';
 
 const statusMap: Record<number, string> = {
     1: 'Reported', 
@@ -737,6 +743,16 @@ const AdminReport = () => {
                                                     <span className="text-xs font-mono text-gray-600">{viewReport.latitude}, {viewReport.longitude}</span>
                                                 </div>
                                             </div>
+
+                                            {/* AI Suggestion Panel */}
+                                            <AISuggestionPanel
+                                                animalType={viewReport.ai_animal_type}
+                                                dominantColor={viewReport.ai_dominant_color}
+                                                estimatedSize={viewReport.ai_estimated_size}
+                                                suggestedRiskLevel={viewReport.ai_suggested_risk_level}
+                                                suggestedPriority={viewReport.ai_suggested_priority}
+                                                possibleBreed={viewReport.ai_possible_breed}
+                                            />
 
                                             {/* Behavior Tags */}
                                             {viewReport.behavior_tags && (

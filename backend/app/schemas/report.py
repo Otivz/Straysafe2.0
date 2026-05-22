@@ -57,10 +57,18 @@ class ReportMediaResponse(BaseModel):
     file_url: str
     media_type: str
     animal_type: str | None = None
+    dominant_color: str | None = None
     history_id: Optional[int] = None
     status_id: Optional[int] = None
     is_evidence: Optional[bool] = False
     uploaded_at: datetime
+    # AI Suggestions
+    ai_animal_type: Optional[str] = None
+    ai_dominant_color: Optional[str] = None
+    ai_estimated_size: Optional[str] = None
+    ai_possible_breed: Optional[str] = None
+    ai_suggested_risk_level: Optional[str] = None
+    ai_suggested_priority: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -88,6 +96,14 @@ class ReportResponse(ReportBase):
     media: Optional[list[ReportMediaResponse]] = []
     comments: Optional[list[CommentResponse]] = []
     history: Optional[list[StatusHistoryResponse]] = []
+    
+    # AI Suggestions
+    ai_animal_type: Optional[str] = None
+    ai_dominant_color: Optional[str] = None
+    ai_estimated_size: Optional[str] = None
+    ai_possible_breed: Optional[str] = None
+    ai_suggested_risk_level: Optional[str] = None
+    ai_suggested_priority: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -7,6 +7,7 @@ import Button from '../../components/Button';
 import MapComponent from '../../components/MapComponent';
 import DataTable from '../../components/DataTable';
 import RescueTimeline from '../../components/RescueTimeline';
+import AISuggestionPanel from '../../components/AISuggestionPanel';
 
 interface RescueRequest {
     rescue_id: number;
@@ -31,8 +32,14 @@ interface RescueRequest {
         reporter_name?: string;
         status_id: number;
         created_at: string;
-        media?: { media_id: number; file_url: string; media_type: string }[];
+        media?: { media_id: number; file_url: string; media_type: string; is_evidence?: boolean }[];
         history?: any[];
+        ai_animal_type?: string | null;
+        ai_dominant_color?: string | null;
+        ai_estimated_size?: string | null;
+        ai_possible_breed?: string | null;
+        ai_suggested_risk_level?: string | null;
+        ai_suggested_priority?: string | null;
     };
     leader_name?: string;
     leader_position?: string;
@@ -447,17 +454,36 @@ const BrgyRescueRequests = () => {
                                             <p className="text-[9px] text-gray-500 uppercase tracking-widest font-medium">{viewingRequest.leader_position || "Subdivision Official"} • {new Date(viewingRequest.created_at || viewingRequest.report?.created_at || Date.now()).toLocaleDateString()}</p>
                                         </div>
                                     </div>
-                                    {viewingRequest.report?.media?.some(m => m.media_type === 'Document' || m.file_url.toLowerCase().endsWith('.pdf') || m.file_url.toLowerCase().endsWith('.docx')) && (
-                                        <button
-                                            onClick={() => {
-                                                const letter = viewingRequest.report?.media?.find(m => m.media_type === 'Document' || m.file_url.toLowerCase().endsWith('.pdf') || m.file_url.toLowerCase().endsWith('.docx'));
-                                                if (letter) setActiveGallery({ media: [letter], index: 0 });
-                                            }}
-                                            className="mt-4 w-full py-3 bg-white border border-orange-200 text-orange-600 text-[9px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-orange-600 hover:text-white transition-all shadow-sm"
-                                        >
-                                            View Official Endorsement Letter
-                                        </button>
-                                    )}
+                                    {(() => {
+                                        const evidenceFiles = viewingRequest.report?.media?.filter(m => m.is_evidence) || [];
+                                        if (evidenceFiles.length === 0) return null;
+                                        return (
+                                            <div className="mt-5 space-y-3">
+                                                <p className="text-[9px] font-black text-orange-600 uppercase tracking-[0.2em]">Endorsement Letter / Evidence</p>
+                                                {evidenceFiles.map((m) => {
+                                                    const urlLower = m.file_url.toLowerCase();
+                                                    const isDoc = urlLower.endsWith('.pdf') || urlLower.endsWith('.doc') || urlLower.endsWith('.docx');
+                                                    const isImg = m.media_type === 'Image' || (!isDoc && (urlLower.endsWith('.jpg') || urlLower.endsWith('.jpeg') || urlLower.endsWith('.png') || urlLower.endsWith('.webp')));
+                                                    return isImg ? (
+                                                        <a key={m.media_id} href={m.file_url} target="_blank" rel="noopener noreferrer" className="block rounded-2xl overflow-hidden border border-orange-100 hover:opacity-90 transition-opacity shadow-sm">
+                                                            <img src={m.file_url} className="w-full max-h-64 object-cover" alt="Endorsement letter" />
+                                                        </a>
+                                                    ) : (
+                                                        <button
+                                                            key={m.media_id}
+                                                            onClick={() => setActiveGallery({ media: [m], index: 0 })}
+                                                            className="w-full py-3 bg-white border border-orange-200 text-orange-600 text-[9px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-orange-600 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                            </svg>
+                                                            View Official Endorsement Letter
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
 
                                 {viewingRequest.assigned_staff_name && (
@@ -489,6 +515,16 @@ const BrgyRescueRequests = () => {
                                         </div>
                                     ))}
                                 </div>
+
+                                {/* AI Suggestion Panel */}
+                                <AISuggestionPanel
+                                    animalType={viewingRequest.report?.ai_animal_type}
+                                    dominantColor={viewingRequest.report?.ai_dominant_color}
+                                    estimatedSize={viewingRequest.report?.ai_estimated_size}
+                                    suggestedRiskLevel={viewingRequest.report?.ai_suggested_risk_level}
+                                    suggestedPriority={viewingRequest.report?.ai_suggested_priority}
+                                    possibleBreed={viewingRequest.report?.ai_possible_breed}
+                                />
 
                                 <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
                                     <h4 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-4">Resident Report Description</h4>
