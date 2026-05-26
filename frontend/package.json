@@ -12,6 +12,7 @@
   "dependencies": {
     "@types/leaflet-routing-machine": "^3.2.9",
     "axios": "^1.15.0",
+    "html5-qrcode": "^2.3.8",
     "leaflet": "^1.9.4",
     "leaflet-routing-machine": "^3.2.12",
     "leaflet.heat": "^0.2.0",

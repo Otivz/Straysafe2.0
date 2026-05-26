@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import Button from './Button';
+import QRScannerModal from './Modals/QRScannerModal';
 
 const SubdSidebar = () => {
     const [isOpen, setIsOpen] = useState(true);
+    const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
     const location = useLocation();
 
     const menuItems = [
         {
             path: '/subd/dashboard',
-            label: 'Area Analytics',
+            label: 'Dashboard',
             icon: (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
@@ -70,6 +72,16 @@ const SubdSidebar = () => {
                 </svg>
             )
         },
+        {
+            isAction: true,
+            onClick: () => setIsQRScannerOpen(true),
+            label: 'Scan QR Collar',
+            icon: (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            )
+        }
     ];
 
     return (
@@ -101,14 +113,27 @@ const SubdSidebar = () => {
                 {/* Navigation */}
                 <nav className="space-y-1 flex-1">
                     {menuItems.map((item) => {
-                        const isActive = location.pathname.includes(item.path);
+                        if (item.isAction) {
+                            return (
+                                <div key={item.label} className="relative group overflow-hidden">
+                                    <button
+                                        onClick={item.onClick}
+                                        className={`w-full flex items-center py-3 font-bold text-xs uppercase tracking-widest transition-colors text-gray-400 hover:text-[#F97316] hover:bg-orange-50/50 cursor-pointer ${isOpen ? 'px-8' : 'justify-center px-0'}`}
+                                    >
+                                        <span className="shrink-0">{item.icon}</span>
+                                        {isOpen && <span className="ml-4 whitespace-nowrap animate-in fade-in duration-300">{item.label}</span>}
+                                    </button>
+                                </div>
+                            );
+                        }
+                        const isActive = item.path ? location.pathname.includes(item.path) : false;
                         return (
                             <div key={item.path} className="relative group overflow-hidden">
                                 {isActive && (
                                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#F97316] rounded-r-full"></div>
                                 )}
                                 <Link
-                                    to={item.path}
+                                    to={item.path || '#'}
                                     className={`flex items-center py-3 font-bold text-xs uppercase tracking-widest transition-colors ${isActive
                                         ? 'bg-orange-50 text-[#F97316]'
                                         : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
@@ -122,6 +147,8 @@ const SubdSidebar = () => {
                     })}
                 </nav>
             </div>
+
+            <QRScannerModal isOpen={isQRScannerOpen} onClose={() => setIsQRScannerOpen(false)} />
 
         </aside>
     );
