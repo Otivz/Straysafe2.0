@@ -102,17 +102,17 @@ const ResiProfile = () => {
     };
 
     const statusMap: Record<number, string> = {
-        1: 'Reported', 
-        2: 'Verified', 
+        1: 'Reported',
+        2: 'Verified',
         3: 'Rejected',
-        4: 'Escalated to Barangay', 
-        5: 'Rescue In Progress', 
+        4: 'Escalated to Barangay',
+        5: 'Rescue In Progress',
         6: 'Picked Up',
-        7: 'Under Observation', 
-        8: 'Impounded', 
-        9: 'Claimed by Owner', 
-        10: 'Released', 
-        11: 'Resolved', 
+        7: 'Under Observation',
+        8: 'Impounded',
+        9: 'Claimed by Owner',
+        10: 'Released',
+        11: 'Resolved',
         12: 'Deceased',
         13: 'Approved'
     };
@@ -285,7 +285,7 @@ const ResiProfile = () => {
                                         My Reports
                                         <div className="absolute -bottom-[25px] left-0 right-0 h-1 bg-[#F97316]"></div>
                                     </h2>
-                                    
+
                                     {/* Search Input for Reports */}
                                     <div className="relative w-full sm:w-64">
                                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -372,6 +372,20 @@ const ResiProfile = () => {
                                                             </svg>
                                                             View Details
                                                         </button>
+                                                        {report.status_id === 1 && (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    navigate('/resident-home', { state: { editReport: report, isViewMode: false, from: '/resident/profile' } });
+                                                                }}
+                                                                className="w-full flex items-center gap-3 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-orange-600 hover:bg-orange-50 transition-colors border-t border-gray-50 cursor-pointer"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                                </svg>
+                                                                Edit Details
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
@@ -402,11 +416,11 @@ const ResiProfile = () => {
                                         <div className="p-5 flex-1 flex flex-col">
                                             <div className="flex justify-between items-start mb-3">
                                                 <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border ${report.status_id === 1 ? 'bg-orange-50 text-orange-600 border-orange-100' :
-                                                        report.status_id === 2 ? 'bg-cyan-50 text-cyan-600 border-cyan-100' :
+                                                    report.status_id === 2 ? 'bg-cyan-50 text-cyan-600 border-cyan-100' :
                                                         report.status_id === 4 ? 'bg-purple-50 text-purple-600 border-purple-100' :
-                                                        report.status_id === 13 ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
-                                                        report.status_id === 11 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                                        'bg-blue-50 text-blue-600 border-blue-100'
+                                                            report.status_id === 13 ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
+                                                                report.status_id === 11 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                                                    'bg-blue-50 text-blue-600 border-blue-100'
                                                     }`}>
                                                     {statusMap[report.status_id]}
                                                 </span>

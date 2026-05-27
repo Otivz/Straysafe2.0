@@ -457,6 +457,10 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, db: 
     # Update current_status_id (DB column name)
     report.current_status_id = status_update.status_id
 
+    # Update animal condition if provided
+    if status_update.animal_condition:
+        report.condition = status_update.animal_condition
+
     # Use either remarks or status_remarks
     final_remarks = status_update.remarks or status_update.status_remarks
 

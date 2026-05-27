@@ -35,10 +35,8 @@ const SubdDashboard = () => {
 
                 {/* SCROLLABLE AREA */}
                 <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-8 custom-scrollbar bg-[#FAFAF9]">
-                    {/* TWO COLUMN CONTENT SECTION BELOW MAP */}
-                    <div className="flex gap-8">
-                        {/* LEFT TWO-THIRDS */}
-                        <div className="flex-1 flex flex-col space-y-8">
+                    {/* CONTENT SECTION BELOW MAP */}
+                    <div className="flex flex-col space-y-8">
 
                             {/* Header Block */}
                             <div className="flex justify-between items-end">
@@ -266,96 +264,6 @@ const SubdDashboard = () => {
                                     </div>
                                 </div>
                             </div>
-
-                        </div>
-
-                        {/* RIGHT SIDEBAR (AI Insights) */}
-                        <div className="w-80 flex-shrink-0 flex flex-col gap-6">
-
-                            <div className="bg-[#f0f9ff] rounded-[2rem] p-6 pb-8 flex-1">
-                                <div className="flex items-center space-x-3 mb-6">
-                                    <div className="w-8 h-8 bg-white rounded flex items-center justify-center text-[#F97316] shadow-sm">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.715-5.349L11 6.477V16h2a1 1 0 110 2H7a1 1 0 110-2h2V6.477L6.237 7.582l1.715 5.349a1 1 0 01-.285 1.05A3.989 3.989 0 015 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.788l1.599.799L9 4.323V3a1 1 0 011-1z" clipRule="evenodd" /></svg>
-                                    </div>
-                                    <div>
-                                        <h3 className="text-base font-bold text-gray-900">AI Smart Insights</h3>
-                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">Operational Intelligence</p>
-                                    </div>
-                                </div>
-
-                                {/* Live Intelligence Feed */}
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between px-1">
-                                        <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Live Intelligence</h4>
-                                        <div className="flex items-center space-x-1">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
-                                            <span className="text-[8px] font-black text-orange-600 uppercase">Live</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Item 1: Anomaly */}
-                                    <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 border border-white/40 shadow-sm transition-all hover:shadow-md hover:bg-white/80 group">
-                                        <div className="flex items-start space-x-3">
-                                            <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center text-red-600 shrink-0 group-hover:scale-110 transition-transform">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                                </svg>
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center space-x-2 mb-1">
-                                                    <span className="text-[9px] font-black text-red-600 uppercase tracking-tighter">Anomaly Detected</span>
-                                                    <span className="text-[8px] text-gray-400">2m ago</span>
-                                                </div>
-                                                <p className="text-[11px] text-gray-700 leading-snug font-medium">
-                                                    Unusual cluster of sighting reports near <span className="font-bold text-gray-900">Block 4</span>. AI suggests potential stray colony migration.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Item 2: Efficiency */}
-                                    <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 border border-white/40 shadow-sm transition-all hover:shadow-md hover:bg-white/80 group">
-                                        <div className="flex items-start space-x-3">
-                                            <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center text-[#F97316] shrink-0 group-hover:scale-110 transition-transform">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                                                </svg>
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center space-x-2 mb-1">
-                                                    <span className="text-[9px] font-black text-[#F97316] uppercase tracking-tighter">Efficiency Gain</span>
-                                                    <span className="text-[8px] text-gray-400">1h ago</span>
-                                                </div>
-                                                <p className="text-[11px] text-gray-700 leading-snug font-medium">
-                                                    Response time in West Zone improved by <span className="text-sky-600 font-bold">12.4%</span> following route optimization.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Item 3: Forecast */}
-                                    <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 border border-white/40 shadow-sm transition-all hover:shadow-md hover:bg-white/80 group">
-                                        <div className="flex items-start space-x-3">
-                                            <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600 shrink-0 group-hover:scale-110 transition-transform">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                </svg>
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center space-x-2 mb-1">
-                                                    <span className="text-[9px] font-black text-orange-600 uppercase tracking-tighter">Predictive Forecast</span>
-                                                    <span className="text-[8px] text-gray-400">Next 6h</span>
-                                                </div>
-                                                <p className="text-[11px] text-gray-700 leading-snug font-medium">
-                                                    High report probability (85%) in <span className="font-bold text-gray-900">Main Gate</span> between 17:00 - 20:00.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                            </div>
-                        </div>
 
                     </div>
                 </div>

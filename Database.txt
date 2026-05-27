@@ -313,11 +313,10 @@ CREATE TABLE report_categories(
 );
 
 INSERT INTO report_categories(category_name) VALUES
-('Injured Animal'),
-('Aggressive Stray'),
-('Possible Rabies Risk'),
-('Roaming Pack'),
-('Animal Rescue Needed');
+('Injured'),
+('Aggressive'),
+('Roaming'),
+('Rescue Needed');
 
 -- =========================================
 -- REPORT STATUS

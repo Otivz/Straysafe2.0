@@ -27,12 +27,8 @@ import ResidentPet from '../pages/citizen/ResidentPet';
 import ResiProfile from '../pages/citizen/ResiProfile';
 import BrgyDashboard from '../pages/Barangay_Staff/BrgyDashboard';
 import BrgyRescueRequests from '../pages/Barangay_Staff/BrgyRescueRequests';
-import BrgyMapDirection from '../pages/Barangay_Staff/BrgyMapDirection';
-import BrgyHeatMap from '../pages/Barangay_Staff/BrgyHeatMap';
-import BrgyRescueHistory from '../pages/Barangay_Staff/BrgyRescueHistory';
-import BrgyMonitoring from '../pages/Barangay_Staff/BrgyMonitoring';
-import BrgyStaff from '../pages/Barangay_Staff/BrgyStaff';
 import BrgyOperation from '../pages/Barangay_Staff/BrgyOperation';
+import BrgyCommunityAlerts from '../pages/Barangay_Staff/BrgyCommunityAlerts';
 
 
 const AppRoutes = () => {
@@ -114,15 +110,10 @@ const AppRoutes = () => {
             <Route path="/subd/pet-records" element={<SubdPetRecords />} />
             <Route path="/subd/hazard-alert" element={<SubdHazardAlert />} />
 
-            {/* Barangay Staff Routes */}
             <Route path="/brgy/dashboard" element={<BrgyDashboard />} />
-            <Route path="/brgy/operations" element={<BrgyOperation />} />
             <Route path="/brgy/rescue-requests" element={<BrgyRescueRequests />} />
-            <Route path="/brgy/map-direction" element={<BrgyMapDirection />} />
-            <Route path="/brgy/heatmap" element={<BrgyHeatMap />} />
-            <Route path="/brgy/monitoring" element={<BrgyMonitoring />} />
-            <Route path="/brgy/history" element={<BrgyRescueHistory />} />
-            <Route path="/brgy/teams" element={<BrgyStaff />} />
+            <Route path="/brgy/operations" element={<BrgyOperation />} />
+            <Route path="/brgy/community-alerts" element={<BrgyCommunityAlerts />} />
 
 
             {/* Landing Page Route */}

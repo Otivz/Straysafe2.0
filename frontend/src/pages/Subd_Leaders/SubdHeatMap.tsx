@@ -22,7 +22,7 @@ const SubdHeatMap = () => {
     const [mapMode, setMapMode] = useState<'heatmap' | 'pinpoint'>('heatmap');
     const [showSummary, setShowSummary] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
-    
+
     // User Context
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -85,8 +85,8 @@ const SubdHeatMap = () => {
         const points = filtered
             .filter(r => r.latitude && r.longitude)
             .map((r: any) => [
-                parseFloat(r.latitude.toString()), 
-                parseFloat(r.longitude.toString()), 
+                parseFloat(r.latitude.toString()),
+                parseFloat(r.longitude.toString()),
                 r.priority_level === 'High' ? 1.0 : 0.6
             ] as [number, number, number]);
         setHeatmapPoints(points);
@@ -104,7 +104,7 @@ const SubdHeatMap = () => {
             .map((r: any) => {
                 const date = new Date(r.created_at);
                 const timeStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-                
+
                 return {
                     id: r.report_id,
                     lat: parseFloat(r.latitude.toString()),
@@ -115,7 +115,7 @@ const SubdHeatMap = () => {
                     time: timeStr
                 };
             });
-        
+
         setMarkers(marks);
     };
 
@@ -139,13 +139,13 @@ const SubdHeatMap = () => {
                     {/* Overlay: Statistics & Controls */}
                     <div className="absolute top-6 right-6 z-[500] flex flex-col items-end gap-4 pointer-events-none">
                         <div className="flex gap-4 pointer-events-auto">
-                            <SummaryCard 
-                                label="Total Sighted" 
-                                value={reports.length} 
+                            <SummaryCard
+                                label="Total Sighted"
+                                value={reports.length}
                                 className="hidden md:flex !bg-slate-900/90 !border-slate-800"
                             />
-                            
-                            <button 
+
+                            <button
                                 onClick={() => { setShowFilters(!showFilters); setShowSummary(false); }}
                                 className={`bg-slate-900/90 backdrop-blur-xl border border-slate-800 p-5 rounded-2xl shadow-2xl transition-all hover:scale-105 active:scale-95 ${showFilters ? 'ring-2 ring-orange-500/50 border-orange-500/50' : ''}`}
                             >
@@ -154,7 +154,7 @@ const SubdHeatMap = () => {
                                 </svg>
                             </button>
 
-                            <button 
+                            <button
                                 onClick={() => { setShowSummary(!showSummary); setShowFilters(false); }}
                                 className={`bg-slate-900/90 backdrop-blur-xl border border-slate-800 p-5 rounded-2xl shadow-2xl transition-all hover:scale-105 active:scale-95 ${showSummary ? 'ring-2 ring-orange-500/50 border-orange-500/50' : ''}`}
                             >
@@ -174,8 +174,8 @@ const SubdHeatMap = () => {
                                             <button
                                                 key={t}
                                                 onClick={() => setTimeFilter(t)}
-                                                className={`py-2.5 rounded-xl text-[10px] font-black transition-all border ${timeFilter === t 
-                                                    ? 'bg-orange-600 border-orange-600 text-white shadow-lg shadow-orange-900/20' 
+                                                className={`py-2.5 rounded-xl text-[10px] font-black transition-all border ${timeFilter === t
+                                                    ? 'bg-orange-600 border-orange-600 text-white shadow-lg shadow-orange-900/20'
                                                     : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'}`}
                                             >
                                                 {t.toUpperCase()}
@@ -185,7 +185,7 @@ const SubdHeatMap = () => {
                                 </div>
                                 <div>
                                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 block">Intelligence Category</label>
-                                    <select 
+                                    <select
                                         className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-[11px] font-black text-white focus:outline-none focus:border-orange-500 transition-all appearance-none"
                                         value={categoryFilter}
                                         onChange={(e) => setCategoryFilter(e.target.value)}
@@ -208,9 +208,8 @@ const SubdHeatMap = () => {
                                         <div key={idx} className="bg-slate-800/50 border border-slate-700/50 p-4 rounded-2xl">
                                             <div className="flex justify-between items-start mb-1">
                                                 <span className="text-xs font-black text-white">{spot.name}</span>
-                                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${
-                                                    spot.risk === 'High' ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'
-                                                }`}>
+                                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${spot.risk === 'High' ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'
+                                                    }`}>
                                                     {spot.risk}
                                                 </span>
                                             </div>
@@ -229,13 +228,13 @@ const SubdHeatMap = () => {
 
                     {/* Bottom Right Overlay: Map Mode Toggle */}
                     <div className="absolute bottom-6 right-6 z-[500] flex bg-slate-900/90 backdrop-blur-xl p-1.5 rounded-2xl border border-slate-800 shadow-2xl">
-                        <button 
+                        <button
                             onClick={() => setMapMode('heatmap')}
                             className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${mapMode === 'heatmap' ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/20' : 'text-slate-500 hover:text-slate-300'}`}
                         >
                             Heatmap
                         </button>
-                        <button 
+                        <button
                             onClick={() => setMapMode('pinpoint')}
                             className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${mapMode === 'pinpoint' ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/20' : 'text-slate-500 hover:text-slate-300'}`}
                         >
@@ -245,7 +244,7 @@ const SubdHeatMap = () => {
 
                     {/* Full Immersive Map */}
                     <div className="w-full h-full">
-                        <MapComponent 
+                        <MapComponent
                             center={[14.8013, 121.0031]} // Selera Homes center point
                             zoom={16}
                             heatmapPoints={heatmapPoints}
