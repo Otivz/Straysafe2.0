@@ -1,309 +1,382 @@
 import React, { useState } from 'react';
-
 import { type PetRecord } from './types';
 
 interface PetDetailPanelProps {
     pet: PetRecord | null;
     onClose?: () => void;
-    hideRegisteredPets?: boolean;
+    hideRegisteredPets?: boolean; // When true, viewed by citizen/owner
+    onEditClick?: (pet: PetRecord) => void;
+    onReportLostClick?: (pet: PetRecord) => void;
 }
 
-const PetDetailPanel: React.FC<PetDetailPanelProps> = ({ pet, onClose, hideRegisteredPets = false }) => {
-    const [activeTab, setActiveTab] = useState<'vaccination' | 'case' | 'ownership'>('vaccination');
+const PetDetailPanel: React.FC<PetDetailPanelProps> = ({ 
+    pet, 
+    onClose, 
+    hideRegisteredPets = false,
+    onEditClick,
+    onReportLostClick
+}) => {
+    const [activeTab, setActiveTab] = useState<'info' | 'health' | 'behavior' | 'incident'>('info');
+    const [isQrOpen, setIsQrOpen] = useState(false);
 
     if (!pet) return null;
 
+    // Status pill style helper
+    const getStatusStyle = (status: string) => {
+        switch (status?.toLowerCase()) {
+            case 'active':
+            case 'healthy':
+                return 'bg-green-50 text-green-600 border-green-100';
+            case 'lost':
+                return 'bg-red-50 text-red-600 border-red-100';
+            case 'found':
+                return 'bg-blue-50 text-blue-600 border-blue-100';
+            case 'rescued':
+                return 'bg-orange-50 text-[#F97316] border-orange-100';
+            case 'deceased':
+                return 'bg-gray-100 text-gray-600 border-gray-200';
+            default:
+                return 'bg-amber-50 text-amber-600 border-amber-100';
+        }
+    };
+
     return (
-        <div className="bg-[#F8FAFC] w-full h-full flex flex-col animate-in fade-in duration-500 overflow-hidden">
+        <div className="bg-[#FAFAF9] w-full h-full flex flex-col animate-in fade-in duration-500 overflow-hidden font-sans relative">
             {/* Header */}
-            <header className="shrink-0 z-30 bg-white/80 backdrop-blur-md px-8 py-5 flex items-center justify-between border-b border-gray-100">
-                <div className="flex items-center gap-4">
-                    <h1 className="text-xl font-black text-[#B35D25] tracking-tight">Pet Information</h1>
+            <header className="shrink-0 z-30 bg-white px-8 py-5 flex items-center justify-between border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                    <div className="w-2.5 h-6 bg-[#F97316] rounded-full"></div>
+                    <h1 className="text-lg font-black text-[#1a1208] uppercase tracking-wider">Pet Profile Detailed Panel</h1>
                 </div>
                 <div className="flex items-center gap-3">
-                    <button onClick={onClose} className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all">
+                    <button 
+                        onClick={onClose} 
+                        className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#1a1208] hover:bg-gray-50 transition-all cursor-pointer"
+                    >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
                 </div>
             </header>
 
-            {/* Content Area - Now internally scrollable */}
-            <div className="flex-1 overflow-y-auto p-10 pt-12 space-y-12 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-                {/* Hero Section */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-                    {/* Hero Image */}
-                    <div className="lg:col-span-2 relative h-[450px] rounded-[3rem] overflow-hidden shadow-2xl group cursor-pointer border-4 border-transparent hover:border-[#B35D25]/30 hover:shadow-[#B35D25]/20 transition-all duration-500">
+            {/* Content Area */}
+            <div className="flex-1 overflow-y-auto p-8 sm:p-10 space-y-10 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                
+                {/* Hero Profile Block */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Large Photo Overlay */}
+                    <div className="lg:col-span-2 relative h-[380px] rounded-[2.5rem] overflow-hidden shadow-lg border border-gray-100 bg-gray-50">
                         <img 
                             src={pet.avatar} 
                             alt={pet.name} 
-                            className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105" 
+                            className="w-full h-full object-cover" 
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
-                        <div className="absolute inset-0 bg-[#B35D25]/0 group-hover:bg-[#B35D25]/20 transition-colors duration-700 mix-blend-overlay"></div>
-                        <div className="absolute bottom-10 left-10 text-white">
-                            <h2 className="text-6xl font-black mb-2 tracking-tighter">{pet.name}</h2>
-                            <p className="text-lg font-bold text-gray-200 uppercase tracking-widest opacity-90">{pet.breed} • {pet.gender}</p>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent"></div>
+                        <div className="absolute bottom-8 left-8 text-white">
+                            <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                <h2 className="text-4xl font-black uppercase tracking-tight">{pet.name}</h2>
+                                <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm ${getStatusStyle(pet.status)}`}>
+                                    {pet.status}
+                                </span>
+                            </div>
+                            <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">{pet.breed} • {pet.species}</p>
                         </div>
                     </div>
 
-                    {/* Vitals & AI Column */}
-                    <div className="space-y-6">
-                        {/* Vitals Card */}
-                        <div className="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-gray-200/50 border-l-8 border-[#F97316]">
-                            <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-8">Vital Statistics</h3>
-                            <div className="space-y-6">
+                    {/* Vitals Summary Card / Quick Actions */}
+                    <div className="flex flex-col justify-between gap-6">
+                        {/* Vitals summary */}
+                        <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 space-y-5">
+                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Registry Details</h3>
+                            <div className="space-y-4">
                                 <div className="flex justify-between items-center">
-                                    <span className="text-base font-bold text-gray-500">Age</span>
-                                    <span className="text-lg font-black text-gray-900">{pet.age} Years</span>
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Record ID</span>
+                                    <span className="text-xs font-black text-[#1a1208]">{pet.idNumber}</span>
                                 </div>
                                 <div className="border-t border-gray-50"></div>
                                 <div className="flex justify-between items-center">
-                                    <span className="text-base font-bold text-gray-500">Weight</span>
-                                    <span className="text-lg font-black text-gray-900">{pet.weight || '32.5 kg'}</span>
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Owner Name</span>
+                                    <span className="text-xs font-black text-[#1a1208] uppercase">{pet.ownerName}</span>
+                                </div>
+                                <div className="border-t border-gray-50"></div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Owner Email</span>
+                                    <span className="text-xs font-black text-[#1a1208] truncate max-w-[150px]">{pet.ownerEmail}</span>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Contact Button */}
-                        {!hideRegisteredPets && (
-                        <button className="w-full py-5 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-orange-900/10 flex items-center justify-center gap-3 transition-all">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                            </svg>
-                            Contact Owner
-                        </button>
-                        )}
+                        {/* Action Buttons for Citizen Owner */}
+                        {hideRegisteredPets && (
+                            <div className="space-y-3">
+                                <button 
+                                    onClick={() => onEditClick && onEditClick(pet)}
+                                    className="w-full py-4 bg-[#F97316] hover:bg-[#E2620D] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                    Edit Pet
+                                </button>
+                                
+                                {pet.status?.toLowerCase() !== 'lost' && (
+                                    <button 
+                                        onClick={() => onReportLostClick && onReportLostClick(pet)}
+                                        className="w-full py-4 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl font-black text-xs uppercase tracking-widest border border-red-100 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                        Report Lost
+                                    </button>
+                                )}
 
+                                <button 
+                                    onClick={() => setIsQrOpen(true)}
+                                    className="w-full py-4 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-2xl font-black text-xs uppercase tracking-widest border border-gray-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v1m0 11v1m4-12h1a2 2 0 012 2v1m-9 9h1a2 2 0 012 2v1M4 12H3m18 0h-1m-2-5H8a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2V9a2 2 0 00-2-2z" />
+                                    </svg>
+                                    View QR
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                {/* Tabs & Content */}
-                <div className="space-y-10">
-                    <div className="flex items-center gap-12 border-b border-gray-100">
-                        {['Vaccination', 'Case History', 'Ownership']
-                            .filter(tab => !(hideRegisteredPets && tab === 'Ownership'))
-                            .map((tab) => (
+                {/* Styled Category Tabs */}
+                <div className="space-y-6">
+                    <div className="flex items-center gap-8 border-b border-gray-100 overflow-x-auto pb-1 scrollbar-none">
+                        {[
+                            { id: 'info', label: 'Pet Information' },
+                            { id: 'health', label: 'Health Information' },
+                            { id: 'behavior', label: 'Behavior Information' },
+                            { id: 'incident', label: 'Incident History' }
+                        ].map((tab) => (
                             <button 
-                                key={tab}
-                                onClick={() => setActiveTab(tab.toLowerCase().split(' ')[0] as any)}
-                                className={`pb-6 text-sm font-black uppercase tracking-widest transition-all relative ${
-                                    activeTab === tab.toLowerCase().split(' ')[0] ? 'text-[#B35D25]' : 'text-gray-400 hover:text-gray-600'
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id as any)}
+                                className={`pb-4 text-xs font-black uppercase tracking-widest transition-all relative shrink-0 cursor-pointer ${
+                                    activeTab === tab.id ? 'text-[#F97316]' : 'text-gray-400 hover:text-gray-600'
                                 }`}
                             >
-                                {tab}
-                                {activeTab === tab.toLowerCase().split(' ')[0] && (
-                                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#B35D25] rounded-t-full"></div>
+                                {tab.label}
+                                {activeTab === tab.id && (
+                                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#F97316] rounded-t-full"></div>
                                 )}
                             </button>
                         ))}
                     </div>
 
-                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        {activeTab === 'vaccination' && (
-                            <div className="space-y-8 animate-in fade-in duration-500">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-green-600">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
+                    {/* Tab Panels */}
+                    <div className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        
+                        {/* Tab 1: Pet Information */}
+                        {activeTab === 'info' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="space-y-5">
+                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Base Statistics</h4>
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                            <span className="text-xs font-bold text-gray-500">Gender</span>
+                                            <span className="text-xs font-black text-[#1a1208] uppercase">{pet.gender}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                            <span className="text-xs font-bold text-gray-500">Estimated Age</span>
+                                            <span className="text-xs font-black text-[#1a1208] uppercase">{pet.age}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                            <span className="text-xs font-bold text-gray-500">Species</span>
+                                            <span className="text-xs font-black text-[#1a1208] uppercase">{pet.species}</span>
+                                        </div>
                                     </div>
-                                    <h4 className="text-2xl font-black text-gray-900 tracking-tight">Vaccination Status</h4>
                                 </div>
 
-                                <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 flex items-center justify-between">
-                                    <div>
-                                        <h5 className="text-lg font-black text-gray-900 mb-1">Rabies & Core Vaccines</h5>
-                                        <p className="text-sm text-gray-500 font-medium">Status based on subdivision registry records.</p>
+                                <div className="space-y-5">
+                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Physical Attributes</h4>
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                            <span className="text-xs font-bold text-gray-500">Size Category</span>
+                                            <span className="text-xs font-black text-[#1a1208] uppercase">{pet.sizeCategory || 'Medium'}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                            <span className="text-xs font-bold text-gray-500">Weight</span>
+                                            <span className="text-xs font-black text-[#1a1208] uppercase">{pet.weight || 'Unknown'}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                            <span className="text-xs font-bold text-gray-500">Color Markings</span>
+                                            <span className="text-xs font-black text-[#1a1208] uppercase truncate max-w-[200px]">{pet.colorMarkings || 'Unknown'}</span>
+                                        </div>
                                     </div>
-                                    <div className={`px-6 py-3 rounded-xl font-black uppercase tracking-widest text-sm flex items-center gap-2 ${pet.status === 'VACCINATED' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                                        {pet.status === 'VACCINATED' ? (
-                                            <>
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                                </svg>
-                                                Vaccinated
-                                            </>
-                                        ) : (
-                                            <>
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                                                </svg>
-                                                Not Vaccinated
-                                            </>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Tab 2: Health Information */}
+                        {activeTab === 'health' && (
+                            <div className="space-y-8">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div className="space-y-4">
+                                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Vaccination Records</h4>
+                                        <div className="bg-[#FAFAF9] p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
+                                            <div>
+                                                <p className="text-xs font-black text-[#1a1208] uppercase mb-0.5">Rabies & Core Registry</p>
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase">
+                                                    {pet.isVaccinated ? `Vaccinated on: ${pet.vaccinationDate || 'Unknown'}` : 'Not Registered'}
+                                                </p>
+                                            </div>
+                                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border ${pet.isVaccinated ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
+                                                {pet.isVaccinated ? 'Vaccinated' : 'Not Vaccinated'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Spay/Neuter Status</h4>
+                                        <div className="bg-[#FAFAF9] p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
+                                            <div>
+                                                <p className="text-xs font-black text-[#1a1208] uppercase mb-0.5">Spayed / Neutered State</p>
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase">Surgical alignment record</p>
+                                            </div>
+                                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border ${pet.isNeutered ? 'bg-green-50 text-green-600 border-green-100' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                                {pet.isNeutered ? 'Neutered' : 'No'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Health Conditions & Remarks</h4>
+                                    <div className="bg-[#FAFAF9] p-6 rounded-2xl border border-gray-100">
+                                        <p className="text-sm font-semibold text-[#1a1208] leading-relaxed">{pet.healthCondition}</p>
+                                        {pet.notes && (
+                                            <p className="text-xs font-medium text-gray-400 mt-4 border-t border-gray-200/50 pt-3">
+                                                <span className="font-bold uppercase tracking-widest text-[9px]">Additional Notes:</span> {pet.notes}
+                                            </p>
                                         )}
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {activeTab === 'case' && (
-                            <div className="space-y-8">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
+                        {/* Tab 3: Behavior Information */}
+                        {activeTab === 'behavior' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="space-y-5">
+                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Social Temperament</h4>
+                                    <div className="bg-[#FAFAF9] p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-xs font-black text-[#1a1208] uppercase mb-0.5">Temperament Profile</p>
+                                            <p className="text-[10px] text-gray-400 font-bold uppercase">Behavioral classification</p>
+                                        </div>
+                                        <span className="px-3.5 py-1.5 bg-orange-50 text-[#F97316] border border-orange-100 rounded-full text-[9px] font-black uppercase tracking-widest">
+                                            {pet.temperament || 'Friendly'}
+                                        </span>
                                     </div>
-                                    <h4 className="text-2xl font-black text-gray-900 tracking-tight">Past Reports</h4>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 flex gap-6 items-center hover:shadow-md transition-shadow">
-                                        <div className="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-400 shrink-0">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                            </svg>
+                                <div className="space-y-5">
+                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest font-bold">Behavior Triggers</h4>
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                            <span className="text-xs font-bold text-gray-500">Has Bite History?</span>
+                                            <span className={`text-xs font-black uppercase ${pet.hasBiteHistory ? 'text-red-500' : 'text-green-600'}`}>
+                                                {pet.hasBiteHistory ? 'Yes' : 'No'}
+                                            </span>
                                         </div>
-                                        <div>
-                                            <h5 className="text-lg font-black text-gray-900 mb-1">Reported Found (Temporary)</h5>
-                                            <p className="text-sm text-gray-500 font-medium mb-3">Briefly separated from owner at Oakwood Park. Scanning chip identified owner instantly.</p>
-                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Case #4429 • Mar 20, 2022</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 flex gap-6 items-center hover:shadow-md transition-shadow">
-                                        <div className="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-400 shrink-0">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                            </svg>
-                                        </div>
-                                        <div>
-                                            <h5 className="text-lg font-black text-gray-900 mb-1">Registration Updated</h5>
-                                            <p className="text-sm text-gray-500 font-medium mb-3">Address and secondary emergency contact details updated in national database.</p>
-                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Update #1105 • Jan 15, 2021</p>
+                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                            <span className="text-xs font-bold text-gray-500">Chase Behavior?</span>
+                                            <span className={`text-xs font-black uppercase ${pet.chaseBehavior ? 'text-red-500' : 'text-green-600'}`}>
+                                                {pet.chaseBehavior ? 'Yes' : 'No'}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {activeTab === 'ownership' && (
-                            <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                {/* Owner Profile Card */}
-                                <div className="bg-white rounded-[2.5rem] shadow-xl shadow-gray-200/50 border border-gray-100 flex flex-col md:flex-row p-8 gap-8 items-start">
-                                    <div className="w-40 h-40 shrink-0">
-                                        <img 
-                                            src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=600&h=800&auto=format&fit=crop" 
-                                            alt="Owner" 
-                                            className="w-full h-full object-cover rounded-[1.5rem] shadow-md" 
-                                        />
+                        {/* Tab 4: Incident History */}
+                        {activeTab === 'incident' && (
+                            <div className="space-y-8 animate-in fade-in duration-300">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    {/* Aggressive incidents */}
+                                    <div className="bg-[#FAFAF9] p-6 rounded-2xl border border-gray-100 flex flex-col justify-between">
+                                        <div>
+                                            <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Aggressive Incidents</h5>
+                                            <p className="text-[11px] text-gray-500 font-semibold leading-relaxed">No community-logged aggressive events in the database.</p>
+                                        </div>
+                                        <div className="mt-4 flex items-center gap-1.5 text-[9px] font-black text-green-600 uppercase tracking-wider bg-green-50 px-2.5 py-1 rounded-md w-max">
+                                            <span>✓</span> Clear Record
+                                        </div>
                                     </div>
-                                    <div className="flex-1 space-y-8">
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <h3 className="text-3xl font-black text-gray-900 mb-2 tracking-tight">{pet.ownerName}</h3>
-                                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm5 3h1a1 1 0 011 1v1H9v-1a1 1 0 011-1h1z" />
-                                                    </svg>
-                                                    Account #P-98421 • Member since May 2021
-                                                </p>
-                                            </div>
-                                        </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                            <div className="flex gap-4">
-                                                <div className="w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center text-[#F97316] shrink-0">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                                    </svg>
-                                                </div>
-                                                <div>
-                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Phone</p>
-                                                    <p className="text-sm font-black text-gray-900">+1 (555) 234-8901</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex gap-4">
-                                                <div className="w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center text-[#F97316] shrink-0">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 00-2 2z" />
-                                                    </svg>
-                                                </div>
-                                                <div>
-                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Email</p>
-                                                    <p className="text-sm font-black text-gray-900">{pet.ownerEmail}</p>
-                                                </div>
-                                            </div>
+                                    {/* Reports */}
+                                    <div className="bg-[#FAFAF9] p-6 rounded-2xl border border-gray-100 flex flex-col justify-between">
+                                        <div>
+                                            <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Sighting Reports</h5>
+                                            <p className="text-[11px] text-gray-500 font-semibold leading-relaxed">No citizen-logged stray sightings linked to this identity.</p>
                                         </div>
+                                        <div className="mt-4 flex items-center gap-1.5 text-[9px] font-black text-green-600 uppercase tracking-wider bg-green-50 px-2.5 py-1 rounded-md w-max">
+                                            <span>✓</span> Clear Record
+                                        </div>
+                                    </div>
 
-                                        <div className="flex gap-4 border-t border-gray-50 pt-8">
-                                            <div className="w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center text-[#F97316] shrink-0">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                </svg>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Residential Address</p>
-                                                <p className="text-sm font-black text-gray-900 leading-relaxed">
-                                                    742 Maplewood Avenue,<br />
-                                                    Highland Park, IL 60035
-                                                </p>
-                                            </div>
+                                    {/* Rescue history */}
+                                    <div className="bg-[#FAFAF9] p-6 rounded-2xl border border-gray-100 flex flex-col justify-between">
+                                        <div>
+                                            <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Rescue Dispatches</h5>
+                                            <p className="text-[11px] text-gray-500 font-semibold leading-relaxed">No subdivision or barangay rescue dispatches recorded.</p>
+                                        </div>
+                                        <div className="mt-4 flex items-center gap-1.5 text-[9px] font-black text-green-600 uppercase tracking-wider bg-green-50 px-2.5 py-1 rounded-md w-max">
+                                            <span>✓</span> Clear Record
                                         </div>
                                     </div>
                                 </div>
-
-                                {/* Registered Pets Section */}
-                                {!hideRegisteredPets && (
-                                <div className="space-y-8">
-                                    <div className="flex justify-between items-center">
-                                        <h4 className="text-2xl font-black text-gray-900 tracking-tight">Registered Pets</h4>
-                                        <button className="text-[10px] font-black text-[#F97316] uppercase tracking-widest hover:underline flex items-center gap-2">
-                                            <span>+</span> Register New Pet
-                                        </button>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex gap-6 items-center hover:shadow-md transition-shadow">
-                                            <img 
-                                                src={pet.avatar} 
-                                                alt="Other Pet" 
-                                                className="w-20 h-20 rounded-2xl object-cover shrink-0" 
-                                            />
-                                            <div className="flex-1">
-                                                <div className="flex justify-between items-start mb-1">
-                                                    <h5 className="text-lg font-black text-gray-900">{pet.name}</h5>
-                                                </div>
-                                                <p className="text-xs font-bold text-gray-400 mb-4">{pet.breed} • {pet.age} Years</p>
-                                                <div className="flex justify-between items-center">
-                                                    <div className="flex gap-1">
-                                                        <div className="w-5 h-5 rounded-full bg-orange-50 text-[8px] font-black flex items-center justify-center text-[#F97316]">V</div>
-                                                        <div className="w-5 h-5 rounded-full bg-blue-50 text-[8px] font-black flex items-center justify-center text-blue-600">C</div>
-                                                    </div>
-                                                    <p className="text-[8px] font-black text-gray-400 italic">Next visit: Oct 12, 2024</p>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex gap-6 items-center hover:shadow-md transition-shadow">
-                                            <img 
-                                                src="https://images.unsplash.com/photo-1513245543132-31f507417b26?q=80&w=400&h=400&auto=format&fit=crop" 
-                                                alt="Other Pet" 
-                                                className="w-20 h-20 rounded-2xl object-cover shrink-0" 
-                                            />
-                                            <div className="flex-1">
-                                                <div className="flex justify-between items-start mb-1">
-                                                    <h5 className="text-lg font-black text-gray-900">Luna</h5>
-                                                </div>
-                                                <p className="text-xs font-bold text-gray-400 mb-4">Siamese Cat • 2 Years</p>
-                                                <div className="flex justify-between items-center">
-                                                    <div className="w-5 h-5 rounded-full bg-red-50 text-[8px] font-black flex items-center justify-center text-red-600">M</div>
-                                                    <p className="text-[8px] font-black text-gray-400 italic">Refill due in 3 days</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                )}
                             </div>
                         )}
+
                     </div>
                 </div>
+
             </div>
+
+            {/* Mock QR Code Modal */}
+            {isQrOpen && (
+                <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
+                    <div 
+                        className="absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300"
+                        onClick={() => setIsQrOpen(false)}
+                    />
+                    <div className="relative w-full max-w-sm bg-white rounded-[2.5rem] p-8 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 text-center">
+                        <h3 className="text-xl font-black text-[#1a1208] uppercase tracking-tight mb-2">Pet ID QR Code</h3>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-6">StraySafe Smart Identification Tag</p>
+                        
+                        {/* High-Fidelity Mock QR Container */}
+                        <div className="w-48 h-48 mx-auto bg-gray-50 border-4 border-dashed border-[#F97316]/20 rounded-3xl p-6 flex flex-col items-center justify-center relative mb-6 shadow-inner group">
+                            {/* Inset mock QR code layout */}
+                            <div className="w-full h-full bg-cover bg-center rounded-lg opacity-90" style={{ backgroundImage: "url('https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=straysafe_pet_id_'" + pet.idNumber }}></div>
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 bg-white rounded-xl shadow-md border border-gray-100 flex items-center justify-center">
+                                <img src="/SSLOGO.png" className="h-7 w-auto" alt="Logo" />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5 mb-8">
+                            <p className="text-base font-black text-[#1a1208] uppercase">{pet.name}</p>
+                            <p className="text-[10px] font-black text-[#F97316] uppercase tracking-widest">{pet.idNumber}</p>
+                            <p className="text-[11px] text-gray-400 font-semibold px-4 mt-2">Scan to retrieve vaccine verification, owner contact details, and emergency subdivision records.</p>
+                        </div>
+
+                        <button 
+                            onClick={() => setIsQrOpen(false)}
+                            className="w-full py-4 bg-[#1a1208] hover:bg-[#2c2010] text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-md transition-all cursor-pointer"
+                        >
+                            Close QR Tag
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -114,8 +114,8 @@ const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, o
 
                         {/* DESKTOP NAV REMOVED */}
                         <div className="hidden md:flex items-center gap-6">
-                            {/* Search Input - Hidden on Profile page as it has its own search */}
-                            {location.pathname !== '/resident/profile' && (
+                            {/* Search Input - Hidden on Profile and Pets pages as they have their own search */}
+                            {location.pathname !== '/resident/profile' && location.pathname !== '/resident/pets' && (
                                 <div className="relative group">
                                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                         <svg className="h-4 w-4 text-gray-400 group-focus-within:text-[#F97316] transition-colors" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">

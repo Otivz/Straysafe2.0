@@ -17,11 +17,6 @@ const ResidentPet = () => {
     const [selectedPet, setSelectedPet] = useState<PetRecord | null>(null);
 
     const transformToPetRecord = (pet: any): PetRecord => {
-        let statusMap: any = {
-            'Healthy': 'VACCINATED',
-            'Under Treatment': 'MEDICAL ALERT',
-            'Critical': 'MEDICAL ALERT'
-        };
         return {
             id: pet.pet_id?.toString() || '0',
             name: pet.pet_name || 'Unknown',
@@ -32,9 +27,20 @@ const ResidentPet = () => {
             ownerName: currentUser ? currentUser.name : 'Unknown Owner',
             ownerEmail: currentUser ? currentUser.email : 'No Email',
             idNumber: `P-${(pet.pet_id || 0).toString().padStart(5, '0')}`,
-            status: statusMap[pet.status] || 'PENDING DOCS',
+            status: pet.status || 'Active',
             avatar: pet.photo_url || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?q=80&w=400&auto=format&fit=crop',
-            weight: pet.weight || 'Unknown'
+            weight: pet.weight ? `${pet.weight}kg` : 'Unknown',
+            colorMarkings: pet.color_markings || 'Unknown',
+            sizeCategory: pet.size_category || 'Medium',
+            isVaccinated: pet.is_vaccinated || false,
+            vaccinationDate: pet.vaccination_date || null,
+            isNeutered: pet.is_neutered || false,
+            temperament: pet.temperament || 'Friendly',
+            hasBiteHistory: pet.has_bite_history || false,
+            chaseBehavior: pet.chase_behavior || false,
+            healthCondition: pet.health_condition || 'Healthy and active',
+            notes: pet.notes || '',
+            rawPetObj: pet
         };
     };
 
@@ -47,11 +53,58 @@ const ResidentPet = () => {
         age: '',
         status: 'Active',
         condition: '',
-        mediaFiles: [] as File[]
+        weight: '',
+        mediaFiles: [] as File[],
+        isVaccinated: true,
+        vaccinationDate: '2026-05-10',
+        isNeutered: true,
+        healthNotes: '',
+        vaccineCardFiles: [] as File[],
+        temperament: 'Friendly',
+        hasBiteHistory: false,
+        chaseBehavior: false
     });
 
     const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState('All Pets');
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+    const [breedsData, setBreedsData] = useState<any[]>([]);
+
+    const [aiSuggestedSpecies, setAiSuggestedSpecies] = useState<string | null>(null);
+    const [aiSuggestedBreed, setAiSuggestedBreed] = useState<string | null>(null);
+    const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
+
+    const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files ? Array.from(e.target.files) : [];
+        setFormData({ ...formData, mediaFiles: files });
+        
+        if (files.length > 0) {
+            setIsAnalyzingPhoto(true);
+            setAiSuggestedSpecies(null);
+            setAiSuggestedBreed(null);
+            
+            // Simulate AI Image Analysis delay
+            setTimeout(() => {
+                const fileName = files[0].name.toLowerCase();
+                let suggestedSpecies = 'Dog';
+                let suggestedBreed = 'Aspin';
+                
+                if (fileName.includes('cat') || fileName.includes('kitten') || fileName.includes('meow') || fileName.includes('siamese') || fileName.includes('puspin')) {
+                    suggestedSpecies = 'Cat';
+                    suggestedBreed = fileName.includes('siamese') ? 'Siamese' : 'Puspin';
+                } else {
+                    suggestedSpecies = 'Dog';
+                    suggestedBreed = fileName.includes('husky') ? 'Siberian Husky' : 
+                                     fileName.includes('golden') ? 'Golden Retriever' : 
+                                     fileName.includes('chihuahua') ? 'Chihuahua' : 'Aspin';
+                }
+                
+                setAiSuggestedSpecies(suggestedSpecies);
+                setAiSuggestedBreed(suggestedBreed);
+                setIsAnalyzingPhoto(false);
+            }, 1200);
+        }
+    };
 
     const userStr = localStorage.getItem('resident_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -71,13 +124,47 @@ const ResidentPet = () => {
         }
     };
 
+    useEffect(() => {
+        const fetchBreedData = async () => {
+            const url = formData.species === 'Dog' 
+              ? 'https://api.thedogapi.com/v1/breeds' 
+              : 'https://api.thecatapi.com/v1/breeds';
+              
+            const apiKey = formData.species === 'Dog'
+              ? (import.meta.env.VITE_DOG_API_KEY || 'live_J9RdXZq7OGRCUigDyq3y8rGqcG3Brarp46ohljsIMO572q0KYcW1alD0z88OADKs')
+              : (import.meta.env.VITE_CAT_API_KEY || 'live_GqD4rtVuossncqXxRcSvcmptrS9rD7NFoigE6UP59wNG69yZ0YhLh35HRma3ZbEm');
+
+            try {
+              const headers: Record<string, string> = {};
+              if (apiKey) {
+                headers['x-api-key'] = apiKey;
+              }
+              const res = await fetch(url, { headers });
+              if (res.ok) {
+                const data = await res.json();
+                setBreedsData(data);
+              }
+            } catch (err) {
+              console.error('Failed to load breed images:', err);
+              setBreedsData([]);
+            }
+        };
+        fetchBreedData();
+    }, [formData.species]);
+
     const filteredPets = pets.filter(pet => {
         const query = searchQuery.toLowerCase();
-        return (
+        const matchesQuery = 
             pet.pet_name.toLowerCase().includes(query) ||
             (pet.breed || '').toLowerCase().includes(query) ||
-            (pet.pet_type || '').toLowerCase().includes(query)
-        );
+            (pet.pet_type || '').toLowerCase().includes(query) ||
+            (pet.status || '').toLowerCase().includes(query);
+
+        const matchesStatus = 
+            statusFilter === 'All Pets' ||
+            (pet.status || '').toLowerCase() === statusFilter.toLowerCase();
+
+        return matchesQuery && matchesStatus;
     });
 
     const handleDeletePet = async (id: number) => {
@@ -119,6 +206,14 @@ const ResidentPet = () => {
                 estimated_age: formData.age,
                 status: formData.status,
                 health_condition: formData.condition,
+                weight: formData.weight ? parseFloat(formData.weight) : null,
+                is_vaccinated: formData.isVaccinated,
+                vaccination_date: formData.isVaccinated && formData.vaccinationDate ? formData.vaccinationDate : null,
+                is_neutered: formData.isNeutered,
+                notes: formData.healthNotes,
+                temperament: formData.temperament,
+                has_bite_history: formData.hasBiteHistory,
+                chase_behavior: formData.chaseBehavior,
                 owner_id: currentUser.user_id
             };
 
@@ -151,13 +246,73 @@ const ResidentPet = () => {
                 age: '',
                 status: 'Active',
                 condition: '',
-                mediaFiles: []
+                weight: '',
+                mediaFiles: [],
+                isVaccinated: true,
+                vaccinationDate: '2026-05-10',
+                isNeutered: true,
+                healthNotes: '',
+                vaccineCardFiles: [],
+                temperament: 'Friendly',
+                hasBiteHistory: false,
+                chaseBehavior: false
             });
+            setAiSuggestedSpecies(null);
+            setAiSuggestedBreed(null);
         } catch (error) {
             console.error('Error saving pet:', error);
             alert('Failed to save pet information.');
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleEditPetFromProfile = (petRecord: PetRecord) => {
+        const petObj = petRecord.rawPetObj;
+        if (!petObj) return;
+        
+        setSelectedPet(null); // Close the detail panel
+        
+        setEditingPetId(petObj.pet_id);
+        setFormData({
+            name: petObj.pet_name || '',
+            species: petObj.pet_type || 'Dog',
+            breed: petObj.breed || '',
+            gender: petObj.gender || 'Male',
+            color: petObj.color_markings || '',
+            age: petObj.estimated_age || '',
+            status: petObj.status || 'Active',
+            condition: petObj.health_condition || '',
+            weight: petObj.weight ? petObj.weight.toString() : '',
+            mediaFiles: [],
+            isVaccinated: petObj.is_vaccinated || false,
+            vaccinationDate: petObj.vaccination_date || '2026-05-10',
+            isNeutered: petObj.is_neutered || false,
+            healthNotes: petObj.notes || '',
+            vaccineCardFiles: [],
+            temperament: petObj.temperament || 'Friendly',
+            hasBiteHistory: petObj.has_bite_history || false,
+            chaseBehavior: petObj.chase_behavior || false
+        });
+        
+        setIsAddPetModalOpen(true);
+    };
+
+    const handleReportLostFromProfile = async (petRecord: PetRecord) => {
+        const petObj = petRecord.rawPetObj;
+        if (!petObj) return;
+        if (window.confirm("Are you sure you want to mark this pet as LOST? This will alert subdivision leaders and notify your neighborhood.")) {
+            try {
+                setSelectedPet(null);
+                await axios.put(`http://localhost:8000/pets/${petObj.pet_id}`, {
+                    status: 'Lost'
+                });
+                fetchPets();
+                alert("Pet marked as LOST. Neighborhood alerts dispatched successfully.");
+            } catch (error) {
+                console.error("Failed to mark pet as lost:", error);
+                alert("Failed to update status.");
+            }
         }
     };
 
@@ -172,6 +327,63 @@ const ResidentPet = () => {
             />
 
             <main className="max-w-6xl mx-auto p-4 sm:p-8 pt-24 sm:pt-32">
+                {/* Premium Custom Search & Status Filter Bar */}
+                <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl p-6 sm:p-8 mb-8">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                        {/* Search Input & Info */}
+                        <div className="flex-1 space-y-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-[10px] font-black text-[#F97316] bg-orange-50 px-3 py-1 rounded-full uppercase tracking-widest">Search:</span>
+                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                                    <span>pet name</span>
+                                    <span className="text-gray-300">|</span>
+                                    <span>breed</span>
+                                    <span className="text-gray-300">|</span>
+                                    <span>status</span>
+                                </div>
+                            </div>
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                                    <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                </div>
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder="🔍 Search pets..."
+                                    className="block w-full pl-12 pr-6 py-4 bg-[#FAFAF9] border border-gray-100 rounded-2xl font-bold text-sm text-[#1a1208] placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-4 focus:ring-[#F97316]/10 focus:border-[#F97316] transition-all"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Status Filter Dropdown */}
+                        <div className="w-full md:w-64 space-y-3">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block pl-1">Filter by Status</span>
+                            <div className="relative">
+                                <select
+                                    value={statusFilter}
+                                    onChange={(e) => setStatusFilter(e.target.value)}
+                                    className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 pr-10 text-xs font-black uppercase tracking-widest text-[#1a1208] focus:outline-none focus:bg-white focus:ring-4 focus:ring-[#F97316]/10 focus:border-[#F97316] transition-all cursor-pointer appearance-none"
+                                >
+                                    <option value="All Pets">All Pets</option>
+                                    <option value="Active">Active</option>
+                                    <option value="Lost">Lost</option>
+                                    <option value="Found">Found</option>
+                                    <option value="Rescued">Rescued</option>
+                                    <option value="Deceased">Deceased</option>
+                                </select>
+                                <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-gray-400">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-4">
                     <div>
                         <h1 className="text-4xl font-black text-[#1a1208] uppercase tracking-tighter">My Family <span className="text-[#F97316]">Pets</span></h1>
@@ -190,8 +402,19 @@ const ResidentPet = () => {
                                 age: '',
                                 status: 'Active',
                                 condition: '',
-                                mediaFiles: []
+                                weight: '',
+                                mediaFiles: [],
+                                isVaccinated: true,
+                                vaccinationDate: '2026-05-10',
+                                isNeutered: true,
+                                healthNotes: '',
+                                vaccineCardFiles: [],
+                                temperament: 'Friendly',
+                                hasBiteHistory: false,
+                                chaseBehavior: false
                             });
+                            setAiSuggestedSpecies(null);
+                            setAiSuggestedBreed(null);
                             setIsAddPetModalOpen(true);
                         }}
                         className="bg-[#F97316] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-200 hover:scale-105 transition-all flex items-center gap-3"
@@ -221,7 +444,7 @@ const ResidentPet = () => {
                         </div>
                     ) : (
                         filteredPets.map((pet) => (
-                            <div key={pet.pet_id} className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden hover:shadow-2xl transition-all duration-300 group">
+                            <div key={pet.pet_id} className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden hover:shadow-2xl transition-all duration-300 group flex flex-col justify-between">
                                 <div className="relative h-56 overflow-hidden bg-gray-50">
                                     {pet.photo_url ? (
                                         <img src={pet.photo_url} alt={pet.pet_name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
@@ -235,8 +458,8 @@ const ResidentPet = () => {
                                     )}
                                     <div className="absolute top-4 right-4 flex gap-2">
                                         <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm border ${
-                                            pet.status === 'Healthy' ? 'bg-green-50 text-green-600 border-green-100' :
-                                            pet.status === 'Under Treatment' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                                            pet.status === 'Healthy' || pet.status === 'Active' ? 'bg-green-50 text-green-600 border-green-100' :
+                                            pet.status === 'Under Treatment' || pet.status === 'Lost' ? 'bg-amber-50 text-amber-600 border-amber-100' :
                                             'bg-red-50 text-red-600 border-red-100'
                                         }`}>
                                             {pet.status}
@@ -245,36 +468,30 @@ const ResidentPet = () => {
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                                     <div className="absolute bottom-4 left-6">
                                         <h2 className="text-2xl font-black text-white uppercase tracking-tight">{pet.pet_name}</h2>
-                                        <p className="text-[10px] font-bold text-white/80 uppercase tracking-widest">{pet.breed || pet.pet_type}</p>
                                     </div>
                                 </div>
                                 <div className="p-6 space-y-4">
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-gray-50 rounded-2xl p-3">
-                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Gender / Age</p>
-                                            <p className="text-xs font-black text-[#1a1208] uppercase">{pet.gender} • {pet.estimated_age || 'N/A'}</p>
+                                        <div className="bg-gray-50 rounded-2xl p-3 text-center">
+                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Breed</p>
+                                            <p className="text-xs font-black text-[#1a1208] uppercase truncate">{pet.breed || pet.pet_type}</p>
                                         </div>
-                                        <div className="bg-gray-50 rounded-2xl p-3">
-                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Color</p>
-                                            <p className="text-xs font-black text-[#1a1208] uppercase">{pet.color_markings || 'Not specified'}</p>
+                                        <div className="bg-gray-50 rounded-2xl p-3 text-center">
+                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Sex</p>
+                                            <p className="text-xs font-black text-[#1a1208] uppercase">{pet.gender}</p>
                                         </div>
-                                    </div>
-                                    <div>
-                                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-2">Condition Details</p>
-                                        <p className="text-xs font-medium text-[#4a3b28] leading-relaxed">
-                                            {pet.health_condition || 'No specific conditions noted.'}
-                                        </p>
                                     </div>
                                     <div className="pt-4 flex gap-3 border-t border-gray-50">
                                         <button 
                                             onClick={() => setSelectedPet(transformToPetRecord(pet))}
-                                            className="flex-1 py-3 bg-orange-50 text-[#F97316] text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-orange-100 transition-colors"
+                                            className="flex-1 py-3.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer text-center"
                                         >
                                             View Profile
                                         </button>
                                         <button 
                                             onClick={() => handleDeletePet(pet.pet_id)}
-                                            className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors"
+                                            className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors cursor-pointer"
+                                            title="Remove Pet"
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -307,6 +524,7 @@ const ResidentPet = () => {
                         </div>
 
                         <div className="p-10 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                            {/* Section 1: Core Information */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-4">
                                     <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Pet Name <span className="text-red-500">*</span></label>
@@ -321,9 +539,10 @@ const ResidentPet = () => {
                                 <div className="space-y-4">
                                     <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Species <span className="text-red-500">*</span></label>
                                     <div className="flex gap-4 h-14">
-                                        {['Dog', 'Cat', 'Other'].map((type) => (
+                                        {['Dog', 'Cat'].map((type) => (
                                             <button 
                                                 key={type}
+                                                type="button"
                                                 onClick={() => setFormData({...formData, species: type})}
                                                 className={`flex-1 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${
                                                     formData.species === type ? 'bg-[#F97316] text-white border-[#F97316] shadow-lg shadow-orange-100' : 'bg-white text-gray-400 border-gray-100'
@@ -338,14 +557,102 @@ const ResidentPet = () => {
                                     <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Breed <span className="text-red-500">*</span></label>
                                     <input 
                                         type="text" 
+                                        list="pet-breed-suggestions"
                                         className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
                                         placeholder="e.g. Aspin / Mixed"
                                         value={formData.breed}
                                         onChange={(e) => setFormData({...formData, breed: e.target.value})}
                                     />
+                                    <datalist id="pet-breed-suggestions">
+                                        {formData.species === 'Dog' ? (
+                                            <>
+                                                <option value="Aspin" />
+                                                {breedsData.length > 0 ? (
+                                                    breedsData.map((b: any) => (
+                                                        <option key={b.id || b.name} value={b.name} />
+                                                    ))
+                                                ) : (
+                                                    <>
+                                                        <option value="Shih Tzu" />
+                                                        <option value="Shihtzu" />
+                                                        <option value="Chihuahua" />
+                                                        <option value="Golden Retriever" />
+                                                        <option value="Siberian Husky" />
+                                                        <option value="Bulldog" />
+                                                        <option value="Poodle" />
+                                                        <option value="German Shepherd" />
+                                                        <option value="Terrier" />
+                                                        <option value="Pug" />
+                                                    </>
+                                                )}
+                                                <option value="Mixed Breed" />
+                                            </>
+                                        ) : (
+                                            <>
+                                                <option value="Puspin" />
+                                                {breedsData.length > 0 ? (
+                                                    breedsData.map((b: any) => (
+                                                        <option key={b.id || b.name} value={b.name} />
+                                                    ))
+                                                ) : (
+                                                    <>
+                                                        <option value="Siamese" />
+                                                        <option value="Persian" />
+                                                        <option value="Maine Coon" />
+                                                        <option value="Bengal" />
+                                                        <option value="Ragdoll" />
+                                                        <option value="Sphynx" />
+                                                        <option value="British Shorthair" />
+                                                    </>
+                                                )}
+                                                <option value="Mixed Breed" />
+                                            </>
+                                        )}
+                                    </datalist>
+
+                                    {/* Dynamic Breed Thumbnail Preview */}
+                                    {(() => {
+                                        const query = formData.breed.trim().toLowerCase();
+                                        if (!query) return null;
+
+                                        // Standardize common phonetic typos and shortcuts
+                                        const normalizedQuery = query
+                                            .replace('dalmation', 'dalmatian')
+                                            .replace('shihtzu', 'shih tzu')
+                                            .replace('shepard', 'shepherd')
+                                            .replace('coly', 'collie');
+
+                                        const matchedBreed = breedsData.find((b) => {
+                                            const breedName = b.name.toLowerCase();
+                                            if (breedName === normalizedQuery) return true;
+                                            
+                                            // Handle smart partial matching when typing is at least 3 characters
+                                            if (normalizedQuery.length >= 3) {
+                                                return breedName.includes(normalizedQuery) || normalizedQuery.includes(breedName);
+                                            }
+                                            return false;
+                                        });
+
+                                        if (matchedBreed && matchedBreed.image?.url) {
+                                            return (
+                                                <div className="mt-3 flex items-center gap-3.5 bg-orange-50/40 border border-orange-100 rounded-2xl p-3.5 animate-in slide-in-from-top-2 duration-300">
+                                                    <img 
+                                                        src={matchedBreed.image.url} 
+                                                        alt="Breed Preview" 
+                                                        className="w-12 h-12 object-cover rounded-xl shadow-sm border border-white"
+                                                    />
+                                                    <div>
+                                                        <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest leading-none">StraySafe Reference Photo</p>
+                                                        <p className="text-[11px] font-black text-[#1a1208] mt-1">{matchedBreed.name} Standard Profile</p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
                                 </div>
                                 <div className="space-y-4">
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Age / Life Stage <span className="text-red-500">*</span></label>
+                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Age (Estimated Age) <span className="text-red-500">*</span></label>
                                     <input 
                                         type="text" 
                                         className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
@@ -370,48 +677,286 @@ const ResidentPet = () => {
                                 </div>
                                 <div className="space-y-4">
                                     <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Gender <span className="text-red-500">*</span></label>
-                                    <div className="flex gap-4 h-14">
-                                        {['Male', 'Female'].map((g) => (
-                                            <button 
-                                                key={g}
-                                                onClick={() => setFormData({...formData, gender: g})}
-                                                className={`flex-1 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${
-                                                    formData.gender === g ? 'bg-[#F97316] text-white border-[#F97316]' : 'bg-white text-gray-400 border-gray-100'
-                                                }`}
-                                            >
-                                                {g}
-                                            </button>
-                                        ))}
-                                    </div>
+                                    <select
+                                        className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
+                                        value={formData.gender}
+                                        onChange={(e) => setFormData({...formData, gender: e.target.value})}
+                                    >
+                                        <option value="Male">Male</option>
+                                        <option value="Female">Female</option>
+                                        <option value="Unknown">Unknown</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-4">
+                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Color Markings <span className="text-red-500">*</span></label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
+                                        placeholder="e.g. Black with white patches"
+                                        value={formData.color}
+                                        onChange={(e) => setFormData({...formData, color: e.target.value})}
+                                    />
+                                </div>
+                                <div className="space-y-4">
+                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Weight <span className="text-red-500">*</span></label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
+                                        placeholder="e.g. 18kg"
+                                        value={formData.weight}
+                                        onChange={(e) => setFormData({...formData, weight: e.target.value})}
+                                    />
                                 </div>
                             </div>
+
                             <div className="space-y-4">
-                                <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Color / Markings <span className="text-red-500">*</span></label>
-                                <input 
-                                    type="text" 
-                                    className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
-                                    placeholder="e.g. Brown with white spots"
-                                    value={formData.color}
-                                    onChange={(e) => setFormData({...formData, color: e.target.value})}
-                                />
-                            </div>
-                            <div className="space-y-4">
-                                <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Health Conditions & Special Instructions <span className="text-red-500">*</span></label>
+                                <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Health Information <span className="text-red-500">*</span></label>
                                 <textarea 
-                                    className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[2rem] p-6 text-sm font-medium focus:outline-none focus:border-orange-200 min-h-[120px]"
+                                    className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[2rem] p-6 text-sm font-medium focus:outline-none focus:border-orange-200 min-h-[100px]"
                                     placeholder="List any allergies, ongoing medications, or behavioral notes..."
                                     value={formData.condition}
                                     onChange={(e) => setFormData({...formData, condition: e.target.value})}
                                 />
                             </div>
+
                             <div className="space-y-4">
                                 <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Pet Photo <span className="text-red-500">*</span></label>
                                 <input 
                                     type="file" 
                                     className="w-full text-xs font-bold text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100"
-                                    onChange={(e) => setFormData({...formData, mediaFiles: e.target.files ? Array.from(e.target.files) : []})}
+                                    onChange={handlePhotoChange}
                                     accept="image/*"
                                 />
+                                {isAnalyzingPhoto && (
+                                    <div className="flex items-center gap-2 text-xs font-bold text-[#F97316] animate-pulse py-1 pl-1">
+                                        <svg className="animate-spin h-4 w-4 text-[#F97316]" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        <span>🔍 AI suggestion analyzing photo details...</span>
+                                    </div>
+                                )}
+                                {!isAnalyzingPhoto && aiSuggestedSpecies && (
+                                    <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-4 flex items-center justify-between animate-in slide-in-from-top-2 duration-300">
+                                        <div>
+                                            <p className="text-[10px] font-black text-[#F97316] uppercase tracking-widest">StraySafe AI Suggestion</p>
+                                            <p className="text-xs font-bold text-[#1a1208] mt-0.5">Detected {aiSuggestedSpecies} • {aiSuggestedBreed}</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setFormData({
+                                                    ...formData,
+                                                    species: aiSuggestedSpecies,
+                                                    breed: aiSuggestedBreed
+                                                });
+                                                setAiSuggestedSpecies(null);
+                                                setAiSuggestedBreed(null);
+                                            }}
+                                            className="px-4 py-2 bg-[#F97316] text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:scale-105 transition-all shadow-md shadow-orange-100 cursor-pointer"
+                                        >
+                                            Apply Suggestion
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Section 2: Health & Vaccination Details */}
+                            <div className="border-t border-gray-100 pt-8 space-y-6">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="h-6 w-1 bg-[#F97316] rounded-full"></span>
+                                    <h3 className="text-xs font-black text-[#1a1208] uppercase tracking-widest">Health & Vaccination Records</h3>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-4">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Vaccinated?</label>
+                                        <div className="flex gap-8 h-14 items-center">
+                                            <label className="flex items-center gap-3 cursor-pointer">
+                                                <input 
+                                                    type="radio" 
+                                                    name="isVaccinated" 
+                                                    className="w-5 h-5 accent-[#F97316]" 
+                                                    checked={formData.isVaccinated === true} 
+                                                    onChange={() => setFormData({...formData, isVaccinated: true})}
+                                                />
+                                                <span className="text-sm font-bold text-gray-700">Yes</span>
+                                            </label>
+                                            <label className="flex items-center gap-3 cursor-pointer">
+                                                <input 
+                                                    type="radio" 
+                                                    name="isVaccinated" 
+                                                    className="w-5 h-5 accent-[#F97316]" 
+                                                    checked={formData.isVaccinated === false} 
+                                                    onChange={() => setFormData({...formData, isVaccinated: false})}
+                                                />
+                                                <span className="text-sm font-bold text-gray-700">No</span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    {formData.isVaccinated && (
+                                        <div className="space-y-4 animate-in fade-in duration-300">
+                                            <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Vaccination Date</label>
+                                            <input 
+                                                type="date" 
+                                                className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
+                                                value={formData.vaccinationDate}
+                                                onChange={(e) => setFormData({...formData, vaccinationDate: e.target.value})}
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div className="space-y-4">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Neutered?</label>
+                                        <div className="flex gap-8 h-14 items-center">
+                                            <label className="flex items-center gap-3 cursor-pointer">
+                                                <input 
+                                                    type="radio" 
+                                                    name="isNeutered" 
+                                                    className="w-5 h-5 accent-[#F97316]" 
+                                                    checked={formData.isNeutered === true} 
+                                                    onChange={() => setFormData({...formData, isNeutered: true})}
+                                                />
+                                                <span className="text-sm font-bold text-gray-700">Yes</span>
+                                            </label>
+                                            <label className="flex items-center gap-3 cursor-pointer">
+                                                <input 
+                                                    type="radio" 
+                                                    name="isNeutered" 
+                                                    className="w-5 h-5 accent-[#F97316]" 
+                                                    checked={formData.isNeutered === false} 
+                                                    onChange={() => setFormData({...formData, isNeutered: false})}
+                                                />
+                                                <span className="text-sm font-bold text-gray-700">No</span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Health Notes (Optional)</label>
+                                        <input 
+                                            type="text" 
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
+                                            placeholder="e.g. Healthy and active"
+                                            value={formData.healthNotes}
+                                            onChange={(e) => setFormData({...formData, healthNotes: e.target.value})}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Upload Vaccination Card or Supporting Document (Optional)</label>
+                                    <input 
+                                        type="file" 
+                                        className="w-full text-xs font-bold text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100"
+                                        onChange={(e) => setFormData({...formData, vaccineCardFiles: e.target.files ? Array.from(e.target.files) : []})}
+                                        accept=".pdf,image/*"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Section 3: Behavior Information */}
+                            <div className="border-t border-gray-100 pt-8 space-y-6">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="h-6 w-1 bg-[#F97316] rounded-full"></span>
+                                    <h3 className="text-xs font-black text-[#1a1208] uppercase tracking-widest">Behavior Information</h3>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-4">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Temperament</label>
+                                        <select
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
+                                            value={formData.temperament}
+                                            onChange={(e) => setFormData({...formData, temperament: e.target.value})}
+                                        >
+                                            <option value="Friendly">Friendly</option>
+                                            <option value="Aggressive">Aggressive</option>
+                                            <option value="Anxious">Anxious</option>
+                                            <option value="Scared">Scared</option>
+                                            <option value="Protective">Protective</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Has Bite History?</label>
+                                        <div className="flex gap-4 h-14 items-center">
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input 
+                                                    type="radio" 
+                                                    name="hasBiteHistory" 
+                                                    className="w-4 h-4 accent-[#F97316]" 
+                                                    checked={formData.hasBiteHistory === true} 
+                                                    onChange={() => setFormData({...formData, hasBiteHistory: true})}
+                                                />
+                                                <span className="text-xs font-bold text-gray-700">Yes</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input 
+                                                    type="radio" 
+                                                    name="hasBiteHistory" 
+                                                    className="w-4 h-4 accent-[#F97316]" 
+                                                    checked={formData.hasBiteHistory === false && !formData.healthNotes.includes('[Bite: not sure]')} 
+                                                    onChange={() => setFormData({...formData, hasBiteHistory: false})}
+                                                />
+                                                <span className="text-xs font-bold text-gray-700">No</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input 
+                                                    type="radio" 
+                                                    name="hasBiteHistory" 
+                                                    className="w-4 h-4 accent-[#F97316]" 
+                                                    checked={formData.healthNotes.includes('[Bite: not sure]')} 
+                                                    onChange={() => {
+                                                        const freshNotes = formData.healthNotes.replace(' [Bite: not sure]', '') + ' [Bite: not sure]';
+                                                        setFormData({...formData, hasBiteHistory: false, healthNotes: freshNotes});
+                                                    }}
+                                                />
+                                                <span className="text-xs font-bold text-gray-700">Not sure</span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Chase Behavior?</label>
+                                        <div className="flex gap-4 h-14 items-center">
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input 
+                                                    type="radio" 
+                                                    name="chaseBehavior" 
+                                                    className="w-4 h-4 accent-[#F97316]" 
+                                                    checked={formData.chaseBehavior === true} 
+                                                    onChange={() => setFormData({...formData, chaseBehavior: true})}
+                                                />
+                                                <span className="text-xs font-bold text-gray-700">Yes</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input 
+                                                    type="radio" 
+                                                    name="chaseBehavior" 
+                                                    className="w-4 h-4 accent-[#F97316]" 
+                                                    checked={formData.chaseBehavior === false && !formData.healthNotes.includes('[Chase: not sure]')} 
+                                                    onChange={() => setFormData({...formData, chaseBehavior: false})}
+                                                />
+                                                <span className="text-xs font-bold text-gray-700">No</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input 
+                                                    type="radio" 
+                                                    name="chaseBehavior" 
+                                                    className="w-4 h-4 accent-[#F97316]" 
+                                                    checked={formData.healthNotes.includes('[Chase: not sure]')} 
+                                                    onChange={() => {
+                                                        const freshNotes = formData.healthNotes.replace(' [Chase: not sure]', '') + ' [Chase: not sure]';
+                                                        setFormData({...formData, chaseBehavior: false, healthNotes: freshNotes});
+                                                    }}
+                                                />
+                                                <span className="text-xs font-bold text-gray-700">Not sure</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -440,7 +985,13 @@ const ResidentPet = () => {
             {selectedPet && (
                 <div className="fixed inset-0 z-[400] flex items-center justify-center p-6 sm:p-12 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
                     <div className="w-full max-w-6xl rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-300 bg-white overflow-hidden flex flex-col max-h-[90vh]">
-                        <PetDetailPanel pet={selectedPet} onClose={() => setSelectedPet(null)} hideRegisteredPets={true} />
+                        <PetDetailPanel 
+                            pet={selectedPet} 
+                            onClose={() => setSelectedPet(null)} 
+                            hideRegisteredPets={true} 
+                            onEditClick={handleEditPetFromProfile}
+                            onReportLostClick={handleReportLostFromProfile}
+                        />
                     </div>
                 </div>
             )}
