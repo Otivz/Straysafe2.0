@@ -162,6 +162,7 @@ const ResiHomePage = () => {
     const [revertColors, setRevertColors] = useState(false);
     const [revertSize, setRevertSize] = useState(false);
     const [breeds, setBreeds] = useState<string[]>([]);
+    const [breedsData, setBreedsData] = useState<any[]>([]);
     const menuRef = useRef<HTMLDivElement>(null);
 
     const [formData, setFormData] = useState({
@@ -239,18 +240,26 @@ const ResiHomePage = () => {
         const fetchBreeds = async () => {
             try {
                 if (formData.animalType === 'Dog') {
-                    const res = await fetch('https://dog.ceo/api/breeds/list/all');
+                    const apiKey = import.meta.env.VITE_DOG_API_KEY || 'live_J9RdXZq7OGRCUigDyq3y8rGqcG3Brarp46ohljsIMO572q0KYcW1alD0z88OADKs';
+                    const res = await fetch('https://api.thedogapi.com/v1/breeds', {
+                        headers: apiKey ? { 'x-api-key': apiKey } : {}
+                    });
                     if (res.ok) {
                         const data = await res.json();
-                        const breedList = Object.keys(data.message).map(b => b.charAt(0).toUpperCase() + b.slice(1));
+                        setBreedsData(data);
+                        const breedList = data.map((b: any) => b.name);
                         setBreeds(['Aspin', ...breedList]);
                     } else {
                         throw new Error('API failed');
                     }
                 } else if (formData.animalType === 'Cat') {
-                    const res = await fetch('https://api.thecatapi.com/v1/breeds');
+                    const apiKey = import.meta.env.VITE_CAT_API_KEY || 'live_GqD4rtVuossncqXxRcSvcmptrS9rD7NFoigE6UP59wNG69yZ0YhLh35HRma3ZbEm';
+                    const res = await fetch('https://api.thecatapi.com/v1/breeds', {
+                        headers: apiKey ? { 'x-api-key': apiKey } : {}
+                    });
                     if (res.ok) {
                         const data = await res.json();
+                        setBreedsData(data);
                         const breedList = data.map((b: any) => b.name);
                         setBreeds(['Puspin', ...breedList]);
                     } else {
@@ -258,15 +267,16 @@ const ResiHomePage = () => {
                     }
                 } else {
                     setBreeds([]);
+                    setBreedsData([]);
                 }
             } catch (err) {
+                console.error("Failed to load breed images from API:", err);
                 if (formData.animalType === 'Dog') {
-                    setBreeds(['Aspin', 'Shih Tzu', 'Pug', 'Golden Retriever', 'German Shepherd', 'Bulldog', 'Beagle', 'Poodle', 'Chihuahua', 'Labrador Retriever']);
+                    setBreeds(['Aspin', 'Shih Tzu', 'Shihtzu', 'Pug', 'Golden Retriever', 'German Shepherd', 'Bulldog', 'Beagle', 'Poodle', 'Chihuahua', 'Labrador Retriever']);
                 } else if (formData.animalType === 'Cat') {
                     setBreeds(['Puspin', 'Persian', 'Siamese', 'Maine Coon', 'Bengal', 'Ragdoll', 'British Shorthair', 'Sphynx']);
-                } else {
-                    setBreeds([]);
                 }
+                setBreedsData([]);
             }
         };
         fetchBreeds();
@@ -814,17 +824,74 @@ const ResiHomePage = () => {
 
                                     <div className="flex flex-col">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4">Animal Breed</label>
-                                        <select
+                                        <input
+                                            type="text"
+                                            list="report-breed-suggestions"
                                             className="w-full h-12 bg-[#FAFAF9] border border-gray-50 rounded-2xl px-6 text-xs font-bold focus:outline-none"
+                                            placeholder="Type or select breed..."
                                             value={formData.animalBreed}
                                             onChange={(e) => setFormData({ ...formData, animalBreed: e.target.value })}
-                                        >
-                                            <option value="">Select Breed</option>
+                                        />
+                                        <datalist id="report-breed-suggestions">
                                             {breeds.map((breed) => (
-                                                <option key={breed} value={breed}>{breed}</option>
+                                                <option key={breed} value={breed} />
                                             ))}
-                                            <option value="Other">Other / Unknown</option>
-                                        </select>
+                                            {formData.animalType === 'Dog' ? (
+                                                <>
+                                                    <option value="Aspin" />
+                                                    <option value="Shih Tzu" />
+                                                    <option value="Shihtzu" />
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <option value="Puspin" />
+                                                    <option value="Siamese" />
+                                                    <option value="Persian" />
+                                                </>
+                                            )}
+                                            <option value="Other" />
+                                        </datalist>
+
+                                         {/* Dynamic Breed Thumbnail Preview */}
+                                         {(() => {
+                                             const query = formData.animalBreed.trim().toLowerCase();
+                                             if (!query) return null;
+
+                                             // Standardize common phonetic typos and shortcuts
+                                             const normalizedQuery = query
+                                                 .replace('dalmation', 'dalmatian')
+                                                 .replace('shihtzu', 'shih tzu')
+                                                 .replace('shepard', 'shepherd')
+                                                 .replace('coly', 'collie');
+
+                                             const matchedBreed = breedsData.find((b) => {
+                                                 const breedName = b.name.toLowerCase();
+                                                 if (breedName === normalizedQuery) return true;
+                                                 
+                                                 // Handle smart partial matching when typing is at least 3 characters
+                                                 if (normalizedQuery.length >= 3) {
+                                                     return breedName.includes(normalizedQuery) || normalizedQuery.includes(breedName);
+                                                 }
+                                                 return false;
+                                             });
+
+                                             if (matchedBreed && matchedBreed.image?.url) {
+                                                 return (
+                                                     <div className="mt-3 flex items-center gap-3.5 bg-orange-50/40 border border-orange-100 rounded-2xl p-3.5 animate-in slide-in-from-top-2 duration-300">
+                                                         <img 
+                                                             src={matchedBreed.image.url} 
+                                                             alt="Breed Preview" 
+                                                             className="w-12 h-12 object-cover rounded-xl shadow-sm border border-white"
+                                                         />
+                                                         <div>
+                                                             <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest leading-none">StraySafe Reference Photo</p>
+                                                             <p className="text-[11px] font-black text-[#1a1208] mt-1">{matchedBreed.name} Standard Profile</p>
+                                                         </div>
+                                                     </div>
+                                                 );
+                                             }
+                                             return null;
+                                         })()}
                                     </div>
 
                                     <div className="flex flex-col">

@@ -186,7 +186,7 @@ def create_report(report_in: ReportCreate, db: Session = Depends(get_db)):
         new_notif = Notification(
             user_id=db_report.user_id,
             title="Report Submitted Successfully",
-            message=f"Your report #{db_report.report_id} has been submitted and is pending verification.",
+            message="Your community incident report was successfully submitted. You will receive updates once the report has been reviewed and verified.",
             type="status_update",
             related_id=db_report.report_id
         )
@@ -473,6 +473,37 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, db: 
     )
     db.add(db_history)
     
+    # Create Notification for Resident
+    if report.user_id:
+        status_names = {
+            1: "Reported",
+            2: "Verified",
+            3: "Rejected",
+            4: "Escalated to Barangay",
+            5: "Rescue In Progress",
+            6: "Picked Up",
+            7: "Under Observation",
+            8: "Impounded",
+            9: "Claimed by Owner",
+            10: "Released",
+            11: "Resolved",
+            12: "Deceased",
+            13: "Approved"
+        }
+        status_name = status_names.get(status_update.status_id, "Updated")
+        notif_msg = f"Your report #{report_id} status has been updated to '{status_name}'."
+        if final_remarks:
+            notif_msg += f" Remarks: {final_remarks}"
+
+        new_notif = Notification(
+            user_id=report.user_id,
+            title=f"Report Update: {status_name}",
+            message=notif_msg,
+            type="status_update",
+            related_id=report_id
+        )
+        db.add(new_notif)
+        
     db.commit()
     db.refresh(report)
 

@@ -27,8 +27,8 @@ const ResiMobileNav = ({ isNavbarMenuOpen, isSearchOpen, onAddReportClick, onSea
                 <span className="text-[8px] font-black uppercase tracking-widest">Home</span>
             </Link>
 
-            {/* Search - Hidden on Profile page */}
-            {location.pathname !== '/resident/profile' && (
+            {/* Search - Hidden on Profile and Pets pages */}
+            {location.pathname !== '/resident/profile' && location.pathname !== '/resident/pets' && (
                 <button onClick={onSearchClick} className="flex flex-col items-center gap-1 text-gray-400">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />

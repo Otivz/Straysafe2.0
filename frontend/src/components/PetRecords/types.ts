@@ -1,16 +1,30 @@
 export interface PetRecord {
     id: string;
     name: string;
-    gender: 'Male' | 'Female';
+    gender: string;
     age: string;
     breed: string;
     species: string;
     ownerName: string;
     ownerEmail: string;
     idNumber: string;
-    status: 'VACCINATED' | 'MEDICAL ALERT' | 'PENDING DOCS';
+    status: string;
     avatar: string;
     weight?: string;
     microchipId?: string;
     insuranceProvider?: string;
+    
+    // Expanded fields
+    colorMarkings?: string;
+    sizeCategory?: string;
+    isVaccinated?: boolean;
+    vaccinationDate?: string;
+    isNeutered?: boolean;
+    temperament?: string;
+    hasBiteHistory?: boolean;
+    chaseBehavior?: boolean;
+    healthCondition?: string;
+    notes?: string;
+    
+    rawPetObj?: any;
 }

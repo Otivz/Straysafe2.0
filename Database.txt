@@ -804,3 +804,46 @@ CREATE TABLE report_media(
 --      - 12: 'Deceased'
 --
 -- Note: Original reporter name and profile pictures remain attached to reports at all times.
+
+-- =========================================
+-- PET QR SCANS
+-- =========================================
+CREATE TABLE pet_qr_scans(
+    scan_id INT AUTO_INCREMENT PRIMARY KEY,
+
+    pet_id INT NOT NULL,
+
+    scanned_by INT NULL,
+
+    finder_name VARCHAR(100) NULL,
+
+    finder_contact VARCHAR(20) NULL,
+
+    scan_lat DECIMAL(10,8) NULL,
+
+    scan_lng DECIMAL(11,8) NULL,
+
+    location_type ENUM(
+        'Found Location',
+        'Barangay Hall',
+        'Temporary Shelter'
+    ) DEFAULT 'Found Location',
+
+    notes VARCHAR(255) NULL,
+
+    scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY(pet_id)
+    REFERENCES pets(pet_id)
+    ON DELETE CASCADE,
+
+    FOREIGN KEY(scanned_by)
+    REFERENCES users(user_id)
+    ON DELETE SET NULL
+);
+
+CREATE INDEX idx_pet_qr_pet
+ON pet_qr_scans(pet_id);
+
+CREATE INDEX idx_pet_qr_scanned_by
+ON pet_qr_scans(scanned_by);
