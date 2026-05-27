@@ -57,18 +57,18 @@ const statusMap: Record<number, string> = {
 };
 
 const reportStatusMap: Record<number, string> = {
-    1: 'Reported', 
-    2: 'Verified', 
+    1: 'Reported',
+    2: 'Verified',
     3: 'Rejected',
-    4: 'Escalated to Barangay', 
+    4: 'Escalated to Barangay',
     13: 'Approved',
-    5: 'Rescue In Progress', 
+    5: 'Rescue In Progress',
     6: 'Picked Up',
-    7: 'Under Observation', 
-    8: 'Impounded', 
-    9: 'Claimed by Owner', 
-    10: 'Released', 
-    11: 'Resolved', 
+    7: 'Under Observation',
+    8: 'Impounded',
+    9: 'Claimed by Owner',
+    10: 'Released',
+    11: 'Resolved',
     12: 'Deceased'
 };
 
@@ -333,7 +333,7 @@ const BrgyRescueRequests = () => {
                                     render: (req) => {
                                         const reportStatus = req.report?.status_id;
                                         const label = reportStatusMap[reportStatus || 0] || statusMap[req.status_id] || "Pending";
-                                        
+
                                         let colorClass = "bg-orange-50 text-orange-600 border border-orange-100"; // Default
                                         if (reportStatus === 13) colorClass = "bg-indigo-50 text-indigo-600 border border-indigo-100";
                                         if (reportStatus === 5) colorClass = "bg-blue-600 text-white";
@@ -395,7 +395,7 @@ const BrgyRescueRequests = () => {
                                             style={{
                                                 width: `${(() => {
                                                     const stages = [1, 2, 4, 13, 5, 6, 11];
-                                                    const currentIndex = stages.indexOf(viewingRequest.report?.status_id);
+                                                    const currentIndex = stages.indexOf(viewingRequest.report?.status_id ?? 1);
                                                     return currentIndex === -1 ? 0 : (currentIndex / (stages.length - 1)) * 100;
                                                 })()}%`
                                             }}

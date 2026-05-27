@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Button from '../../components/Button';
-import CustomRadio, { RadioCircle } from '../../components/CustomRadio';
+import CustomRadio from '../../components/CustomRadio';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import { MapContainer, TileLayer, Marker, useMapEvents, Polygon } from 'react-leaflet';
@@ -127,11 +127,66 @@ const ResiHomePage = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const [isAddReportModalOpen, setIsAddReportModalOpen] = useState(false);
-    const [isViewMode, setIsViewMode] = useState(false);
     const [originalData, setOriginalData] = useState<any>(null);
     const [isNavbarMenuOpen, setIsNavbarMenuOpen] = useState(false);
     const [returnUrl, setReturnUrl] = useState<string | null>(null);
     const [viewingDetailedReport, setViewingDetailedReport] = useState<any | null>(null);
+
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [reports, setReports] = useState<any[]>([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+
+    const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
+    const [replyingTo, setReplyingTo] = useState<Record<number, { commentId: number, userName: string } | null>>({});
+    const [expandedComments, setExpandedComments] = useState<Record<number, boolean>>({});
+
+    const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+    const [editingReportId, setEditingReportId] = useState<number | null>(null);
+    const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
+    const [animalTypeValidation, setAnimalTypeValidation] = useState<{
+        show: boolean;
+        reportId: number;
+        ai_animal_type: string;
+        ai_dominant_color: string;
+        ai_estimated_size: string;
+        ai_possible_breed: string;
+        ai_suggested_priority: string;
+        ai_suggested_risk_level: string;
+        user_animal_type: string;
+        user_dominant_color: string;
+        user_estimated_size: string;
+        user_possible_breed: string;
+    } | null>(null);
+    const [revertAnimalType, setRevertAnimalType] = useState(false);
+    const [revertColors, setRevertColors] = useState(false);
+    const [revertSize, setRevertSize] = useState(false);
+    const [breeds, setBreeds] = useState<string[]>([]);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    const [formData, setFormData] = useState({
+        category: 'Injured Animal',
+        category_id: 1,
+        animalCount: 1,
+        landmark: '',
+        visibility: 'Public',
+        priorityLevel: 'Regular',
+        isPossibleOwned: false,
+        animalType: 'Dog',
+        animalBreed: '',
+        animalColor: '',
+        estimatedSize: 'Medium',
+        description: '',
+        latitude: 14.801313,
+        longitude: 121.003109,
+        mediaFiles: [] as File[],
+        existingMedia: [] as any[],
+        mediaIdsToDelete: [] as number[]
+    });
+
+    const userStr = localStorage.getItem('resident_user');
+    const currentUser = userStr ? JSON.parse(userStr) : null;
+    const currentUserId = currentUser ? currentUser.user_id : null;
 
     useEffect(() => {
         if (location.state?.from) {
@@ -151,7 +206,11 @@ const ResiHomePage = () => {
             navigate(location.pathname, { replace: true, state: {} });
         }
         if (location.state?.editReport) {
-            handleEditClick(location.state.editReport, location.state.isViewMode);
+            if (location.state?.isViewMode) {
+                setViewingDetailedReport(location.state.editReport);
+            } else {
+                handleEditClick(location.state.editReport);
+            }
             // Clear state so it doesn't reopen on refresh
             navigate(location.pathname, { replace: true, state: {} });
         }
@@ -165,38 +224,6 @@ const ResiHomePage = () => {
         }
     };
 
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [reports, setReports] = useState<any[]>([]);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
-
-    const userStr = localStorage.getItem('resident_user');
-    const currentUser = userStr ? JSON.parse(userStr) : null;
-    const currentUserId = currentUser ? currentUser.user_id : null;
-
-    const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
-    const [replyingTo, setReplyingTo] = useState<Record<number, { commentId: number, userName: string } | null>>({});
-    const [expandedComments, setExpandedComments] = useState<Record<number, boolean>>({});
-
-    const [openMenuId, setOpenMenuId] = useState<number | null>(null);
-    const [editingReportId, setEditingReportId] = useState<number | null>(null);
-    const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
-    const [selectedStage, setSelectedStage] = useState<Record<number, number | null>>({});
-    const [animalTypeValidation, setAnimalTypeValidation] = useState<{
-        show: boolean;
-        reportId: number;
-        ai_animal_type: string;
-        ai_dominant_color: string;
-        ai_estimated_size: string;
-        ai_possible_breed: string;
-        ai_suggested_priority: string;
-        ai_suggested_risk_level: string;
-        user_animal_type: string;
-        user_dominant_color: string;
-        user_estimated_size: string;
-        user_possible_breed: string;
-    } | null>(null);
-    const menuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -207,6 +234,43 @@ const ResiHomePage = () => {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    useEffect(() => {
+        const fetchBreeds = async () => {
+            try {
+                if (formData.animalType === 'Dog') {
+                    const res = await fetch('https://dog.ceo/api/breeds/list/all');
+                    if (res.ok) {
+                        const data = await res.json();
+                        const breedList = Object.keys(data.message).map(b => b.charAt(0).toUpperCase() + b.slice(1));
+                        setBreeds(['Aspin', ...breedList]);
+                    } else {
+                        throw new Error('API failed');
+                    }
+                } else if (formData.animalType === 'Cat') {
+                    const res = await fetch('https://api.thecatapi.com/v1/breeds');
+                    if (res.ok) {
+                        const data = await res.json();
+                        const breedList = data.map((b: any) => b.name);
+                        setBreeds(['Puspin', ...breedList]);
+                    } else {
+                        throw new Error('API failed');
+                    }
+                } else {
+                    setBreeds([]);
+                }
+            } catch (err) {
+                if (formData.animalType === 'Dog') {
+                    setBreeds(['Aspin', 'Shih Tzu', 'Pug', 'Golden Retriever', 'German Shepherd', 'Bulldog', 'Beagle', 'Poodle', 'Chihuahua', 'Labrador Retriever']);
+                } else if (formData.animalType === 'Cat') {
+                    setBreeds(['Puspin', 'Persian', 'Siamese', 'Maine Coon', 'Bengal', 'Ragdoll', 'British Shorthair', 'Sphynx']);
+                } else {
+                    setBreeds([]);
+                }
+            }
+        };
+        fetchBreeds();
+    }, [formData.animalType]);
 
     const handleDeleteReport = async (reportId: number) => {
         if (!window.confirm('Are you sure you want to delete this report?')) return;
@@ -226,7 +290,7 @@ const ResiHomePage = () => {
         }
     };
 
-    const handleEditClick = (report: any, viewMode: boolean = false) => {
+    const handleEditClick = (report: any) => {
         const categoryMap: Record<number, string> = {
             1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
             4: 'Roaming Pack', 5: 'Animal Rescue Needed'
@@ -255,7 +319,6 @@ const ResiHomePage = () => {
         setFormData(initialData);
         setOriginalData(initialData);
         setEditingReportId(report.report_id);
-        setIsViewMode(viewMode);
         setIsAddReportModalOpen(true);
         setOpenMenuId(null);
     };
@@ -316,25 +379,7 @@ const ResiHomePage = () => {
         }
     };
 
-    const [formData, setFormData] = useState({
-        category: 'Injured Animal',
-        category_id: 1,
-        animalCount: 1,
-        landmark: '',
-        visibility: 'Public',
-        priorityLevel: 'Regular',
-        isPossibleOwned: false,
-        animalType: 'Dog',
-        animalBreed: '',
-        animalColor: '',
-        estimatedSize: 'Medium',
-        description: '',
-        latitude: 14.801313,
-        longitude: 121.003109,
-        mediaFiles: [] as File[],
-        existingMedia: [] as any[],
-        mediaIdsToDelete: [] as number[]
-    });
+
 
     const validateAISuggestions = (reportId: number, suggestions: any) => {
         if (!suggestions || !suggestions.ai_animal_type) return false;
@@ -375,19 +420,36 @@ const ResiHomePage = () => {
                     animalTypeValidation.ai_suggested_priority.includes('Low') ? 'Low' : 'Regular'
             ) : 'Regular';
 
-            await axios.patch(`http://localhost:8000/reports/${animalTypeValidation.reportId}`, {
-                animal_type: animalTypeValidation.ai_animal_type,
-                animal_color: animalTypeValidation.ai_dominant_color,
-                estimated_size: animalTypeValidation.ai_estimated_size,
+            const patchPayload: any = {
                 priority_level: priorityMapped
-            });
+            };
+            if (!revertAnimalType) {
+                patchPayload.animal_type = animalTypeValidation.ai_animal_type;
+            } else {
+                patchPayload.animal_type = animalTypeValidation.user_animal_type;
+            }
+            if (!revertColors) {
+                patchPayload.animal_color = animalTypeValidation.ai_dominant_color;
+            } else {
+                patchPayload.animal_color = animalTypeValidation.user_dominant_color;
+            }
+            if (!revertSize) {
+                patchPayload.estimated_size = animalTypeValidation.ai_estimated_size;
+            } else {
+                patchPayload.estimated_size = animalTypeValidation.user_estimated_size;
+            }
 
-            alert('Report updated with AI suggestions successfully!');
+            await axios.patch(`http://localhost:8000/reports/${animalTypeValidation.reportId}`, patchPayload);
+
+            alert('Report updated with suggestions successfully!');
         } catch (error) {
-            console.error('Failed to apply AI suggestions:', error);
+            console.error('Failed to apply suggestions:', error);
             alert('Failed to apply suggestions automatically, but your original report is saved.');
         } finally {
             // Standard cleanup
+            setRevertAnimalType(false);
+            setRevertColors(false);
+            setRevertSize(false);
             setAnimalTypeValidation(null);
             handleCloseModal();
             setEditingReportId(null);
@@ -416,6 +478,9 @@ const ResiHomePage = () => {
 
     const handleKeepOriginalInput = () => {
         alert('Report submitted successfully!');
+        setRevertAnimalType(false);
+        setRevertColors(false);
+        setRevertSize(false);
         setAnimalTypeValidation(null);
         handleCloseModal();
         setEditingReportId(null);
@@ -451,6 +516,9 @@ const ResiHomePage = () => {
         } catch (error) {
             console.error('Failed to cancel temporary report:', error);
         } finally {
+            setRevertAnimalType(false);
+            setRevertColors(false);
+            setRevertSize(false);
             setAnimalTypeValidation(null);
             setIsAddReportModalOpen(true);
         }
@@ -682,10 +750,10 @@ const ResiHomePage = () => {
                             <div className="px-10 pt-10 pb-6 flex justify-between items-center border-b border-gray-50">
                                 <div>
                                     <h2 className="text-3xl font-black text-[#1a1208] uppercase tracking-tight">
-                                        {isViewMode ? 'View Report' : editingReportId ? 'Edit Report' : 'Report a Stray'}
+                                        {editingReportId ? 'Edit Report' : 'Report a Stray'}
                                     </h2>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-                                        {isViewMode ? 'Reviewing existing report information' : 'Fill up the details below to help our team'}
+                                        Fill up the details below to help our team
                                     </p>
                                 </div>
                                 <button
@@ -702,26 +770,25 @@ const ResiHomePage = () => {
                                 {/* Report Category */}
                                 <div>
                                     <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4 block">Report Category</label>
-                                    <div className="flex flex-wrap gap-3">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         {[
-                                            { id: 1, name: 'Injured Animal' },
-                                            { id: 2, name: 'Aggressive Stray' },
-                                            { id: 3, name: 'Possible Rabies Risk' },
-                                            { id: 4, name: 'Roaming Pack' },
-                                            { id: 5, name: 'Animal Rescue Needed' }
+                                            { id: 1, label: 'Injured Animal', name: 'Injured Animal' },
+                                            { id: 4, label: 'Roaming Pack', name: 'Roaming Pack' },
+                                            { id: 2, label: 'Aggressive Stray', name: 'Aggressive Stray' },
+                                            { id: 5, label: 'Animal Rescue Needed', name: 'Animal Rescue Needed' }
                                         ].map((cat) => (
-                                            <button
+                                            <CustomRadio
                                                 key={cat.id}
-                                                type="button"
-                                                disabled={isViewMode}
-                                                onClick={() => setFormData({ ...formData, category: cat.name, category_id: cat.id })}
-                                                className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${formData.category_id === cat.id
-                                                    ? 'bg-[#F97316] text-white border-[#F97316] shadow-lg shadow-orange-100'
-                                                    : `bg-white text-gray-400 border-gray-100 ${!isViewMode ? 'hover:border-orange-100' : ''}`
-                                                    } ${isViewMode && formData.category_id !== cat.id ? 'opacity-40' : ''}`}
-                                            >
-                                                {cat.name}
-                                            </button>
+                                                name="category"
+                                                label={cat.label}
+                                                checked={formData.category_id === cat.id}
+                                                onChange={() => setFormData({ ...formData, category: cat.name, category_id: cat.id })}
+                                                className={`bg-[#FAFAF9] border rounded-2xl p-4 transition-all hover:border-orange-200 ${
+                                                    formData.category_id === cat.id
+                                                        ? 'border-[#F97316]/30 bg-orange-50/10 shadow-sm'
+                                                        : 'border-gray-50'
+                                                }`}
+                                            />
                                         ))}
                                     </div>
                                 </div>
@@ -731,14 +798,15 @@ const ResiHomePage = () => {
                                     <div className="flex flex-col">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4">Animal Type</label>
                                         <div className="flex items-center gap-6 h-12">
-                                            {['Dog', 'Cat', 'Unknown'].map((type) => (
+                                            {['Dog', 'Cat'].map((type) => (
                                                 <CustomRadio
                                                     key={type}
                                                     name="animalType"
                                                     label={type}
                                                     checked={formData.animalType === type}
-                                                    onChange={() => setFormData({ ...formData, animalType: type })}
-                                                    disabled={isViewMode}
+                                                    onChange={() => {
+                                                        setFormData({ ...formData, animalType: type, animalBreed: '' });
+                                                    }}
                                                 />
                                             ))}
                                         </div>
@@ -746,14 +814,17 @@ const ResiHomePage = () => {
 
                                     <div className="flex flex-col">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4">Animal Breed</label>
-                                        <input
-                                            type="text"
-                                            placeholder="e.g. Aspin, Golden Retriever"
-                                            className="w-full h-12 bg-[#FAFAF9] border border-gray-50 rounded-2xl px-6 text-xs font-bold"
+                                        <select
+                                            className="w-full h-12 bg-[#FAFAF9] border border-gray-50 rounded-2xl px-6 text-xs font-bold focus:outline-none"
                                             value={formData.animalBreed}
                                             onChange={(e) => setFormData({ ...formData, animalBreed: e.target.value })}
-                                            disabled={isViewMode}
-                                        />
+                                        >
+                                            <option value="">Select Breed</option>
+                                            {breeds.map((breed) => (
+                                                <option key={breed} value={breed}>{breed}</option>
+                                            ))}
+                                            <option value="Other">Other / Unknown</option>
+                                        </select>
                                     </div>
 
                                     <div className="flex flex-col">
@@ -764,8 +835,7 @@ const ResiHomePage = () => {
                                             className="w-full h-12 bg-[#FAFAF9] border border-gray-50 rounded-2xl px-6 text-xs font-bold"
                                             value={formData.animalColor}
                                             onChange={(e) => setFormData({ ...formData, animalColor: e.target.value })}
-                                            disabled={isViewMode}
-                                        />
+                                                                                    />
                                     </div>
 
                                     <div className="flex flex-col">
@@ -774,8 +844,7 @@ const ResiHomePage = () => {
                                             className="w-full h-12 bg-[#FAFAF9] border border-gray-50 rounded-2xl px-6 text-xs font-bold focus:outline-none"
                                             value={formData.estimatedSize}
                                             onChange={(e) => setFormData({ ...formData, estimatedSize: e.target.value })}
-                                            disabled={isViewMode}
-                                        >
+                                                                                    >
                                             <option value="Small">Small (Puppy/Kitten size)</option>
                                             <option value="Medium">Medium (Regular size)</option>
                                             <option value="Large">Large (Giant breed size)</option>
@@ -791,12 +860,11 @@ const ResiHomePage = () => {
                                             <button
                                                 key={prio}
                                                 type="button"
-                                                disabled={isViewMode}
-                                                onClick={() => setFormData({ ...formData, priorityLevel: prio })}
+                                                                                                onClick={() => setFormData({ ...formData, priorityLevel: prio })}
                                                 className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${formData.priorityLevel === prio
                                                     ? 'bg-[#F97316] text-white border-[#F97316] shadow-lg shadow-orange-100'
-                                                    : `bg-white text-gray-400 border-gray-100 ${!isViewMode ? 'hover:border-orange-100' : ''}`
-                                                    } ${isViewMode && formData.priorityLevel !== prio ? 'opacity-40' : ''}`}
+                                                    : `bg-white text-gray-400 border-gray-100 hover:border-orange-100`
+                                                    } `}
                                             >
                                                 {prio}
                                             </button>
@@ -811,9 +879,8 @@ const ResiHomePage = () => {
                                         <div className="flex items-center bg-gray-50 rounded-xl p-1 border border-gray-100 shadow-inner">
                                             <button
                                                 type="button"
-                                                disabled={isViewMode}
-                                                onClick={() => setFormData({ ...formData, animalCount: Math.max(1, formData.animalCount - 1) })}
-                                                className={`w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-[#F97316] transition-all ${!isViewMode ? 'hover:bg-orange-50 active:scale-90' : 'opacity-40'}`}
+                                                                                                onClick={() => setFormData({ ...formData, animalCount: Math.max(1, formData.animalCount - 1) })}
+                                                className={`w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-[#F97316] transition-all hover:bg-orange-50 active:scale-90`}
                                             >
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M20 12H4" />
@@ -824,9 +891,8 @@ const ResiHomePage = () => {
                                             </div>
                                             <button
                                                 type="button"
-                                                disabled={isViewMode}
-                                                onClick={() => setFormData({ ...formData, animalCount: formData.animalCount + 1 })}
-                                                className={`w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-[#F97316] transition-all ${!isViewMode ? 'hover:bg-orange-50 active:scale-90' : 'opacity-40'}`}
+                                                                                                onClick={() => setFormData({ ...formData, animalCount: formData.animalCount + 1 })}
+                                                className={`w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-[#F97316] transition-all hover:bg-orange-50 active:scale-90`}
                                             >
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
@@ -850,8 +916,7 @@ const ResiHomePage = () => {
                                             className="peer appearance-none w-6 h-6 rounded-lg border-2 border-gray-200 checked:bg-[#F97316] checked:border-[#F97316] transition-all cursor-pointer"
                                             checked={formData.isPossibleOwned}
                                             onChange={(e) => setFormData({ ...formData, isPossibleOwned: e.target.checked })}
-                                            disabled={isViewMode}
-                                        />
+                                                                                    />
                                         <svg xmlns="http://www.w3.org/2000/svg" className="absolute h-4 w-4 text-white scale-0 peer-checked:scale-100 transition-transform pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" />
                                         </svg>
@@ -870,11 +935,11 @@ const ResiHomePage = () => {
                                             <div className="space-y-4">
                                                 {/* Grid Preview (Facebook-like) */}
                                                 <div
-                                                    className={`relative grid gap-2 rounded-[2rem] overflow-hidden border-2 border-orange-500 bg-orange-50/10 p-2 ${!isViewMode ? 'cursor-pointer group/grid' : ''} ${allMediaCount === 1 ? 'grid-cols-1' :
+                                                    className={`relative grid gap-2 rounded-[2rem] overflow-hidden border-2 border-orange-500 bg-orange-50/10 p-2 cursor-pointer group/grid ${allMediaCount === 1 ? 'grid-cols-1' :
                                                         allMediaCount === 2 ? 'grid-cols-2' :
                                                             'grid-cols-2'
                                                         }`}
-                                                    onClick={() => !isViewMode && document.getElementById('multi-upload')?.click()}
+                                                    onClick={() => document.getElementById('multi-upload')?.click()}
                                                 >
                                                     {/* Render Existing Media */}
                                                     {formData.existingMedia.map((media, index) => (
@@ -884,7 +949,7 @@ const ResiHomePage = () => {
                                                             ) : (
                                                                 <img src={media.file_url} alt="Existing" className="w-full h-full object-cover" />
                                                             )}
-                                                            {!isViewMode && (
+                                                            {(
                                                                 <button
                                                                     type="button"
                                                                     onClick={(e) => {
@@ -916,7 +981,7 @@ const ResiHomePage = () => {
                                                             ) : (
                                                                 <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
                                                             )}
-                                                            {!isViewMode && (
+                                                            {(
                                                                 <button
                                                                     type="button"
                                                                     onClick={(e) => {
@@ -938,7 +1003,7 @@ const ResiHomePage = () => {
                                                     ))}
 
                                                     {/* Hover Add More Overlay (Only in Edit mode) */}
-                                                    {!isViewMode && (
+                                                    {(
                                                         <div className="absolute inset-0 bg-orange-600/20 backdrop-blur-[2px] opacity-0 group-hover/grid:opacity-100 transition-all flex flex-col items-center justify-center gap-2 z-20">
                                                             <div className="w-12 h-12 rounded-full bg-white shadow-xl flex items-center justify-center text-[#F97316]">
                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -950,7 +1015,7 @@ const ResiHomePage = () => {
                                                     )}
                                                 </div>
 
-                                                {!isViewMode && (
+                                                {(
                                                     <div className="flex justify-end">
                                                         <button
                                                             type="button"
@@ -964,10 +1029,10 @@ const ResiHomePage = () => {
                                             </div>
                                         ) : (
                                             <div
-                                                className={`w-full aspect-video rounded-[2rem] border-2 border-dashed border-gray-100 bg-[#FAFAF9] flex flex-col items-center justify-center gap-4 transition-all group ${!isViewMode ? 'cursor-pointer hover:border-orange-200 hover:bg-orange-50/10' : ''}`}
-                                                onClick={() => !isViewMode && document.getElementById('multi-upload')?.click()}
+                                                className={`w-full aspect-video rounded-[2rem] border-2 border-dashed border-gray-100 bg-[#FAFAF9] flex flex-col items-center justify-center gap-4 transition-all group cursor-pointer hover:border-orange-200 hover:bg-orange-50/10`}
+                                                onClick={() => document.getElementById('multi-upload')?.click()}
                                             >
-                                                <div className={`w-16 h-16 rounded-[1.5rem] bg-white shadow-sm flex items-center justify-center text-gray-300 transition-colors ${!isViewMode ? 'group-hover:text-[#F97316]' : ''}`}>
+                                                <div className={`w-16 h-16 rounded-[1.5rem] bg-white shadow-sm flex items-center justify-center text-gray-300 transition-colors group-hover:text-[#F97316]`}>
                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -975,9 +1040,9 @@ const ResiHomePage = () => {
                                                 </div>
                                                 <div className="text-center">
                                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                                                        {isViewMode ? 'No media attached' : 'Tap to add Photos or Videos'}
+                                                        Tap to add Photos or Videos
                                                     </p>
-                                                    {!isViewMode && <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-1">Multiple files supported</p>}
+                                                    <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-1">Multiple files supported</p>
                                                 </div>
                                             </div>
                                         )}
@@ -1023,8 +1088,7 @@ const ResiHomePage = () => {
                                             <LocationPicker
                                                 position={[formData.latitude, formData.longitude]}
                                                 onLocationSelect={(lat, lng) => setFormData({ ...formData, latitude: lat, longitude: lng })}
-                                                disabled={isViewMode}
-                                            />
+                                                                                            />
                                             <Polygon
                                                 positions={SELERA_POLYGON.map(p => [p.lat, p.lng] as [number, number])}
                                                 pathOptions={{
@@ -1038,7 +1102,7 @@ const ResiHomePage = () => {
                                             <ReturnToSeleraButton />
                                         </MapContainer>
                                         <div className="absolute top-4 right-4 z-[20] bg-white/90 backdrop-blur-sm px-4 py-2 rounded-xl border border-gray-100 shadow-sm pointer-events-none">
-                                            <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest">{isViewMode ? 'Sighting Location' : 'Click map to move pin'}</p>
+                                            <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest">Click map to move pin</p>
                                         </div>
                                     </div>
 
@@ -1074,61 +1138,20 @@ const ResiHomePage = () => {
                                         className="w-full bg-[#FAFAF9] border border-gray-50 rounded-[1.5rem] px-6 py-4 text-xs font-medium text-[#1a1208] focus:outline-none focus:border-orange-200 transition-all placeholder:text-gray-300 shadow-sm"
                                         value={formData.landmark}
                                         onChange={(e) => setFormData({ ...formData, landmark: e.target.value })}
-                                        disabled={isViewMode}
-                                    />
+                                                                            />
                                 </div>
 
                                 {/* Visibility Settings */}
                                 <div>
                                     <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4 block">Report Visibility</label>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <label className={`relative flex flex-col p-5 rounded-[2rem] border-2 transition-all ${formData.visibility === 'Public' ? 'border-[#F97316] bg-orange-50/20' : `border-gray-50 bg-[#FAFAF9] ${!isViewMode ? 'hover:border-orange-100 cursor-pointer' : 'cursor-default'}`}`}>
-                                            <input
-                                                type="radio"
-                                                name="visibility"
-                                                value="Public"
-                                                checked={formData.visibility === 'Public'}
-                                                onChange={(e) => setFormData({ ...formData, visibility: e.target.value })}
-                                                className="absolute opacity-0"
-                                                disabled={isViewMode}
-                                            />
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${formData.visibility === 'Public' ? 'bg-[#F97316] text-white' : 'bg-gray-100 text-gray-400'}`}>
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                        </svg>
-                                                    </div>
-                                                    <span className={`text-[12px] font-black uppercase tracking-widest ${formData.visibility === 'Public' ? 'text-[#F97316]' : 'text-gray-600'}`}>Public Post</span>
-                                                </div>
-                                                <RadioCircle checked={formData.visibility === 'Public'} disabled={isViewMode} />
-                                            </div>
-                                            <p className="text-[10px] font-bold text-gray-400 leading-relaxed ml-11">Visible to all users in the subdivision feed.</p>
-                                        </label>
-                                        <label className={`relative flex flex-col p-5 rounded-[2rem] border-2 transition-all ${formData.visibility === 'Private' ? 'border-[#F97316] bg-orange-50/20' : `border-gray-50 bg-[#FAFAF9] ${!isViewMode ? 'hover:border-orange-100 cursor-pointer' : 'cursor-default'}`}`}>
-                                            <input
-                                                type="radio"
-                                                name="visibility"
-                                                value="Private"
-                                                checked={formData.visibility === 'Private'}
-                                                onChange={(e) => setFormData({ ...formData, visibility: e.target.value })}
-                                                className="absolute opacity-0"
-                                                disabled={isViewMode}
-                                            />
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${formData.visibility === 'Private' ? 'bg-[#F97316] text-white' : 'bg-gray-100 text-gray-400'}`}>
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                                        </svg>
-                                                    </div>
-                                                    <span className={`text-[12px] font-black uppercase tracking-widest ${formData.visibility === 'Private' ? 'text-[#F97316]' : 'text-gray-600'}`}>Private Post</span>
-                                                </div>
-                                                <RadioCircle checked={formData.visibility === 'Private'} disabled={isViewMode} />
-                                            </div>
-                                            <p className="text-[10px] font-bold text-gray-400 leading-relaxed ml-11">Only visible to Admin, Subd. Leader, and Brgy Staff.</p>
-                                        </label>
-                                    </div>
+                                    <select
+                                        className="w-full h-12 bg-[#FAFAF9] border border-gray-50 rounded-2xl px-6 text-xs font-bold focus:outline-none"
+                                        value={formData.visibility}
+                                        onChange={(e) => setFormData({ ...formData, visibility: e.target.value })}
+                                    >
+                                        <option value="Public">Public (Visible to all users in the subdivision feed)</option>
+                                        <option value="Private">Private (Only visible to Admin, Subdivision Leader, and Barangay Staff)</option>
+                                    </select>
                                 </div>
 
                                 {/* Description at the bottom */}
@@ -1140,49 +1163,39 @@ const ResiHomePage = () => {
                                         className="w-full bg-[#FAFAF9] border border-gray-50 rounded-[2rem] p-6 text-sm font-medium focus:outline-none focus:border-orange-200 transition-all placeholder:text-gray-300 shadow-sm"
                                         value={formData.description}
                                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                        disabled={isViewMode}
-                                    />
+                                                                            />
                                 </div>
                             </div>
 
                             {/* Modal Footer */}
                             <div className="p-10 pt-0 flex flex-col gap-4">
-                                {isViewMode ? (
+                                <>
                                     <Button
-                                        className="w-full py-5 bg-[#1a1208] text-white text-[12px] font-black uppercase tracking-[0.2em] rounded-[2rem] shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
-                                        onClick={() => setIsViewMode(false)}
+                                        disabled={isSubmitting}
+                                        className={`w-full py-5 text-white text-[12px] font-black uppercase tracking-[0.2em] rounded-[2rem] shadow-xl transition-all ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#F97316] shadow-orange-100 hover:scale-[1.02] active:scale-[0.98]'
+                                            }`}
+                                        onClick={handleSubmit}
                                     >
-                                        Edit Post
+                                        {isSubmitting ? (
+                                            <span className="flex items-center justify-center gap-2">
+                                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                Processing...
+                                            </span>
+                                        ) : editingReportId ? 'Update Report' : 'Submit Report'}
                                     </Button>
-                                ) : (
-                                    <>
-                                        <Button
-                                            disabled={isSubmitting}
-                                            className={`w-full py-5 text-white text-[12px] font-black uppercase tracking-[0.2em] rounded-[2rem] shadow-xl transition-all ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#F97316] shadow-orange-100 hover:scale-[1.02] active:scale-[0.98]'
-                                                }`}
-                                            onClick={handleSubmit}
+                                    {editingReportId && (
+                                        <button
+                                            type="button"
+                                            onClick={handleReset}
+                                            className="w-full py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-[#F97316] transition-all"
                                         >
-                                            {isSubmitting ? (
-                                                <span className="flex items-center justify-center gap-2">
-                                                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                    </svg>
-                                                    Processing...
-                                                </span>
-                                            ) : editingReportId ? 'Update Report' : 'Submit Report'}
-                                        </Button>
-                                        {editingReportId && (
-                                            <button
-                                                type="button"
-                                                onClick={handleReset}
-                                                className="w-full py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-[#F97316] transition-all"
-                                            >
-                                                Reset Changes
-                                            </button>
-                                        )}
-                                    </>
-                                )}
+                                            Reset Changes
+                                        </button>
+                                    )}
+                                </>
                             </div>
                         </div>
                     </div>
@@ -1210,43 +1223,70 @@ const ResiHomePage = () => {
                                     AI Suggestions
                                 </h3>
                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center max-w-[280px] mx-auto leading-relaxed">
-                                    The uploaded image may not match the selected animal type.
+                                    Review the AI animal detection suggestions below
                                 </p>
                             </div>
 
                             {/* Content */}
                             <div className="bg-[#FAFAF9] border border-gray-100 rounded-3xl p-6 space-y-4 mb-8">
                                 <div className="space-y-3 font-semibold text-[#1a1208]">
-                                    <div className="flex items-center gap-3 py-1.5 border-b border-gray-100/50">
-                                        <span className="text-[#F97316] font-black text-sm">✓</span>
-                                        <span className="text-xs">
-                                            Animal Type: <strong className="uppercase font-black text-[#F97316] ml-1">{animalTypeValidation.ai_animal_type}</strong>
-                                        </span>
+                                    <div className="flex items-center justify-between py-1.5 border-b border-gray-100/50">
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-[#F97316] font-black text-sm">✓</span>
+                                            <span className="text-xs">
+                                                Animal Type: <strong className="uppercase font-black text-[#F97316] ml-1">{revertAnimalType ? animalTypeValidation.user_animal_type : animalTypeValidation.ai_animal_type}</strong>
+                                                {revertAnimalType && <span className="ml-2 text-[9px] text-gray-400 font-bold italic">(reverted)</span>}
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={() => setRevertAnimalType(!revertAnimalType)}
+                                            className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 bg-white border border-gray-200 rounded-lg hover:bg-orange-50 hover:text-[#F97316] hover:border-orange-200 transition-colors"
+                                        >
+                                            {revertAnimalType ? 'Apply AI' : 'revert'}
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center justify-between py-1.5 border-b border-gray-100/50">
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-[#F97316] font-black text-sm">✓</span>
+                                            <span className="text-xs flex items-center gap-2">
+                                                Colors Detected:
+                                                {!revertColors && <span className="inline-block w-3.5 h-3.5 rounded-full border border-gray-200 shadow-sm shrink-0" style={{ background: getSwatchStyle(animalTypeValidation.ai_dominant_color) }} />}
+                                                <strong className="uppercase font-black text-[#F97316]">{revertColors ? animalTypeValidation.user_dominant_color : animalTypeValidation.ai_dominant_color}</strong>
+                                                {revertColors && <span className="ml-1 text-[9px] text-gray-400 font-bold italic">(reverted)</span>}
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={() => setRevertColors(!revertColors)}
+                                            className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 bg-white border border-gray-200 rounded-lg hover:bg-orange-50 hover:text-[#F97316] hover:border-orange-200 transition-colors"
+                                        >
+                                            {revertColors ? 'Apply AI' : 'revert'}
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center justify-between py-1.5 border-b border-gray-100/50">
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-[#F97316] font-black text-sm">✓</span>
+                                            <span className="text-xs">
+                                                Size: <strong className="uppercase font-black text-[#F97316] ml-1">{revertSize ? animalTypeValidation.user_estimated_size : animalTypeValidation.ai_estimated_size}</strong>
+                                                {revertSize && <span className="ml-2 text-[9px] text-gray-400 font-bold italic">(reverted)</span>}
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={() => setRevertSize(!revertSize)}
+                                            className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 bg-white border border-gray-200 rounded-lg hover:bg-orange-50 hover:text-[#F97316] hover:border-orange-200 transition-colors"
+                                        >
+                                            {revertSize ? 'Apply AI' : 'revert'}
+                                        </button>
                                     </div>
                                     <div className="flex items-center gap-3 py-1.5 border-b border-gray-100/50">
-                                        <span className="text-[#F97316] font-black text-sm">✓</span>
-                                        <span className="text-xs flex items-center gap-2">
-                                            Colors Detected:
-                                            <span className="inline-block w-3.5 h-3.5 rounded-full border border-gray-200 shadow-sm shrink-0" style={{ background: getSwatchStyle(animalTypeValidation.ai_dominant_color) }} />
-                                            <strong className="uppercase font-black text-[#F97316]">{animalTypeValidation.ai_dominant_color}</strong>
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-3 py-1.5 border-b border-gray-100/50">
-                                        <span className="text-[#F97316] font-black text-sm">✓</span>
-                                        <span className="text-xs">
-                                            Size: <strong className="uppercase font-black text-[#F97316] ml-1">{animalTypeValidation.ai_estimated_size}</strong>
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-3 py-1.5 border-b border-gray-100/50">
-                                        <span className="text-[#F97316] font-black text-sm">✓</span>
-                                        <span className="text-xs">
-                                            Suggested Risk Level: <strong className="uppercase font-black text-[#F97316] ml-1">{animalTypeValidation.ai_suggested_risk_level}</strong>
+                                        <span className="text-gray-400 font-black text-sm">•</span>
+                                        <span className="text-xs text-gray-600">
+                                            Risk Level: <strong className="uppercase font-black text-red-500 ml-1">{animalTypeValidation.ai_suggested_risk_level}</strong>
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-3 py-1.5">
-                                        <span className="text-[#F97316] font-black text-sm">✓</span>
-                                        <span className="text-xs">
-                                            Suggested Priority: <strong className="uppercase font-black text-[#F97316] ml-1">{animalTypeValidation.ai_suggested_priority}</strong>
+                                        <span className="text-gray-400 font-black text-sm">•</span>
+                                        <span className="text-xs text-gray-600">
+                                            Priority: <strong className="uppercase font-black text-red-500 ml-1">{animalTypeValidation.ai_suggested_priority}</strong>
                                         </span>
                                     </div>
                                 </div>
@@ -1270,7 +1310,7 @@ const ResiHomePage = () => {
                                     onClick={handleGoBackToReport}
                                     className="w-full py-3 text-[10px] font-black text-red-500 hover:text-red-700 uppercase tracking-widest transition-all block text-center border-t border-gray-100/50 mt-1 pt-3"
                                 >
-                                    Go Back to Report
+                                    Back to Report
                                 </button>
                             </div>
                         </div>
@@ -1294,28 +1334,6 @@ const ResiHomePage = () => {
                     </div>
                 ) : (
                     currentTabReports.map((report) => {
-                        const statusMap: Record<number, string> = {
-                            1: 'Pending Verification',
-                            2: 'Verified',
-                            3: 'Rejected',
-                            4: 'Escalated to Barangay',
-                            5: 'Rescue In Progress',
-                            6: 'Picked Up',
-                            7: 'Under Observation',
-                            8: 'Impounded',
-                            9: 'Claimed by Owner',
-                            10: 'Released',
-                            11: 'Resolved',
-                            12: 'Deceased',
-                            13: 'Approved'
-                        };
-                        const categoryMap: Record<number, string> = {
-                            1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
-                            4: 'Roaming Pack', 5: 'Animal Rescue Needed'
-                        };
-
-                        const statusName = statusMap[report.status_id] || 'Unknown Status';
-                        const categoryName = categoryMap[report.category_id] || 'Other Report';
                         const date = new Date(report.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
                         return (
@@ -1325,66 +1343,61 @@ const ResiHomePage = () => {
                                     <div className="px-4 sm:px-8 py-2.5 border-b border-gray-50 flex items-center justify-between bg-gray-50/20">
                                         <p className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">{date}</p>
                                         <div className="flex items-center gap-4">
-                                            <span className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
-                                                ID: {report.report_id.toString().padStart(5, '0')}
-                                            </span>
-                                            {report.user_id === currentUserId && (
-                                                <div className="relative" ref={openMenuId === report.report_id ? menuRef : null}>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setOpenMenuId(openMenuId === report.report_id ? null : report.report_id);
-                                                        }}
-                                                        className="p-1.5 text-gray-400 hover:text-[#1a1208] rounded-full hover:bg-white hover:shadow-sm transition-all border border-transparent hover:border-gray-100"
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                            <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
-                                                        </svg>
-                                                    </button>
-                                                    {openMenuId === report.report_id && (
-                                                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-gray-100 py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); handleEditClick(report, true); }}
-                                                                className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-blue-600 hover:bg-blue-50 transition-colors"
-                                                            >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                                </svg>
-                                                                View Details
-                                                            </button>
+                                            <div className="relative" ref={openMenuId === report.report_id ? menuRef : null}>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setOpenMenuId(openMenuId === report.report_id ? null : report.report_id);
+                                                    }}
+                                                    className="p-1.5 text-gray-400 hover:text-[#1a1208] rounded-full hover:bg-white hover:shadow-sm transition-all border border-transparent hover:border-gray-100"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                        <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
+                                                    </svg>
+                                                </button>
+                                                {openMenuId === report.report_id && (
+                                                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-gray-100 py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); setViewingDetailedReport(report); }}
+                                                            className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-blue-600 hover:bg-blue-50 transition-colors"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                            </svg>
+                                                            View Report
+                                                        </button>
 
-                                                            {report.status_id === 1 && (
-                                                                <>
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); handleEditClick(report, false); }}
-                                                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-[#F97316] hover:bg-orange-50 transition-colors border-t border-gray-50"
-                                                                    >
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                                        </svg>
-                                                                        Edit Details
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); handleDeleteReport(report.report_id); setOpenMenuId(null); }}
-                                                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-colors border-t border-gray-50"
-                                                                    >
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                                        </svg>
-                                                                        Delete Report
-                                                                    </button>
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
+                                                        {report.user_id === currentUserId && report.status_id === 1 && (
+                                                            <>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleEditClick(report); }}
+                                                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-[#F97316] hover:bg-orange-50 transition-colors border-t border-gray-50"
+                                                                >
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                                    </svg>
+                                                                    Edit Details
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteReport(report.report_id); setOpenMenuId(null); }}
+                                                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-colors border-t border-gray-50"
+                                                                >
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                    </svg>
+                                                                    Delete Report
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
 
                                     {/* Content Section */}
-                                    <div className="px-4 sm:px-8 pt-6 pb-8 sm:pb-10">
+                                    <div className="px-4 sm:px-8 pt-6 pb-6">
                                         {/* Profile & Visibility Row */}
                                         <div className="mb-6 flex items-center justify-between">
                                             <div className="flex items-center gap-3">
@@ -1416,177 +1429,14 @@ const ResiHomePage = () => {
                                                     </div>
                                                 </div>
                                             </div>
-                                            <span className={`px-3 py-1 shrink-0 text-[9px] font-black uppercase tracking-widest rounded-full border shadow-sm ${report.status_id === 1 ? 'bg-orange-50 text-[#F97316] border-orange-100' :
-                                                report.status_id === 2 ? 'bg-cyan-50 text-cyan-600 border-cyan-100' :
-                                                    report.status_id === 4 ? 'bg-purple-50 text-purple-600 border-purple-100' :
-                                                        report.status_id === 13 ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
-                                                            report.status_id === 11 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                                                report.status_id === 7 || report.status_id === 8 ? 'bg-purple-50 text-purple-600 border-purple-100' :
-                                                                    report.status_id === 9 || report.status_id === 10 ? 'bg-teal-50 text-teal-600 border-teal-100' :
-                                                                        'bg-blue-50 text-blue-600 border-blue-100'
-                                                }`}>
-                                                {statusName}
-                                            </span>
                                         </div>
 
                                         {/* Description */}
-                                        <div className="mb-6">
+                                        <div className="mb-4">
                                             <p className="text-[13px] sm:text-[15px] font-medium text-[#4a3b28] leading-relaxed">
                                                 {report.description || 'No detailed description provided.'}
                                             </p>
                                         </div>
-
-                                        {/* Rescue Progress Tracker (6 Stages) */}
-                                        <div className="mb-14 mt-4">
-                                            <div className="flex items-center justify-between relative px-2">
-                                                {/* Timeline Connector Line */}
-                                                <div className="absolute top-5 left-10 right-10 h-0.5 bg-gray-100 z-0">
-                                                    <div
-                                                        className="h-full bg-orange-500 transition-all duration-700"
-                                                        style={{
-                                                            width: `${(() => {
-                                                                const statusIndexMap: Record<number, number> = {
-                                                                    1: 0, 2: 1, 4: 2, 13: 3, 5: 4, 7: 5, 8: 6, 11: 7
-                                                                };
-                                                                const logicalIndex = statusIndexMap[report.status_id] ?? 0;
-                                                                const totalStages = 7;
-                                                                return (logicalIndex / totalStages) * 100;
-                                                            })()}%`
-                                                        }}
-                                                    />
-                                                </div>
-
-                                                {[
-                                                    { id: 1, label: 'Reported', sub: 'Citizen Post' },
-                                                    { id: 2, label: 'Verified', sub: 'Leader Vetted' },
-                                                    { id: 4, label: 'Escalated', sub: 'Peer Verified' },
-                                                    { id: 13, label: 'Approved', sub: 'Barangay Auth' },
-                                                    { id: 5, label: 'Rescue', sub: 'En Route' },
-                                                    { id: 7, label: 'Picked Up', sub: 'Secured' },
-                                                    { id: 8, label: 'Impounded', sub: 'At Shelter' },
-                                                    { id: 11, label: 'Resolved', sub: 'Complete' }
-                                                ].map((stage, idx) => {
-                                                    const logicalSequence = [1, 2, 4, 13, 5, 7, 8, 11];
-                                                    const currentStatusIdx = logicalSequence.indexOf(report.status_id);
-                                                    const stageIdx = logicalSequence.indexOf(stage.id);
-                                                    const isCompleted = currentStatusIdx >= stageIdx;
-                                                    const isCurrent = report.status_id === stage.id;
-                                                    const isSelected = selectedStage[report.report_id] === stage.id;
-                                                    const hasHistory = report.history?.some((h: any) => h.status_id === stage.id);
-
-                                                    return (
-                                                        <div key={stage.id} className="relative z-10 flex flex-col items-center group">
-                                                            <button
-                                                                onClick={() => {
-                                                                    if (hasHistory || stage.id === 1) {
-                                                                        setSelectedStage(prev => ({ ...prev, [report.report_id]: isSelected ? null : stage.id }));
-                                                                    }
-                                                                }}
-                                                                disabled={!hasHistory && stage.id !== 1}
-                                                                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 ${isSelected ? 'bg-orange-600 text-white scale-110 shadow-lg shadow-orange-200' :
-                                                                    isCurrent ? 'bg-orange-500 text-white animate-pulse shadow-md ring-4 ring-orange-50' :
-                                                                        isCompleted ? 'bg-orange-100 text-orange-600 border border-orange-200 hover:bg-orange-200' :
-                                                                            'bg-white text-gray-200 border border-gray-100'
-                                                                    }`}
-                                                            >
-                                                                {isCompleted && !isSelected ? (
-                                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-                                                                ) : (
-                                                                    <span className="text-xs font-black">{idx + 1}</span>
-                                                                )}
-                                                            </button>
-                                                            <span className={`mt-2 text-[8px] font-black uppercase tracking-widest ${isCurrent ? 'text-orange-600' : isCompleted ? 'text-gray-700' : 'text-gray-300'}`}>
-                                                                {stage.label}
-                                                            </span>
-                                                            <div className="absolute top-16 flex flex-col items-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap bg-gray-900 text-white px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest -translate-y-2 group-hover:translate-y-0 duration-300 shadow-xl z-20">
-                                                                {stage.label}
-                                                                <span className="text-gray-400 mt-0.5">{stage.sub}</span>
-                                                            </div>
-                                                            {isSelected && (
-                                                                <div className="absolute -top-3 w-2 h-2 bg-orange-600 rounded-full animate-bounce shadow-lg shadow-orange-200"></div>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-
-                                        {/* Stage Specific Update Card */}
-                                        {selectedStage[report.report_id] && (
-                                            <div className="mb-10 animate-in fade-in slide-in-from-top-4 duration-500">
-                                                {(() => {
-                                                    const stageId = selectedStage[report.report_id];
-                                                    const stageData = [
-                                                        { id: 1, label: 'Reported', sub: 'Citizen Post' },
-                                                        { id: 2, label: 'Verified', sub: 'Subdivision Leader has vetted this report' },
-                                                        { id: 4, label: 'Approved', sub: 'Barangay has accepted the rescue request' },
-                                                        { id: 5, label: 'Dispatched', sub: 'Team is on the way' },
-                                                        { id: 7, label: 'Picked Up', sub: 'Animal successfully secured' },
-                                                        { id: 9, label: 'Impounded', sub: 'Transferred to municipal shelter' },
-                                                        { id: 6, label: 'Resolved', sub: 'Operation successfully closed' }
-                                                    ].find(s => s.id === stageId);
-
-                                                    const historyItem = report.history?.find((h: any) => h.status_id === stageId);
-                                                    const stageMedia = report.media?.filter((m: any) => {
-                                                        if (m.history_id !== historyItem?.history_id || !m.is_evidence) return false;
-                                                        const url = m.file_url.toLowerCase();
-                                                        return m.media_type !== 'Document' &&
-                                                            !url.endsWith('.pdf') &&
-                                                            !url.endsWith('.doc') &&
-                                                            !url.endsWith('.docx') &&
-                                                            !url.endsWith('.txt');
-                                                    }) || [];
-
-                                                    return (
-                                                        <div className="bg-[#FAFAF9] rounded-[2.5rem] border border-orange-100 overflow-hidden shadow-sm">
-                                                            <div className="p-8 pb-4 flex justify-between items-start">
-                                                                <div>
-                                                                    <p className="text-[10px] font-black text-orange-600 uppercase tracking-[0.2em] mb-1">Operational Stage {([1, 2, 4, 5, 7, 9, 6].indexOf(stageId!) + 1)}</p>
-                                                                    <h4 className="text-xl font-black text-[#1a1208] uppercase tracking-tight">{stageData?.label}</h4>
-                                                                    {stageId === 2 && historyItem?.updater_name && (
-                                                                        <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase tracking-widest flex items-center gap-2">
-                                                                            <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
-                                                                            Verified by {historyItem.updater_name}
-                                                                        </p>
-                                                                    )}
-                                                                </div>
-                                                                {historyItem && (
-                                                                    <span className="text-[10px] font-bold text-gray-400 bg-white px-4 py-1.5 rounded-full border border-gray-50 shadow-sm">
-                                                                        {new Date(historyItem.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-
-                                                            <div className="px-8 pb-8 space-y-6">
-                                                                <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-gray-50">
-                                                                    <p className="text-[13px] font-medium text-[#4a3b28] leading-relaxed">
-                                                                        {historyItem?.remarks || stageData?.sub || 'No additional remarks provided for this stage.'}
-                                                                    </p>
-                                                                </div>
-
-                                                                {stageMedia.length > 0 && (
-                                                                    <div className={`grid gap-2 rounded-2xl overflow-hidden ${stageMedia.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
-                                                                        {stageMedia.map((m: any, idx: number) => (
-                                                                            <div
-                                                                                key={m.media_id}
-                                                                                onClick={() => setActiveGallery({ media: stageMedia, index: idx })}
-                                                                                className={`relative cursor-pointer hover:opacity-90 transition-opacity ${stageMedia.length === 1 ? 'aspect-video' : 'aspect-square'}`}
-                                                                            >
-                                                                                {m.media_type === 'Video' ? (
-                                                                                    <video src={m.file_url} className="w-full h-full object-cover" />
-                                                                                ) : (
-                                                                                    <img src={m.file_url} className="w-full h-full object-cover" />
-                                                                                )}
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </div>
-                                        )}
 
                                         {/* Media Grid: The Focus */}
                                         {(() => {
@@ -1643,84 +1493,6 @@ const ResiHomePage = () => {
                                                 </div>
                                             );
                                         })()}
-
-                                        {/* Animal Specs Grid */}
-                                        {(report.animal_type || report.animal_condition) && (
-                                            <div className="grid grid-cols-2 gap-3 mb-6">
-                                                {report.animal_type && (
-                                                    <div className="bg-orange-50/30 border border-orange-100/30 rounded-[1.5rem] p-3.5 flex items-center gap-4">
-                                                        <div className="w-10 h-10 rounded-2xl bg-white shadow-sm flex items-center justify-center text-orange-600 shrink-0">
-                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Species</p>
-                                                            <p className="text-[11px] sm:text-[13px] font-black text-[#1a1208] uppercase">{report.animal_type}</p>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                {report.animal_condition && (
-                                                    <div className="bg-red-50/30 border border-red-100/30 rounded-[1.5rem] p-3.5 flex items-center gap-4">
-                                                        <div className="w-10 h-10 rounded-2xl bg-white shadow-sm flex items-center justify-center text-red-600 shrink-0">
-                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Condition</p>
-                                                            <p className="text-[11px] sm:text-[13px] font-black text-[#1a1208] uppercase">{report.animal_condition}</p>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        {/* Quick Info Grid - Always 3 Columns */}
-                                        <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6 bg-[#FAFAF9] p-4 rounded-3xl border border-gray-50">
-                                            <div className="flex flex-col gap-0.5">
-                                                <span className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-widest">{categoryName}</span>
-                                                <span className="text-[10px] sm:text-[11px] font-bold text-[#4a3b28] truncate">{report.landmark || 'Not specified'}</span>
-                                            </div>
-                                            <div className="flex flex-col gap-0.5 border-l border-gray-100 pl-3 sm:pl-4">
-                                                <span className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-widest">Animals</span>
-                                                <span className="text-[10px] sm:text-[11px] font-bold text-[#4a3b28] truncate">{report.animal_count} sighted</span>
-                                            </div>
-                                            <div className="flex flex-col gap-0.5 border-l border-gray-100 pl-3 sm:pl-4">
-                                                <span className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-widest">Priority</span>
-                                                <span className={`text-[10px] sm:text-[11px] font-black uppercase tracking-wider truncate ${report.priority_level === 'High' ? 'text-red-500' : 'text-[#F97316]'}`}>
-                                                    {report.priority_level}
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        {/* View More Button - PROMINENT PLACEMENT */}
-                                        <div className="mb-8">
-                                            <button
-                                                onClick={() => setViewingDetailedReport(report)}
-                                                className="w-full py-4 bg-[#F97316] text-white rounded-3xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-orange-100 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3"
-                                            >
-                                                View Rescue Timeline & Full Intelligence
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
-                                            </button>
-                                        </div>
-
-                                        <div className="rounded-2xl sm:rounded-[2rem] overflow-hidden border border-gray-100 h-40 sm:h-52 relative shadow-inner">
-                                            <MapContainer
-                                                center={[report.latitude, report.longitude]}
-                                                zoom={16}
-                                                className="h-full w-full grayscale-[0.5] contrast-[1.1]"
-                                                scrollWheelZoom={false}
-                                                dragging={false}
-                                                zoomControl={false}
-                                            >
-                                                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                                                <Marker position={[report.latitude, report.longitude]} />
-                                                <ReturnToSeleraButton />
-                                            </MapContainer>
-                                            <div className="absolute bottom-3 sm:bottom-4 left-3 sm:left-4 bg-white/90 backdrop-blur-sm px-3 sm:px-4 py-1 sm:py-1.5 rounded-full border border-gray-100 shadow-sm z-[10]">
-                                                <p className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
-                                                    Live Sighting Location
-                                                </p>
-                                            </div>
-                                        </div>
                                     </div>
 
                                     {/* Comments Section */}
@@ -2014,12 +1786,28 @@ const ResiHomePage = () => {
                                     </div>
                                 </div>
                             </div>
-                            <button
-                                onClick={() => setViewingDetailedReport(null)}
-                                className="p-4 bg-gray-50 text-gray-400 hover:text-gray-900 rounded-2xl transition-all"
-                            >
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
+                            <div className="flex items-center gap-3">
+                                {viewingDetailedReport.user_id === currentUserId && viewingDetailedReport.status_id === 1 && (
+                                    <button
+                                        onClick={() => {
+                                            handleEditClick(viewingDetailedReport);
+                                            setViewingDetailedReport(null);
+                                        }}
+                                        className="px-6 py-3.5 bg-[#F97316] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#EA580C] transition-all flex items-center gap-2 shadow-lg shadow-orange-100 cursor-pointer"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                        Edit Details
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => setViewingDetailedReport(null)}
+                                    className="p-4 bg-gray-50 text-gray-400 hover:text-gray-900 rounded-2xl transition-all"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            </div>
                         </div>
 
                         {/* Scrollable Body */}
@@ -2057,13 +1845,13 @@ const ResiHomePage = () => {
                                                 <p className="text-sm font-black text-gray-900 uppercase">{viewingDetailedReport.animal_type}</p>
                                             </div>
                                         )}
-                                        {!(viewingDetailedReport.ai_suggested_priority && 
-                                           ((p1, p2) => p1.toLowerCase().replace('priority', '').replace('level', '').trim() === p2.toLowerCase().replace('priority', '').replace('level', '').trim())(viewingDetailedReport.ai_suggested_priority, viewingDetailedReport.priority_level)) && (
-                                            <div className="bg-white p-6 rounded-3xl border border-gray-100">
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Priority</p>
-                                                <p className="text-sm font-black text-red-600 uppercase">{viewingDetailedReport.priority_level}</p>
-                                            </div>
-                                        )}
+                                        {!(viewingDetailedReport.ai_suggested_priority &&
+                                            ((p1, p2) => p1.toLowerCase().replace('priority', '').replace('level', '').trim() === p2.toLowerCase().replace('priority', '').replace('level', '').trim())(viewingDetailedReport.ai_suggested_priority, viewingDetailedReport.priority_level)) && (
+                                                <div className="bg-white p-6 rounded-3xl border border-gray-100">
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Priority</p>
+                                                    <p className="text-sm font-black text-red-600 uppercase">{viewingDetailedReport.priority_level}</p>
+                                                </div>
+                                            )}
                                     </div>
 
                                     {/* AI Suggestion Panel */}
@@ -2079,16 +1867,16 @@ const ResiHomePage = () => {
                                     {/* Subject Identification */}
                                     {(() => {
                                         const hasAIData = !!(viewingDetailedReport.ai_animal_type || viewingDetailedReport.ai_dominant_color || viewingDetailedReport.ai_estimated_size);
-                                        const showBreed = !!(viewingDetailedReport.animal_breed && 
-                                            viewingDetailedReport.animal_breed.toLowerCase() !== 'unknown' && 
+                                        const showBreed = !!(viewingDetailedReport.animal_breed &&
+                                            viewingDetailedReport.animal_breed.toLowerCase() !== 'unknown' &&
                                             viewingDetailedReport.animal_breed.toLowerCase() !== 'not specified');
-                                        const showColor = !!(viewingDetailedReport.animal_color && 
-                                            viewingDetailedReport.animal_color.toLowerCase() !== 'unknown' && 
-                                            (!viewingDetailedReport.ai_dominant_color || 
-                                             viewingDetailedReport.animal_color.toLowerCase() !== viewingDetailedReport.ai_dominant_color.toLowerCase()));
-                                        const showSize = !!(viewingDetailedReport.estimated_size && 
-                                            (!viewingDetailedReport.ai_estimated_size || 
-                                             viewingDetailedReport.estimated_size.toLowerCase() !== viewingDetailedReport.ai_estimated_size.toLowerCase()));
+                                        const showColor = !!(viewingDetailedReport.animal_color &&
+                                            viewingDetailedReport.animal_color.toLowerCase() !== 'unknown' &&
+                                            (!viewingDetailedReport.ai_dominant_color ||
+                                                viewingDetailedReport.animal_color.toLowerCase() !== viewingDetailedReport.ai_dominant_color.toLowerCase()));
+                                        const showSize = !!(viewingDetailedReport.estimated_size &&
+                                            (!viewingDetailedReport.ai_estimated_size ||
+                                                viewingDetailedReport.estimated_size.toLowerCase() !== viewingDetailedReport.ai_estimated_size.toLowerCase()));
                                         const showSubjectIdCard = !hasAIData || showBreed || showColor || showSize;
 
                                         if (!showSubjectIdCard) return null;
