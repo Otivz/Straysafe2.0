@@ -6,11 +6,13 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.database import SessionLocal, engine, Base
 from app.models.user import User, Role, Subdivision, Barangay, Position
+from app.models.report import ReportCategory
 from app.utils.auth import get_password_hash
 from dotenv import load_dotenv
 
-# Explicitly load .env
-load_dotenv()
+# Explicitly load .env from project root
+dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+load_dotenv(dotenv_path)
 
 def seed_db():
     # Create tables if they don't exist
@@ -55,6 +57,23 @@ def seed_db():
             barangay = Barangay(barangay_id=1, barangay_name='San Vicente', city='Angeles City')
             db.add(barangay)
             db.commit()
+
+        # 3.5 Seed Report Categories
+        print("Seeding report categories...")
+        categories = {
+            1: 'Injured',
+            2: 'Aggressive',
+            3: 'Rabies Risk',
+            4: 'Roaming',
+            5: 'Rescue Needed'
+        }
+        for cat_id, cat_name in categories.items():
+            cat = db.query(ReportCategory).filter(ReportCategory.category_id == cat_id).first()
+            if not cat:
+                db.add(ReportCategory(category_id=cat_id, category_name=cat_name))
+            else:
+                cat.category_name = cat_name
+        db.commit()
 
         # 4. Seed Subdivisions
         print("Seeding subdivisions...")

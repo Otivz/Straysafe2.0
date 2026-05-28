@@ -79,12 +79,34 @@ def ensure_report_ai_suggestion_columns():
         if result_breed.scalar() == 0:
             conn.execute(text("ALTER TABLE reports ADD COLUMN ai_possible_breed VARCHAR(100) NULL"))
 
+def ensure_report_condition_column():
+    with engine.begin() as conn:
+        result = conn.execute(text(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'reports' "
+            "AND COLUMN_NAME = 'condition'"
+        ))
+        if result.scalar() == 0:
+            conn.execute(text("ALTER TABLE reports ADD COLUMN `condition` TEXT NULL"))
+
+def ensure_pet_vaccine_card_url_column():
+    with engine.begin() as conn:
+        result = conn.execute(text(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pets' "
+            "AND COLUMN_NAME = 'vaccine_card_url'"
+        ))
+        if result.scalar() == 0:
+            conn.execute(text("ALTER TABLE pets ADD COLUMN vaccine_card_url VARCHAR(255) NULL"))
+
 # Create tables
 Base.metadata.create_all(bind=engine)
 ensure_report_media_status_column()
 ensure_report_media_animal_type_column()
 ensure_report_media_dominant_color_column()
 ensure_report_ai_suggestion_columns()
+ensure_report_condition_column()
+ensure_pet_vaccine_card_url_column()
 
 app = FastAPI(title="StraySafe API")
 

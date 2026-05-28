@@ -248,7 +248,8 @@ const ResiHomePage = () => {
                         const data = await res.json();
                         setBreedsData(data);
                         const breedList = data.map((b: any) => b.name);
-                        setBreeds(['Aspin', ...breedList]);
+                        const uniqueBreeds = Array.from(new Set(['Aspin', ...breedList]));
+                        setBreeds(uniqueBreeds);
                     } else {
                         throw new Error('API failed');
                     }
@@ -261,7 +262,8 @@ const ResiHomePage = () => {
                         const data = await res.json();
                         setBreedsData(data);
                         const breedList = data.map((b: any) => b.name);
-                        setBreeds(['Puspin', ...breedList]);
+                        const uniqueBreeds = Array.from(new Set(['Puspin', ...breedList]));
+                        setBreeds(uniqueBreeds);
                     } else {
                         throw new Error('API failed');
                     }
@@ -833,8 +835,8 @@ const ResiHomePage = () => {
                                             onChange={(e) => setFormData({ ...formData, animalBreed: e.target.value })}
                                         />
                                         <datalist id="report-breed-suggestions">
-                                            {breeds.map((breed) => (
-                                                <option key={breed} value={breed} />
+                                            {breeds.map((breed, idx) => (
+                                                <option key={`${breed}-${idx}`} value={breed} />
                                             ))}
                                             {formData.animalType === 'Dog' ? (
                                                 <>

@@ -19,6 +19,7 @@ class PetBase(BaseModel):
     vaccination_date: Optional[date] = None
     vaccine_expiry: Optional[date] = None
     is_neutered: Optional[bool] = False
+    vaccine_card_url: Optional[str] = None
     temperament: Optional[str] = "Friendly"
     has_bite_history: Optional[bool] = False
     bite_incident_count: Optional[int] = 0
@@ -50,6 +51,7 @@ class PetUpdate(BaseModel):
     vaccination_date: Optional[date] = None
     vaccine_expiry: Optional[date] = None
     is_neutered: Optional[bool] = None
+    vaccine_card_url: Optional[str] = None
     temperament: Optional[str] = None
     has_bite_history: Optional[bool] = None
     bite_incident_count: Optional[int] = None

@@ -18,6 +18,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 }) => {
     const [activeTab, setActiveTab] = useState<'info' | 'health' | 'behavior' | 'incident'>('info');
     const [isQrOpen, setIsQrOpen] = useState(false);
+    const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
 
     if (!pet) return null;
 
@@ -103,6 +104,11 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 <div className="flex justify-between items-center">
                                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Owner Email</span>
                                     <span className="text-xs font-black text-[#1a1208] truncate max-w-[150px]">{pet.ownerEmail}</span>
+                                </div>
+                                <div className="border-t border-gray-50"></div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Owner Contact</span>
+                                    <span className="text-xs font-black text-[#1a1208]">{pet.ownerPhone || 'No Contact'}</span>
                                 </div>
                             </div>
                         </div>
@@ -258,6 +264,70 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                         )}
                                     </div>
                                 </div>
+
+                                <div className="space-y-4">
+                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Supporting Document / Evidence</h4>
+                                    {pet.vaccineCardUrl ? (
+                                        <div className="bg-[#FAFAF9] p-6 rounded-[2rem] border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 rounded-2xl bg-orange-50 flex items-center justify-center text-[#F97316]">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                                    </svg>
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-black text-[#1a1208] uppercase mb-0.5">Vaccination Card / Support File</p>
+                                                    <p className="text-[10px] text-gray-400 font-bold uppercase">Uploaded document for official verification</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-3">
+                                                {!pet.vaccineCardUrl.toLowerCase().endsWith('.pdf') ? (
+                                                    <div className="flex items-center gap-4">
+                                                        <div 
+                                                            className="w-14 h-14 rounded-xl overflow-hidden border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-all group relative" 
+                                                            onClick={() => setIsEvidenceOpen(true)}
+                                                        >
+                                                            <img src={pet.vaccineCardUrl} alt="Vaccination Evidence" className="w-full h-full object-cover transition-all duration-300 group-hover:scale-110" />
+                                                            <div className="absolute inset-0 bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                                                </svg>
+                                                            </div>
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => setIsEvidenceOpen(true)}
+                                                            className="px-5 py-3 bg-[#B35D25] hover:bg-[#974A1A] text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer"
+                                                        >
+                                                            Inspect Document
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <a 
+                                                        href={pet.vaccineCardUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="px-5 py-3 bg-[#B35D25] hover:bg-[#974A1A] text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all inline-flex items-center gap-2"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                        </svg>
+                                                        Open PDF Document
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-[#FAFAF9] p-8 rounded-[2rem] border border-dashed border-gray-200 text-center flex flex-col items-center justify-center gap-2">
+                                            <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                </svg>
+                                            </div>
+                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">No vaccination card or supporting document uploaded</p>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -282,14 +352,26 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     <div className="space-y-4">
                                         <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
                                             <span className="text-xs font-bold text-gray-500">Has Bite History?</span>
-                                            <span className={`text-xs font-black uppercase ${pet.hasBiteHistory ? 'text-red-500' : 'text-green-600'}`}>
-                                                {pet.hasBiteHistory ? 'Yes' : 'No'}
+                                            <span className={`text-xs font-black uppercase ${
+                                                pet.hasBiteHistory === true ? 'text-red-500' : 
+                                                pet.hasBiteHistory === false ? 'text-green-600' : 
+                                                'text-amber-500'
+                                            }`}>
+                                                {pet.hasBiteHistory === true ? 'Yes' : 
+                                                 pet.hasBiteHistory === false ? 'No' : 
+                                                 'Not Sure'}
                                             </span>
                                         </div>
                                         <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
                                             <span className="text-xs font-bold text-gray-500">Chase Behavior?</span>
-                                            <span className={`text-xs font-black uppercase ${pet.chaseBehavior ? 'text-red-500' : 'text-green-600'}`}>
-                                                {pet.chaseBehavior ? 'Yes' : 'No'}
+                                            <span className={`text-xs font-black uppercase ${
+                                                pet.chaseBehavior === true ? 'text-red-500' : 
+                                                pet.chaseBehavior === false ? 'text-green-600' : 
+                                                'text-amber-500'
+                                            }`}>
+                                                {pet.chaseBehavior === true ? 'Yes' : 
+                                                 pet.chaseBehavior === false ? 'No' : 
+                                                 'Not Sure'}
                                             </span>
                                         </div>
                                     </div>
@@ -374,6 +456,60 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                         >
                             Close QR Tag
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Vaccine Card / Evidence Lightbox Modal */}
+            {isEvidenceOpen && pet.vaccineCardUrl && (
+                <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
+                    <div 
+                        className="absolute inset-0 bg-stone-900/60 backdrop-blur-md animate-in fade-in duration-300"
+                        onClick={() => setIsEvidenceOpen(false)}
+                    />
+                    <div className="relative w-full max-w-2xl bg-white rounded-[2.5rem] p-8 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 text-center">
+                        <div className="flex justify-between items-center mb-6">
+                            <div className="text-left">
+                                <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight">Vaccine Card & Supporting Evidence</h3>
+                                <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest">{pet.name} • {pet.idNumber}</p>
+                            </div>
+                            <button 
+                                onClick={() => setIsEvidenceOpen(false)} 
+                                className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#1a1208] hover:bg-gray-50 transition-all cursor-pointer"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        
+                        <div className="w-full max-h-[450px] overflow-auto bg-gray-50 border border-gray-100 rounded-3xl p-4 flex items-center justify-center relative mb-6 shadow-inner group">
+                            <img 
+                                src={pet.vaccineCardUrl} 
+                                className="max-w-full max-h-[400px] object-contain rounded-2xl shadow-md border border-gray-100" 
+                                alt="Vaccination Card Evidence" 
+                            />
+                        </div>
+
+                        <div className="flex gap-4">
+                            <button 
+                                onClick={() => setIsEvidenceOpen(false)}
+                                className="flex-1 py-4 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-2xl text-xs font-black uppercase tracking-widest border border-gray-200 transition-all cursor-pointer"
+                            >
+                                Close Preview
+                            </button>
+                            <a 
+                                href={pet.vaccineCardUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex-1 py-4 bg-[#B35D25] hover:bg-[#974A1A] text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-2"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                                Open Original
+                            </a>
+                        </div>
                     </div>
                 </div>
             )}

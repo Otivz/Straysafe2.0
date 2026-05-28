@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { type PetRecord } from './types';
 import Button from '../Button';
 
 interface AddPetModalProps {

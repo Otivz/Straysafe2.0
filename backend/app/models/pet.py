@@ -24,6 +24,7 @@ class Pet(Base):
     vaccination_date = Column(Date, nullable=True)
     vaccine_expiry = Column(Date, nullable=True)
     is_neutered = Column(Boolean, default=False)
+    vaccine_card_url = Column(String(255), nullable=True)
     
     # Behavior
     temperament = Column(Enum('Friendly', 'Aggressive', 'Anxious', 'Scared', 'Protective', name='temperament'), default='Friendly')

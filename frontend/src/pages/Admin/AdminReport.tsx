@@ -804,7 +804,7 @@ const AdminReport = () => {
                                             </div>
 
                                             {/* Media Grid: The Focus */}
-                                            {viewReport.media && viewReport.media.filter((m: any) => {
+                                            {viewReport.media && (viewReport.media || []).filter((m: any) => {
                                                 const url = m.file_url.toLowerCase();
                                                 return m.media_type !== 'Document' &&
                                                     !url.endsWith('.pdf') &&
@@ -814,7 +814,7 @@ const AdminReport = () => {
                                             }).length > 0 && (
                                                     <div>
                                                         <h5 className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4 block">INCIDENT MEDIA GALLERY</h5>
-                                                        <div className={`grid gap-2 rounded-2xl sm:rounded-[2.5rem] overflow-hidden border-2 border-gray-50 shadow-inner bg-gray-50/30 ${viewReport.media.filter((m: any) => {
+                                                        <div className={`grid gap-2 rounded-2xl sm:rounded-[2.5rem] overflow-hidden border-2 border-gray-50 shadow-inner bg-gray-50/30 ${(viewReport.media || []).filter((m: any) => {
                                                             const url = m.file_url.toLowerCase();
                                                             return m.media_type !== 'Document' &&
                                                                 !url.endsWith('.pdf') &&
@@ -823,7 +823,7 @@ const AdminReport = () => {
                                                                 !url.endsWith('.txt');
                                                         }).length === 1 ? 'grid-cols-1' : 'grid-cols-2'
                                                             }`}>
-                                                            {viewReport.media.filter((m: any) => {
+                                                            {(viewReport.media || []).filter((m: any) => {
                                                                 const url = m.file_url.toLowerCase();
                                                                 return m.media_type !== 'Document' &&
                                                                     !url.endsWith('.pdf') &&
@@ -833,7 +833,7 @@ const AdminReport = () => {
                                                             }).slice(0, 4).map((m: any, idx: number) => (
                                                                 <div
                                                                     key={m.media_id}
-                                                                    className={`relative overflow-hidden cursor-pointer group/media ${viewReport.media.filter((m: any) => {
+                                                                    className={`relative overflow-hidden cursor-pointer group/media ${(viewReport.media || []).filter((m: any) => {
                                                                         const url = m.file_url.toLowerCase();
                                                                         return m.media_type !== 'Document' &&
                                                                             !url.endsWith('.pdf') &&
@@ -841,7 +841,7 @@ const AdminReport = () => {
                                                                             !url.endsWith('.docx') &&
                                                                             !url.endsWith('.txt');
                                                                     }).length === 1 ? 'h-64 sm:h-96' :
-                                                                        viewReport.media.filter((m: any) => {
+                                                                        (viewReport.media || []).filter((m: any) => {
                                                                             const url = m.file_url.toLowerCase();
                                                                             return m.media_type !== 'Document' &&
                                                                                 !url.endsWith('.pdf') &&
@@ -849,7 +849,7 @@ const AdminReport = () => {
                                                                                 !url.endsWith('.docx') &&
                                                                                 !url.endsWith('.txt');
                                                                         }).length === 2 ? 'h-48 sm:h-72' :
-                                                                            viewReport.media.filter((m: any) => {
+                                                                            (viewReport.media || []).filter((m: any) => {
                                                                                 const url = m.file_url.toLowerCase();
                                                                                 return m.media_type !== 'Document' &&
                                                                                     !url.endsWith('.pdf') &&
@@ -859,7 +859,7 @@ const AdminReport = () => {
                                                                             }).length === 3 && idx === 0 ? 'row-span-2 h-[24rem] sm:h-[36rem]' : 'h-48 sm:h-72'
                                                                         }`}
                                                                     onClick={() => {
-                                                                        const filtered = viewReport.media.filter((m: any) => {
+                                                                        const filtered = (viewReport.media || []).filter((m: any) => {
                                                                             const url = m.file_url.toLowerCase();
                                                                             return m.media_type !== 'Document' &&
                                                                                 !url.endsWith('.pdf') &&
@@ -888,7 +888,7 @@ const AdminReport = () => {
                                                                             className="w-full h-full object-cover hover:scale-105 transition-all duration-1000 ease-out"
                                                                         />
                                                                     )}
-                                                                    {idx === 3 && viewReport.media.filter((m: any) => {
+                                                                    {idx === 3 && (viewReport.media || []).filter((m: any) => {
                                                                         const url = m.file_url.toLowerCase();
                                                                         return m.media_type !== 'Document' &&
                                                                             !url.endsWith('.pdf') &&
@@ -897,7 +897,7 @@ const AdminReport = () => {
                                                                             !url.endsWith('.txt');
                                                                     }).length > 4 && (
                                                                             <div className="absolute inset-0 bg-black/70 backdrop-blur-[4px] flex items-center justify-center text-white">
-                                                                                <span className="text-xl sm:text-3xl font-black tracking-tighter leading-none">+{viewReport.media.filter((m: any) => {
+                                                                                <span className="text-xl sm:text-3xl font-black tracking-tighter leading-none">+{(viewReport.media || []).filter((m: any) => {
                                                                                     const url = m.file_url.toLowerCase();
                                                                                     return m.media_type !== 'Document' &&
                                                                                         !url.endsWith('.pdf') &&
