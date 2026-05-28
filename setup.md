@@ -69,7 +69,8 @@ With the backend running, open a **new terminal** in the project root and run:
 ```powershell
 .venv\Scripts\activate
 cd backend
-..\venv\Scripts\python scripts/seed_admin.py
+..\.venv\Scripts\python scripts/seed_admin.py
+# (Or simply run "python scripts/seed_admin.py" since the venv is active)
 ```
 
 This creates these accounts (all passwords: `password123`):
@@ -108,7 +109,7 @@ npm run dev
 
 | Terminal | Command |
 |----------|---------|
-| Terminal 1 (Backend) | `.venv\Scripts\activate` → `cd backend` → `..\venv\Scripts\python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload` |
+| Terminal 1 (Backend) | `.venv\Scripts\activate` → `cd backend` → `..\.venv\Scripts\python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload` |
 | Terminal 2 (Frontend) | `cd frontend` → `npm run dev` |
 
 ---
@@ -117,7 +118,7 @@ npm run dev
 
 | Error | Fix |
 |-------|-----|
-| `'uvicorn' is not recognized` | Use `..\venv\Scripts\python -m uvicorn ...` instead |
+| `'uvicorn' is not recognized` | Use `..\.venv\Scripts\python -m uvicorn ...` instead |
 | `No module named uvicorn` | Make sure `.venv` is activated: `.venv\Scripts\activate` |
 | `WinError 10013` (port in use) | Change `--port 8000` to `--port 8001` |
 | `cryptography package required` | Run `pip install cryptography` with venv active |

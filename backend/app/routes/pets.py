@@ -75,3 +75,22 @@ async def upload_pet_photo(pet_id: int, file: UploadFile = File(...), db: Sessio
         return {"photo_url": image_url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/{pet_id}/vaccine-card")
+async def upload_vaccine_card(pet_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
+    if not db_pet:
+        raise HTTPException(status_code=404, detail="Pet not found")
+    
+    try:
+        # Read file content
+        file_content = await file.read()
+        card_url = upload_to_cloudinary(file_content, folder="vaccines", filename=file.filename)
+        if not card_url:
+            raise HTTPException(status_code=500, detail="Failed to upload vaccine card to Cloudinary")
+            
+        db_pet.vaccine_card_url = card_url
+        db.commit()
+        return {"vaccine_card_url": card_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

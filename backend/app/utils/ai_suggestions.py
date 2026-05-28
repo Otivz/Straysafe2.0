@@ -48,39 +48,39 @@ def generate_ai_suggestions(
             animal_type = "Cat"
             
     # 2. Animal Color Selection
-    dominant_color = "Unknown"
+    detected_colors = []
     if media_dominant_color is not None:
-        dominant_color = media_dominant_color
+        # If the media analysis passed a color string (e.g. "Black, White")
+        detected_colors = [c.strip().capitalize() for c in media_dominant_color.split(",")]
     else:
         # Scan text for common color keywords
         color_keywords = ["brown", "black", "white", "golden", "orange", "ginger", "gray", "grey", "spotted", "stripe", "cream", "yellow", "red", "tan"]
-        detected_colors = []
         for ck in color_keywords:
             if ck in text:
                 detected_colors.append(ck.capitalize())
-        
-        if len(detected_colors) >= 1:
-            dominant_color = ", ".join(detected_colors[:2])
-        else:
-            dominant_color = "Brown"  # Fallback default if not detected
 
     # Stick to existing fur colors: dogs are not orange/ginger, map to Brown
-    if animal_type == "Dog" and dominant_color and dominant_color != "Unknown":
-        colors_list = [c.strip() for c in dominant_color.split(",")]
+    if animal_type == "Dog":
         mapped_colors = []
-        for c in colors_list:
+        for c in detected_colors:
             if c.lower() in ["orange", "ginger"]:
                 mapped_colors.append("Brown")
             else:
                 mapped_colors.append(c)
         # De-duplicate while preserving order
         seen = set()
-        final_colors = []
+        detected_colors = []
         for c in mapped_colors:
             if c not in seen:
                 seen.add(c)
-                final_colors.append(c)
-        dominant_color = ", ".join(final_colors)
+                detected_colors.append(c)
+
+    primary = detected_colors[0] if len(detected_colors) >= 1 else "Brown"
+    secondary = detected_colors[1] if len(detected_colors) >= 2 else "None"
+    
+    dominant_color = primary
+    if secondary != "None":
+        dominant_color += f", {secondary}"
 
     # 3. Estimated Size Selection
     estimated_size = "Medium"  # Default

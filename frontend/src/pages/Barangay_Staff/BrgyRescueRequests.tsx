@@ -172,12 +172,30 @@ const BrgyRescueRequests = () => {
 
         setIsUpdating(true);
         try {
+            const friendlyDefaults: Record<number, string> = {
+                1: "Reported.",
+                2: "Incident report has been officially verified by the Subdivision Leader.",
+                3: "Report rejected based on verification criteria.",
+                4: "Report forwarded to Barangay Operations for official review and approval.",
+                13: "Approved by Barangay. Rescue operation is being planned.",
+                5: "Rescue team has been dispatched to the location.",
+                6: "Picked up by the barangay and in a safe place.",
+                7: "Under observation.",
+                8: "Securely impounded.",
+                9: "Claimed by owner.",
+                10: "Safely released.",
+                11: "Incident has been resolved.",
+                12: "Resolved (animal deceased)."
+            };
+
+            const defaultRemark = friendlyDefaults[statusToUpdate.statusId] || `Status updated to ${statusMap[statusToUpdate.statusId] || reportStatusMap[statusToUpdate.statusId]}`;
+
             // 1. Update Rescue & Report Status in ONE call
             const rescuePayload = {
                 status_id: statusToUpdate.statusId, // Use the ACTUAL status (4, 5, 7, etc.)
                 barangay_staff_id: currentUser.user_id,
                 assigned_personnel_id: selectedPersonnelId,
-                remarks: statusUpdateMessage || `Status updated to ${statusMap[statusToUpdate.statusId] || reportStatusMap[statusToUpdate.statusId]}`,
+                remarks: statusUpdateMessage || defaultRemark,
                 animal_condition: statusUpdateCondition
             };
             const rescueResponse = await axios.patch(`http://localhost:8000/rescue-requests/${statusToUpdate.requestId}`, rescuePayload);
@@ -583,7 +601,7 @@ const BrgyRescueRequests = () => {
                                                 routing={isNavigating ? {
                                                     start: navSource === 'brgy' ? BRGY_OFFICE : (userLocation || BRGY_OFFICE),
                                                     end: [viewingRequest.report?.latitude || BRGY_OFFICE[0], viewingRequest.report?.longitude || BRGY_OFFICE[1]],
-                                                    waypointNames: [navSource === 'brgy' ? "Barangay Office" : "Your Location", viewingRequest.report?.landmark]
+                                                    waypointNames: [navSource === 'brgy' ? "Barangay Office" : "Your Location", viewingRequest.report?.landmark || "Rescue Site"]
                                                 } : undefined}
                                                 onMarkerClick={(m) => {
                                                     if (m.source) {

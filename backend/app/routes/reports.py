@@ -463,6 +463,23 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, db: 
 
     # Use either remarks or status_remarks
     final_remarks = status_update.remarks or status_update.status_remarks
+    if not final_remarks:
+        friendly_defaults = {
+            1: "Reported.",
+            2: "Incident report has been officially verified by the Subdivision Leader.",
+            3: "Report rejected based on verification criteria.",
+            4: "Report forwarded to Barangay Operations for official review and approval.",
+            5: "Rescue team has been dispatched to the location.",
+            6: "Picked up by the barangay and in a safe place.",
+            7: "Under observation.",
+            8: "Securely impounded.",
+            9: "Claimed by owner.",
+            10: "Safely released.",
+            11: "Incident has been resolved.",
+            12: "Resolved (animal deceased).",
+            13: "Approved by Barangay. Rescue operation is being planned."
+        }
+        final_remarks = friendly_defaults.get(status_update.status_id, "Status updated.")
 
     # Create status history entry using DB column names
     db_history = StatusHistory(

@@ -7,6 +7,7 @@ export interface PetRecord {
     species: string;
     ownerName: string;
     ownerEmail: string;
+    ownerPhone?: string;
     idNumber: string;
     status: string;
     avatar: string;
@@ -25,6 +26,7 @@ export interface PetRecord {
     chaseBehavior?: boolean;
     healthCondition?: string;
     notes?: string;
+    vaccineCardUrl?: string;
     
     rawPetObj?: any;
 }

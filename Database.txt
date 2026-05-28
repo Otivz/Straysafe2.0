@@ -41,13 +41,13 @@ CREATE TABLE barangays(
     contact_no VARCHAR(20),
     hq_plus_code VARCHAR(20),
     hq_lat DECIMAL(10,8),
-    hq_lng DECIMAL(11,8),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    hq_lng DECIMAL(11,8)
 );
 
 INSERT INTO barangays(
     barangay_name,
     city,
+    contact_no,
     hq_plus_code,
     hq_lat,
     hq_lng
@@ -55,6 +55,7 @@ INSERT INTO barangays(
 VALUES (
     'San Vicente',
     'Santa Maria, Bulacan',
+    '09123456789',
     'R243+QH',
     14.806906,
     121.0039297
@@ -72,8 +73,6 @@ CREATE TABLE subdivisions(
 
     boundary_polygon JSON NULL,
 
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
     UNIQUE(barangay_id, subdivision_name),
 
     FOREIGN KEY(barangay_id)
@@ -88,10 +87,10 @@ INSERT INTO subdivisions(
 VALUES (
     1,
     'Selera Homes',
-    '[{"lat": 14.801496, "lng": 121.005174},
-      {"lat": 14.799577, "lng": 121.003911},
-      {"lat": 14.800634, "lng": 121.002228},
-      {"lat": 14.802461, "lng": 121.003280}]'
+    '[{"lat":14.801496,"lng":121.005174},
+      {"lat":14.799577,"lng":121.003911},
+      {"lat":14.800634,"lng":121.002228},
+      {"lat":14.802461,"lng":121.003280}]'
 );
 
 -- =========================================
@@ -196,6 +195,8 @@ CREATE TABLE pets(
     vaccine_expiry DATE NULL,
 
     is_neutered BOOLEAN DEFAULT FALSE,
+
+    vaccine_card_url VARCHAR(255) NULL,
 
     temperament ENUM(
         'Friendly',
@@ -308,46 +309,58 @@ CREATE TABLE pet_incidents(
 -- =========================================
 CREATE TABLE report_categories(
     category_id INT AUTO_INCREMENT PRIMARY KEY,
-
     category_name VARCHAR(100) UNIQUE NOT NULL
 );
 
 INSERT INTO report_categories(category_name) VALUES
-('Injured'),
-('Aggressive'),
-('Roaming'),
-('Rescue Needed');
+('Injured Animal'),
+('Aggressive Stray'),
+('Possible Rabies Risk'),
+('Roaming Pack'),
+('Animal Rescue Needed');
 
 -- =========================================
 -- REPORT STATUS
 -- =========================================
 CREATE TABLE report_status(
     status_id INT AUTO_INCREMENT PRIMARY KEY,
-
     status_name VARCHAR(50) UNIQUE NOT NULL
 );
 
 INSERT INTO report_status(status_name) VALUES
-('Reported'),
+('Pending Verification'),
 ('Verified'),
 ('Rejected'),
-('Escalated to Barangay'),
+('Forwarded to Barangay'),
 ('Team Dispatched'),
+('Resolved'),
 ('Picked Up'),
 ('Under Observation'),
 ('Impounded'),
-('Claimed by Owner'),
-('Released'),
+('Released');
+
+-- =========================================
+-- RESCUE STATUS
+-- =========================================
+CREATE TABLE rescue_status(
+    status_id INT AUTO_INCREMENT PRIMARY KEY,
+    status_name VARCHAR(50) UNIQUE NOT NULL
+);
+
+INSERT INTO rescue_status(status_name) VALUES
+('Pending'),
+('Dispatched'),
+('Picked Up'),
+('Under Observation'),
+('Impounded'),
 ('Resolved'),
-('Deceased'),
-('Approved');
+('Released');
 
 -- =========================================
 -- LETTER STATUS
 -- =========================================
 CREATE TABLE letter_status(
     status_id INT AUTO_INCREMENT PRIMARY KEY,
-
     status_name VARCHAR(50) UNIQUE NOT NULL
 );
 
@@ -365,8 +378,6 @@ CREATE TABLE reports(
     user_id INT NOT NULL,
 
     subdivision_id INT NOT NULL,
-
-    assigned_barangay_id INT NULL,
 
     category_id INT NOT NULL,
 
@@ -404,32 +415,17 @@ CREATE TABLE reports(
         'High'
     ) DEFAULT 'Regular',
 
-    report_priority_score DECIMAL(5,2) DEFAULT 0,
-
     visibility ENUM(
         'Public',
-        'Private',
-        'Barangay Only'
+        'Private'
     ) DEFAULT 'Public',
 
     is_possible_owned BOOLEAN DEFAULT FALSE,
 
-    current_status_id INT NOT NULL DEFAULT 1,
+    current_status_id INT,
 
-    final_action_type ENUM(
-        'Returned to Owner',
-        'Impounded',
-        'Released',
-        'Transferred',
-        'Deceased',
-        'False Report'
-    ) NULL,
+    `condition` TEXT NULL,
 
-    final_outcome TEXT NULL,
-
-    resolved_at TIMESTAMP NULL,
-
-    -- AI Suggestions Columns
     ai_animal_type VARCHAR(50) NULL,
     ai_dominant_color VARCHAR(100) NULL,
     ai_estimated_size VARCHAR(50) NULL,
@@ -438,8 +434,6 @@ CREATE TABLE reports(
     ai_suggested_priority VARCHAR(50) NULL,
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    ON UPDATE CURRENT_TIMESTAMP,
 
     FOREIGN KEY(user_id)
     REFERENCES users(user_id)
@@ -447,9 +441,6 @@ CREATE TABLE reports(
 
     FOREIGN KEY(subdivision_id)
     REFERENCES subdivisions(subdivision_id),
-
-    FOREIGN KEY(assigned_barangay_id)
-    REFERENCES barangays(barangay_id),
 
     FOREIGN KEY(category_id)
     REFERENCES report_categories(category_id),
@@ -469,6 +460,396 @@ CREATE INDEX idx_reports_location
 ON reports(latitude, longitude);
 
 -- =========================================
+-- REPORT VERIFICATIONS
+-- =========================================
+CREATE TABLE report_verifications(
+    verification_id INT AUTO_INCREMENT PRIMARY KEY,
+
+    report_id INT NOT NULL UNIQUE,
+
+    leader_id INT NOT NULL,
+
+    status_id INT NOT NULL,
+
+    remarks TEXT,
+
+    verified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY(report_id)
+    REFERENCES reports(report_id)
+    ON DELETE CASCADE,
+
+    FOREIGN KEY(leader_id)
+    REFERENCES users(user_id)
+    ON DELETE CASCADE,
+
+    FOREIGN KEY(status_id)
+    REFERENCES report_status(status_id)
+);
+
+-- =========================================
+-- ENDORSEMENT LETTERS
+-- =========================================
+CREATE TABLE endorsement_letters(
+    letter_id INT AUTO_INCREMENT PRIMARY KEY,
+
+    report_id INT NOT NULL UNIQUE,
+
+    leader_id INT NOT NULL,
+
+    letter_content TEXT NOT NULL,
+
+    file_url VARCHAR(255),
+
+    status_id INT,
+
+    issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY(report_id)
+    REFERENCES reports(report_id)
+    ON DELETE CASCADE,
+
+    FOREIGN KEY(leader_id)
+    REFERENCES users(user_id)
+    ON DELETE CASCADE,
+
+    FOREIGN KEY(status_id)
+    REFERENCES letter_status(status_id)
+);
+
+-- =========================================
+-- RESCUES
+-- =========================================
+CREATE TABLE rescues(
+    rescue_id INT AUTO_INCREMENT PRIMARY KEY,
+
+    report_id INT NOT NULL,
+
+    staff_id INT,
+
+    status_id INT,
+
+    notes TEXT,
+
+    started_at TIMESTAMP NULL,
+
+    completed_at TIMESTAMP NULL,
+
+    leader_id INT NULL,
+
+    FOREIGN KEY(report_id)
+    REFERENCES reports(report_id)
+    ON DELETE CASCADE,
+
+    FOREIGN KEY(staff_id)
+    REFERENCES users(user_id)
+    ON DELETE SET NULL,
+
+    FOREIGN KEY(status_id)
+    REFERENCES rescue_status(status_id),
+
+    FOREIGN KEY(leader_id)
+    REFERENCES users(user_id)
+    ON DELETE SET NULL
+);
+
+-- =========================================
+-- RESCUE ASSIGNMENTS
+-- =========================================
+CREATE TABLE rescue_assignments(
+    assignment_id INT AUTO_INCREMENT PRIMARY KEY,
+
+    rescue_id INT NOT NULL,
+
+    staff_id INT NOT NULL,
+
+    assigned_by INT NOT NULL,
+
+    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    assignment_status ENUM(
+        'Assigned',
+        'In Transit',
+        'On Site',
+        'Completed',
+        'Cancelled'
+    ) DEFAULT 'Assigned',
+
+    remarks TEXT,
+
+    FOREIGN KEY(rescue_id)
+    REFERENCES rescues(rescue_id)
+    ON DELETE CASCADE,
+
+    FOREIGN KEY(staff_id)
+    REFERENCES users(user_id)
+    ON DELETE CASCADE,
+
+    FOREIGN KEY(assigned_by)
+    REFERENCES users(user_id)
+);
+
+-- =========================================
+-- STATUS HISTORY
+-- =========================================
+CREATE TABLE status_history(
+    history_id INT AUTO_INCREMENT PRIMARY KEY,
+
+    report_id INT NULL,
+
+    rescue_id INT NULL,
+
+    report_status_id INT NULL,
+
+    rescue_status_id INT NULL,
+
+    updated_by INT,
+
+    remarks TEXT,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY(report_id)
+    REFERENCES reports(report_id)
+    ON DELETE CASCADE,
+
+    FOREIGN KEY(rescue_id)
+    REFERENCES rescues(rescue_id)
+    ON DELETE CASCADE,
+
+    FOREIGN KEY(report_status_id)
+    REFERENCES report_status(status_id),
+
+    FOREIGN KEY(rescue_status_id)
+    REFERENCES rescue_status(status_id),
+
+    FOREIGN KEY(updated_by)
+    REFERENCES users(user_id)
+    ON DELETE SET NULL
+);
+
+-- =========================================
+-- REPORT MEDIA
+-- =========================================
+CREATE TABLE report_media(
+    media_id INT AUTO_INCREMENT PRIMARY KEY,
+
+    report_id INT NOT NULL,
+
+    history_id INT NULL,
+
+    status_id INT NULL,
+
+    file_url VARCHAR(255) NOT NULL,
+
+    media_type ENUM(
+        'Image',
+        'Video',
+        'Document'
+    ) NOT NULL,
+
+    animal_type ENUM('Dog', 'Cat', 'Unknown') DEFAULT 'Unknown',
+
+    dominant_color VARCHAR(100) NULL,
+
+    is_evidence BOOLEAN DEFAULT FALSE,
+
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY(report_id)
+    REFERENCES reports(report_id)
+    ON DELETE CASCADE,
+
+    FOREIGN KEY(history_id)
+    REFERENCES status_history(history_id)
+    ON DELETE SET NULL,
+
+    FOREIGN KEY(status_id)
+    REFERENCES report_status(status_id)
+    ON DELETE SET NULL
+);
+
+-- =========================================
+-- AI DETECTIONS
+-- =========================================
+CREATE TABLE ai_detections(
+    detection_id INT AUTO_INCREMENT PRIMARY KEY,
+
+    media_id INT NOT NULL,
+
+    detected_animal ENUM(
+        'Dog',
+        'Cat',
+        'Unknown'
+    ),
+
+    confidence DECIMAL(5,2),
+
+    bounding_box JSON,
+
+    feature_vector JSON,
+
+    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY(media_id)
+    REFERENCES report_media(media_id)
+    ON DELETE CASCADE
+);
+
+-- =========================================
+-- BEHAVIOR TAGS
+-- =========================================
+CREATE TABLE behavior_tags(
+    tag_id INT AUTO_INCREMENT PRIMARY KEY,
+    tag_name VARCHAR(50) UNIQUE NOT NULL
+);
+
+INSERT INTO behavior_tags(tag_name) VALUES
+('Aggressive'),
+('Injured'),
+('Limping'),
+('Scared'),
+('Friendly');
+
+-- =========================================
+-- AI TAG SUGGESTIONS
+-- =========================================
+CREATE TABLE ai_tag_suggestions(
+    suggestion_id INT AUTO_INCREMENT PRIMARY KEY,
+
+    report_id INT NOT NULL,
+
+    tag_id INT NOT NULL,
+
+    confidence DECIMAL(5,2),
+
+    is_applied BOOLEAN DEFAULT FALSE,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY(report_id)
+    REFERENCES reports(report_id)
+    ON DELETE CASCADE,
+
+    FOREIGN KEY(tag_id)
+    REFERENCES behavior_tags(tag_id)
+    ON DELETE CASCADE
+);
+
+-- =========================================
+-- AI POTENTIAL MATCHES
+-- =========================================
+CREATE TABLE ai_potential_matches(
+    match_id INT AUTO_INCREMENT PRIMARY KEY,
+
+    report_id_1 INT NOT NULL,
+
+    report_id_2 INT NOT NULL,
+
+    similarity_score DECIMAL(5,2),
+
+    is_confirmed BOOLEAN DEFAULT FALSE,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY(report_id_1)
+    REFERENCES reports(report_id)
+    ON DELETE CASCADE,
+
+    FOREIGN KEY(report_id_2)
+    REFERENCES reports(report_id)
+    ON DELETE CASCADE
+);
+
+-- =========================================
+-- REPORT BEHAVIOR TAGS
+-- =========================================
+CREATE TABLE report_behavior_tags(
+    report_id INT NOT NULL,
+
+    tag_id INT NOT NULL,
+
+    PRIMARY KEY(report_id, tag_id),
+
+    FOREIGN KEY(report_id)
+    REFERENCES reports(report_id)
+    ON DELETE CASCADE,
+
+    FOREIGN KEY(tag_id)
+    REFERENCES behavior_tags(tag_id)
+    ON DELETE CASCADE
+);
+
+-- =========================================
+-- HOTSPOTS
+-- =========================================
+CREATE TABLE hotspots(
+    hotspot_id INT AUTO_INCREMENT PRIMARY KEY,
+
+    area_name VARCHAR(100),
+
+    latitude DECIMAL(10,8),
+
+    longitude DECIMAL(11,8),
+
+    radius DECIMAL(10,2),
+
+    incident_count INT DEFAULT 0,
+
+    risk_level ENUM(
+        'Low',
+        'Medium',
+        'High'
+    ),
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =========================================
+-- HOTSPOT REPORTS
+-- =========================================
+CREATE TABLE hotspot_reports(
+    hotspot_id INT NOT NULL,
+
+    report_id INT NOT NULL,
+
+    PRIMARY KEY(hotspot_id, report_id),
+
+    FOREIGN KEY(hotspot_id)
+    REFERENCES hotspots(hotspot_id)
+    ON DELETE CASCADE,
+
+    FOREIGN KEY(report_id)
+    REFERENCES reports(report_id)
+    ON DELETE CASCADE
+);
+
+-- =========================================
+-- NOTIFICATIONS
+-- =========================================
+CREATE TABLE notifications(
+    notification_id INT AUTO_INCREMENT PRIMARY KEY,
+
+    user_id INT NOT NULL,
+
+    title VARCHAR(255) NOT NULL DEFAULT 'Notification',
+
+    message TEXT NOT NULL,
+
+    type VARCHAR(50) DEFAULT 'status_update',
+
+    is_read BOOLEAN DEFAULT FALSE,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    related_id INT NULL,
+
+    FOREIGN KEY(user_id)
+    REFERENCES users(user_id)
+    ON DELETE CASCADE
+);
+
+-- =========================================
 -- ANNOUNCEMENT CATEGORIES
 -- =========================================
 CREATE TABLE announcement_categories(
@@ -476,16 +857,22 @@ CREATE TABLE announcement_categories(
 
     category_name VARCHAR(100) UNIQUE NOT NULL,
 
+    description TEXT NULL,
+
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT INTO announcement_categories(category_name) VALUES
-('General'),
-('Emergency'),
-('Animal Advisory'),
-('Vaccination Drive'),
-('Lost and Found'),
-('Community Notice');
+INSERT INTO announcement_categories(
+    category_name,
+    description
+)
+VALUES
+('General Advisory', 'General announcements'),
+('Rescue Operation', 'Animal rescue related announcements'),
+('Rabies Alert', 'Possible rabies outbreak warnings'),
+('Lost and Found', 'Lost or found pet announcements'),
+('Community Event', 'Animal welfare community events'),
+('Emergency Alert', 'Urgent emergency announcements');
 
 -- =========================================
 -- ANNOUNCEMENTS
@@ -493,11 +880,11 @@ INSERT INTO announcement_categories(category_name) VALUES
 CREATE TABLE announcements(
     announcement_id INT AUTO_INCREMENT PRIMARY KEY,
 
-    posted_by INT NOT NULL,
-
     barangay_id INT NULL,
 
     subdivision_id INT NULL,
+
+    created_by INT NOT NULL,
 
     category_id INT NULL,
 
@@ -505,12 +892,12 @@ CREATE TABLE announcements(
 
     content TEXT NOT NULL,
 
-    cover_photo VARCHAR(255) NULL,
+    cover_image VARCHAR(255) NULL,
 
     visibility ENUM(
         'Public',
-        'Barangay Only',
-        'Subdivision Only'
+        'Subdivision Only',
+        'Barangay Only'
     ) DEFAULT 'Public',
 
     priority_level ENUM(
@@ -520,9 +907,15 @@ CREATE TABLE announcements(
         'Emergency'
     ) DEFAULT 'Normal',
 
-    is_pinned BOOLEAN DEFAULT FALSE,
+    status ENUM(
+        'Draft',
+        'Published',
+        'Archived'
+    ) DEFAULT 'Published',
 
-    is_active BOOLEAN DEFAULT TRUE,
+    allow_comments BOOLEAN DEFAULT TRUE,
+
+    published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     expires_at TIMESTAMP NULL,
 
@@ -530,10 +923,6 @@ CREATE TABLE announcements(
 
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ON UPDATE CURRENT_TIMESTAMP,
-
-    FOREIGN KEY(posted_by)
-    REFERENCES users(user_id)
-    ON DELETE CASCADE,
 
     FOREIGN KEY(barangay_id)
     REFERENCES barangays(barangay_id)
@@ -543,16 +932,14 @@ CREATE TABLE announcements(
     REFERENCES subdivisions(subdivision_id)
     ON DELETE SET NULL,
 
+    FOREIGN KEY(created_by)
+    REFERENCES users(user_id)
+    ON DELETE CASCADE,
+
     FOREIGN KEY(category_id)
     REFERENCES announcement_categories(category_id)
     ON DELETE SET NULL
 );
-
-CREATE INDEX idx_announcements_barangay
-ON announcements(barangay_id);
-
-CREATE INDEX idx_announcements_subdivision
-ON announcements(subdivision_id);
 
 -- =========================================
 -- ANNOUNCEMENT MEDIA
@@ -569,6 +956,8 @@ CREATE TABLE announcement_media(
         'Video',
         'Document'
     ) NOT NULL,
+
+    caption TEXT NULL,
 
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
@@ -622,7 +1011,7 @@ CREATE TABLE announcement_reactions(
     reaction_type ENUM(
         'Like',
         'Heart',
-        'Helpful'
+        'Care'
     ) DEFAULT 'Like',
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -639,211 +1028,57 @@ CREATE TABLE announcement_reactions(
 );
 
 -- =========================================
--- ANNOUNCEMENT VIEWS
+-- COMMENTS
 -- =========================================
-CREATE TABLE announcement_views(
-    view_id INT AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE comments(
+    comment_id INT AUTO_INCREMENT PRIMARY KEY,
 
-    announcement_id INT NOT NULL,
+    report_id INT NOT NULL,
 
     user_id INT NOT NULL,
 
-    viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    parent_comment_id INT NULL,
 
-    UNIQUE(announcement_id, user_id),
+    comment TEXT NOT NULL,
 
-    FOREIGN KEY(announcement_id)
-    REFERENCES announcements(announcement_id)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY(report_id)
+    REFERENCES reports(report_id)
     ON DELETE CASCADE,
 
     FOREIGN KEY(user_id)
     REFERENCES users(user_id)
-    ON DELETE CASCADE
-);
-
--- =========================================
--- NOTIFICATIONS
--- =========================================
-CREATE TABLE notifications(
-    notification_id INT AUTO_INCREMENT PRIMARY KEY,
-
-    user_id INT NOT NULL,
-
-    title VARCHAR(255) NOT NULL DEFAULT 'Notification',
-
-    message TEXT NOT NULL,
-
-    type VARCHAR(50) DEFAULT 'status_update',
-
-    is_read BOOLEAN DEFAULT FALSE,
-
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    related_id INT NULL,
-
-    FOREIGN KEY(user_id)
-    REFERENCES users(user_id)
-    ON DELETE CASCADE
-);
-
--- =========================================
--- RESCUE STATUS
--- =========================================
-CREATE TABLE rescue_status(
-    status_id INT AUTO_INCREMENT PRIMARY KEY,
-    status_name VARCHAR(50) UNIQUE NOT NULL
-);
-
-INSERT INTO rescue_status(status_name) VALUES
-('Pending'),
-('Approved'),
-('Rejected'),
-('Started'),
-('Dispatched'),
-('Resolved');
-
--- =========================================
--- RESCUES
--- =========================================
-CREATE TABLE rescues(
-    rescue_id INT AUTO_INCREMENT PRIMARY KEY,
-    report_id INT NOT NULL,
-    staff_id INT NULL,
-    status_id INT DEFAULT 1,
-    notes TEXT,
-    started_at TIMESTAMP NULL,
-    completed_at TIMESTAMP NULL,
-    leader_id INT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    FOREIGN KEY(report_id) REFERENCES reports(report_id) ON DELETE CASCADE,
-    FOREIGN KEY(staff_id) REFERENCES users(user_id) ON DELETE SET NULL,
-    FOREIGN KEY(status_id) REFERENCES rescue_status(status_id),
-    FOREIGN KEY(leader_id) REFERENCES users(user_id) ON DELETE SET NULL
-);
-
--- =========================================
--- RESCUE ASSIGNMENTS
--- =========================================
-CREATE TABLE rescue_assignments(
-    assignment_id INT AUTO_INCREMENT PRIMARY KEY,
-    rescue_id INT NOT NULL,
-    staff_id INT NOT NULL,
-    assigned_by INT NOT NULL,
-    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    assignment_status ENUM('Assigned', 'In Transit', 'On Site', 'Completed', 'Cancelled') DEFAULT 'Assigned',
-    remarks TEXT,
-
-    FOREIGN KEY(rescue_id) REFERENCES rescues(rescue_id) ON DELETE CASCADE,
-    FOREIGN KEY(staff_id) REFERENCES users(user_id) ON DELETE CASCADE,
-    FOREIGN KEY(assigned_by) REFERENCES users(user_id)
-);
-
--- =========================================
--- STATUS HISTORY
--- =========================================
-CREATE TABLE status_history(
-    history_id INT AUTO_INCREMENT PRIMARY KEY,
-    report_id INT NULL,
-    rescue_id INT NULL,
-    report_status_id INT NULL,
-    rescue_status_id INT NULL,
-    updated_by INT NULL,
-    remarks TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    FOREIGN KEY(report_id) REFERENCES reports(report_id) ON DELETE CASCADE,
-    FOREIGN KEY(rescue_id) REFERENCES rescues(rescue_id) ON DELETE CASCADE,
-    FOREIGN KEY(report_status_id) REFERENCES report_status(status_id),
-    FOREIGN KEY(rescue_status_id) REFERENCES rescue_status(status_id),
-    FOREIGN KEY(updated_by) REFERENCES users(user_id) ON DELETE SET NULL
-);
-
--- =========================================
--- REPORT MEDIA
--- =========================================
-CREATE TABLE report_media(
-    media_id INT AUTO_INCREMENT PRIMARY KEY,
-    report_id INT NOT NULL,
-    history_id INT NULL,
-    file_url VARCHAR(255) NOT NULL,
-    media_type VARCHAR(50) DEFAULT 'image',
-    animal_type ENUM('Dog', 'Cat', 'Unknown') DEFAULT 'Unknown',
-    dominant_color VARCHAR(100) NULL,
-    is_evidence BOOLEAN DEFAULT FALSE,
-    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    FOREIGN KEY(report_id) REFERENCES reports(report_id) ON DELETE CASCADE,
-    FOREIGN KEY(history_id) REFERENCES status_history(history_id) ON DELETE SET NULL
-);
-
--- =========================================
--- STATUS-BASED POST ROUTING & FILTERING
--- =========================================
--- StraySafe routes reports dynamically depending on their current `status_id` in the `reports` table.
---
--- 1. Community / Resident Public Feed (Normal Posts):
---    - Displays reports containing public visibility where the status is active community-related.
---    - Allowed Statuses:
---      - 1: 'Reported' (Pending Verification)
---      - 2: 'Verified'
---      - 3: 'Rejected'
---      - 13: 'Approved'
---
--- 2. Rescue Case Intelligence (Active Escalated Rescues):
---    - Reports which have been verified and escalated to subdivision/barangay responders for dispatch, care, or resolution.
---    - Allowed Statuses:
---      - 4: 'Escalated to Barangay'
---      - 5: 'Team Dispatched' (Rescue In Progress)
---      - 6: 'Picked Up'
---      - 7: 'Under Observation'
---      - 8: 'Impounded'
---      - 9: 'Claimed by Owner'
---      - 10: 'Released'
---      - 11: 'Resolved'
---      - 12: 'Deceased'
---
--- Note: Original reporter name and profile pictures remain attached to reports at all times.
-
--- =========================================
--- PET QR SCANS
--- =========================================
-CREATE TABLE pet_qr_scans(
-    scan_id INT AUTO_INCREMENT PRIMARY KEY,
-
-    pet_id INT NOT NULL,
-
-    scanned_by INT NULL,
-
-    finder_name VARCHAR(100) NULL,
-
-    finder_contact VARCHAR(20) NULL,
-
-    scan_lat DECIMAL(10,8) NULL,
-
-    scan_lng DECIMAL(11,8) NULL,
-
-    location_type ENUM(
-        'Found Location',
-        'Barangay Hall',
-        'Temporary Shelter'
-    ) DEFAULT 'Found Location',
-
-    notes VARCHAR(255) NULL,
-
-    scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    FOREIGN KEY(pet_id)
-    REFERENCES pets(pet_id)
     ON DELETE CASCADE,
 
-    FOREIGN KEY(scanned_by)
+    FOREIGN KEY(parent_comment_id)
+    REFERENCES comments(comment_id)
+    ON DELETE CASCADE
+);
+
+-- =========================================
+-- AUDIT LOGS
+-- =========================================
+CREATE TABLE audit_logs(
+    log_id INT AUTO_INCREMENT PRIMARY KEY,
+
+    user_id INT NULL,
+
+    action VARCHAR(100) NOT NULL,
+
+    target_table VARCHAR(100),
+
+    target_id INT,
+
+    description TEXT,
+
+    ip_address VARCHAR(45),
+
+    user_agent TEXT,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY(user_id)
     REFERENCES users(user_id)
     ON DELETE SET NULL
 );
-
-CREATE INDEX idx_pet_qr_pet
-ON pet_qr_scans(pet_id);
-
-CREATE INDEX idx_pet_qr_scanned_by
-ON pet_qr_scans(scanned_by);

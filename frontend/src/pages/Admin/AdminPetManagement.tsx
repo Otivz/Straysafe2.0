@@ -5,7 +5,7 @@ import AdminNavbar from '../../components/Navbars/AdminNavbar';
 
 const AdminPetManagement = () => {
     const navigate = useNavigate();
-    const [pets, setPets] = useState([
+    const [pets] = useState([
         {
             id: 1,
             name: 'Buddy',

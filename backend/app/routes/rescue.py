@@ -185,7 +185,24 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                 db_rescue.status_id = rescue_status_id
 
             # Record history for both the rescue and the report
-            history_remarks = remarks or f"Status updated to {report_status_id}"
+            history_remarks = remarks
+            if not history_remarks:
+                friendly_defaults = {
+                    1: "Reported.",
+                    2: "Incident report has been officially verified by the Subdivision Leader.",
+                    3: "Report rejected based on verification criteria.",
+                    4: "Report forwarded to Barangay Operations for official review and approval.",
+                    5: "Rescue team has been dispatched to the location.",
+                    6: "Picked up by the barangay and in a safe place.",
+                    7: "Under observation.",
+                    8: "Securely impounded.",
+                    9: "Claimed by owner.",
+                    10: "Safely released.",
+                    11: "Incident has been resolved.",
+                    12: "Resolved (animal deceased).",
+                    13: "Approved by Barangay. Rescue operation is being planned."
+                }
+                history_remarks = friendly_defaults.get(report_status_id, "Status updated.")
             db_history = StatusHistory(
                 rescue_id=rescue_id,
                 report_id=db_rescue.report_id,
@@ -206,10 +223,19 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
 
                     # Create Notification for Resident
                     status_names = {
-                        1: "Reported", 2: "Verified", 3: "Rejected",
-                        4: "Escalated", 13: "Approved by Barangay", 5: "Dispatched", 
-                        6: "Resolved", 11: "Resolved", 7: "Picked Up", 
-                        8: "Under Observation", 9: "Impounded", 10: "Released"
+                        1: "Reported",
+                        2: "Verified",
+                        3: "Rejected",
+                        4: "Escalated to Barangay",
+                        5: "Team Dispatched",
+                        6: "Picked Up",
+                        7: "Under Observation",
+                        8: "Impounded",
+                        9: "Claimed by Owner",
+                        10: "Released",
+                        11: "Resolved",
+                        12: "Deceased",
+                        13: "Approved by Barangay"
                     }
                     status_name = status_names.get(report_status_id, "Updated")
                     

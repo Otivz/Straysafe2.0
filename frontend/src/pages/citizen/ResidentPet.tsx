@@ -7,6 +7,111 @@ import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import { type PetRecord } from '../../components/PetRecords/types';
 
+// Real client-side image color analyzer using HTML5 Canvas
+const analyzeImageColors = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        
+        img.onload = () => {
+            try {
+                const canvas = document.createElement('canvas');
+                // Downscale to 40x40 for fast processing and soft average noise smoothing
+                canvas.width = 40;
+                canvas.height = 40;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    resolve("Brown");
+                    return;
+                }
+                
+                ctx.drawImage(img, 0, 0, 40, 40);
+                const imgData = ctx.getImageData(0, 0, 40, 40);
+                const data = imgData.data;
+                
+                let blackCount = 0;
+                let whiteCount = 0;
+                let goldenCount = 0;
+                let brownCount = 0;
+                let grayCount = 0;
+                let totalPixels = 0;
+                
+                for (let i = 0; i < data.length; i += 4) {
+                    const r = data[i];
+                    const g = data[i+1];
+                    const b = data[i+2];
+                    const a = data[i+3];
+                    
+                    // Skip transparent/extremely dark alpha values
+                    if (a < 128) continue;
+                    totalPixels++;
+                    
+                    const max = Math.max(r, g, b);
+                    const min = Math.min(r, g, b);
+                    const diff = max - min;
+                    
+                    // 1. Black: very low RGB values
+                    if (r < 65 && g < 65 && b < 65) {
+                        blackCount++;
+                    }
+                    // 2. White: very high RGB values and low color saturation difference
+                    else if (r > 190 && g > 190 && b > 185 && diff < 30) {
+                        whiteCount++;
+                    }
+                    // 3. Golden/Yellow: High red and green, low blue
+                    else if (r > 160 && g > 125 && b < 130 && r > g && g > b && diff > 30) {
+                        goldenCount++;
+                    }
+                    // 4. Brown/Tan: Moderate red/green, low blue, reddish hue
+                    else if (r > 60 && g > 40 && b < r - 15 && diff > 15) {
+                        if (r > 130 && g > 100 && b < 70) {
+                            goldenCount++;
+                        } else {
+                            brownCount++;
+                        }
+                    }
+                    // 5. Gray: neutral middle-range colors
+                    else if (max > 65 && max < 190 && diff < 20) {
+                        grayCount++;
+                    }
+                }
+                
+                const colorFrequencies = [
+                    { name: "Black", count: blackCount },
+                    { name: "White", count: whiteCount },
+                    { name: "Golden", count: goldenCount },
+                    { name: "Brown", count: brownCount },
+                    { name: "Gray", count: grayCount }
+                ];
+                
+                // Sort by pixel frequency descending
+                colorFrequencies.sort((a, b) => b.count - a.count);
+                
+                const threshold = totalPixels * 0.15; // requires at least 15% of pixels
+                
+                const primary = colorFrequencies[0];
+                const secondary = colorFrequencies[1];
+                
+                const primaryName = primary.count > 0 ? primary.name : "Brown";
+                const secondaryName = (secondary && secondary.count > threshold) ? secondary.name : "None";
+                
+                let formatResult = primaryName;
+                if (secondaryName !== "None") {
+                    formatResult += `, ${secondaryName}`;
+                }
+                resolve(formatResult);
+            } catch (err) {
+                console.error("Image analysis failed, falling back to default:", err);
+                resolve("Brown");
+            }
+        };
+        
+        img.onerror = () => {
+            resolve("Brown");
+        };
+    });
+};
+
 const ResidentPet = () => {
     const navigate = useNavigate();
     const [isAddPetModalOpen, setIsAddPetModalOpen] = useState(false);
@@ -26,6 +131,7 @@ const ResidentPet = () => {
             species: pet.pet_type || 'Unknown',
             ownerName: currentUser ? currentUser.name : 'Unknown Owner',
             ownerEmail: currentUser ? currentUser.email : 'No Email',
+            ownerPhone: pet.emergency_contact_phone || (currentUser ? currentUser.phone : 'No Contact'),
             idNumber: `P-${(pet.pet_id || 0).toString().padStart(5, '0')}`,
             status: pet.status || 'Active',
             avatar: pet.photo_url || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?q=80&w=400&auto=format&fit=crop',
@@ -36,10 +142,11 @@ const ResidentPet = () => {
             vaccinationDate: pet.vaccination_date || null,
             isNeutered: pet.is_neutered || false,
             temperament: pet.temperament || 'Friendly',
-            hasBiteHistory: pet.has_bite_history || false,
-            chaseBehavior: pet.chase_behavior || false,
+            hasBiteHistory: pet.has_bite_history === null ? null : pet.has_bite_history,
+            chaseBehavior: pet.chase_behavior === null ? null : pet.chase_behavior,
             healthCondition: pet.health_condition || 'Healthy and active',
             notes: pet.notes || '',
+            vaccineCardUrl: pet.vaccine_card_url || null,
             rawPetObj: pet
         };
     };
@@ -52,7 +159,6 @@ const ResidentPet = () => {
         color: '',
         age: '',
         status: 'Active',
-        condition: '',
         weight: '',
         mediaFiles: [] as File[],
         isVaccinated: true,
@@ -61,8 +167,9 @@ const ResidentPet = () => {
         healthNotes: '',
         vaccineCardFiles: [] as File[],
         temperament: 'Friendly',
-        hasBiteHistory: false,
-        chaseBehavior: false
+        hasBiteHistory: null as boolean | null,
+        chaseBehavior: null as boolean | null,
+        existingVaccineCardUrl: null as string | null
     });
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -71,38 +178,50 @@ const ResidentPet = () => {
     const [breedsData, setBreedsData] = useState<any[]>([]);
 
     const [aiSuggestedSpecies, setAiSuggestedSpecies] = useState<string | null>(null);
-    const [aiSuggestedBreed, setAiSuggestedBreed] = useState<string | null>(null);
+    const [aiSuggestedColor, setAiSuggestedColor] = useState<string | null>(null);
     const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
+    const [formErrors, setFormErrors] = useState<Record<string, boolean>>({});
+    const [submitErrorMessage, setSubmitErrorMessage] = useState<string | null>(null);
 
-    const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files ? Array.from(e.target.files) : [];
         setFormData({ ...formData, mediaFiles: files });
+        setFormErrors({ ...formErrors, photo: false });
         
         if (files.length > 0) {
             setIsAnalyzingPhoto(true);
             setAiSuggestedSpecies(null);
-            setAiSuggestedBreed(null);
+            setAiSuggestedColor(null);
             
-            // Simulate AI Image Analysis delay
-            setTimeout(() => {
-                const fileName = files[0].name.toLowerCase();
-                let suggestedSpecies = 'Dog';
-                let suggestedBreed = 'Aspin';
+            const file = files[0];
+            const fileName = file.name.toLowerCase();
+            
+            // Basic species detection from filename
+            let suggestedSpecies = 'Dog';
+            if (fileName.includes('cat') || fileName.includes('kitten') || fileName.includes('meow') || fileName.includes('siamese') || fileName.includes('puspin')) {
+                suggestedSpecies = 'Cat';
+            } else {
+                suggestedSpecies = 'Dog';
+            }
+            
+            try {
+                // Perform REAL image pixel color analysis using HTML5 canvas
+                const suggestedColor = await analyzeImageColors(file);
                 
-                if (fileName.includes('cat') || fileName.includes('kitten') || fileName.includes('meow') || fileName.includes('siamese') || fileName.includes('puspin')) {
-                    suggestedSpecies = 'Cat';
-                    suggestedBreed = fileName.includes('siamese') ? 'Siamese' : 'Puspin';
-                } else {
-                    suggestedSpecies = 'Dog';
-                    suggestedBreed = fileName.includes('husky') ? 'Siberian Husky' : 
-                                     fileName.includes('golden') ? 'Golden Retriever' : 
-                                     fileName.includes('chihuahua') ? 'Chihuahua' : 'Aspin';
-                }
-                
-                setAiSuggestedSpecies(suggestedSpecies);
-                setAiSuggestedBreed(suggestedBreed);
-                setIsAnalyzingPhoto(false);
-            }, 1200);
+                // Retain visual interactive analysis delay for enhanced UX
+                setTimeout(() => {
+                    setAiSuggestedSpecies(suggestedSpecies);
+                    setAiSuggestedColor(suggestedColor);
+                    setIsAnalyzingPhoto(false);
+                }, 850);
+            } catch (err) {
+                console.error("Failed to analyze uploaded photo:", err);
+                setTimeout(() => {
+                    setAiSuggestedSpecies(suggestedSpecies);
+                    setAiSuggestedColor("Brown");
+                    setIsAnalyzingPhoto(false);
+                }, 850);
+            }
         }
     };
 
@@ -181,17 +300,29 @@ const ResidentPet = () => {
     const handleSubmit = async () => {
         if (!currentUser) return;
 
-        // Validation
-        if (!formData.name.trim() || !formData.species || !formData.breed.trim() || 
-            !formData.color.trim() || !formData.age.trim() || !formData.gender || !formData.condition.trim()) {
-            alert('Please fill in all required fields.');
-            return;
-        }
+        // Reset errors
+        setFormErrors({});
+        setSubmitErrorMessage(null);
 
-        // Photo check: Required for new pets, optional for updates if already has one
+        const errors: Record<string, boolean> = {};
+        if (!formData.name.trim()) errors.name = true;
+        if (!formData.breed.trim()) errors.breed = true;
+        if (!formData.age.trim()) errors.age = true;
+
         const hasPhoto = formData.mediaFiles.length > 0;
         if (!editingPetId && !hasPhoto) {
-            alert('Please upload a pet photo.');
+            errors.photo = true;
+        }
+
+        if (Object.keys(errors).length > 0) {
+            setFormErrors(errors);
+            setSubmitErrorMessage('Please complete the important required fields before registering your pet.');
+            
+            // Scroll modal to top so they see the reminder
+            const scrollContainer = document.querySelector('.custom-scrollbar');
+            if (scrollContainer) {
+                scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+            }
             return;
         }
 
@@ -202,19 +333,20 @@ const ResidentPet = () => {
                 pet_type: formData.species,
                 breed: formData.breed,
                 gender: formData.gender,
-                color_markings: formData.color,
+                color_markings: formData.color.trim() || null,
                 estimated_age: formData.age,
                 status: formData.status,
-                health_condition: formData.condition,
+                health_condition: formData.healthNotes.trim() || 'Healthy and active',
                 weight: formData.weight ? parseFloat(formData.weight) : null,
                 is_vaccinated: formData.isVaccinated,
                 vaccination_date: formData.isVaccinated && formData.vaccinationDate ? formData.vaccinationDate : null,
                 is_neutered: formData.isNeutered,
-                notes: formData.healthNotes,
+                notes: null,
                 temperament: formData.temperament,
                 has_bite_history: formData.hasBiteHistory,
                 chase_behavior: formData.chaseBehavior,
-                owner_id: currentUser.user_id
+                owner_id: currentUser.user_id,
+                emergency_contact_phone: currentUser.phone
             };
 
             let response;
@@ -234,6 +366,16 @@ const ResidentPet = () => {
                 });
             }
 
+            // Handle vaccine card upload if any
+            if (formData.vaccineCardFiles.length > 0) {
+                const petId = editingPetId || response.data.pet_id;
+                const uploadData = new FormData();
+                uploadData.append('file', formData.vaccineCardFiles[0]);
+                await axios.post(`http://localhost:8000/pets/${petId}/vaccine-card`, uploadData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+            }
+
             fetchPets();
             setIsAddPetModalOpen(false);
             setEditingPetId(null);
@@ -245,7 +387,6 @@ const ResidentPet = () => {
                 color: '',
                 age: '',
                 status: 'Active',
-                condition: '',
                 weight: '',
                 mediaFiles: [],
                 isVaccinated: true,
@@ -254,11 +395,14 @@ const ResidentPet = () => {
                 healthNotes: '',
                 vaccineCardFiles: [],
                 temperament: 'Friendly',
-                hasBiteHistory: false,
-                chaseBehavior: false
+                hasBiteHistory: null,
+                chaseBehavior: null,
+                existingVaccineCardUrl: null
             });
             setAiSuggestedSpecies(null);
-            setAiSuggestedBreed(null);
+            setAiSuggestedColor(null);
+            setFormErrors({});
+            setSubmitErrorMessage(null);
         } catch (error) {
             console.error('Error saving pet:', error);
             alert('Failed to save pet information.');
@@ -282,18 +426,23 @@ const ResidentPet = () => {
             color: petObj.color_markings || '',
             age: petObj.estimated_age || '',
             status: petObj.status || 'Active',
-            condition: petObj.health_condition || '',
             weight: petObj.weight ? petObj.weight.toString() : '',
             mediaFiles: [],
             isVaccinated: petObj.is_vaccinated || false,
             vaccinationDate: petObj.vaccination_date || '2026-05-10',
             isNeutered: petObj.is_neutered || false,
-            healthNotes: petObj.notes || '',
+            healthNotes: petObj.health_condition === 'Healthy and active' ? '' : petObj.health_condition || '',
             vaccineCardFiles: [],
             temperament: petObj.temperament || 'Friendly',
-            hasBiteHistory: petObj.has_bite_history || false,
-            chaseBehavior: petObj.chase_behavior || false
+            hasBiteHistory: petObj.has_bite_history === null ? null : petObj.has_bite_history,
+            chaseBehavior: petObj.chase_behavior === null ? null : petObj.chase_behavior,
+            existingVaccineCardUrl: petObj.vaccine_card_url || null
         });
+        
+        setAiSuggestedSpecies(null);
+        setAiSuggestedColor(null);
+        setFormErrors({});
+        setSubmitErrorMessage(null);
         
         setIsAddPetModalOpen(true);
     };
@@ -401,7 +550,6 @@ const ResidentPet = () => {
                                 color: '',
                                 age: '',
                                 status: 'Active',
-                                condition: '',
                                 weight: '',
                                 mediaFiles: [],
                                 isVaccinated: true,
@@ -410,11 +558,14 @@ const ResidentPet = () => {
                                 healthNotes: '',
                                 vaccineCardFiles: [],
                                 temperament: 'Friendly',
-                                hasBiteHistory: false,
-                                chaseBehavior: false
+                                hasBiteHistory: null,
+                                chaseBehavior: null,
+                                existingVaccineCardUrl: null
                             });
                             setAiSuggestedSpecies(null);
-                            setAiSuggestedBreed(null);
+                            setAiSuggestedColor(null);
+                            setFormErrors({});
+                            setSubmitErrorMessage(null);
                             setIsAddPetModalOpen(true);
                         }}
                         className="bg-[#F97316] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-200 hover:scale-105 transition-all flex items-center gap-3"
@@ -524,16 +675,43 @@ const ResidentPet = () => {
                         </div>
 
                         <div className="p-10 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                            {submitErrorMessage && (
+                                <div className="bg-red-50 border-2 border-dashed border-red-200 rounded-[2rem] p-6 flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
+                                    <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0 shadow-sm">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <p className="text-xs font-black text-red-700 uppercase tracking-widest leading-none">Incomplete Registration</p>
+                                        <p className="text-xs font-bold text-red-600 leading-normal">Please complete the important required fields before registering your pet.</p>
+                                        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                                            {formErrors.name && <span className="text-[9px] font-black text-red-600 bg-white border border-red-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Pet Name</span>}
+                                            {formErrors.breed && <span className="text-[9px] font-black text-red-600 bg-white border border-red-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Breed</span>}
+                                            {formErrors.age && <span className="text-[9px] font-black text-red-600 bg-white border border-red-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Estimated Age</span>}
+                                            {formErrors.photo && <span className="text-[9px] font-black text-red-600 bg-white border border-red-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Pet Photo</span>}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Section 1: Core Information */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-4">
                                     <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Pet Name <span className="text-red-500">*</span></label>
                                     <input 
                                         type="text" 
-                                        className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
+                                        className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${
+                                            formErrors.name 
+                                            ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10' 
+                                            : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
+                                        }`}
                                         placeholder="e.g. Bruno"
                                         value={formData.name}
-                                        onChange={(e) => setFormData({...formData, name: e.target.value})}
+                                        onChange={(e) => {
+                                            setFormData({...formData, name: e.target.value});
+                                            if (formErrors.name) setFormErrors({...formErrors, name: false});
+                                        }}
                                     />
                                 </div>
                                 <div className="space-y-4">
@@ -558,10 +736,17 @@ const ResidentPet = () => {
                                     <input 
                                         type="text" 
                                         list="pet-breed-suggestions"
-                                        className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
+                                        className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${
+                                            formErrors.breed 
+                                            ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10' 
+                                            : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
+                                        }`}
                                         placeholder="e.g. Aspin / Mixed"
                                         value={formData.breed}
-                                        onChange={(e) => setFormData({...formData, breed: e.target.value})}
+                                        onChange={(e) => {
+                                            setFormData({...formData, breed: e.target.value});
+                                            if (formErrors.breed) setFormErrors({...formErrors, breed: false});
+                                        }}
                                     />
                                     <datalist id="pet-breed-suggestions">
                                         {formData.species === 'Dog' ? (
@@ -655,12 +840,20 @@ const ResidentPet = () => {
                                     <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Age (Estimated Age) <span className="text-red-500">*</span></label>
                                     <input 
                                         type="text" 
-                                        className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
+                                        className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${
+                                            formErrors.age 
+                                            ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10' 
+                                            : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
+                                        }`}
                                         placeholder="e.g. 2 years / Puppy"
                                         value={formData.age}
-                                        onChange={(e) => setFormData({...formData, age: e.target.value})}
+                                        onChange={(e) => {
+                                            setFormData({...formData, age: e.target.value});
+                                            if (formErrors.age) setFormErrors({...formErrors, age: false});
+                                        }}
                                     />
                                 </div>
+
                                 <div className="space-y-4">
                                     <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Current Status <span className="text-red-500">*</span></label>
                                     <select 
@@ -688,7 +881,7 @@ const ResidentPet = () => {
                                     </select>
                                 </div>
                                 <div className="space-y-4">
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Color Markings <span className="text-red-500">*</span></label>
+                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Color Markings <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
                                     <input 
                                         type="text" 
                                         className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
@@ -696,9 +889,27 @@ const ResidentPet = () => {
                                         value={formData.color}
                                         onChange={(e) => setFormData({...formData, color: e.target.value})}
                                     />
+                                    {aiSuggestedColor && (
+                                        <div className="mt-2.5 flex items-center justify-between bg-orange-50/50 border border-orange-100 rounded-2xl p-3.5 animate-in slide-in-from-top-2 duration-300">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-black text-[#F97316] uppercase tracking-widest bg-white px-2 py-0.5 rounded-md border border-orange-100 shadow-sm leading-none">AI Suggestion</span>
+                                                <span className="text-xs font-semibold text-gray-700">Markings: <span className="font-extrabold text-[#1a1208]">{aiSuggestedColor}</span></span>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setFormData({ ...formData, color: aiSuggestedColor });
+                                                    setAiSuggestedColor(null);
+                                                }}
+                                                className="px-3.5 py-2 bg-[#F97316] text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:scale-105 transition-all shadow-md shadow-orange-100 cursor-pointer"
+                                            >
+                                                Apply
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="space-y-4">
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Weight <span className="text-red-500">*</span></label>
+                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Weight <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
                                     <input 
                                         type="text" 
                                         className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
@@ -710,21 +921,18 @@ const ResidentPet = () => {
                             </div>
 
                             <div className="space-y-4">
-                                <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Health Information <span className="text-red-500">*</span></label>
-                                <textarea 
-                                    className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[2rem] p-6 text-sm font-medium focus:outline-none focus:border-orange-200 min-h-[100px]"
-                                    placeholder="List any allergies, ongoing medications, or behavioral notes..."
-                                    value={formData.condition}
-                                    onChange={(e) => setFormData({...formData, condition: e.target.value})}
-                                />
-                            </div>
-
-                            <div className="space-y-4">
                                 <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Pet Photo <span className="text-red-500">*</span></label>
                                 <input 
                                     type="file" 
-                                    className="w-full text-xs font-bold text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100"
-                                    onChange={handlePhotoChange}
+                                    className={`w-full text-xs font-bold text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-widest transition-all ${
+                                        formErrors.photo 
+                                        ? 'file:bg-red-50 file:text-red-600 border border-dashed border-red-200 rounded-2xl p-4 bg-red-50/5' 
+                                        : 'file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100'
+                                    }`}
+                                    onChange={(e) => {
+                                        handlePhotoChange(e);
+                                        if (formErrors.photo) setFormErrors({...formErrors, photo: false});
+                                    }}
                                     accept="image/*"
                                 />
                                 {isAnalyzingPhoto && (
@@ -740,18 +948,16 @@ const ResidentPet = () => {
                                     <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-4 flex items-center justify-between animate-in slide-in-from-top-2 duration-300">
                                         <div>
                                             <p className="text-[10px] font-black text-[#F97316] uppercase tracking-widest">StraySafe AI Suggestion</p>
-                                            <p className="text-xs font-bold text-[#1a1208] mt-0.5">Detected {aiSuggestedSpecies} • {aiSuggestedBreed}</p>
+                                            <p className="text-xs font-bold text-[#1a1208] mt-0.5">Detected {aiSuggestedSpecies}</p>
                                         </div>
                                         <button
                                             type="button"
                                             onClick={() => {
                                                 setFormData({
                                                     ...formData,
-                                                    species: aiSuggestedSpecies,
-                                                    breed: aiSuggestedBreed
+                                                    species: aiSuggestedSpecies || 'Dog'
                                                 });
                                                 setAiSuggestedSpecies(null);
-                                                setAiSuggestedBreed(null);
                                             }}
                                             className="px-4 py-2 bg-[#F97316] text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:scale-105 transition-all shadow-md shadow-orange-100 cursor-pointer"
                                         >
@@ -833,12 +1039,11 @@ const ResidentPet = () => {
                                         </div>
                                     </div>
 
-                                    <div className="space-y-4">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Health Notes (Optional)</label>
-                                        <input 
-                                            type="text" 
-                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
-                                            placeholder="e.g. Healthy and active"
+                                    <div className="space-y-4 md:col-span-2">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Health Notes / Remarks (Optional)</label>
+                                        <textarea 
+                                            className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[2rem] p-6 text-sm font-medium focus:outline-none focus:border-orange-200 min-h-[100px]"
+                                            placeholder="List any allergies, ongoing medications, or specific health remarks..."
                                             value={formData.healthNotes}
                                             onChange={(e) => setFormData({...formData, healthNotes: e.target.value})}
                                         />
@@ -853,6 +1058,20 @@ const ResidentPet = () => {
                                         onChange={(e) => setFormData({...formData, vaccineCardFiles: e.target.files ? Array.from(e.target.files) : []})}
                                         accept=".pdf,image/*"
                                     />
+                                    {formData.existingVaccineCardUrl && (
+                                        <div className="flex items-center gap-2 mt-2 px-4 py-2 bg-orange-50/50 rounded-xl border border-orange-100/50 w-fit animate-in fade-in slide-in-from-top-1 duration-200">
+                                            <span className="text-[10px] text-[#F97316] font-black uppercase tracking-wider">✓ Current Document Uploaded</span>
+                                            <span className="text-gray-300">|</span>
+                                            <a 
+                                                href={formData.existingVaccineCardUrl} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="text-[10px] font-black uppercase tracking-widest text-[#B35D25] hover:underline"
+                                            >
+                                                View Document
+                                            </a>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -897,7 +1116,7 @@ const ResidentPet = () => {
                                                     type="radio" 
                                                     name="hasBiteHistory" 
                                                     className="w-4 h-4 accent-[#F97316]" 
-                                                    checked={formData.hasBiteHistory === false && !formData.healthNotes.includes('[Bite: not sure]')} 
+                                                    checked={formData.hasBiteHistory === false} 
                                                     onChange={() => setFormData({...formData, hasBiteHistory: false})}
                                                 />
                                                 <span className="text-xs font-bold text-gray-700">No</span>
@@ -907,11 +1126,8 @@ const ResidentPet = () => {
                                                     type="radio" 
                                                     name="hasBiteHistory" 
                                                     className="w-4 h-4 accent-[#F97316]" 
-                                                    checked={formData.healthNotes.includes('[Bite: not sure]')} 
-                                                    onChange={() => {
-                                                        const freshNotes = formData.healthNotes.replace(' [Bite: not sure]', '') + ' [Bite: not sure]';
-                                                        setFormData({...formData, hasBiteHistory: false, healthNotes: freshNotes});
-                                                    }}
+                                                    checked={formData.hasBiteHistory === null} 
+                                                    onChange={() => setFormData({...formData, hasBiteHistory: null})}
                                                 />
                                                 <span className="text-xs font-bold text-gray-700">Not sure</span>
                                             </label>
@@ -936,7 +1152,7 @@ const ResidentPet = () => {
                                                     type="radio" 
                                                     name="chaseBehavior" 
                                                     className="w-4 h-4 accent-[#F97316]" 
-                                                    checked={formData.chaseBehavior === false && !formData.healthNotes.includes('[Chase: not sure]')} 
+                                                    checked={formData.chaseBehavior === false} 
                                                     onChange={() => setFormData({...formData, chaseBehavior: false})}
                                                 />
                                                 <span className="text-xs font-bold text-gray-700">No</span>
@@ -946,11 +1162,8 @@ const ResidentPet = () => {
                                                     type="radio" 
                                                     name="chaseBehavior" 
                                                     className="w-4 h-4 accent-[#F97316]" 
-                                                    checked={formData.healthNotes.includes('[Chase: not sure]')} 
-                                                    onChange={() => {
-                                                        const freshNotes = formData.healthNotes.replace(' [Chase: not sure]', '') + ' [Chase: not sure]';
-                                                        setFormData({...formData, chaseBehavior: false, healthNotes: freshNotes});
-                                                    }}
+                                                    checked={formData.chaseBehavior === null} 
+                                                    onChange={() => setFormData({...formData, chaseBehavior: null})}
                                                 />
                                                 <span className="text-xs font-bold text-gray-700">Not sure</span>
                                             </label>
