@@ -1,4 +1,7 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from app.database import get_db
@@ -134,12 +137,16 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
         # Handle assignment if personnel ID is provided
         assigned_id = update_data.pop("assigned_personnel_id", None)
         remarks = update_data.pop("remarks", None)
+        animal_condition = update_data.pop("animal_condition", None)  # Pop early; applied to Report, not Rescue
         # Accept both barangay_staff_id and user_id for flexibility
         staff_id_for_history = update_data.pop("user_id", None) or update_data.get("barangay_staff_id")
 
         # Map barangay_staff_id → staff_id (DB column name) if it exists in update_data
         if "barangay_staff_id" in update_data:
             update_data["staff_id"] = update_data.pop("barangay_staff_id")
+
+        # Capture original staff_id BEFORE overwriting it
+        original_staff_id = db_rescue.staff_id
 
         if assigned_id:
             # Update the main staff_id for the rescue as the assigned person
@@ -149,14 +156,15 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
             new_assignment = RescueAssignment(
                 rescue_id=rescue_id,
                 staff_id=assigned_id,
-                assigned_by=staff_id_for_history or (db_rescue.staff_id if db_rescue.staff_id else assigned_id),
+                assigned_by=staff_id_for_history or original_staff_id or assigned_id,
                 remarks=remarks
             )
             db.add(new_assignment)
 
-        # Update rescue fields
+        # Update rescue fields — skip status_id (handled below), staff_id (handled above)
+        SKIP_KEYS = {"status_id", "staff_id"}
         for key, value in update_data.items():
-            if key != "status_id" and hasattr(db_rescue, key):
+            if key not in SKIP_KEYS and hasattr(db_rescue, key):
                 setattr(db_rescue, key, value)
 
         # Record Status History and Synchronize
@@ -218,8 +226,8 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                 report_obj = db.query(Report).filter(Report.report_id == db_rescue.report_id).first()
                 if report_obj:
                     report_obj.current_status_id = report_status_id
-                    if "animal_condition" in update_data:
-                        report_obj.condition = update_data["animal_condition"]
+                    if animal_condition:  # Use the pre-popped value
+                        report_obj.condition = animal_condition
 
                     # Create Notification for Resident
                     status_names = {
@@ -258,6 +266,9 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                 hist.updater_photo = hist.updater.profile_picture if hist.updater else None
                 
         return db_rescue
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Error updating rescue {rescue_id}: {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"{type(e).__name__}: {str(e)}")

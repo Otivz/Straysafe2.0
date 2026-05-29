@@ -29,7 +29,8 @@ INSERT INTO positions(position_name) VALUES
 ('Secretary'),
 ('Barangay Staff'),
 ('Tanod'),
-('Animal Rescuer');
+('Animal Rescuer'),
+('Barangay Captain');
 
 -- =========================================
 -- BARANGAYS
@@ -313,11 +314,11 @@ CREATE TABLE report_categories(
 );
 
 INSERT INTO report_categories(category_name) VALUES
-('Injured Animal'),
-('Aggressive Stray'),
-('Possible Rabies Risk'),
-('Roaming Pack'),
-('Animal Rescue Needed');
+('Injured'),
+('Aggressive'),
+('Rabies Risk'),
+('Roaming'),
+('Rescue Needed');
 
 -- =========================================
 -- REPORT STATUS
@@ -337,7 +338,10 @@ INSERT INTO report_status(status_name) VALUES
 ('Picked Up'),
 ('Under Observation'),
 ('Impounded'),
-('Released');
+('Released'),
+('Incident Resolved'),
+('Deceased'),
+('Approved by Barangay');
 
 -- =========================================
 -- RESCUE STATUS
@@ -349,12 +353,11 @@ CREATE TABLE rescue_status(
 
 INSERT INTO rescue_status(status_name) VALUES
 ('Pending'),
+('Approved'),
+('Rejected'),
+('Started'),
 ('Dispatched'),
-('Picked Up'),
-('Under Observation'),
-('Impounded'),
-('Resolved'),
-('Released');
+('Resolved');
 
 -- =========================================
 -- LETTER STATUS
@@ -451,6 +454,7 @@ CREATE TABLE reports(
 
     FOREIGN KEY(current_status_id)
     REFERENCES report_status(status_id)
+    ON DELETE SET NULL
 );
 
 CREATE INDEX idx_reports_user

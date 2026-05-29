@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import axios from 'axios';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import StatCard from '../../components/PetRecords/StatCard';
@@ -12,10 +13,72 @@ const SubdPetRecords = () => {
     const [selectedPet, setSelectedPet] = useState<PetRecord | null>(null);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [pets, setPets] = useState<PetRecord[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const fetchRegisteredPets = async () => {
+        try {
+            setLoading(true);
+            const response = await axios.get('http://localhost:8000/pets/');
+
+            // Map backend schema values into PetRecord structure
+            const mappedPets: PetRecord[] = response.data.map((pet: any) => ({
+                id: pet.pet_id.toString(),
+                name: pet.pet_name || 'Unknown',
+                gender: pet.gender || 'Unknown',
+                age: pet.estimated_age || 'Unknown',
+                breed: pet.breed || 'Unknown',
+                species: pet.pet_type || 'Dog',
+                ownerName: pet.owner?.name || 'Unknown Owner',
+                ownerEmail: pet.owner?.email || 'No Email',
+                ownerPhone: pet.emergency_contact_phone || pet.owner?.phone || 'No Contact',
+                idNumber: `P-${pet.pet_id.toString().padStart(5, '0')}`,
+                status: pet.status || 'Active',
+                avatar: pet.photo_url || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?q=80&w=400&auto=format&fit=crop',
+                weight: pet.weight ? `${pet.weight}kg` : 'Unknown',
+                colorMarkings: pet.color_markings || 'Unknown',
+                sizeCategory: pet.size_category || 'Medium',
+                isVaccinated: pet.is_vaccinated || false,
+                vaccinationDate: pet.vaccination_date || null,
+                isNeutered: pet.is_neutered || false,
+                temperament: pet.temperament || 'Friendly',
+                hasBiteHistory: pet.has_bite_history || false,
+                chaseBehavior: pet.chase_behavior || false,
+                healthCondition: pet.health_condition || 'Healthy and active',
+                notes: pet.notes || '',
+                vaccineCardUrl: pet.vaccine_card_url || null,
+                rawPetObj: pet
+            }));
+
+            setPets(mappedPets);
+        } catch (error) {
+            console.error('Error fetching subdivision pets:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Load all registered pets so every ResidentPet entry is visible
+    useEffect(() => {
+        fetchRegisteredPets();
+    }, []);
 
     const handleSelectPet = (pet: PetRecord) => {
         setSelectedPet(pet);
     };
+
+    // Refresh helper used by modal close handlers
+    const refreshPets = () => {
+        fetchRegisteredPets();
+    };
+
+    // Calculate dynamic stats
+    const totalCount = pets.length;
+    const vaccinatedCount = pets.filter(p => p.isVaccinated).length;
+    const pendingCount = pets.filter(p => p.status === 'Lost' || p.status === 'Found').length;
+
+    // Calculate dynamic percentages / display content
+    const complianceRate = totalCount > 0 ? Math.round((vaccinatedCount / totalCount) * 100) : 0;
 
     return (
         <div className="min-h-screen w-full flex bg-[#FDFDFD] font-sans text-gray-800 relative overflow-hidden">
@@ -38,13 +101,12 @@ const SubdPetRecords = () => {
                 <div className="flex-1 overflow-y-auto p-10 flex flex-col gap-10 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                     
                     {/* Header */}
-                    <div className="flex justify-between items-end">
+                    <div className="flex justify-between items-end shrink-0">
                         <div>
-                            <h1 className="text-4xl font-black text-gray-900 mb-2">Subdivision Pet Information</h1>
+                            <h1 className="text-4xl font-black text-gray-900 mb-2">Subdivision Pet Record</h1>
                             <p className="text-gray-500 text-sm font-medium">Manage and monitor all registered animals within your subdivision.</p>
                         </div>
                         <div className="flex items-center gap-4">
-
                             <Button 
                                 variant="primary" 
                                 onClick={() => setIsAddModalOpen(true)}
@@ -60,31 +122,31 @@ const SubdPetRecords = () => {
 
                     {/* Stats Row */}
                     {!selectedPet && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in duration-500">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in duration-500 shrink-0">
                             <StatCard 
                                 label="Total Registered" 
-                                value="428" 
-                                badge="+5%" 
+                                value={totalCount.toString()} 
+                                badge="Live" 
                                 badgeVariant="warning"
                             />
                             <StatCard 
                                 label="Fully Vaccinated" 
-                                value="315" 
-                                badge="74%" 
+                                value={vaccinatedCount.toString()} 
+                                badge={`${complianceRate}%`} 
                                 badgeVariant="info"
                             />
                             <StatCard 
-                                label="Pending Records" 
-                                value="5" 
-                                badge="Attention" 
-                                badgeVariant="info"
+                                label="Lost / Found Cases" 
+                                value={pendingCount.toString()} 
+                                badge={pendingCount > 0 ? "Alert" : "Clear"} 
+                                badgeVariant={pendingCount > 0 ? "error" : "info"}
                             />
                         </div>
                     )}
 
                     {/* Main Content Area */}
-                    <div className="flex flex-col gap-6">
-                        <div className="flex justify-between items-center">
+                    <div className="flex flex-col gap-6 flex-1 min-h-0">
+                        <div className="flex justify-between items-center shrink-0">
                             <h2 className="text-xl font-black text-gray-900">Active Records</h2>
                             <div className="flex items-center gap-6">
                                 <div className="relative">
@@ -95,26 +157,42 @@ const SubdPetRecords = () => {
                                     </div>
                                     <input 
                                         type="text" 
-                                        placeholder="Search pets, owners, ID..." 
+                                        placeholder="🔍 Search pets..." 
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                         className="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B35D25]/20 focus:border-[#B35D25] transition-all w-64 shadow-sm"
                                     />
                                 </div>
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Showing 1-10 of 428</p>
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                    Showing {loading ? 0 : Math.min(pets.length, 10)} of {pets.length}
+                                </p>
                             </div>
                         </div>
-                        <PetTable onSelectPet={handleSelectPet} selectedPetId={selectedPet?.id || null} searchTerm={searchTerm} />
+                        <div className="flex-1 min-h-0">
+                            <PetTable 
+                                pets={pets} 
+                                onSelectPet={handleSelectPet} 
+                                selectedPetId={selectedPet?.id || null} 
+                                searchTerm={searchTerm} 
+                                loading={loading}
+                            />
+                        </div>
                     </div>
 
                     {/* Add Pet Modal */}
-                    <AddPetModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} />
+                    <AddPetModal isOpen={isAddModalOpen} onClose={() => {
+                        setIsAddModalOpen(false);
+                        refreshPets();
+                    }} />
 
                     {/* Centered Modal Popup */}
                     {selectedPet && (
                         <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 sm:p-12 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
                             <div className="w-full max-w-6xl rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-300 bg-white overflow-hidden flex flex-col max-h-[90vh]">
-                                <PetDetailPanel pet={selectedPet} onClose={() => setSelectedPet(null)} />
+                                <PetDetailPanel pet={selectedPet} onClose={() => {
+                                    setSelectedPet(null);
+                                    refreshPets();
+                                }} />
                             </div>
                         </div>
                     )}

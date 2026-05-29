@@ -11,7 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Local imports (now safe to import after path fix)
 from app.database import engine, Base
-from app.routes import auth, users, reports, rescue, pets, notifications
+from app.routes import auth, users, reports, rescue, pets, notifications, announcements
 
 
 def ensure_report_media_status_column():
@@ -99,6 +99,29 @@ def ensure_pet_vaccine_card_url_column():
         if result.scalar() == 0:
             conn.execute(text("ALTER TABLE pets ADD COLUMN vaccine_card_url VARCHAR(255) NULL"))
 
+def ensure_report_status_rows():
+    """Insert missing report_status rows that the application logic depends on.
+    The original DB seed only had status IDs 1-10.
+    The rescue workflow requires 11 (Incident Resolved), 12 (Deceased), 13 (Approved by Barangay).
+    Inserts each row only if the status_id does not already exist.
+    """
+    required_statuses = {
+        11: 'Incident Resolved',
+        12: 'Deceased',
+        13: 'Approved by Barangay',
+    }
+    with engine.begin() as conn:
+        for status_id, status_name in required_statuses.items():
+            # Only insert if this specific status_id doesn't exist yet
+            conn.execute(
+                text(
+                    "INSERT INTO report_status (status_id, status_name) "
+                    "SELECT :id, :name FROM DUAL "
+                    "WHERE NOT EXISTS (SELECT 1 FROM report_status WHERE status_id = :id)"
+                ),
+                {"id": status_id, "name": status_name}
+            )
+
 # Create tables
 Base.metadata.create_all(bind=engine)
 ensure_report_media_status_column()
@@ -107,6 +130,7 @@ ensure_report_media_dominant_color_column()
 ensure_report_ai_suggestion_columns()
 ensure_report_condition_column()
 ensure_pet_vaccine_card_url_column()
+ensure_report_status_rows()
 
 app = FastAPI(title="StraySafe API")
 
@@ -132,6 +156,7 @@ app.include_router(reports.router)
 app.include_router(rescue.router)
 app.include_router(pets.router)
 app.include_router(notifications.router)
+app.include_router(announcements.router)
 
 @app.get("/")
 def read_root():

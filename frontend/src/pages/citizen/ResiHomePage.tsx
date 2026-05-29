@@ -134,6 +134,10 @@ const ResiHomePage = () => {
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [reports, setReports] = useState<any[]>([]);
+    const [announcements, setAnnouncements] = useState<any[]>([]);
+    const [annCommentInputs, setAnnCommentInputs] = useState<Record<number, string>>({});
+    const [annReplyingTo, setAnnReplyingTo] = useState<Record<number, { commentId: number, userName: string } | null>>({});
+    const [feedTab, setFeedTab] = useState<'reports' | 'announcements'>('reports');
     const [searchQuery, setSearchQuery] = useState('');
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
@@ -359,11 +363,59 @@ const ResiHomePage = () => {
         }
     };
 
+    const fetchAnnouncements = async () => {
+        if (!currentUserId) return;
+        try {
+            const response = await axios.get(`http://localhost:8000/announcements/feed/resident/${currentUserId}`);
+            setAnnouncements(response.data);
+        } catch (error) {
+            console.error('Failed to fetch announcements:', error);
+        }
+    };
+
+    const handleLikeAnnouncement = async (announcementId: number) => {
+        if (!currentUserId) return;
+        try {
+            await axios.post(`http://localhost:8000/announcements/${announcementId}/react`, {
+                user_id: currentUserId,
+                reaction_type: "Like"
+            });
+            await fetchAnnouncements();
+        } catch (error) {
+            console.error('Failed to react to announcement:', error);
+        }
+    };
+
+    const handleAddAnnouncementComment = async (announcementId: number, parentCommentId: number | null = null) => {
+        const text = annCommentInputs[announcementId];
+        if (!text || !text.trim() || !currentUserId) return;
+        try {
+            await axios.post(`http://localhost:8000/announcements/${announcementId}/comments`, {
+                user_id: currentUserId,
+                comment: text.trim(),
+                parent_comment_id: parentCommentId
+            });
+            setAnnCommentInputs(prev => ({ ...prev, [announcementId]: '' }));
+            setAnnReplyingTo(prev => ({ ...prev, [announcementId]: null }));
+            await fetchAnnouncements();
+        } catch (error) {
+            console.error('Failed to add announcement comment:', error);
+            alert('Failed to post comment.');
+        }
+    };
+
+    const formatAnnouncementDate = (raw: string) => {
+        const dt = new Date(raw);
+        if (Number.isNaN(dt.getTime())) return raw;
+        return dt.toLocaleDateString('en-US') + ' • ' + dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    };
+
     const API_URL = 'http://localhost:8000/reports';
 
     useEffect(() => {
         fetchReports();
-    }, []);
+        fetchAnnouncements();
+    }, [currentUserId]);
 
     const handleAddComment = async (reportId: number) => {
         const text = commentInputs[reportId];
@@ -699,6 +751,17 @@ const ResiHomePage = () => {
             (categoryName.toLowerCase().includes(q));
     });
 
+    const filteredAnnouncements = announcements.filter((ann) => {
+        if (!searchQuery.trim()) return true;
+        const q = searchQuery.toLowerCase();
+        return (
+            (ann.title || '').toLowerCase().includes(q) ||
+            (ann.content || '').toLowerCase().includes(q) ||
+            (ann.category || '').toLowerCase().includes(q) ||
+            (ann.location || '').toLowerCase().includes(q)
+        );
+    });
+
     // Show all reports in the feed; the endorsement letter photo is hidden via is_evidence=true
     const currentTabReports = filteredReports;
 
@@ -715,7 +778,8 @@ const ResiHomePage = () => {
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-32 pb-24 sm:pb-8">
 
                 {/* Top Actions - Hidden on mobile, shown on desktop */}
-                <div className="hidden sm:flex justify-end items-center mb-10">
+                {feedTab === 'reports' && (
+                <div className="hidden sm:flex justify-end items-center mb-6">
                     <Button
                         variant="primary"
                         onClick={() => {
@@ -745,6 +809,35 @@ const ResiHomePage = () => {
                         </svg>
                         Add Report
                     </Button>
+                </div>
+                )}
+
+                {/* Feed tabs: Reports | Announcements */}
+                <div className="max-w-3xl mx-auto mb-8">
+                    <div className="flex bg-white border border-gray-200 rounded-2xl p-1 shadow-sm">
+                        <button
+                            type="button"
+                            onClick={() => setFeedTab('reports')}
+                            className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                                feedTab === 'reports'
+                                    ? 'bg-[#F97316] text-white shadow-sm shadow-orange-200'
+                                    : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'
+                            }`}
+                        >
+                            Reports
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFeedTab('announcements')}
+                            className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                                feedTab === 'announcements'
+                                    ? 'bg-[#F97316] text-white shadow-sm shadow-orange-200'
+                                    : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'
+                            }`}
+                        >
+                            Announcements
+                        </button>
+                    </div>
                 </div>
 
                 {/* Add Report Modal */}
@@ -1386,8 +1479,288 @@ const ResiHomePage = () => {
                     </div>
                 )}
 
+                {feedTab === 'announcements' && (
+                    <>
+                        {filteredAnnouncements.length === 0 ? (
+                            <div className="max-w-md mx-auto text-center py-20 px-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm">
+                                <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-2">
+                                    No Announcements
+                                </h3>
+                                <p className="text-xs text-gray-400 leading-relaxed max-w-xs mx-auto">
+                                    There are no community announcements for you right now.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="max-w-3xl mx-auto">
+                                {filteredAnnouncements.map((ann) => {
+                                    const cover = ann.media?.find((m: any) => m.media_type === 'Image')?.file_url || ann.media?.[0]?.file_url;
+                                    return (
+                                        <div
+                                            key={ann.announcement_id}
+                                            className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden mb-12 hover:shadow-2xl transition-all duration-300"
+                                        >
+                                            <div className="p-6 sm:p-8">
+                                                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                                                    <span className="text-[10px] font-black uppercase px-3 py-1 rounded-full bg-gray-100 text-gray-700">
+                                                        {ann.category}
+                                                    </span>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                                        {formatAnnouncementDate(ann.posted_on)}
+                                                    </span>
+                                                </div>
+                                                <h3 className="text-xl font-black mb-2 text-gray-900">
+                                                    {ann.title}
+                                                </h3>
+                                                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line mb-6 font-medium">
+                                                    {ann.content}
+                                                </p>
+                                                {ann.location && (
+                                                    <p className="text-sm font-bold text-gray-800 mb-4">
+                                                        📍 {ann.location}
+                                                    </p>
+                                                )}
+                                                {cover && ann.media?.[0]?.media_type === 'Image' && (
+                                                    <img src={cover} alt={ann.title} className="w-full h-48 object-cover rounded-2xl border border-gray-100 mb-4" />
+                                                )}
+                                                
+                                                {(ann.media || []).length > 0 && (ann.media[0]?.media_type !== 'Image' || ann.media.length > 1) && (
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+                                                        {ann.media.map((media: any, idx: number) => {
+                                                            if (idx === 0 && media.media_type === 'Image') return null; // already rendered as cover
+                                                            return (
+                                                                <div key={idx} className="border border-gray-100 rounded-xl p-2 bg-gray-50/50 shadow-sm">
+                                                                    {media.media_type === 'Image' ? (
+                                                                        <img src={media.file_url} alt="Attachment" className="w-full h-40 object-cover rounded-lg" />
+                                                                    ) : media.media_type === 'Video' ? (
+                                                                        <video src={media.file_url} controls className="w-full h-40 rounded-lg" />
+                                                                    ) : (
+                                                                        <a href={media.file_url} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-gray-800 hover:underline">
+                                                                            Open PDF / Document
+                                                                        </a>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+
+                                                <div className="flex items-center justify-between gap-4 mb-4">
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                                        Posted by {ann.posted_by} • {ann.visibility}
+                                                    </p>
+                                                </div>
+
+                                                {/* Reactions and Likes section */}
+                                                <div className="flex items-center gap-4 mt-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleLikeAnnouncement(ann.announcement_id)}
+                                                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-sm ${
+                                                            ann.reactions?.some((r: any) => r.user_id === currentUserId)
+                                                                ? 'bg-[#F97316] text-white shadow-orange-100'
+                                                                : 'bg-[#FAFAF9] border border-gray-100 text-gray-500 hover:bg-orange-50 hover:text-[#F97316] hover:border-orange-200'
+                                                        }`}
+                                                    >
+                                                        <svg className="w-3.5 h-3.5" fill={ann.reactions?.some((r: any) => r.user_id === currentUserId) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"></path>
+                                                        </svg>
+                                                        <span>{ann.reactions ? ann.reactions.length : 0} Likes</span>
+                                                    </button>
+                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                                        💬 {ann.comments ? ann.comments.length : 0} Comments
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Comments Section */}
+                                            <div className="bg-white border-t border-gray-100 p-4 sm:p-8 pt-6">
+                                                {ann.comments && ann.comments.length > 0 && (
+                                                    <button
+                                                        onClick={() => setExpandedComments(prev => ({ ...prev, [ann.announcement_id + 100000]: !prev[ann.announcement_id + 100000] }))}
+                                                        className="text-[9px] sm:text-[10px] font-black text-gray-400 hover:text-[#F97316] uppercase tracking-widest transition-colors flex items-center gap-2 mb-6"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform duration-300 ${expandedComments[ann.announcement_id + 100000] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                                        </svg>
+                                                        {expandedComments[ann.announcement_id + 100000] ? 'Hide Comments' : `View all ${ann.comments.length} comments`}
+                                                    </button>
+                                                )}
+
+                                                {(expandedComments[ann.announcement_id + 100000] || !ann.comments || ann.comments.length === 0) && (
+                                                    <div className="space-y-2 mb-6 max-h-72 overflow-y-auto custom-scrollbar pr-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                                        {ann.comments && ann.comments.length > 0 ? (
+                                                            ann.comments
+                                                                .filter((c: any) => !c.parent_comment_id)
+                                                                .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                                                                .map((c: any) => {
+                                                                    const replies = ann.comments
+                                                                        .filter((reply: any) => reply.parent_comment_id === c.comment_id)
+                                                                        .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+                                                                    return (
+                                                                        <div key={c.comment_id} className="mb-4 last:mb-0">
+                                                                            <div className="flex gap-3 relative">
+                                                                                {/* Parent Avatar & Vertical Line */}
+                                                                                <div className="relative flex flex-col items-center shrink-0">
+                                                                                    {c.user_photo ? (
+                                                                                        <img src={c.user_photo} className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm" alt={c.user_name} />
+                                                                                    ) : (
+                                                                                        <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center text-[#F97316] font-black text-xs z-10 ring-4 ring-white border border-orange-100">
+                                                                                            {c.user_name ? c.user_name.charAt(0).toUpperCase() : 'U'}
+                                                                                        </div>
+                                                                                    )}
+                                                                                    {(replies.length > 0 || annReplyingTo[ann.announcement_id]?.commentId === c.comment_id) && (
+                                                                                        <div className="absolute top-8 bottom-[-16px] left-1/2 -translate-x-1/2 w-[2px] bg-gray-100 z-0"></div>
+                                                                                    )}
+                                                                                </div>
+
+                                                                                <div className="flex-1 pb-1">
+                                                                                    {/* Meta Info */}
+                                                                                    <div className="bg-[#FAFAF9] rounded-[1.5rem] p-3.5 px-4 border border-gray-50 shadow-sm inline-block">
+                                                                                        <span className="block text-[11px] font-black text-[#1a1208] mb-0.5">{c.user_name}</span>
+                                                                                        <p className="text-xs font-semibold text-gray-700 leading-relaxed pr-6">{c.comment}</p>
+                                                                                    </div>
+                                                                                    {/* Parent Actions */}
+                                                                                    <div className="flex items-center gap-4 mt-1.5 ml-3">
+                                                                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{new Date(c.created_at).toLocaleDateString()}</span>
+                                                                                        <button
+                                                                                            onClick={() => setAnnReplyingTo(prev => ({ ...prev, [ann.announcement_id]: { commentId: c.comment_id, userName: c.user_name } }))}
+                                                                                            className="text-[10px] font-bold text-gray-500 hover:text-[#F97316] transition-colors"
+                                                                                        >
+                                                                                            Reply
+                                                                                        </button>
+                                                                                    </div>
+
+                                                                                    {/* Replies Container */}
+                                                                                    {replies.length > 0 && (
+                                                                                        <div className="mt-4 space-y-4">
+                                                                                            {replies.map((reply: any, index: number) => (
+                                                                                                <div key={reply.comment_id} className="flex gap-3 relative">
+                                                                                                    {/* Horizontal connector curve */}
+                                                                                                    <div className="absolute top-[-10px] left-[-28px] w-[28px] h-[26px] border-b-[2px] border-l-[2px] border-gray-100 rounded-bl-[12px] z-0 pointer-events-none"></div>
+
+                                                                                                    {/* Mask to hide vertical line below the last reply */}
+                                                                                                    {index === replies.length - 1 && annReplyingTo[ann.announcement_id]?.commentId !== c.comment_id && (
+                                                                                                        <div className="absolute top-[16px] bottom-[-100px] left-[-30px] w-[6px] bg-white z-0 pointer-events-none"></div>
+                                                                                                    )}
+
+                                                                                                    {/* Child Avatar */}
+                                                                                                    {reply.user_photo ? (
+                                                                                                        <img src={reply.user_photo} className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0" alt={reply.user_name} />
+                                                                                                    ) : (
+                                                                                                        <div className="w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 font-bold text-[10px] z-10 mt-1 ring-4 ring-white border border-gray-100 shrink-0">
+                                                                                                            {reply.user_name ? reply.user_name.charAt(0).toUpperCase() : 'U'}
+                                                                                                        </div>
+                                                                                                    )}
+
+                                                                                                    <div className="flex-1">
+                                                                                                        {/* Child Bubble */}
+                                                                                                        <div className="bg-[#FAFAF9] rounded-[1.2rem] p-3 px-4 border border-gray-50 shadow-sm inline-block">
+                                                                                                            <span className="block text-[10px] font-black text-gray-800 mb-0.5">{reply.user_name}</span>
+                                                                                                            <p className="text-[11px] font-semibold text-gray-600 leading-relaxed pr-4">{reply.comment}</p>
+                                                                                                        </div>
+                                                                                                        {/* Child Actions */}
+                                                                                                        <div className="flex items-center gap-4 mt-1.5 ml-3">
+                                                                                                            <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">{new Date(reply.created_at).toLocaleDateString()}</span>
+                                                                                                            <button
+                                                                                                                onClick={() => setAnnReplyingTo(prev => ({ ...prev, [ann.announcement_id]: { commentId: c.comment_id, userName: reply.user_name } }))}
+                                                                                                                className="text-[9px] font-bold text-gray-500 hover:text-[#F97316] transition-colors"
+                                                                                                            >
+                                                                                                                Reply
+                                                                                                            </button>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    )}
+
+                                                                                    {/* Inline Reply Input */}
+                                                                                    {annReplyingTo[ann.announcement_id]?.commentId === c.comment_id && (
+                                                                                        <div className="mt-4 flex items-center gap-3 relative z-10 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                                                            {/* Thread curve for the reply input itself */}
+                                                                                            <div className="absolute top-[-10px] left-[-28px] w-[28px] h-[24px] border-b-[2px] border-l-[2px] border-gray-100 rounded-bl-[12px] z-0 pointer-events-none"></div>
+                                                                                            {/* Mask to hide vertical line below the inline reply input */}
+                                                                                            <div className="absolute top-[14px] bottom-[-100px] left-[-30px] w-[6px] bg-white z-0 pointer-events-none"></div>
+
+                                                                                            <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center text-[#F97316] font-black text-[10px] shrink-0 border border-orange-200 z-10 bg-white ring-4 ring-white">
+                                                                                                {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+                                                                                            </div>
+                                                                                            <div className="flex-1 relative flex items-center">
+                                                                                                <input
+                                                                                                    type="text"
+                                                                                                    autoFocus
+                                                                                                    placeholder={`Replying to ${annReplyingTo[ann.announcement_id]?.userName}...`}
+                                                                                                    className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[1.2rem] pl-4 pr-10 py-2 text-[11px] font-semibold text-[#1a1208] focus:outline-none focus:border-orange-200 focus:bg-white transition-all placeholder:text-gray-400 shadow-inner"
+                                                                                                    value={annCommentInputs[ann.announcement_id] || ''}
+                                                                                                    onChange={(e) => setAnnCommentInputs(prev => ({ ...prev, [ann.announcement_id]: e.target.value }))}
+                                                                                                    onKeyPress={(e) => e.key === 'Enter' && handleAddAnnouncementComment(ann.announcement_id, c.comment_id)}
+                                                                                                />
+                                                                                                <button
+                                                                                                    onClick={() => {
+                                                                                                        setAnnReplyingTo(prev => ({ ...prev, [ann.announcement_id]: null }));
+                                                                                                        setAnnCommentInputs(prev => ({ ...prev, [ann.announcement_id]: '' }));
+                                                                                                    }}
+                                                                                                    className="absolute right-3 text-gray-400 hover:text-red-500 transition-colors"
+                                                                                                >
+                                                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                                                                                    </svg>
+                                                                                                </button>
+                                                                                            </div>
+                                                                                            <button
+                                                                                                onClick={() => handleAddAnnouncementComment(ann.announcement_id, c.comment_id)}
+                                                                                                className="bg-[#F97316] text-white rounded-full w-8 h-8 flex items-center justify-center shadow-md shadow-orange-100 hover:scale-105 active:scale-[0.95] transition-all shrink-0"
+                                                                                            >
+                                                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 relative left-[1px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                                                                                </svg>
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })
+                                                        ) : (
+                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic text-center py-4">No comments yet. Be the first to comment!</p>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {!annReplyingTo[ann.announcement_id] && (
+                                                    <div className="flex items-center gap-3 animate-in fade-in duration-200">
+                                                        <div className="flex-1 relative">
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Write a comment..."
+                                                                className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[1.5rem] pl-5 pr-12 py-3 text-xs font-semibold text-[#1a1208] focus:outline-none focus:border-orange-200 focus:bg-white transition-all placeholder:text-gray-300 shadow-inner"
+                                                                value={annCommentInputs[ann.announcement_id] || ''}
+                                                                onChange={(e) => setAnnCommentInputs(prev => ({ ...prev, [ann.announcement_id]: e.target.value }))}
+                                                                onKeyPress={(e) => e.key === 'Enter' && handleAddAnnouncementComment(ann.announcement_id)}
+                                                            />
+                                                        </div>
+                                                        <button
+                                                            onClick={() => handleAddAnnouncementComment(ann.announcement_id)}
+                                                            className="bg-[#F97316] text-white rounded-[1.2rem] p-3 shadow-md shadow-orange-100 hover:scale-105 active:scale-[0.95] transition-all flex-shrink-0"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </>
+                )}
+
                 {/* Real Report Posts */}
-                {currentTabReports.length === 0 ? (
+                {feedTab === 'reports' && (currentTabReports.length === 0 ? (
                     <div className="max-w-md mx-auto text-center py-20 px-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm animate-in fade-in slide-in-from-bottom-5 duration-500">
                         <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 mx-auto mb-6 border border-gray-100/50">
                             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1748,7 +2121,7 @@ const ResiHomePage = () => {
                             </div>
                         );
                     })
-                )}
+                ))}
 
                 {/* Dashboard content cleared as requested */}
             </main>
@@ -2100,6 +2473,7 @@ const ResiHomePage = () => {
                 isSearchOpen={isMobileSearchOpen}
                 onSearchClick={() => setIsMobileSearchOpen(true)}
                 onAddReportClick={() => {
+                    setFeedTab('reports');
                     setEditingReportId(null);
                     setFormData({
                         category: 'Injured Animal',

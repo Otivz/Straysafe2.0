@@ -64,11 +64,20 @@ class PetUpdate(BaseModel):
     emergency_contact_name: Optional[str] = None
     emergency_contact_phone: Optional[str] = None
 
+class UserMini(BaseModel):
+    name: str
+    email: str
+    phone: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
 class PetResponse(PetBase):
     pet_id: int
     owner_id: int
     created_at: datetime
     updated_at: datetime
+    owner: Optional[UserMini] = None
 
     class Config:
         from_attributes = True

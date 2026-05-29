@@ -1,20 +1,63 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import MapComponent from '../../components/MapComponent';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 
+interface Report {
+    report_id: number;
+    status_id: number;
+    category_id: number;
+    animal_type: string;
+    landmark: string;
+    reporter_name?: string;
+    created_at: string;
+    priority_level: string;
+}
+
+interface RescueRequest {
+    rescue_id: number;
+    status_id: number;
+}
+
+interface ActivityItem {
+    id: number;
+    text: string;
+    sub: string;
+    icon: 'report' | 'rescue' | 'verified';
+}
+
+const categoryMap: Record<number, string> = {
+    1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
+    4: 'Roaming Pack', 5: 'Animal Rescue Needed'
+};
+
+function timeAgo(dateStr: string): string {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins} minute${mins > 1 ? 's' : ''} ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs} hour${hrs > 1 ? 's' : ''} ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+}
+
 const SubdDashboard = () => {
     const navigate = useNavigate();
-    
+
+    const [reports, setReports] = useState<Report[]>([]);
+    const [rescues, setRescues] = useState<RescueRequest[]>([]);
+    const [petCount, setPetCount] = useState<number>(0);
+    const [loading, setLoading] = useState(true);
+
     useEffect(() => {
         const rawUser = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
         if (rawUser) {
             try {
                 const user = JSON.parse(rawUser);
-                if (user.role_id !== 2) {
-                    navigate('/staff/login');
-                }
+                if (user.role_id !== 2) navigate('/staff/login');
             } catch {
                 navigate('/staff/login');
             }
@@ -23,247 +66,241 @@ const SubdDashboard = () => {
         }
     }, [navigate]);
 
+    useEffect(() => {
+        const fetchAll = async () => {
+            setLoading(true);
+            try {
+                const [reportsRes, rescuesRes, petsRes] = await Promise.allSettled([
+                    axios.get('http://localhost:8000/reports/'),
+                    axios.get('http://localhost:8000/rescue-requests/'),
+                    axios.get('http://localhost:8000/pets/'),
+                ]);
+                if (reportsRes.status === 'fulfilled') setReports(reportsRes.value.data || []);
+                if (rescuesRes.status === 'fulfilled') setRescues(rescuesRes.value.data || []);
+                if (petsRes.status === 'fulfilled') setPetCount((petsRes.value.data || []).length);
+            } catch (err) {
+                console.error('Dashboard fetch error:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchAll();
+    }, []);
+
+    // Derived stats
+    const pendingCount = reports.filter(r => r.status_id === 1).length;
+    const verifiedCount = reports.filter(r => r.status_id === 2 || r.status_id === 13).length;
+    // Active rescues = status 1 (Pending), 2 (Approved), 4 (Started), 5 (Dispatched)
+    const activeRescueCount = rescues.filter(r => r.status_id >= 1 && r.status_id <= 5).length;
+
+    // Trend chart: last 7 days
+    const trendData = (() => {
+        const days: { label: string; count: number }[] = [];
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const label = d.toLocaleDateString('en-US', { weekday: 'short' });
+            const dateStr = d.toISOString().slice(0, 10);
+            const count = reports.filter(r => r.created_at?.slice(0, 10) === dateStr).length;
+            days.push({ label, count });
+        }
+        return days;
+    })();
+
+    const maxTrend = Math.max(...trendData.map(d => d.count), 1);
+
+    // Recent activity: last 5 reports sorted by date
+    const recentReports = [...reports]
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 5);
+
+    const recentActivity: ActivityItem[] = recentReports.map(r => ({
+        id: r.report_id,
+        text: `#${r.report_id.toString().padStart(4, '0')} — ${categoryMap[r.category_id] || 'Incident'} ${r.landmark ? `at ${r.landmark}` : ''}`,
+        sub: timeAgo(r.created_at),
+        icon: r.status_id === 2 ? 'verified' : r.status_id >= 5 ? 'rescue' : 'report',
+    }));
+
+    const iconMap = {
+        report: (
+            <svg className="h-4 w-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z" />
+            </svg>
+        ),
+        verified: (
+            <svg className="h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+        ),
+        rescue: (
+            <svg className="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 110 20A10 10 0 0112 2z" />
+            </svg>
+        ),
+    };
+
+    const statCards = [
+        {
+            label: 'Pending Reports',
+            value: pendingCount,
+            icon: (
+                <svg className="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            ),
+            bg: 'bg-amber-50',
+            border: 'border-amber-100',
+            textColor: 'text-amber-600',
+        },
+        {
+            label: 'Verified Reports',
+            value: verifiedCount,
+            icon: (
+                <svg className="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            ),
+            bg: 'bg-blue-50',
+            border: 'border-blue-100',
+            textColor: 'text-blue-600',
+        },
+        {
+            label: 'Active Rescue',
+            value: activeRescueCount,
+            icon: (
+                <svg className="h-5 w-5 text-[#F97316]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+            ),
+            bg: 'bg-orange-50',
+            border: 'border-orange-100',
+            textColor: 'text-[#F97316]',
+        },
+        {
+            label: 'Registered Pets',
+            value: petCount,
+            icon: (
+                <svg className="h-5 w-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+            ),
+            bg: 'bg-green-50',
+            border: 'border-green-100',
+            textColor: 'text-green-600',
+        },
+    ];
+
     return (
         <div className="min-h-screen w-full flex bg-[#F8F9FA] font-sans text-gray-800">
-            {/* LEFT SIDEBAR COMPONENT */}
             <SubdSidebar />
 
-            {/* MAIN CONTENT DIV */}
             <main className="flex-1 flex flex-col h-screen overflow-hidden">
-                {/* TOP NAVIGATION */}
                 <SubdNavbar />
 
-                {/* SCROLLABLE AREA */}
                 <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-8 custom-scrollbar bg-[#FAFAF9]">
-                    {/* CONTENT SECTION BELOW MAP */}
-                    <div className="flex flex-col space-y-8">
+                    <div className="flex flex-col gap-8">
 
-                            {/* Header Block */}
-                            <div className="flex justify-between items-end">
-                                <div>
-                                    <h1 className="text-3xl font-extrabold text-gray-900 mb-2">Subdivision Overview</h1>
-                                    <p className="text-gray-500 text-sm">Real-time surveillance and rescue coordination status.</p>
+                        {/* Header */}
+                        <div>
+                            <h1 className="text-3xl font-extrabold text-gray-900 mb-1">Subdivision Dashboard</h1>
+                            <p className="text-gray-500 text-sm">Overview of reports, rescue operations, and registered pets.</p>
+                        </div>
+
+                        {/* Stat Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                            {statCards.map((card) => (
+                                <div key={card.label} className={`bg-white rounded-2xl p-5 border ${card.border} shadow-sm flex items-center gap-4`}>
+                                    <div className={`w-10 h-10 rounded-xl ${card.bg} flex items-center justify-center shrink-0`}>
+                                        {card.icon}
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{card.label}</p>
+                                        {loading ? (
+                                            <div className="h-7 w-12 bg-gray-100 rounded-lg animate-pulse mt-1" />
+                                        ) : (
+                                            <p className={`text-3xl font-black ${card.textColor} mt-0.5`}>{card.value}</p>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="relative flex items-center">
-                                    <span className="absolute left-3 text-gray-400">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                        </svg>
-                                    </span>
-                                    <input
-                                        type="text"
-                                        placeholder="Search operations..."
-                                        className="pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#F97316] focus:border-transparent w-64 shadow-sm transition-all"
-                                    />
+                            ))}
+                        </div>
+
+                        {/* Trend Chart */}
+                        <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
+                            <h3 className="text-lg font-bold text-gray-900 mb-6">Incident Report Trend — Last 7 Days</h3>
+                            {loading ? (
+                                <div className="h-48 bg-gray-50 rounded-2xl animate-pulse" />
+                            ) : (
+                                <div className="flex items-end gap-3 h-48">
+                                    {trendData.map((day, i) => {
+                                        const heightPct = maxTrend > 0 ? (day.count / maxTrend) * 100 : 0;
+                                        return (
+                                            <div key={i} className="flex-1 flex flex-col items-center gap-2">
+                                                <span className="text-xs font-bold text-gray-500">{day.count > 0 ? day.count : ''}</span>
+                                                <div className="w-full rounded-xl bg-gray-100 overflow-hidden" style={{ height: '140px' }}>
+                                                    <div
+                                                        className="w-full rounded-xl transition-all duration-700"
+                                                        style={{
+                                                            height: `${Math.max(heightPct, day.count > 0 ? 4 : 0)}%`,
+                                                            background: i === trendData.length - 1
+                                                                ? 'linear-gradient(to top, #F97316, #fb923c)'
+                                                                : 'linear-gradient(to top, #fdba74, #fed7aa)',
+                                                            marginTop: 'auto',
+                                                            display: 'block',
+                                                            position: 'relative',
+                                                            top: `${100 - Math.max(heightPct, day.count > 0 ? 4 : 0)}%`
+                                                        }}
+                                                    />
+                                                </div>
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase">{day.label}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Map + Recent Activity side by side */}
+                        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+                            {/* Map */}
+                            <div className="xl:col-span-3 bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
+                                <h3 className="text-lg font-bold text-gray-900 mb-4">Incident Intelligence Map</h3>
+                                <div className="w-full h-[340px] rounded-2xl overflow-hidden border border-gray-100">
+                                    <MapComponent center={[14.8093, 121.0028]} zoom={16} />
                                 </div>
                             </div>
 
-                            {/* Top Stats Row */}
-                            <div className="grid grid-cols-5 gap-4">
-                                <div className="bg-white rounded-2xl p-5 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between h-32 transition-all hover:shadow-md">
-                                    <div className="flex justify-between items-start">
-                                        <div className="w-9 h-9 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
-                                            </svg>
-                                        </div>
-                                        <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-lg">+12%</span>
+                            {/* Recent Activity */}
+                            <div className="xl:col-span-2 bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col">
+                                <h3 className="text-lg font-bold text-gray-900 mb-5">Recent Activity</h3>
+                                {loading ? (
+                                    <div className="space-y-3">
+                                        {[1, 2, 3].map(i => (
+                                            <div key={i} className="h-16 bg-gray-50 rounded-2xl animate-pulse" />
+                                        ))}
                                     </div>
-                                    <div>
-                                        <p className="text-2xl font-black text-gray-900 leading-none">346</p>
-                                        <p className="text-[10px] font-bold text-gray-400 tracking-wider uppercase mt-1.5">Total Reports</p>
+                                ) : recentActivity.length === 0 ? (
+                                    <div className="flex-1 flex items-center justify-center">
+                                        <p className="text-sm text-gray-400 italic">No recent activity</p>
                                     </div>
-                                </div>
-
-                                <div className="bg-white rounded-2xl p-5 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between h-32 transition-all hover:shadow-md">
-                                    <div className="flex justify-between items-start">
-                                        <div className="w-9 h-9 bg-orange-50 rounded-xl flex items-center justify-center text-sky-600">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" />
-                                            </svg>
-                                        </div>
-                                        <span className="text-[10px] font-bold text-sky-600 bg-orange-50 px-1.5 py-0.5 rounded-lg">+8%</span>
+                                ) : (
+                                    <div className="space-y-3 flex-1 overflow-y-auto">
+                                        {recentActivity.map((item) => (
+                                            <div key={item.id} className="border border-gray-100 rounded-2xl p-4 flex items-start gap-3 hover:bg-gray-50 transition-colors">
+                                                <div className="w-8 h-8 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0 mt-0.5">
+                                                    {iconMap[item.icon]}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-semibold text-gray-900 leading-snug truncate">{item.text}</p>
+                                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">{item.sub}</p>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                    <div>
-                                        <p className="text-2xl font-black text-gray-900 leading-none">135</p>
-                                        <p className="text-[10px] font-bold text-gray-400 tracking-wider uppercase mt-1.5">Active Cases</p>
-                                    </div>
-                                </div>
-
-                                <div className="bg-white rounded-2xl p-5 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between h-32 transition-all hover:shadow-md">
-                                    <div className="flex justify-between items-start">
-                                        <div className="w-9 h-9 bg-red-50 rounded-xl flex items-center justify-center text-red-600">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                            </svg>
-                                        </div>
-                                        <span className="text-[10px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded-lg">-5%</span>
-                                    </div>
-                                    <div>
-                                        <p className="text-2xl font-black text-gray-900 leading-none">23</p>
-                                        <p className="text-[10px] font-bold text-gray-400 tracking-wider uppercase mt-1.5">High Priority</p>
-                                    </div>
-                                </div>
-
-                                <div className="bg-white rounded-2xl p-5 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between h-32 transition-all hover:shadow-md">
-                                    <div className="flex justify-between items-start">
-                                        <div className="w-9 h-9 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                                            </svg>
-                                        </div>
-                                        <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-lg">-15%</span>
-                                    </div>
-                                    <div>
-                                        <p className="text-2xl font-black text-gray-900 leading-none">4.2h</p>
-                                        <p className="text-[10px] font-bold text-gray-400 tracking-wider uppercase mt-1.5">Avg Response</p>
-                                    </div>
-                                </div>
-
-                                <div className="bg-[#F97316] rounded-2xl p-5 shadow-lg shadow-orange-900/10 flex flex-col justify-between h-32 transition-all hover:scale-[1.02] hover:shadow-xl">
-                                    <div className="flex justify-between items-start">
-                                        <div className="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center text-orange-200">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                            </svg>
-                                        </div>
-                                        <span className="text-[10px] font-bold text-orange-200 bg-white/10 px-1.5 py-0.5 rounded-lg">+3%</span>
-                                    </div>
-                                    <div>
-                                        <p className="text-2xl font-black text-white leading-none">87%</p>
-                                        <p className="text-[10px] font-bold text-orange-100/70 tracking-wider uppercase mt-1.5">Resolution Rate</p>
-                                    </div>
-                                </div>
+                                )}
                             </div>
-
-                            {/* Second Row: Charts */}
-                            <div className="grid grid-cols-3 gap-6">
-                                {/* Reports Over Time - Line Chart */}
-                                <div className="bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100">
-                                    <div className="flex justify-between items-center mb-6">
-                                        <h3 className="text-sm font-bold text-gray-900">Reports Over Time</h3>
-                                        <div className="flex items-center space-x-1 text-[10px] font-bold text-sky-600 bg-orange-50 px-2 py-1 rounded-lg">
-                                            <span>Apr 18 - Apr 24</span>
-                                        </div>
-                                    </div>
-                                    <div className="relative h-40 w-full">
-                                        <svg viewBox="0 0 400 150" className="w-full h-full">
-                                            <defs>
-                                                <linearGradient id="lineGradient" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="0%" stopColor="#F97316" stopOpacity="0.2" />
-                                                    <stop offset="100%" stopColor="#F97316" stopOpacity="0" />
-                                                </linearGradient>
-                                            </defs>
-                                            {/* Grid Lines */}
-                                            <line x1="0" y1="0" x2="400" y2="0" stroke="#F1F5F9" strokeWidth="1" />
-                                            <line x1="0" y1="50" x2="400" y2="50" stroke="#F1F5F9" strokeWidth="1" />
-                                            <line x1="0" y1="100" x2="400" y2="100" stroke="#F1F5F9" strokeWidth="1" />
-                                            <line x1="0" y1="150" x2="400" y2="150" stroke="#E2E8F0" strokeWidth="2" />
-
-                                            {/* Area Fill */}
-                                            <path d="M0,120 C40,60 80,100 120,40 C160,80 200,30 240,70 C280,110 320,20 360,50 L400,60 L400,150 L0,150 Z" fill="url(#lineGradient)" />
-
-                                            {/* Line Path */}
-                                            <path d="M0,120 C40,60 80,100 120,40 C160,80 200,30 240,70 C280,110 320,20 360,50 L400,60" fill="none" stroke="#F97316" strokeWidth="3" strokeLinecap="round" />
-
-                                            {/* Data Points */}
-                                            <circle cx="0" cy="120" r="4" fill="white" stroke="#F97316" strokeWidth="2" />
-                                            <circle cx="120" cy="40" r="4" fill="white" stroke="#F97316" strokeWidth="2" />
-                                            <circle cx="200" cy="30" r="4" fill="white" stroke="#F97316" strokeWidth="2" />
-                                            <circle cx="320" cy="20" r="4" fill="white" stroke="#F97316" strokeWidth="2" />
-                                            <circle cx="400" cy="60" r="4" fill="white" stroke="#F97316" strokeWidth="2" />
-                                        </svg>
-                                        <div className="flex justify-between mt-2 text-[9px] font-bold text-gray-400 uppercase tracking-widest px-1">
-                                            <span>Apr 18</span>
-                                            <span>Apr 20</span>
-                                            <span>Apr 22</span>
-                                            <span>Apr 24</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Reports by Category - Donut Chart */}
-                                <div className="bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col">
-                                    <h3 className="text-sm font-bold text-gray-900 mb-6">Reports by Category</h3>
-                                    <div className="flex-1 flex items-center justify-center relative">
-                                        <svg viewBox="0 0 100 100" className="w-32 h-32 transform -rotate-90">
-                                            {/* Injured Segment - Sky Blue */}
-                                            <circle cx="50" cy="50" r="40" fill="transparent" stroke="#F97316" strokeWidth="12" strokeDasharray="125.6 251.2" />
-                                            {/* Aggressive Segment - Orange */}
-                                            <circle cx="50" cy="50" r="40" fill="transparent" stroke="#F97316" strokeWidth="12" strokeDasharray="75.36 251.2" strokeDashoffset="-125.6" />
-                                            {/* Sighting Segment - Indigo */}
-                                            <circle cx="50" cy="50" r="40" fill="transparent" stroke="#4F46E5" strokeWidth="12" strokeDasharray="50.24 251.2" strokeDashoffset="-200.96" />
-                                        </svg>
-                                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                            <span className="text-xl font-black text-gray-900 leading-none">346</span>
-                                            <span className="text-[8px] font-bold text-gray-400 uppercase mt-1">Total</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex justify-center space-x-4 mt-6">
-                                        <div className="flex items-center space-x-1.5">
-                                            <div className="w-2 h-2 rounded-full bg-[#F97316]"></div>
-                                            <span className="text-[10px] font-bold text-gray-500">Injured</span>
-                                        </div>
-                                        <div className="flex items-center space-x-1.5">
-                                            <div className="w-2 h-2 rounded-full bg-[#F97316]"></div>
-                                            <span className="text-[10px] font-bold text-gray-500">Aggressive</span>
-                                        </div>
-                                        <div className="flex items-center space-x-1.5">
-                                            <div className="w-2 h-2 rounded-full bg-[#4F46E5]"></div>
-                                            <span className="text-[10px] font-bold text-gray-500">Sighting</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Species Distribution - Bar Chart */}
-                                <div className="bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100">
-                                    <h3 className="text-sm font-bold text-gray-900 mb-8">Species Distribution</h3>
-                                    <div className="flex items-end justify-around h-32 px-4 gap-8">
-                                        <div className="flex flex-col items-center flex-1">
-                                            <div className="text-[10px] font-bold text-gray-400 mb-2">204</div>
-                                            <div className="w-full bg-[#F97316] rounded-t-xl transition-all hover:bg-[#EA580C]" style={{ height: '100%' }}></div>
-                                            <div className="mt-3 text-[10px] font-bold text-gray-900 uppercase tracking-wider">Dog</div>
-                                        </div>
-                                        <div className="flex flex-col items-center flex-1">
-                                            <div className="text-[10px] font-bold text-gray-400 mb-2">142</div>
-                                            <div className="w-full bg-[#E2E8F0] rounded-t-xl transition-all hover:bg-gray-300" style={{ height: '70%' }}></div>
-                                            <div className="mt-3 text-[10px] font-bold text-gray-900 uppercase tracking-wider">Cat</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Live Activity Heatmap Section */}
-                            <div className="bg-white rounded-3xl shadow-[0_2px_14px_rgba(0,0,0,0.02)] overflow-hidden flex flex-col p-6">
-                                <div className="flex justify-between items-center mb-6">
-                                    <div>
-                                        <h3 className="text-lg font-bold text-gray-900">Subdivision Activity Heatmap</h3>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Stray Density & Hotspots</p>
-                                    </div>
-                                    <div className="flex items-center space-x-3 text-xs bg-gray-50 rounded px-2.5 py-1">
-                                        <span className="text-[9px] text-gray-400 font-bold uppercase">Filter:</span>
-                                        <span className="font-bold text-gray-700 uppercase tracking-wider text-[10px]">Last 24 Hours</span>
-                                    </div>
-                                </div>
-
-                                <div className="w-full h-[500px] rounded-2xl overflow-hidden relative border border-gray-100 shadow-lg bg-gray-50 shrink-0">
-                                    <MapComponent 
-                                        center={[14.8093, 121.0028]} 
-                                        zoom={16}
-                                    />
-
-                                    {/* Peak Hotspot Box */}
-                                    <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm rounded-xl p-4 shadow-xl z-[1000] border border-white/50">
-                                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest flex items-center">
-                                            Peak Hotspot <span className="text-red-500 ml-1 font-black">+12.4%</span>
-                                        </p>
-                                        <p className="text-sm font-black text-gray-900 mt-1">Block 4 Park Area</p>
-                                        <div className="w-full h-1 bg-gray-100 mt-2 rounded-full overflow-hidden">
-                                            <div className="w-[82%] h-full bg-[#F97316] rounded-full"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                        </div>
 
                     </div>
                 </div>

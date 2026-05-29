@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
 from app.models.pet import Pet
+from app.models.user import User
 from app.schemas.pet import PetCreate, PetUpdate, PetResponse
 from app.utils.cloudinary_config import upload_to_cloudinary
 
@@ -13,18 +14,27 @@ router = APIRouter(
 
 @router.get("/", response_model=List[PetResponse])
 def get_pets(db: Session = Depends(get_db)):
-    return db.query(Pet).all()
+    from sqlalchemy.orm import joinedload
+    return db.query(Pet).options(joinedload(Pet.owner)).all()
 
 @router.get("/{pet_id}", response_model=PetResponse)
 def get_pet(pet_id: int, db: Session = Depends(get_db)):
-    pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
+    from sqlalchemy.orm import joinedload
+    pet = db.query(Pet).options(joinedload(Pet.owner)).filter(Pet.pet_id == pet_id).first()
     if not pet:
         raise HTTPException(status_code=404, detail="Pet not found")
     return pet
 
 @router.get("/owner/{owner_id}", response_model=List[PetResponse])
 def get_owner_pets(owner_id: int, db: Session = Depends(get_db)):
-    return db.query(Pet).filter(Pet.owner_id == owner_id).all()
+    from sqlalchemy.orm import joinedload
+    return db.query(Pet).options(joinedload(Pet.owner)).filter(Pet.owner_id == owner_id).all()
+
+@router.get("/subdivision/{subdivision_id}", response_model=List[PetResponse])
+def get_subdivision_pets(subdivision_id: int, db: Session = Depends(get_db)):
+    from app.models.user import User
+    from sqlalchemy.orm import joinedload
+    return db.query(Pet).join(User).filter(User.subdivision_id == subdivision_id).options(joinedload(Pet.owner)).all()
 
 @router.post("/", response_model=PetResponse)
 def create_pet(pet: PetCreate, db: Session = Depends(get_db)):
