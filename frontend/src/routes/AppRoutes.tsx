@@ -15,10 +15,10 @@ import CommunityStaffLogin from '../pages/Subd_Leaders/CommunityStaffLogin';
 import SubdDashboard from '../pages/Subd_Leaders/SubdDashboard';
 import SubdReports from '../pages/Subd_Leaders/SubdReports';
 import EscelatedMissions from '../pages/Subd_Leaders/EscelatedMissions';
-import SubdHeatMap from '../pages/Subd_Leaders/SubdHeatMap';
+
 import EndorsementArch from '../pages/Subd_Leaders/EndorsementArch';
 import SubdPetRecords from '../pages/Subd_Leaders/SubdPetRecords';
-import SubdHazardAlert from '../pages/Subd_Leaders/SubdHazardAlert';
+
 
 import LandingPage from '../pages/citizen/LandingPage';
 import ResidentsLogin from '../pages/citizen/ResidentsLogin';
@@ -29,7 +29,7 @@ import BrgyDashboard from '../pages/Barangay_Staff/BrgyDashboard';
 import BrgyRescueRequests from '../pages/Barangay_Staff/BrgyRescueRequests';
 import BrgyOperation from '../pages/Barangay_Staff/BrgyOperation';
 import BrgyCommunityAlerts from '../pages/Barangay_Staff/BrgyCommunityAlerts';
-
+import SubdHazardAlert from '../pages/Subd_Leaders/SubdHazardAlert';
 
 const AppRoutes = () => {
     const navigate = useNavigate();
@@ -105,7 +105,7 @@ const AppRoutes = () => {
             <Route path="/subd/dashboard" element={<SubdDashboard />} />
             <Route path="/subd/reports" element={<SubdReports />} />
             <Route path="/subd/escalated" element={<EscelatedMissions />} />
-            <Route path="/subd/heatmap" element={<SubdHeatMap />} />
+
             <Route path="/subd/endorsements" element={<EndorsementArch />} />
             <Route path="/subd/pet-records" element={<SubdPetRecords />} />
             <Route path="/subd/hazard-alert" element={<SubdHazardAlert />} />

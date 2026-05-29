@@ -45,6 +45,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         "email": user.email,
         "name": user.name,
         "role_id": user.role_id,
+        "subdivision_id": user.subdivision_id,
         "profile_picture": user.profile_picture,
         "phone": user.phone,
         "address": user.address,
