@@ -1,4 +1,4 @@
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useEffect } from 'react';
 import L from 'leaflet';
@@ -170,6 +170,18 @@ const ChangeView = ({ center, zoom }: { center: [number, number], zoom: number }
     return null;
 };
 
+// Internal component to handle click-to-pinpoint events on map
+const MapEventsHandler = ({ onLocationChange }: { onLocationChange?: (lat: number, lng: number) => void }) => {
+    useMapEvents({
+        click(e) {
+            if (onLocationChange) {
+                onLocationChange(e.latlng.lat, e.latlng.lng);
+            }
+        }
+    });
+    return null;
+};
+
 const MapComponent = ({
     height = "100%",
     center = [14.6760, 121.0437],
@@ -206,6 +218,7 @@ const MapComponent = ({
             style={{ height: height, width: '100%' }}
         >
             <ChangeView center={center} zoom={zoom} />
+            <MapEventsHandler onLocationChange={onLocationChange} />
             <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

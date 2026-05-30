@@ -25,6 +25,10 @@ import ResidentsLogin from '../pages/citizen/ResidentsLogin';
 import ResiHomePage from '../pages/citizen/ResiHomePage';
 import ResidentPet from '../pages/citizen/ResidentPet';
 import ResiProfile from '../pages/citizen/ResiProfile';
+import PetScanPage from '../pages/citizen/PetScanPage';
+import PetScanSuccessPage from '../pages/citizen/PetScanSuccessPage';
+import PetQrCardPage from '../pages/citizen/PetQrCardPage';
+import PetScanHistoryPage from '../pages/citizen/PetScanHistoryPage';
 import BrgyDashboard from '../pages/Barangay_Staff/BrgyDashboard';
 import BrgyRescueRequests from '../pages/Barangay_Staff/BrgyRescueRequests';
 import BrgyOperation from '../pages/Barangay_Staff/BrgyOperation';
@@ -122,6 +126,12 @@ const AppRoutes = () => {
             <Route path="/resident-home" element={<ResiHomePage />} />
             <Route path="/resident/pets" element={<ResidentPet />} />
             <Route path="/resident/profile" element={<ResiProfile />} />
+
+            {/* Pet QR Code System Routes */}
+            <Route path="/pet/scan/:token" element={<PetScanPage />} />
+            <Route path="/pet/scan/:token/success" element={<PetScanSuccessPage />} />
+            <Route path="/resident/pet/:petId/qr" element={<PetQrCardPage />} />
+            <Route path="/resident/pet/:petId/scan-history" element={<PetScanHistoryPage />} />
 
 
             {/* Catch-all Redirect to Login */}

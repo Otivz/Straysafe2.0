@@ -11,7 +11,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Local imports (now safe to import after path fix)
 from app.database import engine, Base
-from app.routes import auth, users, reports, rescue, pets, notifications, announcements
+from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr
+from app.models.pet_qr import PetQRCode, PetQRScan
 
 
 def ensure_report_media_status_column():
@@ -122,6 +123,58 @@ def ensure_report_status_rows():
                 {"id": status_id, "name": status_name}
             )
 
+def ensure_qr_tables_exist():
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS pet_qr_codes (
+                qr_id INT AUTO_INCREMENT PRIMARY KEY,
+                pet_id INT NOT NULL UNIQUE,
+                qr_token VARCHAR(255) UNIQUE NOT NULL,
+                qr_image_url VARCHAR(255) NULL,
+                is_active BOOLEAN DEFAULT TRUE,
+                scan_count INT DEFAULT 0,
+                last_scanned_at TIMESTAMP NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(pet_id) REFERENCES pets(pet_id) ON DELETE CASCADE
+            )
+        """))
+        result_sc = conn.execute(text(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pet_qr_codes' "
+            "AND COLUMN_NAME = 'scan_count'"
+        ))
+        if result_sc.scalar() == 0:
+            conn.execute(text("ALTER TABLE pet_qr_codes ADD COLUMN scan_count INT DEFAULT 0"))
+        result_la = conn.execute(text(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pet_qr_codes' "
+            "AND COLUMN_NAME = 'last_scanned_at'"
+        ))
+        if result_la.scalar() == 0:
+            conn.execute(text("ALTER TABLE pet_qr_codes ADD COLUMN last_scanned_at TIMESTAMP NULL"))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS pet_qr_scans (
+                scan_id INT AUTO_INCREMENT PRIMARY KEY,
+                qr_id INT NOT NULL,
+                pet_id INT NOT NULL,
+                scanned_by INT NULL,
+                finder_name VARCHAR(100) NULL,
+                finder_contact VARCHAR(20) NULL,
+                scan_lat DECIMAL(10,8) NULL,
+                scan_lng DECIMAL(11,8) NULL,
+                street_address VARCHAR(255) NULL,
+                barangay VARCHAR(100) NULL,
+                city VARCHAR(100) NULL,
+                landmark VARCHAR(255) NULL,
+                location_type ENUM('Found Location', 'Barangay Hall', 'Temporary Shelter') DEFAULT 'Found Location',
+                notes VARCHAR(255) NULL,
+                scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(qr_id) REFERENCES pet_qr_codes(qr_id) ON DELETE CASCADE,
+                FOREIGN KEY(pet_id) REFERENCES pets(pet_id) ON DELETE CASCADE,
+                FOREIGN KEY(scanned_by) REFERENCES users(user_id) ON DELETE SET NULL
+            )
+        """))
+
 # Create tables
 Base.metadata.create_all(bind=engine)
 ensure_report_media_status_column()
@@ -131,6 +184,7 @@ ensure_report_ai_suggestion_columns()
 ensure_report_condition_column()
 ensure_pet_vaccine_card_url_column()
 ensure_report_status_rows()
+ensure_qr_tables_exist()
 
 app = FastAPI(title="StraySafe API")
 
@@ -155,6 +209,7 @@ app.include_router(users.router)
 app.include_router(reports.router)
 app.include_router(rescue.router)
 app.include_router(pets.router)
+app.include_router(pet_qr.router)
 app.include_router(notifications.router)
 app.include_router(announcements.router)
 
