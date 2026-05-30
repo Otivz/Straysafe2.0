@@ -75,6 +75,14 @@ const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, o
         }
     };
 
+    const handleNotificationClick = async (notif: any) => {
+        await markAsRead(notif.notification_id);
+        setIsNotificationOpen(false);
+        if (notif.title === "Pet Tag Scanned" && notif.related_id) {
+            navigate(`/resident/pet/${notif.related_id}/scan-history`);
+        }
+    };
+
     const profilePic = user?.profile_picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name || 'User'}`;
 
     const toggleMenu = () => {
@@ -180,7 +188,7 @@ const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, o
                                                     notifications.map((notif) => (
                                                         <div 
                                                             key={notif.notification_id}
-                                                            onClick={() => markAsRead(notif.notification_id)}
+                                                            onClick={() => handleNotificationClick(notif)}
                                                             className={`px-5 py-4 border-b border-gray-50 last:border-0 hover:bg-[#FAFAF9] transition-all cursor-pointer relative ${!notif.is_read ? 'bg-orange-50/30' : ''}`}
                                                         >
                                                             {!notif.is_read && (

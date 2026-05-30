@@ -42,6 +42,17 @@ def create_pet(pet: PetCreate, db: Session = Depends(get_db)):
     db.add(db_pet)
     db.commit()
     db.refresh(db_pet)
+    
+    # Automatically generate QR Code for the pet on registration
+    try:
+        from app.routes.pet_qr import generate_qr_for_pet_internal
+        generate_qr_for_pet_internal(db_pet.pet_id, db)
+    except Exception as e:
+        # Avoid blocking registration if QR generation encounters an issue
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to auto-generate QR code for registered pet {db_pet.pet_id}: {e}")
+        
     return db_pet
 
 @router.put("/{pet_id}", response_model=PetResponse)

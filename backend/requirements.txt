@@ -13,3 +13,4 @@ pydantic-settings>=2.2.1
 email-validator>=2.1.1
 ultralytics>=8.1.0
 Pillow>=9.0.0
+qrcode>=7.4.2

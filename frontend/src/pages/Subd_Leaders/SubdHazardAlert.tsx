@@ -200,33 +200,63 @@ const SubdHazardAlert = () => {
             );
         } else if (ann.category === 'Vaccination Drive') {
             return (
-                <div key={ann.id} className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-row gap-4 justify-between items-stretch max-h-[260px]">
-                    <div className="flex-1 flex flex-col justify-between min-w-0">
-                        <div>
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="bg-[#e6f4ea] text-[#137333] text-[10px] font-black uppercase px-2.5 py-1 rounded-full">
-                                    Vaccination Drive
-                                </span>
-                                <span className="text-[10px] font-bold text-gray-400">{ann.date}</span>
-                            </div>
-                            <h3 className="text-sm font-extrabold text-gray-900 mb-1 leading-tight">{ann.title}</h3>
-                            <p className="text-gray-500 text-xs font-semibold leading-relaxed line-clamp-2">{ann.content}</p>
-                        </div>
-                        {/* Date Block & Location info */}
-                        <div className="flex items-center gap-3 border-t border-gray-100 pt-3 mt-3">
-                            <div className="bg-[#f0f4f9] rounded-xl p-2 flex flex-col items-center justify-center min-w-[44px] border border-gray-100">
-                                {ann.dateDay && <span className="text-base font-black text-[#0B57D0] leading-none">{ann.dateDay}</span>}
-                                {ann.dateMonth && <span className="text-[7px] font-bold text-gray-500 uppercase tracking-wider mt-0.5">{ann.dateMonth}</span>}
-                            </div>
+                <div key={ann.id} className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-0">
+                    <div className="flex flex-row gap-4 justify-between items-stretch">
+                        <div className="flex-1 flex flex-col justify-between min-w-0">
                             <div>
-                                {ann.location && <div className="text-xs font-black text-gray-800">{ann.location}</div>}
-                                {ann.extraDetails && <div className="text-[10px] font-bold text-gray-400 mt-0.5">{ann.extraDetails}</div>}
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="bg-[#e6f4ea] text-[#137333] text-[10px] font-black uppercase px-2.5 py-1 rounded-full">
+                                        Vaccination Drive
+                                    </span>
+                                    <span className="text-[10px] font-bold text-gray-400">{ann.date}</span>
+                                </div>
+                                <h3 className="text-sm font-extrabold text-gray-900 mb-1 leading-tight">{ann.title}</h3>
+                                <p className="text-gray-500 text-xs font-semibold leading-relaxed line-clamp-2">{ann.content}</p>
+                            </div>
+                            {/* Date Block & Location info */}
+                            <div className="flex items-center gap-3 border-t border-gray-100 pt-3 mt-3">
+                                <div className="bg-[#f0f4f9] rounded-xl p-2 flex flex-col items-center justify-center min-w-[44px] border border-gray-100">
+                                    {ann.dateDay && <span className="text-base font-black text-[#0B57D0] leading-none">{ann.dateDay}</span>}
+                                    {ann.dateMonth && <span className="text-[7px] font-bold text-gray-500 uppercase tracking-wider mt-0.5">{ann.dateMonth}</span>}
+                                </div>
+                                <div>
+                                    {ann.location && <div className="text-xs font-black text-gray-800">{ann.location}</div>}
+                                    {ann.extraDetails && <div className="text-[10px] font-bold text-gray-400 mt-0.5">{ann.extraDetails}</div>}
+                                </div>
                             </div>
                         </div>
+                        {ann.mediaUrl && (
+                            <img src={ann.mediaUrl} alt={ann.title} className="w-36 max-h-[220px] object-cover rounded-2xl border border-gray-50 shadow-sm shrink-0" />
+                        )}
                     </div>
-                    {ann.mediaUrl && (
-                        <img src={ann.mediaUrl} alt={ann.title} className="w-36 h-full max-h-[220px] object-cover rounded-2xl border border-gray-50 shadow-sm shrink-0" />
-                    )}
+                    {/* Engagement Row: Likes, Comments, Views */}
+                    <div className="border-t border-gray-100 pt-3 mt-3 flex flex-wrap items-center gap-5 text-xs font-semibold text-gray-500">
+                        <button
+                            onClick={() => handleLike(ann.id)}
+                            className={`flex items-center gap-1.5 transition-colors ${ann.hasLiked ? 'text-[#137333]' : 'hover:text-[#137333]'}`}
+                        >
+                            <svg className={`w-4 h-4 ${ann.hasLiked ? 'text-[#137333]' : 'text-gray-400'}`} fill={ann.hasLiked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"></path>
+                            </svg>
+                            <span>{ann.reactions} {ann.reactions === 1 ? 'Like' : 'Likes'}</span>
+                        </button>
+                        <button
+                            onClick={() => handleOpenFull(ann)}
+                            className="flex items-center gap-1.5 hover:text-[#0B57D0] transition-colors"
+                        >
+                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                            </svg>
+                            <span>{ann.comments.length} {ann.comments.length === 1 ? 'Comment' : 'Comments'}</span>
+                        </button>
+                        <span className="flex items-center gap-1.5">
+                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                            <span>{ann.views} Views</span>
+                        </span>
+                    </div>
                 </div>
             );
         } else {

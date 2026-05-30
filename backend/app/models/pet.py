@@ -1,65 +1,81 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, ForeignKey, Enum, Numeric, Text, func
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Optional
+
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.database import Base
-from sqlalchemy.orm import relationship
+
 
 class Pet(Base):
     __tablename__ = "pets"
 
-    pet_id = Column(Integer, primary_key=True, index=True)
-    owner_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
-    pet_name = Column(String(100), nullable=False)
-    pet_type = Column(Enum('Dog', 'Cat', name='pet_type'), nullable=False)
-    breed = Column(String(100), nullable=True)
-    color_markings = Column(String(255), nullable=True)
-    gender = Column(Enum('Male', 'Female', 'Unknown', name='pet_gender'), default='Unknown')
-    birth_date = Column(Date, nullable=True)
-    estimated_age = Column(String(50), nullable=True)
-    weight = Column(Numeric(5, 2), nullable=True)
-    size_category = Column(Enum('Small', 'Medium', 'Large', name='size_category'), default='Medium')
-    photo_url = Column(String(255), nullable=True)
-    
-    # Health
-    health_condition = Column(Text, nullable=True)
-    is_vaccinated = Column(Boolean, default=False)
-    vaccination_date = Column(Date, nullable=True)
-    vaccine_expiry = Column(Date, nullable=True)
-    is_neutered = Column(Boolean, default=False)
-    vaccine_card_url = Column(String(255), nullable=True)
-    
-    # Behavior
-    temperament = Column(Enum('Friendly', 'Aggressive', 'Anxious', 'Scared', 'Protective', name='temperament'), default='Friendly')
-    has_bite_history = Column(Boolean, default=False)
-    bite_incident_count = Column(Integer, default=0)
-    chase_behavior = Column(Boolean, default=False)
-    notes = Column(Text, nullable=True)
-    
-    # Tracking
-    status = Column(Enum('Active', 'Lost', 'Found', 'Rescued', 'Deceased', name='pet_status'), default='Active')
-    is_verified = Column(Boolean, default=False)
-    last_seen_lat = Column(Numeric(10, 8), nullable=True)
-    last_seen_lng = Column(Numeric(11, 8), nullable=True)
-    last_seen_at = Column(DateTime, nullable=True)
-    
-    emergency_contact_name = Column(String(100), nullable=True)
-    emergency_contact_phone = Column(String(20), nullable=True)
-    
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    pet_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    owner_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
+    )
+    pet_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    pet_type: Mapped[str] = mapped_column(Enum("Dog", "Cat", name="pet_type"), nullable=False)
+    breed: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    color_markings: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    gender: Mapped[Optional[str]] = mapped_column(
+        Enum("Male", "Female", "Unknown", name="pet_gender"), default="Unknown"
+    )
+    birth_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    estimated_age: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    weight: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
+    size_category: Mapped[Optional[str]] = mapped_column(
+        Enum("Small", "Medium", "Large", name="size_category"), default="Medium"
+    )
+    photo_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
-    # Relationships
+    health_condition: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_vaccinated: Mapped[bool] = mapped_column(Boolean, default=False)
+    vaccination_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    vaccine_expiry: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    is_neutered: Mapped[bool] = mapped_column(Boolean, default=False)
+    vaccine_card_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    temperament: Mapped[Optional[str]] = mapped_column(
+        Enum("Friendly", "Aggressive", "Anxious", "Scared", "Protective", name="temperament"),
+        default="Friendly",
+    )
+    has_bite_history: Mapped[bool] = mapped_column(Boolean, default=False)
+    bite_incident_count: Mapped[int] = mapped_column(Integer, default=0)
+    chase_behavior: Mapped[bool] = mapped_column(Boolean, default=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    status: Mapped[Optional[str]] = mapped_column(
+        Enum("Active", "Lost", "Found", "Rescued", "Deceased", name="pet_status"), default="Active"
+    )
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_seen_lat: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 8), nullable=True)
+    last_seen_lng: Mapped[Optional[Decimal]] = mapped_column(Numeric(11, 8), nullable=True)
+    last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    emergency_contact_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    emergency_contact_phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
     owner = relationship("User")
     vaccinations = relationship("PetVaccination", back_populates="pet", cascade="all, delete-orphan")
+
 
 class PetVaccination(Base):
     __tablename__ = "pet_vaccinations"
 
-    vaccination_id = Column(Integer, primary_key=True, index=True)
-    pet_id = Column(Integer, ForeignKey("pets.pet_id", ondelete="CASCADE"), nullable=False)
-    vaccine_name = Column(String(100), nullable=False)
-    vaccination_date = Column(Date, nullable=False)
-    expiry_date = Column(Date, nullable=True)
-    veterinarian = Column(String(100), nullable=True)
-    notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, server_default=func.now())
+    vaccination_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    pet_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("pets.pet_id", ondelete="CASCADE"), nullable=False
+    )
+    vaccine_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    vaccination_date: Mapped[date] = mapped_column(Date, nullable=False)
+    expiry_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    veterinarian: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     pet = relationship("Pet", back_populates="vaccinations")

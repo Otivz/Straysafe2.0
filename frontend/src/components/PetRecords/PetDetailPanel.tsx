@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { type PetRecord } from './types';
 
 interface PetDetailPanelProps {
@@ -16,6 +17,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
     onEditClick,
     onReportLostClick
 }) => {
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'info' | 'health' | 'behavior' | 'incident'>('info');
     const [isQrOpen, setIsQrOpen] = useState(false);
     const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
@@ -139,13 +141,48 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 )}
 
                                 <button 
-                                    onClick={() => setIsQrOpen(true)}
+                                    onClick={() => navigate(`/resident/pet/${pet.id}/qr`)}
                                     className="w-full py-4 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-2xl font-black text-xs uppercase tracking-widest border border-gray-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v1m0 11v1m4-12h1a2 2 0 012 2v1m-9 9h1a2 2 0 012 2v1M4 12H3m18 0h-1m-2-5H8a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2V9a2 2 0 00-2-2z" />
                                     </svg>
-                                    View QR
+                                    View QR Tag
+                                </button>
+
+                                <button 
+                                    onClick={() => navigate(`/resident/pet/${pet.id}/scan-history`)}
+                                    className="w-full py-4 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-2xl font-black text-xs uppercase tracking-widest border border-gray-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                                    </svg>
+                                    Sighting History
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Action Buttons for Subd Leader (read-only QR viewer) */}
+                        {!hideRegisteredPets && (
+                            <div className="space-y-3">
+                                <button 
+                                    onClick={() => navigate(`/resident/pet/${pet.id}/qr?mode=subd`)}
+                                    className="w-full py-4 bg-[#F97316] hover:bg-[#E2620D] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v1m0 11v1m4-12h1a2 2 0 012 2v1m-9 9h1a2 2 0 012 2v1M4 12H3m18 0h-1m-2-5H8a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2V9a2 2 0 00-2-2z" />
+                                    </svg>
+                                    View QR Tag
+                                </button>
+
+                                <button 
+                                    onClick={() => navigate(`/resident/pet/${pet.id}/scan-history?mode=subd`)}
+                                    className="w-full py-4 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-2xl font-black text-xs uppercase tracking-widest border border-gray-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                                    </svg>
+                                    Sighting History
                                 </button>
                             </div>
                         )}
