@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+/* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
+import { useEffect, useState, FormEvent } from 'react';
 import axios from 'axios';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
@@ -25,6 +26,7 @@ interface Announcement {
     views: number;
     hasLiked?: boolean;
     attachedMedia?: { file_url: string; media_type: string }[];
+    status?: string;
 }
 
 const SubdHazardAlert = () => {
@@ -32,6 +34,8 @@ const SubdHazardAlert = () => {
     const currentUser = userStr ? JSON.parse(userStr) : null;
     // New state for Announcement/Broadcast module
     const [showCreate, setShowCreate] = useState(false);
+    const [editAnnouncementId, setEditAnnouncementId] = useState<string | null>(null);
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [title, setTitle] = useState('');
     const [category, setCategory] = useState('Emergency');
     const [visibility, setVisibility] = useState('Public');
@@ -43,6 +47,8 @@ const SubdHazardAlert = () => {
 
     // Feed filters and selection states
     const [selectedCategory, setSelectedCategory] = useState('All');
+    const [selectedStatus, setSelectedStatus] = useState('All');
+    const [searchQuery, setSearchQuery] = useState('');
     const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
     const [newCommentText, setNewCommentText] = useState('');
 
@@ -50,7 +56,8 @@ const SubdHazardAlert = () => {
 
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
-    const formatPostedDate = (raw: string) => {
+    const formatPostedDate = (raw?: string | null) => {
+        if (!raw) return 'Just now';
         const dt = new Date(raw);
         if (Number.isNaN(dt.getTime())) return raw;
         return dt.toLocaleDateString('en-US') + ' • ' + dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
@@ -60,6 +67,7 @@ const SubdHazardAlert = () => {
         const imageMedia = item.media?.find((m: any) => m.media_type === 'Image');
         const mediaUrl = imageMedia?.file_url || item.media?.[0]?.file_url || undefined;
         const dateObj = item.posted_on ? new Date(item.posted_on) : null;
+        const isValidDate = dateObj && !Number.isNaN(dateObj.getTime());
         return {
             id: String(item.announcement_id),
             title: item.title,
@@ -76,9 +84,10 @@ const SubdHazardAlert = () => {
             views: 0,
             mediaUrl,
             hasLiked: item.reactions ? item.reactions.some((r: any) => r.user_id === currentUser?.user_id) : false,
-            dateDay: dateObj ? String(dateObj.getDate()).padStart(2, '0') : undefined,
-            dateMonth: dateObj ? dateObj.toLocaleDateString('en-US', { month: 'short' }).toUpperCase() : undefined,
-            attachedMedia: item.media || []
+            dateDay: isValidDate ? String(dateObj.getDate()).padStart(2, '0') : undefined,
+            dateMonth: isValidDate ? dateObj.toLocaleDateString('en-US', { month: 'short' }).toUpperCase() : undefined,
+            attachedMedia: item.media || [],
+            status: item.status || 'Published'
         };
     };
 
@@ -104,6 +113,16 @@ const SubdHazardAlert = () => {
             }
         }
     }, [announcements]);
+
+    useEffect(() => {
+        const handleWindowClick = () => {
+            setOpenMenuId(null);
+        };
+        window.addEventListener('click', handleWindowClick);
+        return () => {
+            window.removeEventListener('click', handleWindowClick);
+        };
+    }, []);
 
     const handleLike = async (id: string) => {
         if (!currentUser?.user_id) return;
@@ -136,166 +155,338 @@ const SubdHazardAlert = () => {
         }
     };
 
+    const handleToggleStatus = async (id: string, currentStatus: string) => {
+        const nextStatus = currentStatus === 'Published' ? 'Draft' : 'Published';
+        try {
+            await axios.patch(`http://localhost:8000/announcements/${id}/status`, { status: nextStatus });
+            await fetchAnnouncements();
+        } catch (err) {
+            console.error('Failed to toggle status:', err);
+            alert('Failed to update status.');
+        }
+    };
+
+    const handleDeleteAnnouncement = async (id: string) => {
+        if (!window.confirm("Are you sure you want to delete this announcement?")) {
+            return;
+        }
+        try {
+            await axios.delete(`http://localhost:8000/announcements/${id}`);
+            await fetchAnnouncements();
+        } catch (err) {
+            console.error('Failed to delete announcement:', err);
+            alert('Failed to delete announcement.');
+        }
+    };
+
+    const handleEditAnnouncement = (ann: Announcement) => {
+        setEditAnnouncementId(ann.id);
+        setTitle(ann.title);
+        setContent(ann.content);
+        setCategory(ann.category);
+        setVisibility(ann.visibility);
+        setPinned(ann.pinned);
+        // Expiration from date
+        if (ann.expiration) {
+            const expDate = new Date(ann.expiration);
+            if (!Number.isNaN(expDate.getTime())) {
+                setExpiration(expDate.toISOString().split('T')[0]);
+            } else {
+                setExpiration('');
+            }
+        } else {
+            setExpiration('');
+        }
+        setLocation(ann.location || '');
+        setMediaFiles([]);
+        setShowCreate(true);
+    };
+
     const filteredAnnouncements = announcements.filter(ann => {
-        if (selectedCategory === 'All') return true;
-        return ann.category.toLowerCase() === selectedCategory.toLowerCase();
+        const matchesCategory = selectedCategory === 'All' || ann.category.toLowerCase() === selectedCategory.toLowerCase();
+        const matchesSearch = searchQuery === '' ||
+            ann.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            ann.content.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesStatus = selectedStatus === 'All' ||
+            (selectedStatus === 'Active' && ann.status === 'Published') ||
+            (selectedStatus === 'Draft' && ann.status === 'Draft') ||
+            (selectedStatus === 'Pinned' && ann.pinned);
+        return matchesCategory && matchesSearch && matchesStatus;
+    }).sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return 0;
     });
 
     const pinnedAnnouncements = filteredAnnouncements.filter(ann => ann.pinned);
     const normalAnnouncements = filteredAnnouncements.filter(ann => !ann.pinned);
+    const totalFiltered = filteredAnnouncements.length;
 
-    // Group remaining into left and right columns
-    const leftColAnnouncements: Announcement[] = [];
-    const rightColAnnouncements: Announcement[] = [];
-
-    normalAnnouncements.forEach((ann, index) => {
-        if (ann.category === 'Vaccination Drive') {
-            rightColAnnouncements.push(ann);
-        } else if (ann.category === 'Lost and Found' || ann.category === 'Animal Advisory') {
-            leftColAnnouncements.push(ann);
-        } else {
-            if (index % 2 === 0) {
-                leftColAnnouncements.push(ann);
-            } else {
-                rightColAnnouncements.push(ann);
-            }
+    const categoryStyle = (cat: string) => {
+        switch (cat) {
+            case 'Emergency': return 'bg-red-50 text-red-600 border-red-100';
+            case 'Vaccination Drive': return 'bg-green-50 text-green-700 border-green-100';
+            case 'Lost and Found': return 'bg-blue-50 text-blue-600 border-blue-100';
+            default: return 'bg-indigo-50 text-indigo-600 border-indigo-100';
         }
-    });
+    };
 
-    const renderNormalCard = (ann: Announcement) => {
-        if (ann.category === 'Lost and Found') {
-            return (
-                <div key={ann.id} className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[300px]">
-                    <div>
-                        <div className="flex items-center justify-between mb-3">
-                            <span className="bg-[#e8f0fe] text-[#1a73e8] text-[10px] font-black uppercase px-2.5 py-1 rounded-full">
-                                Lost & Found
+    const renderUniformCard = (ann: Announcement) => {
+        const isPinned = ann.pinned;
+
+        const borderStyle = (cat: string) => {
+            switch (cat) {
+                case 'Emergency': return 'border-l-[#c5221f]';
+                case 'Vaccination Drive': return 'border-l-green-500';
+                case 'Lost and Found': return 'border-l-[#0B57D0]';
+                default: return 'border-l-violet-500';
+            }
+        };
+
+        const iconContainerStyle = (cat: string) => {
+            switch (cat) {
+                case 'Emergency': return 'bg-red-50 text-red-500';
+                case 'Vaccination Drive': return 'bg-green-50 text-green-600';
+                case 'Lost and Found': return 'bg-blue-50 text-[#0B57D0]';
+                default: return 'bg-violet-50 text-violet-600';
+            }
+        };
+
+        const categoryBadgeStyle = (cat: string) => {
+            switch (cat) {
+                case 'Emergency': return 'bg-red-50 text-red-600';
+                case 'Vaccination Drive': return 'bg-green-50 text-green-700';
+                case 'Lost and Found': return 'bg-blue-50 text-blue-700';
+                default: return 'bg-violet-50 text-violet-700';
+            }
+        };
+
+        const renderCategoryIcon = (cat: string) => {
+            switch (cat) {
+                case 'Emergency':
+                    return (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    );
+                case 'Vaccination Drive':
+                    return (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                    );
+                case 'Lost and Found':
+                    return (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    );
+                default:
+                    return (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12a7.5 7.5 0 0015 0m-15 0a7.5 7.5 0 1115 0m-15 0H3m16.5 0H21m-1.5 0H12m-8.457 3.077l1.41-.513m14.095-.513l1.41.513M5.106 17.785l1.15-.827m11.488-.827l1.15.827M8.14 21.27l.73-1.01m6.26 1.01l-.73-1.01" />
+                        </svg>
+                    );
+            }
+        };
+
+        const isLive = ann.status === 'Published';
+
+        return (
+            <div
+                key={ann.id}
+                onClick={() => handleOpenFull(ann)}
+                className={`bg-white rounded-2xl border border-gray-200/80 border-l-[6px] ${borderStyle(ann.category)} shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-gray-300/80 hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)] transition-all duration-300 ease-out p-6 flex flex-col sm:flex-row gap-5 items-start justify-between relative cursor-pointer group`}
+            >
+                <div className="flex gap-4 items-start flex-1 w-full">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${iconContainerStyle(ann.category)}`}>
+                        {renderCategoryIcon(ann.category)}
+                    </div>
+
+                    <div className="flex flex-col gap-2 flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-[15px] font-bold text-gray-900 leading-snug group-hover:text-[#F97316] transition-colors">
+                                {ann.title}
+                            </h3>
+                            {isPinned && (
+                                <span className="inline-flex items-center gap-1 bg-orange-50 text-[#F97316] px-2 py-0.5 rounded-full text-[10px] font-black uppercase border border-orange-100 tracking-wide">
+                                    <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M10 2a1 1 0 011 1v1.171l1.646-1.647a1 1 0 011.414 1.414L12.414 5.6H15a1 1 0 110 2h-1.646l2.122 2.121a1 1 0 11-1.414 1.414L11.94 9.013V15.6a1 1 0 11-2 0V9.013L7.818 11.15a1 1 0 11-1.414-1.414l2.122-2.121H5.1a1 1 0 110-2h2.586L6.038 3.938a1 1 0 011.414-1.414L9.1 4.171V3a1 1 0 011-1z" />
+                                    </svg>
+                                    pinned
+                                </span>
+                            )}
+                        </div>
+
+                        <p className="text-[#3B5898] text-[12.5px] leading-relaxed font-medium line-clamp-2">
+                            {ann.content}
+                        </p>
+
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-1 text-[11px] font-bold text-gray-400">
+                            <span className={`px-2.5 py-0.5 rounded-full font-black text-[10px] uppercase tracking-wider ${categoryBadgeStyle(ann.category)}`}>
+                                {ann.category}
                             </span>
-                            <span className="text-[10px] font-bold text-gray-400">{ann.date}</span>
-                        </div>
-                        <h3 className="text-base font-extrabold text-gray-900 mb-1">{ann.title}</h3>
-                        <p className="text-gray-500 text-xs font-semibold leading-relaxed mb-4 line-clamp-3">{ann.content}</p>
-                        {ann.mediaUrl && (
-                            <img src={ann.mediaUrl} alt={ann.title} className="w-full h-44 object-cover rounded-2xl mb-4 border border-gray-50 shadow-sm" />
-                        )}
-                    </div>
-                    <div className="flex items-center justify-between border-t border-gray-100 pt-3.5 mt-auto">
-                        <button
-                            onClick={() => handleLike(ann.id)}
-                            className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-[#F97316] transition-colors"
-                        >
-                            <svg className={`w-4 h-4 ${ann.hasLiked ? 'text-[#F97316]' : 'text-gray-400'}`} fill={ann.hasLiked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"></path>
-                            </svg>
-                            <span>{ann.reactions}</span>
-                        </button>
-                        <button
-                            onClick={() => handleOpenFull(ann)}
-                            className="text-xs font-black text-[#0B57D0] hover:text-[#0045b5] transition-colors"
-                        >
-                            {ann.actionText || 'Contact Finder'}
-                        </button>
-                    </div>
-                </div>
-            );
-        } else if (ann.category === 'Vaccination Drive') {
-            return (
-                <div key={ann.id} className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-0">
-                    <div className="flex flex-row gap-4 justify-between items-stretch">
-                        <div className="flex-1 flex flex-col justify-between min-w-0">
-                            <div>
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="bg-[#e6f4ea] text-[#137333] text-[10px] font-black uppercase px-2.5 py-1 rounded-full">
-                                        Vaccination Drive
-                                    </span>
-                                    <span className="text-[10px] font-bold text-gray-400">{ann.date}</span>
-                                </div>
-                                <h3 className="text-sm font-extrabold text-gray-900 mb-1 leading-tight">{ann.title}</h3>
-                                <p className="text-gray-500 text-xs font-semibold leading-relaxed line-clamp-2">{ann.content}</p>
-                            </div>
-                            {/* Date Block & Location info */}
-                            <div className="flex items-center gap-3 border-t border-gray-100 pt-3 mt-3">
-                                <div className="bg-[#f0f4f9] rounded-xl p-2 flex flex-col items-center justify-center min-w-[44px] border border-gray-100">
-                                    {ann.dateDay && <span className="text-base font-black text-[#0B57D0] leading-none">{ann.dateDay}</span>}
-                                    {ann.dateMonth && <span className="text-[7px] font-bold text-gray-500 uppercase tracking-wider mt-0.5">{ann.dateMonth}</span>}
-                                </div>
-                                <div>
-                                    {ann.location && <div className="text-xs font-black text-gray-800">{ann.location}</div>}
-                                    {ann.extraDetails && <div className="text-[10px] font-bold text-gray-400 mt-0.5">{ann.extraDetails}</div>}
-                                </div>
-                            </div>
-                        </div>
-                        {ann.mediaUrl && (
-                            <img src={ann.mediaUrl} alt={ann.title} className="w-36 max-h-[220px] object-cover rounded-2xl border border-gray-50 shadow-sm shrink-0" />
-                        )}
-                    </div>
-                    {/* Engagement Row: Likes, Comments, Views */}
-                    <div className="border-t border-gray-100 pt-3 mt-3 flex flex-wrap items-center gap-5 text-xs font-semibold text-gray-500">
-                        <button
-                            onClick={() => handleLike(ann.id)}
-                            className={`flex items-center gap-1.5 transition-colors ${ann.hasLiked ? 'text-[#137333]' : 'hover:text-[#137333]'}`}
-                        >
-                            <svg className={`w-4 h-4 ${ann.hasLiked ? 'text-[#137333]' : 'text-gray-400'}`} fill={ann.hasLiked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"></path>
-                            </svg>
-                            <span>{ann.reactions} {ann.reactions === 1 ? 'Like' : 'Likes'}</span>
-                        </button>
-                        <button
-                            onClick={() => handleOpenFull(ann)}
-                            className="flex items-center gap-1.5 hover:text-[#0B57D0] transition-colors"
-                        >
-                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                            </svg>
-                            <span>{ann.comments.length} {ann.comments.length === 1 ? 'Comment' : 'Comments'}</span>
-                        </button>
-                        <span className="flex items-center gap-1.5">
-                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                            </svg>
-                            <span>{ann.views} Views</span>
-                        </span>
-                    </div>
-                </div>
-            );
-        } else {
-            // default / Animal Advisory layout
-            const isEmergency = ann.category === 'Emergency';
-            const badgeBg = isEmergency ? 'bg-[#fce8e6] text-[#c5221f]' : 'bg-[#f0f4ff] text-[#4f46e5]';
-            const badgeLabel = isEmergency ? 'Emergency' : ann.category;
-            return (
-                <div key={ann.id} className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[220px]">
-                    <div>
-                        <div className="flex items-center justify-between mb-3">
-                            <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${badgeBg}`}>
-                                {badgeLabel}
+                            <span className="flex items-center gap-1">
+                                <svg className="w-3.5 h-3.5 text-gray-300" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                {ann.category === 'Vaccination Drive' ? 'Pet owners' : 'All residents'}
                             </span>
-                            <span className="text-[10px] font-bold text-gray-400">{ann.date}</span>
+                            <span className="flex items-center gap-1">
+                                <svg className="w-3.5 h-3.5 text-gray-300" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-9-6h.008v.008H12v-.008zM12 15h.008v.008H12V15zm0 2.25h.008v.008H12v-.008zM9.75 15h.008v.008H9.75V15zm0 2.25h.008v.008H9.75v-.008zM7.5 15h.008v.008H7.5V15zm0 2.25h.008v.008H7.5v-.008zm6.75-4.5h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V15zm0 2.25h.008v.008h-.008v-.008zm2.25-4.5h.008v.008H16.5v-.008zm0 2.25h.008v.008H16.5V15z" />
+                                </svg>
+                                {ann.date}
+                            </span>
+                            <span className="flex items-center gap-1">
+                                <span>📍</span>
+                                <span>{ann.location || 'Selera Homes'}</span>
+                            </span>
                         </div>
-                        <h3 className="text-base font-extrabold text-gray-900 mb-1">{ann.title}</h3>
-                        <p className="text-gray-500 text-xs font-semibold leading-relaxed mb-4 line-clamp-3">{ann.content}</p>
+
+                        {/* Visual separation line */}
+                        <div className="w-full border-t border-gray-100 my-1"></div>
+
+                        {/* Bottom social engagement row */}
+                        <div className="flex items-center gap-5 text-[11.5px] font-extrabold text-gray-400 select-none">
+                            <span
+                                className="flex items-center gap-1.5 hover:text-[#F97316] hover:scale-[1.06] active:scale-95 transition-all duration-250 cursor-pointer"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleLike(ann.id);
+                                }}
+                            >
+                                <svg className={`w-4 h-4 transition-all duration-300 ${ann.hasLiked ? 'text-[#F97316] fill-[#F97316]' : 'text-gray-300 hover:text-[#F97316]'}`} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3zM7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3" />
+                                </svg>
+                                <span className={`transition-colors duration-250 ${ann.hasLiked ? 'text-[#F97316]' : ''}`}>{ann.reactions} Likes</span>
+                            </span>
+                            <span className="flex items-center gap-1.5 hover:text-gray-600 hover:scale-[1.04] active:scale-95 transition-all duration-250">
+                                <svg className="w-4 h-4 text-gray-300 transition-colors" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                </svg>
+                                <span>{ann.comments.length} Comments</span>
+                            </span>
+                            <span className="flex items-center gap-1.5 hover:text-gray-600 hover:scale-[1.04] active:scale-95 transition-all duration-250">
+                                <svg className="w-4 h-4 text-gray-300 transition-colors" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                                <span>{ann.views || 0} Views</span>
+                            </span>
+                        </div>
                     </div>
-                    {ann.mediaUrl && (
-                        <img src={ann.mediaUrl} alt={ann.title} className="w-full h-40 object-cover rounded-2xl mb-4 border border-gray-50 shadow-sm" />
-                    )}
-                    {isEmergency && (
-                        <button
-                            onClick={() => handleOpenFull(ann)}
-                            className="w-full mt-auto border border-[#0B57D0] hover:bg-[#eaf1fb] text-[#0B57D0] font-black text-xs py-2.5 rounded-xl text-center transition-colors"
+                </div>
+
+                <div className="relative shrink-0 align-top self-start mt-1">
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuId(openMenuId === ann.id ? null : ann.id);
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-gray-50 border border-transparent hover:border-gray-200/60 text-gray-400 hover:text-gray-700 transition-all shrink-0 cursor-pointer"
+                    >
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                        </svg>
+                    </button>
+                    {openMenuId === ann.id && (
+                        <div
+                            className="absolute right-0 mt-1 w-32 bg-white rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-gray-150 py-1 z-30 flex flex-col animate-in fade-in slide-in-from-top-1 duration-150"
+                            onClick={(e) => e.stopPropagation()}
                         >
-                            View Full Announcement
-                        </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setOpenMenuId(null);
+                                    handleEditAnnouncement(ann);
+                                }}
+                                className="w-full text-left px-3 py-2 text-[11px] font-bold text-gray-750 hover:bg-orange-50 hover:text-[#F97316] transition-colors flex items-center gap-2 cursor-pointer"
+                            >
+                                <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                                <span>Edit</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setOpenMenuId(null);
+                                    handleDeleteAnnouncement(ann.id);
+                                }}
+                                className="w-full text-left px-3 py-2 text-[11px] font-bold text-red-650 hover:bg-red-50 hover:text-red-650 transition-colors flex items-center gap-2 cursor-pointer"
+                            >
+                                <svg className="w-3.5 h-3.5 text-red-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                <span>Delete</span>
+                            </button>
+                        </div>
                     )}
                 </div>
-            );
+            </div>
+        );
+    };
+
+    const handleCloseCreateModal = () => {
+        setShowCreate(false);
+        setEditAnnouncementId(null);
+        setTitle('');
+        setContent('');
+        setLocation('');
+        setPinned(false);
+        setExpiration('');
+        setMediaFiles([]);
+    };
+
+    const handleSubmit = async (e: FormEvent, targetStatus?: string) => {
+        e.preventDefault();
+        if (!currentUser?.user_id) return;
+        try {
+            const payload = {
+                created_by: currentUser.user_id,
+                title,
+                category,
+                visibility,
+                content,
+                pinned,
+                expiration: expiration ? new Date(expiration).toISOString() : null,
+                location: location || null,
+                subdivision_id: currentUser.subdivision_id || null,
+                status: targetStatus || (editAnnouncementId ? announcements.find(a => a.id === editAnnouncementId)?.status : 'Published')
+            };
+
+            let announcementId = editAnnouncementId;
+            if (editAnnouncementId) {
+                await axios.put(`http://localhost:8000/announcements/${editAnnouncementId}`, payload);
+            } else {
+                const created = await axios.post('http://localhost:8000/announcements/', payload);
+                announcementId = created.data.announcement_id;
+            }
+
+            if (announcementId && mediaFiles.length > 0) {
+                for (const file of mediaFiles) {
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    await axios.post(`http://localhost:8000/announcements/${announcementId}/media`, fd, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                    });
+                }
+            }
+
+            await fetchAnnouncements();
+            handleCloseCreateModal();
+        } catch (err) {
+            console.error('Failed to submit announcement:', err);
+            alert('Failed to submit announcement.');
         }
     };
 
     return (
         <div className="min-h-screen w-full flex bg-[#FDFDFD] font-sans text-gray-800 relative overflow-hidden">
             {/* Decorative Background Elements */}
-            <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-[#B35D25]/5 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2 z-0"></div>
+            <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-[#F97316]/5 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2 z-0"></div>
             <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-orange-50/50 rounded-full blur-[120px] pointer-events-none translate-x-1/3 translate-y-1/3 z-0"></div>
 
             {/* Sidebar */}
@@ -306,7 +497,14 @@ const SubdHazardAlert = () => {
             {/* Main Content */}
             <main className="flex-1 flex flex-col h-screen overflow-hidden">
                 {/* Navbar */}
-                <SubdNavbar />
+                <SubdNavbar
+                    leftContent={
+                        <div className="flex flex-col">
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">Announcements</h1>
+                            <p className="text-[11px] text-gray-400 font-semibold mt-1.5 leading-none">Manage and broadcast advisories to the Stray Safe community</p>
+                        </div>
+                    }
+                />
 
                 {/* Scrollable Content Area */}
                 <div className="flex-1 overflow-y-auto p-10 flex flex-col gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent relative z-10">
@@ -314,7 +512,7 @@ const SubdHazardAlert = () => {
 
                     {/* Create Announcement Modal */}
                     {showCreate && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setShowCreate(false)}>
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={handleCloseCreateModal}>
                             <div
                                 className="bg-white rounded-2xl shadow-2xl w-full max-w-[560px] max-h-[90vh] overflow-y-auto relative animate-[fadeInUp_0.25s_ease-out]"
                                 onClick={(e) => e.stopPropagation()}
@@ -323,11 +521,15 @@ const SubdHazardAlert = () => {
                                 <div className="px-8 pt-8 pb-4 border-b border-gray-100">
                                     <div className="flex items-start justify-between">
                                         <div>
-                                            <h2 className="text-2xl font-black text-gray-900 tracking-tight">Create Community Announcement</h2>
-                                            <p className="text-sm text-gray-400 mt-1 font-medium">Draft and publish important updates for your neighbors. Choose the right category to ensure proper visibility.</p>
+                                            <h2 className="text-2xl font-black text-gray-900 tracking-tight">
+                                                {editAnnouncementId ? 'Edit Announcement' : 'Create Community Announcement'}
+                                            </h2>
+                                            <p className="text-sm text-gray-400 mt-1 font-medium">
+                                                {editAnnouncementId ? 'Modify details of your announcement and save updates.' : 'Draft and publish important updates for your neighbors. Choose the right category to ensure proper visibility.'}
+                                            </p>
                                         </div>
                                         <button
-                                            onClick={() => setShowCreate(false)}
+                                            onClick={handleCloseCreateModal}
                                             className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-600 shrink-0 ml-4"
                                         >
                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -339,44 +541,7 @@ const SubdHazardAlert = () => {
 
                                 {/* Modal Body */}
                                 <form
-                                    onSubmit={async (e) => {
-                                        e.preventDefault();
-                                        if (!currentUser?.user_id) return;
-                                        try {
-                                            const created = await axios.post('http://localhost:8000/announcements/', {
-                                                created_by: currentUser.user_id,
-                                                title,
-                                                category,
-                                                visibility,
-                                                content,
-                                                pinned,
-                                                expiration: expiration ? new Date(expiration).toISOString() : null,
-                                                location: location || null,
-                                                subdivision_id: currentUser.subdivision_id || null
-                                            });
-
-                                            const announcementId = created.data.announcement_id;
-                                            for (const file of mediaFiles) {
-                                                const fd = new FormData();
-                                                fd.append('file', file);
-                                                await axios.post(`http://localhost:8000/announcements/${announcementId}/media`, fd, {
-                                                    headers: { 'Content-Type': 'multipart/form-data' }
-                                                });
-                                            }
-
-                                            await fetchAnnouncements();
-                                            setShowCreate(false);
-                                            setTitle('');
-                                            setContent('');
-                                            setLocation('');
-                                            setPinned(false);
-                                            setExpiration('');
-                                            setMediaFiles([]);
-                                        } catch (err) {
-                                            console.error('Failed to publish announcement:', err);
-                                            alert('Failed to publish announcement.');
-                                        }
-                                    }}
+                                    onSubmit={(e) => handleSubmit(e)}
                                     className="px-8 py-6 space-y-5"
                                 >
                                     {/* Title */}
@@ -388,9 +553,9 @@ const SubdHazardAlert = () => {
                                             onChange={(e) => setTitle(e.target.value)}
                                             required
                                             placeholder="e.g., Emergency Rabies Advisory"
-                                            className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0B57D0]/20 focus:border-[#0B57D0]/40 transition-colors"
+                                            className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/40 transition-colors"
                                         />
-                                        <p className="text-xs text-[#0B57D0] mt-1 font-semibold italic">Make it concise and descriptive.</p>
+                                        <p className="text-xs text-[#F97316] mt-1 font-semibold italic">Make it concise and descriptive.</p>
                                     </div>
 
                                     {/* Category & Visibility */}
@@ -401,7 +566,7 @@ const SubdHazardAlert = () => {
                                                 <select
                                                     value={category}
                                                     onChange={(e) => setCategory(e.target.value)}
-                                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#0B57D0]/20 focus:border-[#0B57D0]/40 appearance-none cursor-pointer transition-colors"
+                                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/40 appearance-none cursor-pointer transition-colors"
                                                 >
                                                     <option value="Emergency">Emergency (Urgent public safety alerts)</option>
                                                     <option value="Animal Advisory">Animal Advisory</option>
@@ -419,7 +584,7 @@ const SubdHazardAlert = () => {
                                                 <select
                                                     value={visibility}
                                                     onChange={(e) => setVisibility(e.target.value)}
-                                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#0B57D0]/20 focus:border-[#0B57D0]/40 appearance-none cursor-pointer transition-colors"
+                                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/40 appearance-none cursor-pointer transition-colors"
                                                 >
                                                     <option value="Public">Public - Visible to all residents in the system</option>
                                                     <option value="Subdivision Only">Subdivision Only - Visible only to registered subdivision residents</option>
@@ -442,15 +607,15 @@ const SubdHazardAlert = () => {
                                             onChange={(e) => setContent(e.target.value)}
                                             required
                                             placeholder="Provide all necessary details about the announcement..."
-                                            className="w-full px-4 py-3 bg-[#f8f9fc] border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0B57D0]/20 focus:border-[#0B57D0]/40 resize-none transition-colors"
+                                            className="w-full px-4 py-3 bg-[#f8f9fc] border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/40 resize-none transition-colors"
                                         ></textarea>
                                     </div>
 
                                     {/* Media Upload — Drag & Drop Zone */}
                                     <div>
-                                        <label className="block text-sm font-bold text-[#0B57D0] mb-2">Media Upload</label>
+                                        <label className="block text-sm font-bold text-[#F97316] mb-2">Media Upload</label>
                                         <div
-                                            className="border-2 border-dashed border-[#0B57D0]/30 bg-[#f0f4ff]/50 rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-[#e8f0fe] hover:border-[#0B57D0]/50 transition-colors relative"
+                                            className="border-2 border-dashed border-[#F97316]/30 bg-orange-50/20 rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-orange-50/50 hover:border-[#F97316]/50 transition-colors relative"
                                             onClick={() => document.getElementById('modal-file-input')?.click()}
                                         >
                                             <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
@@ -460,7 +625,7 @@ const SubdHazardAlert = () => {
                                             <p className="text-xs text-gray-400 font-medium">Support for Images, Videos, or PDFs</p>
                                             <div className="flex items-center gap-2 mt-2">
                                                 <span className="inline-flex items-center gap-1 px-3 py-1 bg-white border border-gray-200 rounded-full text-xs font-bold text-gray-600 shadow-sm">
-                                                    <svg className="w-3.5 h-3.5 text-[#0B57D0]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" /></svg>
+                                                    <svg className="w-3.5 h-3.5 text-[#F97316]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" /></svg>
                                                     Image
                                                 </span>
                                                 <span className="inline-flex items-center gap-1 px-3 py-1 bg-white border border-gray-200 rounded-full text-xs font-bold text-green-600 shadow-sm">
@@ -518,7 +683,7 @@ const SubdHazardAlert = () => {
                                                     value={expiration}
                                                     onChange={(e) => setExpiration(e.target.value)}
                                                     placeholder="mm/dd/yyyy"
-                                                    className="w-48 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#0B57D0]/20 focus:border-[#0B57D0]/40 transition-colors"
+                                                    className="w-48 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/40 transition-colors"
                                                 />
                                             </div>
                                         </div>
@@ -528,16 +693,17 @@ const SubdHazardAlert = () => {
                                     <div className="flex justify-center gap-3 pt-4 border-t border-gray-100">
                                         <button
                                             type="button"
-                                            onClick={() => setShowCreate(false)}
+                                            onClick={(e) => handleSubmit(e, 'Draft')}
                                             className="px-6 py-2.5 rounded-xl border border-gray-300 text-gray-600 font-bold text-sm hover:bg-gray-50 transition-colors"
                                         >
                                             Save as Draft
                                         </button>
                                         <button
-                                            type="submit"
-                                            className="px-8 py-2.5 bg-[#c5221f] hover:bg-[#a51d1a] text-white rounded-xl font-bold text-sm transition-colors shadow-sm"
+                                            type="button"
+                                            onClick={(e) => handleSubmit(e, 'Published')}
+                                            className="px-8 py-2.5 bg-[#F97316] hover:bg-[#EA580C] hover:scale-[1.02] hover:shadow-[0_8px_20px_rgba(249,115,22,0.25)] active:scale-95 text-white rounded-xl font-bold text-sm transition-all duration-200 cursor-pointer shadow-sm"
                                         >
-                                            Publish Announcement
+                                            {editAnnouncementId ? 'Save Changes' : 'Publish Announcement'}
                                         </button>
                                     </div>
                                 </form>
@@ -545,166 +711,169 @@ const SubdHazardAlert = () => {
                         </div>
                     )}
 
-                    {/* Filters & Sorting */}
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mt-2">
-                        <div className="flex flex-wrap gap-2">
-                            {categories.map((cat) => {
-                                const isActive = selectedCategory === cat;
+
+
+                    {/* Statistics Row Grid */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-1">
+                        {/* TOTAL */}
+                        <div className="bg-white rounded-2xl border border-blue-100 p-5 flex flex-col justify-between shadow-sm min-h-[110px] hover:border-blue-300 hover:-translate-y-1.5 hover:shadow-[0_12px_24px_rgba(59,130,246,0.08)] transition-all duration-300 ease-out group/stat relative overflow-hidden cursor-pointer">
+                            <div className="absolute top-0 right-0 w-12 h-12 bg-blue-500/5 rounded-bl-full opacity-0 group-hover/stat:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                            <div className="flex justify-between items-start z-10">
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider transition-colors group-hover/stat:text-blue-600">Total</span>
+                                    <span className="text-3xl font-black text-gray-800 my-1 transition-transform group-hover/stat:scale-[1.02] origin-left duration-300">{announcements.length}</span>
+                                </div>
+                                <div className="w-9 h-9 rounded-xl bg-slate-50 text-slate-500 border border-slate-100/80 flex items-center justify-center shrink-0 group-hover/stat:bg-slate-100 group-hover/stat:text-slate-600 group-hover/stat:scale-110 group-hover/stat:rotate-6 transition-all duration-300">
+                                    <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide z-10">all time</span>
+                        </div>
+                        {/* ACTIVE */}
+                        <div className="bg-white rounded-2xl border border-green-100 p-5 flex flex-col justify-between shadow-sm min-h-[110px] hover:border-green-300 hover:-translate-y-1.5 hover:shadow-[0_12px_24px_rgba(22,163,74,0.08)] transition-all duration-300 ease-out group/stat relative overflow-hidden cursor-pointer">
+                            <div className="absolute top-0 right-0 w-12 h-12 bg-green-500/5 rounded-bl-full opacity-0 group-hover/stat:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                            <div className="flex justify-between items-start z-10">
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider transition-colors group-hover/stat:text-green-600">Active</span>
+                                    <span className="text-3xl font-black text-green-600 my-1 transition-transform group-hover/stat:scale-[1.02] origin-left duration-300">
+                                        {announcements.filter(a => a.status === 'Published').length}
+                                    </span>
+                                </div>
+                                <div className="w-9 h-9 rounded-xl bg-green-50 text-green-600 border border-green-100/80 flex items-center justify-center shrink-0 group-hover/stat:bg-green-100 group-hover/stat:scale-110 group-hover/stat:rotate-3 transition-all duration-300">
+                                    <span className="relative flex h-4.5 w-4.5 justify-center items-center">
+                                        <span className="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-green-400 opacity-75"></span>
+                                        <svg className="relative w-4.5 h-4.5 text-green-600" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.536a5 5 0 001.414-1.414M12 12v.01M12 12a1 1 0 100-2 1 1 0 000 2z" />
+                                        </svg>
+                                    </span>
+                                </div>
+                            </div>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide z-10">currently live</span>
+                        </div>
+                        {/* PINNED */}
+                        <div className="bg-white rounded-2xl border border-orange-100 p-5 flex flex-col justify-between shadow-sm min-h-[110px] hover:border-orange-300 hover:-translate-y-1.5 hover:shadow-[0_12px_24px_rgba(249,115,22,0.08)] transition-all duration-300 ease-out group/stat relative overflow-hidden cursor-pointer">
+                            <div className="absolute top-0 right-0 w-12 h-12 bg-orange-500/5 rounded-bl-full opacity-0 group-hover/stat:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                            <div className="flex justify-between items-start z-10">
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider transition-colors group-hover/stat:text-[#F97316]">Pinned</span>
+                                    <span className="text-3xl font-black text-[#F97316] my-1 transition-transform group-hover/stat:scale-[1.02] origin-left duration-300">
+                                        {announcements.filter(a => a.pinned).length}
+                                    </span>
+                                </div>
+                                <div className="w-9 h-9 rounded-xl bg-orange-50 text-[#F97316] border border-orange-100/80 flex items-center justify-center shrink-0 group-hover/stat:bg-orange-100 group-hover/stat:scale-110 group-hover/stat:-rotate-12 transition-all duration-300">
+                                    <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 17v4m-2-4h4m-8-4h12M8 13v-3a4 4 0 018 0v3H8z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide z-10">always on top</span>
+                        </div>
+                        {/* DRAFT */}
+                        <div className="bg-white rounded-2xl border border-amber-100 p-5 flex flex-col justify-between shadow-sm min-h-[110px] hover:border-amber-300 hover:-translate-y-1.5 hover:shadow-[0_12px_24px_rgba(217,119,6,0.08)] transition-all duration-300 ease-out group/stat relative overflow-hidden cursor-pointer">
+                            <div className="absolute top-0 right-0 w-12 h-12 bg-amber-500/5 rounded-bl-full opacity-0 group-hover/stat:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                            <div className="flex justify-between items-start z-10">
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider transition-colors group-hover/stat:text-amber-600">Draft</span>
+                                    <span className="text-3xl font-black text-amber-600 my-1 transition-transform group-hover/stat:scale-[1.02] origin-left duration-300">
+                                        {announcements.filter(a => a.status === 'Draft').length}
+                                    </span>
+                                </div>
+                                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 border border-amber-100/80 flex items-center justify-center shrink-0 group-hover/stat:bg-amber-100 group-hover/stat:scale-110 group-hover/stat:rotate-12 transition-all duration-300">
+                                    <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide z-10">not published</span>
+                        </div>
+                    </div>
+
+                    {/* Toolbar: Pills Filters & Search Bar */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-t border-gray-100 pt-5 mt-2">
+                        {/* Left: Filter Pills */}
+                        <div className="flex items-center gap-2">
+                            {['All', 'Active', 'Draft', 'Pinned'].map((tab) => {
+                                const isActive = selectedStatus === tab;
                                 return (
                                     <button
-                                        key={cat}
-                                        onClick={() => setSelectedCategory(cat)}
-                                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${isActive
-                                            ? 'bg-[#0B57D0] text-white shadow-sm'
-                                            : 'bg-[#eaf1fb] text-[#001d35] hover:bg-[#dce6f5]'
+                                        key={tab}
+                                        type="button"
+                                        onClick={() => setSelectedStatus(tab)}
+                                        className={`px-4 py-2 text-xs font-black rounded-lg border transition-all uppercase tracking-wider ${isActive
+                                            ? 'bg-[#F97316] text-white border-[#F97316] shadow-sm'
+                                            : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-orange-200 hover:text-[#F97316] hover:scale-[1.02] active:scale-95 cursor-pointer'
                                             }`}
                                     >
-                                        {cat}
+                                        {tab}
                                     </button>
                                 );
                             })}
                         </div>
 
-                        {/* Sort & Create — right side of filter row */}
-                        <div className="flex items-center gap-3 self-end md:self-auto">
-                            {/* Sort dropdown */}
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-700 shadow-sm cursor-pointer hover:bg-gray-50 transition-colors">
-                                <span>Sort: <strong className="text-gray-900">Newest</strong></span>
-                                <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                    <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round"></path>
+                        {/* Right: Search bar & Category dropdown */}
+                        <div className="flex flex-wrap items-center gap-2 flex-1 md:justify-end">
+                            {/* Search bar */}
+                            <div className="relative flex-1 min-w-[200px] max-w-xs">
+                                <svg className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder="Search announcements..."
+                                    className="w-full pl-8 pr-3 py-2 text-xs font-bold bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/40 placeholder-gray-400 transition-colors"
+                                />
+                            </div>
+
+                            {/* Category dropdown */}
+                            <div className="relative">
+                                <select
+                                    value={selectedCategory}
+                                    onChange={(e) => setSelectedCategory(e.target.value)}
+                                    className="appearance-none pl-3 pr-7 py-2 text-xs font-bold bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/40 text-gray-700 cursor-pointer transition-colors uppercase tracking-wider"
+                                >
+                                    <option value="All">All Categories</option>
+                                    <option value="Emergency">Emergency</option>
+                                    <option value="Animal Advisory">Animal Advisory</option>
+                                    <option value="Vaccination Drive">Vaccination Drive</option>
+                                    <option value="Lost and Found">Lost and Found</option>
+                                </select>
+                                <svg className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                    <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                             </div>
 
-                            {/* Create Announcement Button */}
+                            {/* New Announcement button beside Category Dropdown */}
                             <button
-                                onClick={() => setShowCreate(!showCreate)}
-                                className="flex items-center gap-2 px-5 py-2 rounded-xl bg-[#0B57D0] hover:bg-[#0045b5] text-white font-black text-xs uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap"
+                                onClick={() => { handleCloseCreateModal(); setShowCreate(true); }}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#F97316] hover:bg-[#EA580C] text-white font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_4px_12px_rgba(249,115,22,0.2)] active:scale-95 shrink-0 cursor-pointer group shadow-sm"
                             >
-                                + Create Announcement
+                                <span className="text-sm font-bold transition-transform duration-300 group-hover:rotate-90">+</span>
+                                <span>New Announcement</span>
                             </button>
                         </div>
                     </div>
 
-                    {/* Pinned Announcements */}
-                    {pinnedAnnouncements.map((ann) => (
-                        <div
-                            key={ann.id}
-                            className="bg-white rounded-2xl p-6 border border-[#c5221f] border-l-[6px] shadow-sm relative overflow-hidden flex flex-col md:flex-row gap-6 justify-between transition-shadow hover:shadow-md shrink-0"
-                        >
-                            {/* Left Side: Content */}
-                            <div className="flex-1 flex flex-col justify-between">
-                                <div>
-                                    {/* Top Row Badges & Meta */}
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                                        <div className="flex items-center gap-2">
-                                            <span className="bg-[#c5221f] text-white text-[10px] font-black uppercase px-3 py-1 rounded-full flex items-center gap-1.5">
-                                                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                                </svg>
-                                                Emergency
-                                            </span>
-                                            <span className="text-gray-500 text-xs font-semibold flex items-center gap-1.5">
-                                                <svg className="w-3.5 h-3.5 text-[#c5221f]" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path d="M10 2a1 1 0 011 1v1.171l1.646-1.647a1 1 0 011.414 1.414L12.414 5.6H15a1 1 0 110 2h-1.646l2.122 2.121a1 1 0 11-1.414 1.414L11.94 9.013V15.6a1 1 0 11-2 0V9.013L7.818 11.15a1 1 0 11-1.414-1.414l2.122-2.121H5.1a1 1 0 110-2h2.586L6.038 3.938a1 1 0 011.414-1.414L9.1 4.171V3a1 1 0 011-1z" />
-                                                </svg>
-                                                Pinned Announcement
-                                            </span>
-                                        </div>
-
-                                        <div className="flex items-center gap-4 text-xs font-medium text-gray-500">
-                                            {ann.location && (
-                                                <span className="flex items-center gap-1.5">
-                                                    <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                                    </svg>
-                                                    {ann.location}
-                                                </span>
-                                            )}
-                                            <span className="flex items-center gap-1.5">
-                                                <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                                </svg>
-                                                {ann.date}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Title & Body */}
-                                    <h2 className="text-[19px] font-bold text-[#c5221f] mb-2 leading-tight">
-                                        {ann.title}
-                                    </h2>
-                                    <p className="text-[#3c4043] text-[13px] leading-relaxed mb-6 font-medium whitespace-pre-line">
-                                        {ann.content}
-                                    </p>
-                                </div>
-
-                                {/* Engagement & View Action */}
-                                <div className="border-t border-gray-100 pt-4 flex flex-wrap items-center gap-6 text-xs font-semibold text-gray-500 mt-auto">
-                                    <button
-                                        onClick={() => handleLike(ann.id)}
-                                        className="flex items-center gap-1.5 hover:text-blue-600 transition-colors"
-                                    >
-                                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3zM7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"></path>
-                                        </svg>
-                                        <span>{ann.reactions} Reactions</span>
-                                    </button>
-                                    <button
-                                        onClick={() => handleOpenFull(ann)}
-                                        className="flex items-center gap-1.5 hover:text-blue-600 transition-colors"
-                                    >
-                                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                                        </svg>
-                                        <span>{ann.comments.length} Comments</span>
-                                    </button>
-                                    <span className="flex items-center gap-1.5">
-                                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                                        </svg>
-                                        <span>{ann.views} Views</span>
-                                    </span>
-                                </div>
+                    {/* Announcement Feed vertical stacked list */}
+                    <div className="flex flex-col gap-4">
+                        {filteredAnnouncements.length === 0 ? (
+                            <div className="text-center py-16 bg-white rounded-2xl border border-gray-200 border-dashed text-gray-400 text-sm font-semibold shadow-sm">
+                                No announcements found matching filters.
                             </div>
-
-                            {/* Right Side: Image and Button */}
-                            <div className="w-full md:w-64 flex flex-col justify-between gap-4 shrink-0">
-                                {ann.mediaUrl ? (
-                                    <img
-                                        src={ann.mediaUrl}
-                                        alt={ann.title}
-                                        className="w-full h-36 object-cover rounded-xl border border-gray-100 shadow-sm"
-                                    />
-                                ) : (
-                                    <div className="w-full h-36 bg-gray-50 border border-gray-100 rounded-xl flex items-center justify-center text-gray-400 text-sm">
-                                        No Image Provided
-                                    </div>
-                                )}
-                                <button
-                                    onClick={() => handleOpenFull(ann)}
-                                    className="w-full bg-[#c5221f] hover:bg-[#a61919] text-white font-extrabold text-[13px] py-3.5 px-4 rounded-xl flex items-center justify-between transition-colors shadow-sm mt-3"
-                                >
-                                    <span>View Full Announcement</span>
-                                    <span className="text-lg font-black leading-none">→</span>
-                                </button>
-                            </div>
-                        </div>
-                    ))}
-
-                    {/* Community Feed Grid */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 shrink-0">
-                        {/* Left Column: Lost & Found / Animal Advisory */}
-                        <div className="flex flex-col gap-6">
-                            {leftColAnnouncements.map((ann) => renderNormalCard(ann))}
-                        </div>
-
-                        {/* Right Columns: Vaccination Drive / Double Span Cards */}
-                        <div className="lg:col-span-2 flex flex-col gap-6">
-                            {rightColAnnouncements.map((ann) => renderNormalCard(ann))}
-                        </div>
+                        ) : (
+                            filteredAnnouncements.map((ann) => renderUniformCard(ann))
+                        )}
                     </div>
+
+                    {/* Results count */}
+                    {announcements.length > 0 && (
+                        <div className="text-xs text-gray-500 font-bold border-t border-gray-100 pt-4 mt-1">
+                            Showing {totalFiltered} of {announcements.length} announcement{announcements.length !== 1 ? 's' : ''}
+                        </div>
+                    )}
 
                     {/* View Full Announcement Modal */}
                     {selectedAnnouncement && (
@@ -713,7 +882,10 @@ const SubdHazardAlert = () => {
                                 {/* Modal Header */}
                                 <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                        <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${selectedAnnouncement.category === 'Emergency' ? 'bg-[#fce8e6] text-[#c5221f]' : 'bg-[#eaf1fb] text-[#0b57d0]'
+                                        <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${selectedAnnouncement.category === 'Emergency' ? 'bg-red-50 text-red-600' :
+                                                selectedAnnouncement.category === 'Vaccination Drive' ? 'bg-green-50 text-green-700' :
+                                                    selectedAnnouncement.category === 'Lost and Found' ? 'bg-blue-50 text-blue-700' :
+                                                        'bg-violet-50 text-violet-700'
                                             }`}>
                                             {selectedAnnouncement.category}
                                         </span>
@@ -770,13 +942,42 @@ const SubdHazardAlert = () => {
                                                     ) : media.media_type === 'Video' ? (
                                                         <video src={media.file_url} controls className="w-full h-40 rounded-lg" />
                                                     ) : (
-                                                        <a href={media.file_url} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-[#0B57D0] hover:underline">
+                                                        <a href={media.file_url} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-[#F97316] hover:underline">
                                                             PDF Preview
                                                         </a>
                                                     )}
                                                 </div>
                                             ))}
                                         </div>
+                                    </div>
+
+                                    {/* Beautiful Engagement metrics and Like button inside modal positioned at the bottom of attached media */}
+                                    <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-gray-500 border-t border-gray-100 pt-6 mt-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleLike(selectedAnnouncement.id)}
+                                            className="flex items-center gap-2 hover:text-[#F97316] hover:bg-orange-50/50 px-4 py-2 rounded-full border border-gray-150 bg-white transition-all cursor-pointer shadow-sm active:scale-95"
+                                        >
+                                            <svg className={`w-4 h-4 ${selectedAnnouncement.hasLiked ? 'text-[#F97316] fill-[#F97316]' : 'text-gray-400'}`} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3zM7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3" />
+                                            </svg>
+                                            <span className={selectedAnnouncement.hasLiked ? 'text-[#F97316]' : ''}>
+                                                {selectedAnnouncement.reactions} Likes
+                                            </span>
+                                        </button>
+                                        <span className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-full border border-gray-150">
+                                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                            </svg>
+                                            <span>{selectedAnnouncement.comments.length} Comments</span>
+                                        </span>
+                                        <span className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-full border border-gray-150">
+                                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                            </svg>
+                                            <span>{selectedAnnouncement.views || 0} Views</span>
+                                        </span>
                                     </div>
 
                                     {/* Comments Section */}
@@ -792,11 +993,11 @@ const SubdHazardAlert = () => {
                                             ) : (
                                                 selectedAnnouncement.comments.map((comment, i) => (
                                                     <div key={i} className="flex gap-3 items-start bg-gray-50/50 p-3 rounded-2xl border border-gray-100">
-                                                        <div className="w-8 h-8 rounded-full bg-[#0B57D0]/10 text-[#0B57D0] flex items-center justify-center text-xs font-black shrink-0">
-                                                            {comment.author.charAt(0).toUpperCase()}
+                                                        <div className="w-8 h-8 rounded-full bg-orange-50 text-[#F97316] flex items-center justify-center text-xs font-black shrink-0">
+                                                            {(comment.author || 'Resident').charAt(0).toUpperCase()}
                                                         </div>
                                                         <div>
-                                                            <div className="text-xs font-bold text-gray-800">{comment.author}</div>
+                                                            <div className="text-xs font-bold text-gray-800">{comment.author || 'Resident'}</div>
                                                             <div className="text-xs text-gray-600 mt-1 font-medium">{comment.text}</div>
                                                         </div>
                                                     </div>
@@ -822,11 +1023,11 @@ const SubdHazardAlert = () => {
                                                 placeholder="Write a comment..."
                                                 value={newCommentText}
                                                 onChange={(e) => setNewCommentText(e.target.value)}
-                                                className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#0B57D0]/20"
+                                                className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#F97316]/20"
                                             />
                                             <button
                                                 type="submit"
-                                                className="bg-[#0B57D0] hover:bg-[#0045b5] text-white font-black text-xs px-4 py-2.5 rounded-xl transition-colors shrink-0"
+                                                className="bg-[#F97316] hover:bg-[#EA580C] text-white font-black text-xs px-4 py-2.5 rounded-xl transition-colors shrink-0 cursor-pointer hover:scale-[1.02] active:scale-95"
                                             >
                                                 Post
                                             </button>

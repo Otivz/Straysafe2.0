@@ -60,18 +60,21 @@ const EndorsementArch = () => {
             <SubdSidebar />
 
             <div className="flex-1 flex flex-col overflow-hidden">
-                <SubdNavbar />
+                <SubdNavbar
+                    leftContent={
+                        <div className="flex flex-col">
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">Endorsement Archive</h1>
+                            <p className="text-[11px] text-gray-400 font-semibold mt-1.5 leading-none">Repository of all official endorsement letters sent to the Barangay</p>
+                        </div>
+                    }
+                />
 
                 <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto">
                         
                         {/* Header Section */}
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                            <div>
-                                <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Endorsement Archive</h1>
-                                <p className="text-gray-500 text-sm mt-1">Repository of all official endorsement letters sent to the Barangay.</p>
-                            </div>
-                            <div className="relative w-full md:w-80">
+                            <div className="relative w-full md:w-80 ml-auto">
                                 <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -125,7 +128,7 @@ const EndorsementArch = () => {
                                         <Button variant="light" size="sm" className="!text-[10px] !font-black uppercase tracking-widest !rounded-xl">
                                             Preview
                                         </Button>
-                                        <Button variant="primary" size="sm" className="!text-[10px] !font-black uppercase tracking-widest !rounded-xl !bg-gray-900 !border-gray-900 hover:!bg-[#F97316] hover:!border-[#F97316]">
+                                        <Button variant="primary" size="sm" className="!text-[10px] !font-black uppercase tracking-widest !rounded-xl">
                                             Download
                                         </Button>
                                     </div>

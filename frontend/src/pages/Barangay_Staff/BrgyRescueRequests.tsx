@@ -639,21 +639,12 @@ const BrgyRescueRequests = () => {
                                     <div className="flex gap-3">
                                         <Button
                                             variant="primary"
-                                            className="flex-1 !bg-orange-600 hover:!bg-orange-700 !rounded-2xl py-4 flex flex-col items-center gap-1 shadow-lg shadow-orange-100"
+                                            className="flex-1 !rounded-2xl py-4 flex flex-col items-center gap-1"
                                             onClick={() => openStatusUpdate(viewingRequest.rescue_id, viewingRequest.report_id, 13)}
                                         >
                                             <span className="text-[11px] font-black uppercase tracking-widest">Approve Report Request</span>
                                             <span className="text-[9px] opacity-70 font-medium">Status will change to 'Approved'</span>
                                         </Button>
-                                    </div>
-                                    <div className="flex gap-3">
-                                        <button
-                                            onClick={() => navigate('/brgy/map-direction', { state: { rescue: viewingRequest } })}
-                                            className="flex-1 py-4 bg-white border border-orange-500 text-orange-600 rounded-2xl flex items-center justify-center gap-3 hover:bg-orange-50 transition-all shadow-sm"
-                                        >
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                            <span className="text-[11px] font-black uppercase tracking-[0.2em]">Navigate to Rescue Site</span>
-                                        </button>
                                     </div>
                                     <div className="flex gap-3">
                                         <button
@@ -835,8 +826,9 @@ const BrgyRescueRequests = () => {
                             <div className="flex flex-col gap-3 mt-10">
                                 <Button
                                     variant="primary"
+                                    fullWidth
                                     onClick={handleUpdateStatus}
-                                    className="!bg-gray-900 hover:!bg-black !rounded-2xl py-4 !border-none"
+                                    className="!rounded-2xl py-4 !border-none"
                                     disabled={isUpdating}
                                 >
                                     {isUpdating ? 'Updating...' : 'Confirm Status Update'}

@@ -213,6 +213,82 @@ def create_report(report_in: ReportCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/{report_id}", response_model=ReportResponse)
+def get_report(report_id: int, db: Session = Depends(get_db)):
+    report = db.query(Report).options(
+        joinedload(Report.reporter),
+        joinedload(Report.category),
+        joinedload(Report.status),
+        joinedload(Report.subdivision),
+        selectinload(Report.media),
+        selectinload(Report.comments).joinedload(Comment.user),
+        selectinload(Report.history).joinedload(StatusHistory.updater),
+        selectinload(Report.history).selectinload(StatusHistory.media)
+    ).filter(Report.report_id == report_id).first()
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    from app.utils.ai_suggestions import generate_ai_suggestions
+
+    try:
+        # Backfill AI suggestions if missing
+        if report.ai_suggested_risk_level is None:
+            category_name = report.category.category_name if report.category else ""
+            media_animal = None
+            media_color = None
+            if report.media:
+                for m in report.media:
+                    if m.animal_type and m.animal_type != "Unknown":
+                        media_animal = m.animal_type
+                    if m.dominant_color and m.dominant_color != "Unknown":
+                        media_color = m.dominant_color
+
+            suggestions = generate_ai_suggestions(
+                description=report.description,  # type: ignore
+                category_name=category_name,  # type: ignore
+                media_animal_type=media_animal,
+                media_dominant_color=media_color
+            )
+            report.ai_animal_type = suggestions["ai_animal_type"]  # type: ignore
+            report.ai_dominant_color = suggestions["ai_dominant_color"]  # type: ignore
+            report.ai_estimated_size = suggestions["ai_estimated_size"]  # type: ignore
+            report.ai_possible_breed = suggestions["ai_possible_breed"]  # type: ignore
+            report.ai_suggested_risk_level = suggestions["ai_suggested_risk_level"]  # type: ignore
+            report.ai_suggested_priority = suggestions["ai_suggested_priority"]  # type: ignore
+            db.commit()
+            db.refresh(report)
+
+        rep_data = ReportResponse.model_validate(report)
+        rep_data.status_id = report.current_status_id  # type: ignore[assignment]
+        rep_data.reporter_name = report.reporter.name if report.reporter else "Unknown User"
+        rep_data.reporter_photo = report.reporter.profile_picture if report.reporter else None
+
+        rep_data.ai_animal_type = report.ai_animal_type  # type: ignore
+        rep_data.ai_dominant_color = report.ai_dominant_color  # type: ignore
+        rep_data.ai_estimated_size = report.ai_estimated_size  # type: ignore
+        rep_data.ai_possible_breed = report.ai_possible_breed  # type: ignore
+        rep_data.ai_suggested_risk_level = report.ai_suggested_risk_level  # type: ignore
+        rep_data.ai_suggested_priority = report.ai_suggested_priority  # type: ignore
+
+        if report.history:
+            for i, hist in enumerate(report.history):  # type: ignore[arg-type]
+                if rep_data.history and i < len(rep_data.history):
+                    rep_data.history[i].updater_name = hist.updater.name if hist.updater else "System"
+                    rep_data.history[i].updater_photo = hist.updater.profile_picture if hist.updater else None
+
+        if report.comments:
+            for i, comment in enumerate(report.comments):  # type: ignore[arg-type]
+                if rep_data.comments and i < len(rep_data.comments):
+                    rep_data.comments[i].user_name = comment.user.name if comment.user else "Unknown User"
+                    rep_data.comments[i].user_photo = comment.user.profile_picture if comment.user else None
+
+        return rep_data
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error fetching report: {str(e)}")
+
+
 @router.delete("/{report_id}")
 def delete_report(report_id: int, db: Session = Depends(get_db)):
     report = db.query(Report).filter(Report.report_id == report_id).first()

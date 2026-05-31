@@ -84,6 +84,7 @@ def _to_response(ann: Announcement) -> AnnouncementResponse:
         media=ann.media or [],
         comments=comments_list,
         reactions=reactions_list,
+        status=str(ann.status or "Published"),
     )
 
 
@@ -101,7 +102,6 @@ def get_subdivision_announcements(subdivision_id: int, db: Session = Depends(get
         )
         .filter(
             Announcement.subdivision_id == subdivision_id,
-            Announcement.status == "Published",
         )
         .order_by(Announcement.published_at.desc(), Announcement.created_at.desc())
         .all()
@@ -160,6 +160,7 @@ def create_announcement(payload: AnnouncementCreate, db: Session = Depends(get_d
     if not category:
         raise HTTPException(status_code=400, detail="Invalid announcement category mapping")
 
+    target_status = payload.status or "Published"
     row = Announcement(
         barangay_id=payload.barangay_id,
         subdivision_id=payload.subdivision_id or creator.subdivision_id,
@@ -169,8 +170,8 @@ def create_announcement(payload: AnnouncementCreate, db: Session = Depends(get_d
         content=payload.content,
         visibility=payload.visibility,
         priority_level="Emergency" if payload.pinned else "Normal",
-        status="Published",
-        published_at=datetime.now(),
+        status=target_status,
+        published_at=datetime.now() if target_status == "Published" else None,
         expires_at=payload.expiration,
     )
     db.add(row)
@@ -305,3 +306,87 @@ def react_to_announcement(
         db.add(new_reaction)
         db.commit()
         return {"status": "added", "reaction_type": payload.reaction_type}
+
+
+@router.patch("/{announcement_id}/status", response_model=AnnouncementResponse)
+def update_announcement_status(announcement_id: int, payload: dict, db: Session = Depends(get_db)):
+    ann = db.query(Announcement).filter(Announcement.announcement_id == announcement_id).first()
+    if not ann:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    new_status = payload.get("status")
+    if new_status not in ["Draft", "Published", "Archived"]:
+        raise HTTPException(status_code=400, detail="Invalid status")
+    ann.status = new_status
+    if new_status == "Published" and not ann.published_at:
+        ann.published_at = datetime.now()
+    db.commit()
+    db.refresh(ann)
+    # Re-fetch with joinedloads to match _to_response requirements
+    ann = (
+        db.query(Announcement)
+        .options(
+            joinedload(Announcement.creator),
+            joinedload(Announcement.category),
+            joinedload(Announcement.subdivision),
+            joinedload(Announcement.media),
+            selectinload(Announcement.comments).joinedload(AnnouncementComment.user),
+            selectinload(Announcement.reactions)
+        )
+        .filter(Announcement.announcement_id == announcement_id)
+        .first()
+    )
+    return _to_response(ann)
+
+
+@router.put("/{announcement_id}", response_model=AnnouncementResponse)
+def update_announcement(announcement_id: int, payload: AnnouncementCreate, db: Session = Depends(get_db)):
+    ann = db.query(Announcement).filter(Announcement.announcement_id == announcement_id).first()
+    if not ann:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    
+    mapped_category = CATEGORY_MAP.get(payload.category, payload.category)
+    category = db.query(AnnouncementCategory).filter(AnnouncementCategory.category_name == mapped_category).first()
+    if not category:
+        raise HTTPException(status_code=400, detail="Invalid announcement category mapping")
+        
+    ann.title = payload.title
+    ann.content = payload.content
+    ann.category_id = category.category_id
+    ann.visibility = payload.visibility
+    ann.priority_level = "Emergency" if payload.pinned else "Normal"
+    ann.expires_at = payload.expiration
+    ann.location = payload.location
+    if payload.status:
+        ann.status = payload.status
+        if payload.status == "Published" and not ann.published_at:
+            ann.published_at = datetime.now()
+
+    db.commit()
+    db.refresh(ann)
+    
+    # Re-fetch with joinedloads
+    ann = (
+        db.query(Announcement)
+        .options(
+            joinedload(Announcement.creator),
+            joinedload(Announcement.category),
+            joinedload(Announcement.subdivision),
+            joinedload(Announcement.media),
+            selectinload(Announcement.comments).joinedload(AnnouncementComment.user),
+            selectinload(Announcement.reactions)
+        )
+        .filter(Announcement.announcement_id == announcement_id)
+        .first()
+    )
+    return _to_response(ann)
+
+
+@router.delete("/{announcement_id}", response_model=dict)
+def delete_announcement(announcement_id: int, db: Session = Depends(get_db)):
+    ann = db.query(Announcement).filter(Announcement.announcement_id == announcement_id).first()
+    if not ann:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    db.delete(ann)
+    db.commit()
+    return {"message": "Announcement deleted successfully"}
+

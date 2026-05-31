@@ -211,10 +211,12 @@ const ResiHomePage = () => {
             navigate(location.pathname, { replace: true, state: {} });
         }
         if (location.state?.editReport) {
+            const editReport = location.state.editReport;
             if (location.state?.isViewMode) {
-                setViewingDetailedReport(location.state.editReport);
+                // Always fetch fresh from the single-report endpoint to get up-to-date AI suggestions
+                openReportDetail(editReport.report_id, editReport);
             } else {
-                handleEditClick(location.state.editReport);
+                handleEditClick(editReport);
             }
             // Clear state so it doesn't reopen on refresh
             navigate(location.pathname, { replace: true, state: {} });
@@ -360,6 +362,21 @@ const ResiHomePage = () => {
             }
         } catch (error) {
             console.error('Failed to fetch reports:', error);
+        }
+    };
+
+    // Fetch a single report fresh from the API (with guaranteed AI suggestion fields)
+    const openReportDetail = async (reportId: number, fallback?: any) => {
+        try {
+            const response = await fetch(`http://localhost:8000/reports/${reportId}`);
+            if (response.ok) {
+                const freshReport = await response.json();
+                setViewingDetailedReport(freshReport);
+            } else if (fallback) {
+                setViewingDetailedReport(fallback);
+            }
+        } catch {
+            if (fallback) setViewingDetailedReport(fallback);
         }
     };
 
@@ -773,70 +790,66 @@ const ResiHomePage = () => {
                 searchValue={searchQuery}
                 isMobileSearchOpen={isMobileSearchOpen}
                 onCloseSearch={() => setIsMobileSearchOpen(false)}
+                feedTab={feedTab}
+                onFeedTabChange={setFeedTab}
             />
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-32 pb-24 sm:pb-8">
 
                 {/* Top Actions - Hidden on mobile, shown on desktop */}
-                {feedTab === 'reports' && (
-                <div className="hidden sm:flex justify-end items-center mb-6">
-                    <Button
-                        variant="primary"
-                        onClick={() => {
-                            setEditingReportId(null);
-                            setFormData({
-                                ...formData,
-                                category: 'Injured Animal',
-                                category_id: 1,
-                                animalCount: 1,
-                                landmark: '',
-                                visibility: 'Public',
-                                priorityLevel: 'Regular',
-                                isPossibleOwned: false,
-                                description: '',
-                                latitude: 14.801313,
-                                longitude: 121.003109,
-                                mediaFiles: [],
-                                existingMedia: [],
-                                mediaIdsToDelete: []
-                            });
-                            setIsAddReportModalOpen(true);
-                        }}
-                        className="bg-[#F97316] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-200 hover:scale-105 transition-all flex items-center gap-3"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
-                        </svg>
-                        Add Report
-                    </Button>
-                </div>
-                )}
+                <div className="hidden sm:flex items-center justify-between relative mb-6">
+                    {/* Left spacer to perfectly center the search bar relative to the page width */}
+                    <div className="flex-1"></div>
 
-                {/* Feed tabs: Reports | Announcements */}
-                <div className="max-w-3xl mx-auto mb-8">
-                    <div className="flex bg-white border border-gray-200 rounded-2xl p-1 shadow-sm">
-                        <button
-                            type="button"
-                            onClick={() => setFeedTab('reports')}
-                            className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-                                feedTab === 'reports'
-                                    ? 'bg-[#F97316] text-white shadow-sm shadow-orange-200'
-                                    : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'
-                            }`}
-                        >
-                            Reports
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setFeedTab('announcements')}
-                            className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-                                feedTab === 'announcements'
-                                    ? 'bg-[#F97316] text-white shadow-sm shadow-orange-200'
-                                    : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'
-                            }`}
-                        >
-                            Announcements
-                        </button>
+                    {/* Centered Localized Page Search Input */}
+                    <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <svg className="h-4.5 w-4.5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </div>
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder={feedTab === 'reports' ? "Search reports..." : "Search announcements..."}
+                            className="block w-96 pl-11 pr-4 py-3.5 border border-gray-200 rounded-2xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316] transition-all text-xs font-bold text-[#1a1208] shadow-sm"
+                        />
+                    </div>
+
+                    {/* Add Report Button (Only visible on reports feed, right aligned) */}
+                    <div className="flex-1 flex justify-end">
+                        {feedTab === 'reports' && (
+                            <Button
+                                variant="primary"
+                                onClick={() => {
+                                    setEditingReportId(null);
+                                    setFormData({
+                                        ...formData,
+                                        category: 'Injured Animal',
+                                        category_id: 1,
+                                        animalCount: 1,
+                                        landmark: '',
+                                        visibility: 'Public',
+                                        priorityLevel: 'Regular',
+                                        isPossibleOwned: false,
+                                        description: '',
+                                        latitude: 14.801313,
+                                        longitude: 121.003109,
+                                        mediaFiles: [],
+                                        existingMedia: [],
+                                        mediaIdsToDelete: []
+                                    });
+                                    setIsAddReportModalOpen(true);
+                                }}
+                                className="bg-[#F97316] text-white px-8 py-3.5 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-200 hover:scale-105 transition-all flex items-center gap-3 border border-orange-500/20"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
+                                </svg>
+                                Add Report
+                            </Button>
+                        )}
                     </div>
                 </div>
 
@@ -1800,7 +1813,7 @@ const ResiHomePage = () => {
                                                 {openMenuId === report.report_id && (
                                                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-gray-100 py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
                                                         <button
-                                                            onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); setViewingDetailedReport(report); }}
+                                                            onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); openReportDetail(report.report_id, report); }}
                                                             className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-blue-600 hover:bg-blue-50 transition-colors"
                                                         >
                                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2460,7 +2473,7 @@ const ResiHomePage = () => {
                             <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">© 2026 STRAYSAFE MISSION CONTROL</p>
                             <button
                                 onClick={() => setViewingDetailedReport(null)}
-                                className="px-8 py-3 bg-gray-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all"
+                                className="px-8 py-3 bg-[#F97316] text-[#FAFAF9] rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#EA580C] transition-all border border-orange-500/20 shadow-sm"
                             >
                                 Close Intelligence View
                             </button>
