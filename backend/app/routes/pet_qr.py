@@ -103,18 +103,18 @@ def get_public_scan_info(token: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Associated pet record not found")
         
     return PublicPetScanResponse(
-        pet_id=pet.pet_id,
-        pet_name=pet.pet_name,
-        pet_type=pet.pet_type,
-        breed=pet.breed,
-        color_markings=pet.color_markings,
-        temperament=pet.temperament,
-        photo_url=pet.photo_url,
-        emergency_contact_name=pet.emergency_contact_name,
-        emergency_contact_phone=pet.emergency_contact_phone,
-        notes=pet.notes, # serves as owner instructions
-        is_active=db_qr.is_active,
-        qr_token=db_qr.qr_token
+        pet_id=int(pet.pet_id),  # type: ignore
+        pet_name=str(pet.pet_name),
+        pet_type=str(pet.pet_type),
+        breed=str(pet.breed) if pet.breed else None,
+        color_markings=str(pet.color_markings) if pet.color_markings else None,
+        temperament=str(pet.temperament) if pet.temperament else None,
+        photo_url=str(pet.photo_url) if pet.photo_url else None,
+        emergency_contact_name=str(pet.emergency_contact_name) if pet.emergency_contact_name else None,
+        emergency_contact_phone=str(pet.emergency_contact_phone) if pet.emergency_contact_phone else None,
+        notes=str(pet.notes) if pet.notes else None, # serves as owner instructions
+        is_active=bool(db_qr.is_active),  # type: ignore
+        qr_token=str(db_qr.qr_token)
     )
 
 @router.post("/pet/scan/{token}/submit")
@@ -181,32 +181,32 @@ def get_pet_scan_history(pet_id: int, db: Session = Depends(get_db)):
     scans = db.query(PetQRScan).filter(PetQRScan.pet_id == pet_id).order_by(PetQRScan.scanned_at.desc()).all()
     
     # Map scanned_by name for frontend readability
-    response_list = []
+    response_list: List[PetQRScanResponse] = []
     for s in scans:
-        scanned_by_name = None
+        scanned_by_name: Optional[str] = None
         if s.scanned_by:
             user = db.query(User).filter(User.user_id == s.scanned_by).first()
             if user:
-                scanned_by_name = user.name
+                scanned_by_name = str(user.name)
                 
         response_list.append(
             PetQRScanResponse(
-                scan_id=s.scan_id,
-                qr_id=s.qr_id,
-                pet_id=s.pet_id,
-                scanned_by=s.scanned_by,
-                scanned_by_name=scanned_by_name,
-                finder_name=s.finder_name,
-                finder_contact=s.finder_contact,
-                scan_lat=s.scan_lat,
-                scan_lng=s.scan_lng,
-                street_address=s.street_address,
-                barangay=s.barangay,
-                city=s.city,
-                landmark=s.landmark,
-                location_type=s.location_type,
-                notes=s.notes,
-                scanned_at=s.scanned_at
+                scan_id=int(s.scan_id),  # type: ignore
+                qr_id=int(s.qr_id),  # type: ignore
+                pet_id=int(s.pet_id),  # type: ignore
+                scanned_by=int(s.scanned_by) if s.scanned_by else None,  # type: ignore
+                scanned_by_name=str(scanned_by_name) if scanned_by_name else None,
+                finder_name=str(s.finder_name) if s.finder_name else None,
+                finder_contact=str(s.finder_contact) if s.finder_contact else None,
+                scan_lat=s.scan_lat,  # type: ignore
+                scan_lng=s.scan_lng,  # type: ignore
+                street_address=str(s.street_address) if s.street_address else None,
+                barangay=str(s.barangay) if s.barangay else None,
+                city=str(s.city) if s.city else None,
+                landmark=str(s.landmark) if s.landmark else None,
+                location_type=str(s.location_type) if s.location_type else "Found Location",
+                notes=str(s.notes) if s.notes else None,
+                scanned_at=s.scanned_at  # type: ignore
             )
         )
         

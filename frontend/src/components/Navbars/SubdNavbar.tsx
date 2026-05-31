@@ -1,6 +1,11 @@
+import { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const SubdNavbar = () => {
+interface SubdNavbarProps {
+    leftContent?: ReactNode;
+}
+
+const SubdNavbar = ({ leftContent }: SubdNavbarProps) => {
     const navigate = useNavigate();
 
     const handleLogout = () => {
@@ -14,10 +19,15 @@ const SubdNavbar = () => {
     const user = userStr ? JSON.parse(userStr) : { email: 'staff@straysafe.com', name: 'Subdivision Staff' };
 
     return (
-        <header className="h-20 bg-white/90 backdrop-blur-md border-b border-gray-100 flex items-center justify-end px-8 sticky top-0 z-10 w-full shadow-sm">
+        <header className="h-20 bg-white/90 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-10 w-full shadow-sm">
+
+            {/* Left Content Area */}
+            <div className="flex flex-col justify-center min-w-0">
+                {leftContent}
+            </div>
 
             {/* Right Side Actions */}
-            <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-6 ml-auto">
                 {/* Notifications */}
                 <button className="relative p-2 text-gray-400 hover:text-[#F97316] hover:bg-orange-50 rounded-lg transition-all group">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -61,7 +71,7 @@ const SubdNavbar = () => {
                             </div>
 
                             <div className="p-1">
-                                <button 
+                                <button
                                     onClick={() => navigate('/staff/account-settings')}
                                     className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-gray-600 hover:text-[#F97316] hover:bg-orange-50 rounded-xl transition-all group/item"
                                 >

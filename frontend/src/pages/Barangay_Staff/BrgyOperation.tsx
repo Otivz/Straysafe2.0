@@ -138,7 +138,7 @@ const BrgyOperation = () => {
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <button className="px-6 py-3 bg-gray-900 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-[#F97316] hover:shadow-lg hover:shadow-orange-500/20 transition-all active:scale-95">
+                                                    <button className="px-6 py-3 bg-[#F97316] text-[#FAFAF9] text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-[#EA580C] hover:shadow-lg hover:shadow-orange-500/20 transition-all active:scale-95 border border-orange-500/20">
                                                         DISPATCH NOW
                                                     </button>
                                                 </div>

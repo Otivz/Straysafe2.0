@@ -283,7 +283,7 @@ const MapComponent = ({
                                             e.stopPropagation();
                                             if (onMarkerClick) onMarkerClick({ ...marker, source: 'brgy' });
                                         }}
-                                        className="py-2 bg-orange-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-orange-700 transition-colors shadow-sm"
+                                        className="py-2 bg-[#F97316] text-[#FAFAF9] text-[9px] font-black uppercase rounded-lg hover:bg-[#EA580C] transition-colors shadow-sm border border-orange-500/20"
                                     >
                                         From Office
                                     </button>
@@ -293,7 +293,7 @@ const MapComponent = ({
                                             e.stopPropagation();
                                             if (onMarkerClick) onMarkerClick({ ...marker, source: 'current' });
                                         }}
-                                        className="py-2 bg-gray-900 text-white text-[9px] font-black uppercase rounded-lg hover:bg-black transition-colors shadow-sm"
+                                        className="py-2 bg-[#F97316] text-[#FAFAF9] text-[9px] font-black uppercase rounded-lg hover:bg-[#EA580C] transition-colors shadow-sm border border-orange-500/20"
                                     >
                                         From Me
                                     </button>

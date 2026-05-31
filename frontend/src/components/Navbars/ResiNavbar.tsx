@@ -9,9 +9,11 @@ interface ResiNavbarProps {
     searchValue?: string;
     isMobileSearchOpen?: boolean;
     onCloseSearch?: () => void;
+    feedTab?: 'reports' | 'announcements';
+    onFeedTabChange?: (tab: 'reports' | 'announcements') => void;
 }
 
-const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, onCloseSearch }: ResiNavbarProps) => {
+const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, onCloseSearch, feedTab, onFeedTabChange }: ResiNavbarProps) => {
     const navigate = useNavigate();
     const location = useLocation();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -122,21 +124,37 @@ const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, o
 
                         {/* DESKTOP NAV REMOVED */}
                         <div className="hidden md:flex items-center gap-6">
-                            {/* Search Input - Hidden on Profile and Pets pages as they have their own search */}
-                            {location.pathname !== '/resident/profile' && location.pathname !== '/resident/pets' && (
-                                <div className="relative group">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <svg className="h-4 w-4 text-gray-400 group-focus-within:text-[#F97316] transition-colors" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                            <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                            {feedTab && onFeedTabChange && (
+                                <div className="flex items-center gap-2 mr-1">
+                                    {/* Reports Feed Toggle */}
+                                    <button
+                                        onClick={() => onFeedTabChange('reports')}
+                                        title="Incident Reports"
+                                        className={`p-2 rounded-xl border transition-all duration-200 active:scale-95 cursor-pointer ${
+                                            feedTab === 'reports'
+                                                ? 'bg-orange-50 border-orange-100 text-[#F97316] shadow-sm'
+                                                : 'bg-white border-gray-100 text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                         </svg>
-                                    </div>
-                                    <input
-                                        type="text"
-                                        value={searchValue || ''}
-                                        onChange={(e) => onSearch && onSearch(e.target.value)}
-                                        placeholder="Search reports..."
-                                        className="block w-64 pl-10 pr-3 py-2 border border-gray-200 rounded-2xl leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316] transition-all sm:text-sm font-medium text-[#1a1208]"
-                                    />
+                                    </button>
+
+                                    {/* Announcements Feed Toggle */}
+                                    <button
+                                        onClick={() => onFeedTabChange('announcements')}
+                                        title="Announcements Feed"
+                                        className={`p-2 rounded-xl border transition-all duration-200 active:scale-95 cursor-pointer ${
+                                            feedTab === 'announcements'
+                                                ? 'bg-orange-50 border-orange-100 text-[#F97316] shadow-sm'
+                                                : 'bg-white border-gray-100 text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+                                        </svg>
+                                    </button>
                                 </div>
                             )}
 
@@ -263,6 +281,34 @@ const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, o
 
                         {/* MOBILE ACTIONS */}
                         <div className="md:hidden flex items-center gap-2">
+                            {feedTab && onFeedTabChange && (
+                                <div className="flex items-center gap-1.5 mr-1">
+                                    <button
+                                        onClick={() => onFeedTabChange('reports')}
+                                        className={`p-2 rounded-xl border transition-all active:scale-95 cursor-pointer ${
+                                            feedTab === 'reports'
+                                                ? 'bg-orange-50 border-orange-100 text-[#F97316]'
+                                                : 'bg-white border-gray-150 text-gray-400'
+                                        }`}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                    </button>
+                                    <button
+                                        onClick={() => onFeedTabChange('announcements')}
+                                        className={`p-2 rounded-xl border transition-all active:scale-95 cursor-pointer ${
+                                            feedTab === 'announcements'
+                                                ? 'bg-orange-50 border-orange-100 text-[#F97316]'
+                                                : 'bg-white border-gray-150 text-gray-400'
+                                        }`}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            )}
                             {/* Notification Bell */}
                             <button 
                                 onClick={() => {

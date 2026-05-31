@@ -16,6 +16,8 @@ interface EscalatedMission {
 
 const EscelatedMissions = () => {
     const [loading] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedStatus, setSelectedStatus] = useState('All');
 
 
     const [selectedMission, setSelectedMission] = useState<EscalatedMission | null>(null);
@@ -53,6 +55,15 @@ const EscelatedMissions = () => {
             landmark: "North Perimeter Wall"
         }
     ];
+
+    const filteredMissions = mockMissions.filter(m => {
+        const matchesSearch = searchQuery === '' ||
+            m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            m.mission_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            m.reporter.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesStatus = selectedStatus === 'All' || m.barangay_status === selectedStatus;
+        return matchesSearch && matchesStatus;
+    });
 
     const getStatusStyle = (status: string) => {
         switch (status) {
@@ -193,16 +204,17 @@ const EscelatedMissions = () => {
             <SubdSidebar />
 
             <div className="flex-1 flex flex-col overflow-hidden">
-                <SubdNavbar />
+                <SubdNavbar
+                    leftContent={
+                        <div className="flex flex-col">
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">Escalated Missions</h1>
+                            <p className="text-[11px] text-gray-400 font-semibold mt-1.5 leading-none">Track reports forwarded to Barangay operations for immediate rescue</p>
+                        </div>
+                    }
+                />
 
                 <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto">
-                        
-                        {/* Header Section */}
-                        <div className="mb-8">
-                            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Escalated Missions</h1>
-                            <p className="text-gray-500 text-sm mt-1">Track reports forwarded to Barangay operations for immediate rescue.</p>
-                        </div>
 
                         {/* Stats Overview */}
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -224,9 +236,49 @@ const EscelatedMissions = () => {
 
                         {/* Main Table Section */}
                         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                            {/* Toolbar: Search + Status Filter */}
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-6 py-4 border-b border-gray-100">
+                                {/* Search */}
+                                <div className="relative flex-1 min-w-[180px] max-w-sm">
+                                    <svg className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+                                    </svg>
+                                    <input
+                                        type="text"
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        placeholder="Quick find by title, mission ID, or reporter..."
+                                        className="w-full pl-8 pr-3 py-2 text-xs font-medium bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/40 placeholder-gray-400 transition-colors"
+                                    />
+                                </div>
+
+                                {/* Status dropdown */}
+                                <div className="relative">
+                                    <select
+                                        value={selectedStatus}
+                                        onChange={(e) => setSelectedStatus(e.target.value)}
+                                        className="appearance-none pl-3 pr-7 py-2 text-xs font-semibold bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/40 text-gray-700 cursor-pointer transition-colors"
+                                    >
+                                        <option value="All">All Status</option>
+                                        <option value="Pending">Pending</option>
+                                        <option value="In Progress">In Progress</option>
+                                        <option value="Resolved">Resolved</option>
+                                        <option value="Rejected">Rejected</option>
+                                    </select>
+                                    <svg className="w-3 h-3 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                        <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                </div>
+
+                                {/* Results count */}
+                                <span className="text-xs text-gray-400 font-medium ml-auto shrink-0">
+                                    {filteredMissions.length} of {mockMissions.length} missions
+                                </span>
+                            </div>
+
                             <DataTable
                                 loading={loading}
-                                data={mockMissions}
+                                data={filteredMissions}
                                 emptyMessage="No escalated missions found."
                                 loadingMessage="Fetching mission status..."
                                 columns={[
@@ -471,7 +523,7 @@ const EscelatedMissions = () => {
                             <footer className="px-8 py-5 border-t border-gray-50 bg-gray-50/30 flex justify-end shrink-0">
                                 <button 
                                     onClick={() => setSelectedMission(null)}
-                                    className="px-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
+                                    className="px-6 py-2.5 bg-[#F97316] text-[#FAFAF9] hover:bg-[#EA580C] rounded-xl font-bold text-xs uppercase tracking-widest transition-all border border-orange-500/20"
                                 >
                                     Close Tracker
                                 </button>

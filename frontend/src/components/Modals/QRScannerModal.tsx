@@ -49,8 +49,11 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
     const [pet, setPet] = useState<PetRecord | null>(null);
     const [owner, setOwner] = useState<OwnerRecord | null>(null);
     const [cameraActive, setCameraActive] = useState(false);
+    const [cameras, setCameras] = useState<any[]>([]);
+    const [currentCameraId, setCurrentCameraId] = useState<string | null>(null);
 
     const qrScannerRef = useRef<Html5Qrcode | null>(null);
+    const cameraTimeoutRef = useRef<any>(null);
     const scannerId = 'qr-reader-viewport';
 
     // Cleanup camera stream on close or unmount
@@ -85,14 +88,23 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
         setPetIdInput('');
     };
 
-    const startCamera = async () => {
+    const startCamera = async (preferredCameraId?: string) => {
         setError(null);
         setCameraActive(false);
 
-        // Ensure scanner div exists
-        setTimeout(async () => {
+        // Clear any pending camera start timeouts to prevent multiple initialization race conditions
+        if (cameraTimeoutRef.current) {
+            clearTimeout(cameraTimeoutRef.current);
+        }
+
+        // If scanner already initialized, stop it first
+        if (qrScannerRef.current) {
+            await stopCamera();
+        }
+
+        cameraTimeoutRef.current = setTimeout(async () => {
             try {
-                // If scanner already initialized, stop it first
+                // Double check to prevent multiple instances
                 if (qrScannerRef.current) {
                     await stopCamera();
                 }
@@ -100,8 +112,52 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                 const html5QrCode = new Html5Qrcode(scannerId);
                 qrScannerRef.current = html5QrCode;
 
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                let cameraConfig: any = preferredCameraId;
+
+                if (!cameraConfig) {
+                    try {
+                        const devices = await Html5Qrcode.getCameras();
+                        if (devices && devices.length > 0) {
+                            if (isMobile) {
+                                const backCamera = devices.find(device => 
+                                    device.label.toLowerCase().includes('back') || 
+                                    device.label.toLowerCase().includes('rear') || 
+                                    device.label.toLowerCase().includes('environment')
+                                );
+                                cameraConfig = backCamera ? backCamera.id : devices[0].id;
+                            } else {
+                                // On laptop/PC: automatically prioritize real physical webcam over virtual cameras by default!
+                                const physicalWebcam = devices.find(device => {
+                                    const label = device.label.toLowerCase();
+                                    const isVirtual = label.includes('virtual') || 
+                                                      label.includes('droidcam') || 
+                                                      label.includes('iriun') || 
+                                                      label.includes('epoccam') || 
+                                                      label.includes('obs');
+                                    return !isVirtual && (
+                                        label.includes('integrated') || 
+                                        label.includes('webcam') || 
+                                        label.includes('usb') || 
+                                        label.includes('camera') || 
+                                        label.includes('hd')
+                                    );
+                                });
+                                cameraConfig = physicalWebcam ? physicalWebcam.id : devices[0].id;
+                            }
+                        }
+                    } catch (camErr) {
+                        console.warn('Could not retrieve camera list, falling back to facingMode:', camErr);
+                    }
+                }
+
+                // Final fallback if getCameras failed or returned nothing
+                if (!cameraConfig) {
+                    cameraConfig = isMobile ? 'environment' : 'user';
+                }
+
                 await html5QrCode.start(
-                    { facingMode: 'environment' },
+                    cameraConfig,
                     {
                         fps: 10,
                         qrbox: (width, height) => {
@@ -119,14 +175,41 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                 );
 
                 setCameraActive(true);
+
+                // Populate available cameras list asynchronously AFTER camera has successfully started
+                // This is instant since permission is granted, and doesn't block the initial launch.
+                try {
+                    const devices = await Html5Qrcode.getCameras();
+                    if (devices && devices.length > 0) {
+                        setCameras(devices);
+                        if (!preferredCameraId) {
+                            // Match the camera ID that was actually selected and started
+                            setCurrentCameraId(cameraConfig);
+                        } else {
+                            setCurrentCameraId(preferredCameraId);
+                        }
+                    }
+                } catch (camListErr) {
+                    console.warn('Could not enumerate cameras after start:', camListErr);
+                }
+
             } catch (err: any) {
                 console.error('QR Scanner initialization failed:', err);
-                setError('Failed to access camera. Please check permissions or upload an image instead.');
+                
+                const errName = err?.name || 'Error';
+                const errMsg = err?.message || String(err);
+                
+                setError(`Camera failed to start: [${errName}] ${errMsg}. Please close other browser tabs using the webcam, verify your physical webcam shutter/privacy settings are open, and refresh.`);
             }
         }, 150);
     };
 
     const stopCamera = async () => {
+        if (cameraTimeoutRef.current) {
+            clearTimeout(cameraTimeoutRef.current);
+            cameraTimeoutRef.current = null;
+        }
+
         if (qrScannerRef.current) {
             try {
                 if (qrScannerRef.current.isScanning) {
@@ -141,9 +224,58 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
         }
     };
 
-    // Extract ID from QR payload and fetch records
+    const handleSwitchCamera = async () => {
+        if (cameras.length <= 1 || !qrScannerRef.current) return;
+        
+        // Find next camera in the list
+        const currentIndex = cameras.findIndex(c => c.id === currentCameraId);
+        const nextIndex = (currentIndex + 1) % cameras.length;
+        const nextCamera = cameras[nextIndex];
+        
+        setCurrentCameraId(nextCamera.id);
+        // Restart camera with the new preferred ID
+        await startCamera(nextCamera.id);
+    };
+
+    const fetchPetAndOwnerByToken = async (token: string) => {
+        setLoading(true);
+        setError(null);
+        setPet(null);
+        setOwner(null);
+
+        try {
+            // 1. Fetch public scan info to get the pet_id associated with the secure QR token
+            const scanRes = await axios.get(`http://localhost:8000/pet/scan/${token}`);
+            const petId = scanRes.data.pet_id;
+
+            if (petId) {
+                // 2. Fetch full pet details and owner details
+                await fetchPetAndOwnerDetails(petId);
+            } else {
+                setError('No associated pet record found for this QR token.');
+            }
+        } catch (err: any) {
+            console.error('Error fetching pet by token:', err);
+            setError(err.response?.status === 404
+                ? 'No registered pet found with this QR tag.'
+                : 'Error connecting to database. Please check backend status.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Extract ID or secure QR token from QR payload and fetch records
     const handleQRDecoded = async (text: string) => {
         let petId = null;
+
+        // Try matching secure QR token format: /pet/scan/{token}
+        const tokenMatch = text.match(/pet\/scan\/([a-zA-Z0-9_-]+)/i);
+        if (tokenMatch) {
+            const token = tokenMatch[1];
+            await stopCamera();
+            await fetchPetAndOwnerByToken(token);
+            return;
+        }
 
         // Try extracting numeric pet ID from various QR contents
         if (/^\d+$/.test(text.trim())) {
@@ -169,7 +301,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
             await stopCamera();
             fetchPetAndOwnerDetails(petId);
         } else {
-            setError('Could not decode a valid Pet ID from this QR code. Please try another one.');
+            setError('Could not decode a valid Pet ID or QR token from this QR code. Please try another one.');
         }
     };
 
@@ -198,8 +330,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
             }
         } catch (err: any) {
             console.error('Error fetching pet record:', err);
-            setError(err.response?.status === 404 
-                ? `No registered pet found with ID #${id}.` 
+            setError(err.response?.status === 404
+                ? `No registered pet found with ID #${id}.`
                 : 'Error connecting to database. Please check backend status.');
         } finally {
             setLoading(false);
@@ -219,7 +351,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
             // Instantly create a temporary HTML5 QR Code instance to scan the static file
             const tempScanner = new Html5Qrcode('qr-upload-temp-container');
             const result = await tempScanner.scanFile(file, true);
-            
+
             // Handle scanned text
             await handleQRDecoded(result);
         } catch (err) {
@@ -243,17 +375,17 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300 font-sans">
-            
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300 font-sans">
+
             {/* Temporary container hidden in viewport for handling static image scans */}
             <div id="qr-upload-temp-container" className="hidden" style={{ width: '1px', height: '1px' }}></div>
 
             <div className="bg-white rounded-[2.5rem] shadow-2xl overflow-hidden max-w-xl w-full max-h-[90vh] flex flex-col border border-gray-100 animate-in zoom-in-95 duration-300">
-                
+
                 {/* Header */}
                 <div className="bg-gradient-to-r from-orange-500 to-[#F97316] text-white px-8 py-6 flex justify-between items-center relative overflow-hidden shrink-0">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-xl translate-x-8 -translate-y-8"></div>
-                    
+
                     <div className="flex items-center space-x-3.5 z-10">
                         <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center text-white backdrop-blur-sm">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
@@ -267,7 +399,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                         </div>
                     </div>
 
-                    <button 
+                    <button
                         onClick={onClose}
                         className="bg-white/10 hover:bg-white/20 text-white rounded-full p-2.5 transition-all z-10 cursor-pointer"
                     >
@@ -279,7 +411,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-6">
-                    
+
                     {/* Active Scanning Mode tabs */}
                     {!pet && !loading && (
                         <div className="flex bg-gray-100 rounded-2xl p-1.5 shrink-0">
@@ -321,10 +453,10 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                             {activeTab === 'camera' && (
                                 <div className="flex flex-col items-center justify-center space-y-4">
                                     <div className="w-full h-[320px] rounded-3xl bg-gray-50 border border-gray-100 shadow-inner overflow-hidden relative flex items-center justify-center">
-                                        
+
                                         {/* Scanner Viewport Element */}
                                         <div id={scannerId} className="w-full h-full object-cover"></div>
-                                        
+
                                         {/* Scanner Animation Overlays */}
                                         {cameraActive && (
                                             <>
@@ -358,11 +490,11 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                             {activeTab === 'upload' && (
                                 <div className="flex flex-col items-center justify-center">
                                     <label className="w-full h-64 border-2 border-dashed border-gray-200 rounded-[2rem] flex flex-col items-center justify-center gap-4 cursor-pointer bg-gray-50 hover:bg-orange-50/20 hover:border-orange-300 transition-all group p-6">
-                                        <input 
-                                            type="file" 
-                                            accept="image/*" 
-                                            className="hidden" 
-                                            onChange={handleImageUpload} 
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={handleImageUpload}
                                         />
                                         <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center text-gray-400 group-hover:text-orange-600 shadow-md transition-colors">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -421,10 +553,10 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                     {/* RESULTS MODE PANEL */}
                     {pet && !loading && (
                         <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
-                            
+
                             {/* Pet Core Detail Card */}
                             <div className="bg-gray-50 rounded-[2rem] p-6 border border-gray-100 flex flex-col sm:flex-row gap-6">
-                                
+
                                 {/* Photo */}
                                 <div className="w-32 h-32 rounded-3xl bg-white border border-gray-200 shadow-sm overflow-hidden shrink-0 self-center flex items-center justify-center">
                                     {pet.photo_url ? (
@@ -444,7 +576,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                             </span>
                                         </div>
                                         <p className="text-xs text-gray-400 font-extrabold uppercase tracking-wider mt-1">{pet.breed || 'Unknown Breed'}</p>
-                                        
+
                                         <div className="grid grid-cols-2 gap-3 mt-4 text-xs font-semibold text-gray-600">
                                             <div>
                                                 <span className="text-[10px] font-extrabold text-gray-400 uppercase block tracking-wider">Gender</span>
@@ -491,7 +623,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                             <div className="bg-[#1A4543] rounded-[2rem] p-6 text-white shadow-lg relative overflow-hidden">
                                 <div className="absolute bottom-0 right-0 w-40 h-40 bg-white/5 rounded-full blur-2xl translate-x-12 translate-y-12"></div>
                                 <div className="absolute top-0 left-0 w-24 h-24 bg-white/5 rounded-full blur-xl -translate-x-6 -translate-y-6"></div>
-                                
+
                                 <div className="flex justify-between items-start z-10 relative">
                                     <div>
                                         <span className="text-[9px] font-black text-teal-300 uppercase tracking-widest">Registered Owner Details</span>
@@ -504,7 +636,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                             <h4 className="text-xl font-black text-teal-100/60 tracking-tight mt-2">No Linked Owner Found</h4>
                                         )}
                                     </div>
-                                    
+
                                     <div className="bg-white/10 rounded-2xl p-2.5 backdrop-blur-sm">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-teal-300" viewBox="0 0 20 20" fill="currentColor">
                                             <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
@@ -515,8 +647,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                 {owner && (
                                     <div className="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-white/10 z-10 relative text-xs">
                                         {owner.phone && (
-                                            <a 
-                                                href={`tel:${owner.phone}`} 
+                                            <a
+                                                href={`tel:${owner.phone}`}
                                                 className="flex items-center space-x-3 bg-white/5 hover:bg-white/10 p-3 rounded-2xl border border-white/5 transition-all text-white group"
                                             >
                                                 <div className="w-8 h-8 rounded-xl bg-teal-300/10 flex items-center justify-center text-teal-300 group-hover:scale-105 transition-transform">
@@ -530,8 +662,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                                 </div>
                                             </a>
                                         )}
-                                        <a 
-                                            href={`mailto:${owner.email}`} 
+                                        <a
+                                            href={`mailto:${owner.email}`}
                                             className="flex items-center space-x-3 bg-white/5 hover:bg-white/10 p-3 rounded-2xl border border-white/5 transition-all text-white group"
                                         >
                                             <div className="w-8 h-8 rounded-xl bg-teal-300/10 flex items-center justify-center text-teal-300 group-hover:scale-105 transition-transform">
@@ -566,17 +698,30 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                         </button>
                     ) : (
                         activeTab === 'camera' && cameraActive && (
-                            <button
-                                onClick={stopCamera}
-                                className="px-6 py-3.5 bg-gray-200 hover:bg-gray-300 text-gray-600 rounded-2xl text-xs font-extrabold tracking-wider uppercase transition-all cursor-pointer"
-                            >
-                                Stop Camera
-                            </button>
+                            <div className="flex gap-3">
+                                {cameras.length > 1 && (
+                                    <button
+                                        onClick={handleSwitchCamera}
+                                        className="px-6 py-3.5 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-2xl text-xs font-extrabold tracking-wider uppercase transition-all flex items-center space-x-2 cursor-pointer"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                        </svg>
+                                        <span>Switch Camera</span>
+                                    </button>
+                                )}
+                                <button
+                                    onClick={stopCamera}
+                                    className="px-6 py-3.5 bg-gray-200 hover:bg-gray-300 text-gray-600 rounded-2xl text-xs font-extrabold tracking-wider uppercase transition-all cursor-pointer"
+                                >
+                                    Stop Camera
+                                </button>
+                            </div>
                         )
                     )}
                     <button
                         onClick={onClose}
-                        className="px-6 py-3.5 bg-gray-900 hover:bg-black text-white rounded-2xl text-xs font-extrabold tracking-wider uppercase shadow-md transition-all cursor-pointer"
+                        className="px-6 py-3.5 bg-[#F97316] hover:bg-[#EA580C] text-[#FAFAF9] rounded-2xl text-xs font-extrabold tracking-wider uppercase shadow-md transition-all cursor-pointer border border-orange-500/20"
                     >
                         Close
                     </button>
@@ -584,12 +729,47 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
 
             </div>
 
-            {/* Injected scan laser animation style block */}
+            {/* Injected styles for scanner layout and overlay issues */}
             <style>{`
                 @keyframes scan {
                     0% { top: 15%; opacity: 0.3; }
                     50% { top: 85%; opacity: 1; }
                     100% { top: 15%; opacity: 0.3; }
+                }
+                
+                /* Ensure html5-qrcode video viewport scales and fits the container perfectly */
+                #qr-reader-viewport {
+                    width: 100% !important;
+                    height: 100% !important;
+                    position: relative !important;
+                    overflow: hidden !important;
+                    border-radius: 1.5rem !important;
+                }
+
+                #qr-reader-viewport video {
+                    width: 100% !important;
+                    height: 100% !important;
+                    object-fit: cover !important;
+                    object-position: center !important;
+                    border-radius: 1.5rem !important;
+                }
+
+                /* Hide any unwanted default controls injected by html5-qrcode */
+                #qr-reader-viewport button {
+                    display: none !important;
+                }
+                
+                #qr-reader-viewport a {
+                    display: none !important;
+                }
+
+                /* Hide the Leaflet Map and its controls dynamically only while the modal is open */
+                .leaflet-container,
+                .leaflet-pane,
+                .leaflet-control-container {
+                    visibility: hidden !important;
+                    opacity: 0 !important;
+                    pointer-events: none !important;
                 }
             `}</style>
         </div>

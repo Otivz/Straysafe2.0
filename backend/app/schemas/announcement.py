@@ -25,6 +25,7 @@ class AnnouncementCreate(BaseModel):
     location: Optional[str] = None
     subdivision_id: Optional[int] = None
     barangay_id: Optional[int] = None
+    status: Optional[str] = "Published"
 
 
 class AnnouncementCommentResponse(BaseModel):
@@ -77,5 +78,6 @@ class AnnouncementResponse(BaseModel):
     media: List[AnnouncementMediaResponse] = []
     comments: List[AnnouncementCommentResponse] = []
     reactions: List[AnnouncementReactionResponse] = []
+    status: str = "Published"
 
 

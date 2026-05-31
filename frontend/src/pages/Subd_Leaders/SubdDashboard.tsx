@@ -196,16 +196,17 @@ const SubdDashboard = () => {
             <SubdSidebar />
 
             <main className="flex-1 flex flex-col h-screen overflow-hidden">
-                <SubdNavbar />
+                <SubdNavbar
+                    leftContent={
+                        <div className="flex flex-col">
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">Subdivision Dashboard</h1>
+                            <p className="text-[11px] text-gray-400 font-semibold mt-1.5 leading-none">Overview of reports, rescue operations, and registered pets</p>
+                        </div>
+                    }
+                />
 
                 <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-8 custom-scrollbar bg-[#FAFAF9]">
                     <div className="flex flex-col gap-8">
-
-                        {/* Header */}
-                        <div>
-                            <h1 className="text-3xl font-extrabold text-gray-900 mb-1">Subdivision Dashboard</h1>
-                            <p className="text-gray-500 text-sm">Overview of reports, rescue operations, and registered pets.</p>
-                        </div>
 
                         {/* Stat Cards */}
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">

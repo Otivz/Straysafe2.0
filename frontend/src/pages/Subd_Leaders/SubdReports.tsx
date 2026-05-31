@@ -449,17 +449,20 @@ const SubdReports = () => {
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* TOP NAVIGATION */}
-                <SubdNavbar />
+                <SubdNavbar
+                    leftContent={
+                        <div className="flex flex-col">
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">Incident Reports</h1>
+                            <p className="text-[11px] text-gray-400 font-semibold mt-1.5 leading-none">Monitor and manage reported animal incidents in your subdivision</p>
+                        </div>
+                    }
+                />
 
                 <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto">
-                        {/* Header */}
+                        {/* Action Toolbar */}
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                            <div>
-                                <h1 className="text-2xl font-bold text-gray-900">Community Incident Reports</h1>
-                                <p className="text-gray-500 text-sm mt-1">Monitor and manage reported animal incidents in your subdivision.</p>
-                            </div>
-                            <div className="flex items-center space-x-3">
+                            <div className="flex items-center space-x-3 ml-auto">
                                 <Button variant="light" className="flex items-center space-x-2" onClick={fetchReports}>
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
