@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 
 const BrgyOperation = () => {
     const navigate = useNavigate();
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
     useEffect(() => {
         const rawUser = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
@@ -67,18 +68,25 @@ const BrgyOperation = () => {
 
     return (
         <div className="min-h-screen w-full flex bg-[#F8F9FA] font-sans text-gray-800">
-            <BrgySidebar />
-            <main className="flex-1 flex flex-col h-screen overflow-hidden">
-                <BrgyNavbar />
+            <BrgySidebar 
+                isMobileOpen={isMobileSidebarOpen}
+                onCloseMobile={() => setIsMobileSidebarOpen(false)}
+            />
+            <main className="flex-1 flex flex-col h-screen overflow-hidden w-full">
+                <BrgyNavbar
+                    onMenuToggle={() => setIsMobileSidebarOpen(true)}
+                    leftContent={
+                        <div className="flex flex-col">
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">Operation Command Center</h1>
+                            <p className="text-[11px] text-gray-400 font-semibold mt-1.5 leading-none">Real-time tactical oversight for Brgy. San Vicente</p>
+                        </div>
+                    }
+                />
                 <div className="flex-1 overflow-y-auto p-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                     
                     <div className="flex flex-col gap-8">
                         {/* Header Section */}
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Operation Command Center</h1>
-                                <p className="text-gray-500 font-medium">Real-time tactical oversight for Brgy. San Vicente</p>
-                            </div>
+                        <div className="flex justify-end items-center">
                             <div className="flex gap-3">
                                 <div className="px-4 py-2 bg-white rounded-xl shadow-sm border border-gray-100 flex items-center gap-2">
                                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>

@@ -46,14 +46,14 @@ def _to_response(ann: Announcement) -> AnnouncementResponse:
         for c in ann.comments:
             comments_list.append(
                 AnnouncementCommentResponse(
-                    comment_id=c.comment_id,
-                    announcement_id=c.announcement_id,
-                    user_id=c.user_id,
+                    comment_id=c.comment_id,  # type: ignore
+                    announcement_id=c.announcement_id,  # type: ignore
+                    user_id=c.user_id,  # type: ignore
                     user_name=c.user.name if c.user else "Unknown User",
                     user_photo=c.user.profile_picture if c.user else None,
-                    parent_comment_id=c.parent_comment_id,
-                    comment=c.comment,
-                    created_at=c.created_at,
+                    parent_comment_id=c.parent_comment_id,  # type: ignore
+                    comment=c.comment,  # type: ignore
+                    created_at=c.created_at,  # type: ignore
                 )
             )
 
@@ -62,25 +62,25 @@ def _to_response(ann: Announcement) -> AnnouncementResponse:
         for r in ann.reactions:
             reactions_list.append(
                 AnnouncementReactionResponse(
-                    reaction_id=r.reaction_id,
-                    announcement_id=r.announcement_id,
-                    user_id=r.user_id,
-                    reaction_type=r.reaction_type,
-                    created_at=r.created_at,
+                    reaction_id=r.reaction_id,  # type: ignore
+                    announcement_id=r.announcement_id,  # type: ignore
+                    user_id=r.user_id,  # type: ignore
+                    reaction_type=r.reaction_type,  # type: ignore
+                    created_at=r.created_at,  # type: ignore
                 )
             )
 
     return AnnouncementResponse(
-        announcement_id=ann.announcement_id,
-        title=ann.title,
+        announcement_id=ann.announcement_id,  # type: ignore
+        title=ann.title,  # type: ignore
         category=_presentation_category(ann.category.category_name if ann.category else None),
         visibility=str(ann.visibility),
-        content=ann.content,
+        content=ann.content,  # type: ignore
         pinned=(str(ann.priority_level) == "Emergency"),
-        expiration=ann.expires_at,
+        expiration=ann.expires_at,  # type: ignore
         location=ann.subdivision.subdivision_name if ann.subdivision else None,
         posted_by=ann.creator.name if ann.creator else "Subdivision Leader",
-        posted_on=ann.published_at or ann.created_at,
+        posted_on=ann.published_at or ann.created_at,  # type: ignore
         media=ann.media or [],
         comments=comments_list,
         reactions=reactions_list,
@@ -162,17 +162,17 @@ def create_announcement(payload: AnnouncementCreate, db: Session = Depends(get_d
 
     target_status = payload.status or "Published"
     row = Announcement(
-        barangay_id=payload.barangay_id,
-        subdivision_id=payload.subdivision_id or creator.subdivision_id,
-        created_by=payload.created_by,
-        category_id=category.category_id,
-        title=payload.title,
-        content=payload.content,
-        visibility=payload.visibility,
-        priority_level="Emergency" if payload.pinned else "Normal",
-        status=target_status,
-        published_at=datetime.now() if target_status == "Published" else None,
-        expires_at=payload.expiration,
+        barangay_id=payload.barangay_id,  # type: ignore
+        subdivision_id=payload.subdivision_id or creator.subdivision_id,  # type: ignore
+        created_by=payload.created_by,  # type: ignore
+        category_id=category.category_id,  # type: ignore
+        title=payload.title,  # type: ignore
+        content=payload.content,  # type: ignore
+        visibility=payload.visibility,  # type: ignore
+        priority_level="Emergency" if payload.pinned else "Normal",  # type: ignore
+        status=target_status,  # type: ignore
+        published_at=datetime.now() if target_status == "Published" else None,  # type: ignore
+        expires_at=payload.expiration,  # type: ignore
     )
     db.add(row)
     db.commit()
@@ -191,6 +191,8 @@ def create_announcement(payload: AnnouncementCreate, db: Session = Depends(get_d
         .filter(Announcement.announcement_id == row.announcement_id)
         .first()
     )
+    if not row:
+        raise HTTPException(status_code=404, detail="Announcement not found")
     return _to_response(row)
 
 
@@ -256,16 +258,18 @@ def add_announcement_comment(
         .filter(AnnouncementComment.comment_id == db_comment.comment_id)
         .first()
     )
+    if not db_comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
 
     return AnnouncementCommentResponse(
-        comment_id=db_comment.comment_id,
-        announcement_id=db_comment.announcement_id,
-        user_id=db_comment.user_id,
+        comment_id=db_comment.comment_id,  # type: ignore
+        announcement_id=db_comment.announcement_id,  # type: ignore
+        user_id=db_comment.user_id,  # type: ignore
         user_name=db_comment.user.name if db_comment.user else "Unknown User",
         user_photo=db_comment.user.profile_picture if db_comment.user else None,
-        parent_comment_id=db_comment.parent_comment_id,
-        comment=db_comment.comment,
-        created_at=db_comment.created_at,
+        parent_comment_id=db_comment.parent_comment_id,  # type: ignore
+        comment=db_comment.comment,  # type: ignore
+        created_at=db_comment.created_at,  # type: ignore
     )
 
 
@@ -294,14 +298,14 @@ def react_to_announcement(
             db.commit()
             return {"status": "removed", "reaction_type": payload.reaction_type}
         else:
-            existing.reaction_type = payload.reaction_type
+            existing.reaction_type = payload.reaction_type  # type: ignore
             db.commit()
             return {"status": "updated", "reaction_type": payload.reaction_type}
     else:
         new_reaction = AnnouncementReaction(
-            announcement_id=announcement_id,
-            user_id=payload.user_id,
-            reaction_type=payload.reaction_type,
+            announcement_id=announcement_id,  # type: ignore
+            user_id=payload.user_id,  # type: ignore
+            reaction_type=payload.reaction_type,  # type: ignore
         )
         db.add(new_reaction)
         db.commit()
@@ -316,9 +320,9 @@ def update_announcement_status(announcement_id: int, payload: dict, db: Session 
     new_status = payload.get("status")
     if new_status not in ["Draft", "Published", "Archived"]:
         raise HTTPException(status_code=400, detail="Invalid status")
-    ann.status = new_status
-    if new_status == "Published" and not ann.published_at:
-        ann.published_at = datetime.now()
+    ann.status = new_status  # type: ignore
+    if new_status == "Published" and not ann.published_at:  # type: ignore
+        ann.published_at = datetime.now()  # type: ignore
     db.commit()
     db.refresh(ann)
     # Re-fetch with joinedloads to match _to_response requirements
@@ -335,6 +339,8 @@ def update_announcement_status(announcement_id: int, payload: dict, db: Session 
         .filter(Announcement.announcement_id == announcement_id)
         .first()
     )
+    if not ann:
+        raise HTTPException(status_code=404, detail="Announcement not found")
     return _to_response(ann)
 
 
@@ -349,17 +355,18 @@ def update_announcement(announcement_id: int, payload: AnnouncementCreate, db: S
     if not category:
         raise HTTPException(status_code=400, detail="Invalid announcement category mapping")
         
-    ann.title = payload.title
-    ann.content = payload.content
-    ann.category_id = category.category_id
-    ann.visibility = payload.visibility
-    ann.priority_level = "Emergency" if payload.pinned else "Normal"
-    ann.expires_at = payload.expiration
-    ann.location = payload.location
+    ann.title = payload.title  # type: ignore
+    ann.content = payload.content  # type: ignore
+    ann.category_id = category.category_id  # type: ignore
+    ann.visibility = payload.visibility  # type: ignore
+    ann.priority_level = "Emergency" if payload.pinned else "Normal"  # type: ignore
+    ann.expires_at = payload.expiration  # type: ignore
+    ann.subdivision_id = payload.subdivision_id  # type: ignore
+    ann.barangay_id = payload.barangay_id  # type: ignore
     if payload.status:
-        ann.status = payload.status
-        if payload.status == "Published" and not ann.published_at:
-            ann.published_at = datetime.now()
+        ann.status = payload.status  # type: ignore
+        if payload.status == "Published" and not ann.published_at:  # type: ignore
+            ann.published_at = datetime.now()  # type: ignore
 
     db.commit()
     db.refresh(ann)
@@ -378,6 +385,8 @@ def update_announcement(announcement_id: int, payload: AnnouncementCreate, db: S
         .filter(Announcement.announcement_id == announcement_id)
         .first()
     )
+    if not ann:
+        raise HTTPException(status_code=404, detail="Announcement not found")
     return _to_response(ann)
 
 
@@ -389,4 +398,3 @@ def delete_announcement(announcement_id: int, db: Session = Depends(get_db)):
     db.delete(ann)
     db.commit()
     return {"message": "Announcement deleted successfully"}
-

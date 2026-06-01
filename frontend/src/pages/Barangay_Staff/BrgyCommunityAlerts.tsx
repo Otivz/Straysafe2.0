@@ -15,6 +15,7 @@ interface Alert {
 
 const BrgyCommunityAlerts = () => {
     const navigate = useNavigate();
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [alerts] = useState<Alert[]>([
         {
             id: 'ALR-001',
@@ -90,18 +91,25 @@ const BrgyCommunityAlerts = () => {
 
     return (
         <div className="min-h-screen w-full flex bg-[#F8F9FA] font-sans text-gray-800">
-            <BrgySidebar />
-            <main className="flex-1 flex flex-col h-screen overflow-hidden">
-                <BrgyNavbar />
+            <BrgySidebar 
+                isMobileOpen={isMobileSidebarOpen}
+                onCloseMobile={() => setIsMobileSidebarOpen(false)}
+            />
+            <main className="flex-1 flex flex-col h-screen overflow-hidden w-full">
+                <BrgyNavbar
+                    onMenuToggle={() => setIsMobileSidebarOpen(true)}
+                    leftContent={
+                        <div className="flex flex-col">
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">Community Alerts</h1>
+                            <p className="text-[11px] text-gray-400 font-semibold mt-1.5 leading-none">Broadcast safety alerts and advisories to the community</p>
+                        </div>
+                    }
+                />
                 <div className="flex-1 overflow-y-auto p-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                     <div className="flex flex-col gap-8">
 
                         {/* Header */}
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Community Alerts</h1>
-                                <p className="text-gray-500 font-medium">Broadcast safety alerts and advisories to the community</p>
-                            </div>
+                        <div className="flex justify-end items-center">
                             <button className="px-5 py-2.5 bg-[#F97316] text-white rounded-xl text-xs font-bold shadow-md hover:bg-[#EA580C] transition-all">
                                 + New Alert
                             </button>

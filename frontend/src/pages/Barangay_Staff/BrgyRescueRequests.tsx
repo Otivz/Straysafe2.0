@@ -83,6 +83,7 @@ const categoryMap: Record<number, string> = {
 const BrgyRescueRequests = () => {
     const navigate = useNavigate();
     const [requests, setRequests] = useState<RescueRequest[]>([]);
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [loading, setLoading] = useState(true);
     const [viewingRequest, setViewingRequest] = useState<RescueRequest | null>(null);
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -263,18 +264,26 @@ const BrgyRescueRequests = () => {
 
     return (
         <div className="min-h-screen w-full flex bg-[#F8F9FA] font-sans text-gray-800">
-            <BrgySidebar />
-
-            <main className="flex-1 flex flex-col h-screen overflow-hidden">
-                <BrgyNavbar />
+            <BrgySidebar 
+                isMobileOpen={isMobileSidebarOpen}
+                onCloseMobile={() => setIsMobileSidebarOpen(false)}
+            />
+ 
+            {/* MAIN CONTENT */}
+            <main className="flex-1 flex flex-col h-screen overflow-hidden w-full">
+                <BrgyNavbar
+                    onMenuToggle={() => setIsMobileSidebarOpen(true)}
+                    leftContent={
+                        <div className="flex flex-col">
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">Rescue Requests</h1>
+                            <p className="text-[11px] text-gray-400 font-semibold mt-1.5 leading-none">Review and approve rescue operations escalated by Subdivision Leaders.</p>
+                        </div>
+                    }
+                />
 
                 <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                     <div className="max-w-7xl mx-auto w-full">
-                        <div className="flex justify-between items-end mb-8">
-                            <div>
-                                <h1 className="text-3xl font-extrabold text-gray-900 mb-2">Rescue Requests</h1>
-                                <p className="text-gray-500 text-sm">Review and approve rescue operations escalated by Subdivision Leaders.</p>
-                            </div>
+                        <div className="flex justify-end items-center mb-8">
                             <Button variant="light" onClick={fetchRequests} className="flex items-center gap-2">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

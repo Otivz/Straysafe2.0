@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import DataTable from '../../components/DataTable';
+import axios from 'axios';
 
 interface EscalatedMission {
     mission_id: string;
@@ -15,11 +16,10 @@ interface EscalatedMission {
 }
 
 const EscelatedMissions = () => {
-    const [loading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedStatus, setSelectedStatus] = useState('All');
-
-
+    const [missions, setMissions] = useState<EscalatedMission[]>([]);
     const [selectedMission, setSelectedMission] = useState<EscalatedMission | null>(null);
 
     // Mock Data for UI demonstration
@@ -56,7 +56,58 @@ const EscelatedMissions = () => {
         }
     ];
 
-    const filteredMissions = mockMissions.filter(m => {
+    const fetchMissions = async (showLoading = true) => {
+        try {
+            if (showLoading) setLoading(true);
+            const response = await axios.get('http://localhost:8000/rescue-requests/');
+            if (response.data && response.data.length > 0) {
+                const mapped: EscalatedMission[] = response.data.map((m: any) => {
+                    let friendlyStatus: 'Pending' | 'In Progress' | 'Resolved' | 'Rejected' = 'Pending';
+                    const sid = m.status_id;
+                    if (sid === 3) friendlyStatus = 'Rejected';
+                    else if (sid === 4 || sid === 5) friendlyStatus = 'In Progress';
+                    else if (sid === 6) friendlyStatus = 'Resolved';
+
+                    const escDate = m.created_at ? new Date(m.created_at).toLocaleString('en-US', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true
+                    }) : 'N/A';
+
+                    return {
+                        mission_id: `MSN-2026-${m.rescue_id.toString().padStart(3, '0')}`,
+                        report_id: m.report_id,
+                        title: m.title || `Rescue Request #${m.rescue_id}`,
+                        description: m.description || m.notes || 'No description provided.',
+                        escalated_date: escDate,
+                        barangay_status: friendlyStatus,
+                        reporter: m.report?.reporter_name || m.leader_name || 'Subdivision Leader',
+                        landmark: m.report?.landmark || 'Subdivision Boundary',
+                        raw_data: m
+                    };
+                });
+                setMissions(mapped);
+            } else {
+                setMissions(mockMissions);
+            }
+        } catch (error) {
+            console.error('Error fetching escalated missions:', error);
+            setMissions(mockMissions);
+        } finally {
+            if (showLoading) setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchMissions(true);
+        const interval = setInterval(() => fetchMissions(false), 5000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const filteredMissions = missions.filter(m => {
         const matchesSearch = searchQuery === '' ||
             m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
             m.mission_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -87,117 +138,141 @@ const EscelatedMissions = () => {
     }
 
     const getTimelineData = (mission: EscalatedMission) => {
-        const steps: TimelineStep[] = [];
-        let assignedTeam = 'N/A';
+        const raw = (mission as any).raw_data;
+        if (!raw) {
+            const steps: TimelineStep[] = [];
+            let assignedTeam = 'N/A';
 
-        // Step 1: Report Received (Always completed for escalated missions)
+            steps.push({
+                label: 'Report Received',
+                status: 'Resolved',
+                timestamp: '2024-05-10 08:30 AM',
+                note: `Initial report registered successfully by ${mission.reporter}.`
+            });
+
+            if (mission.barangay_status === 'Pending') {
+                steps.push({
+                    label: 'Endorsed to Barangay',
+                    status: 'Pending',
+                    timestamp: mission.escalated_date,
+                    note: 'Awaiting barangay acknowledgment and team assignment.'
+                });
+                steps.push({ label: 'Rescue Team Assigned', status: 'Not Started', timestamp: '-' });
+                steps.push({ label: 'Rescue In Progress', status: 'Not Started', timestamp: '-' });
+                steps.push({ label: 'Mission Resolved', status: 'Not Started', timestamp: '-' });
+            } else if (mission.barangay_status === 'In Progress') {
+                assignedTeam = 'Alpha Rescue Squad';
+                steps.push({
+                    label: 'Endorsed to Barangay',
+                    status: 'Resolved',
+                    timestamp: mission.escalated_date,
+                    note: 'Endorsed to Barangay Operations Hub.'
+                });
+                steps.push({
+                    label: 'Rescue Team Assigned',
+                    status: 'Resolved',
+                    timestamp: '2024-05-12 11:00 AM',
+                    note: 'Dispatched Alpha Rescue Squad.'
+                });
+                steps.push({
+                    label: 'Rescue In Progress',
+                    status: 'In Progress',
+                    timestamp: '2024-05-12 11:15 AM',
+                    note: `Team has arrived at ${mission.landmark} and is conducting operations.`
+                });
+                steps.push({ label: 'Mission Resolved', status: 'Not Started', timestamp: '-' });
+            } else if (mission.barangay_status === 'Resolved') {
+                assignedTeam = 'Bravo Rescue Team';
+                steps.push({
+                    label: 'Endorsed to Barangay',
+                    status: 'Resolved',
+                    timestamp: mission.escalated_date,
+                    note: 'Endorsed to Barangay Operations Hub.'
+                });
+                steps.push({
+                    label: 'Rescue Team Assigned',
+                    status: 'Resolved',
+                    timestamp: '2024-05-10 09:00 AM',
+                    note: 'Dispatched Bravo Rescue Team.'
+                });
+                steps.push({
+                    label: 'Rescue In Progress',
+                    status: 'Resolved',
+                    timestamp: '2024-05-10 09:30 AM',
+                    note: `Team conducted rescue operation near ${mission.landmark}.`
+                });
+                steps.push({
+                    label: 'Mission Resolved',
+                    status: 'Resolved',
+                    timestamp: '2024-05-10 10:15 AM',
+                    note: 'Mission resolved successfully. Animal relocated to safety.'
+                });
+            } else if (mission.barangay_status === 'Rejected') {
+                steps.push({
+                    label: 'Endorsed to Barangay',
+                    status: 'Pending',
+                    timestamp: mission.escalated_date,
+                    note: 'Endorsement rejected. Review required.'
+                });
+                steps.push({ label: 'Rescue Team Assigned', status: 'Not Started', timestamp: '-' });
+                steps.push({ label: 'Rescue In Progress', status: 'Not Started', timestamp: '-' });
+                steps.push({ label: 'Mission Resolved', status: 'Not Started', timestamp: '-' });
+            }
+
+            return { steps, assignedTeam };
+        }
+
+        const steps: TimelineStep[] = [];
+        const assignedTeam = raw.assigned_staff_name || 'Awaiting Dispatch';
+
         steps.push({
             label: 'Report Received',
             status: 'Resolved',
-            timestamp: '2024-05-10 08:30 AM',
+            timestamp: raw.report?.created_at ? new Date(raw.report.created_at).toLocaleString() : 'N/A',
             note: `Initial report registered successfully by ${mission.reporter}.`
         });
 
-        if (mission.barangay_status === 'Pending') {
-            steps.push({
-                label: 'Endorsed to Barangay',
-                status: 'Pending',
-                timestamp: mission.escalated_date,
-                note: 'Awaiting barangay acknowledgment and team assignment.'
-            });
-            steps.push({
-                label: 'Rescue Team Assigned',
-                status: 'Not Started',
-                timestamp: '-'
-            });
-            steps.push({
-                label: 'Rescue In Progress',
-                status: 'Not Started',
-                timestamp: '-'
-            });
-            steps.push({
-                label: 'Mission Resolved',
-                status: 'Not Started',
-                timestamp: '-'
-            });
-        } else if (mission.barangay_status === 'In Progress') {
-            assignedTeam = 'Alpha Rescue Squad';
-            steps.push({
-                label: 'Endorsed to Barangay',
-                status: 'Resolved',
-                timestamp: mission.escalated_date,
-                note: 'Endorsed to Barangay Operations Hub.'
-            });
-            steps.push({
-                label: 'Rescue Team Assigned',
-                status: 'Resolved',
-                timestamp: '2024-05-12 11:00 AM',
-                note: 'Dispatched Alpha Rescue Squad.'
-            });
-            steps.push({
-                label: 'Rescue In Progress',
-                status: 'In Progress',
-                timestamp: '2024-05-12 11:15 AM',
-                note: `Team has arrived at ${mission.landmark} and is conducting operations.`
-            });
-            steps.push({
-                label: 'Mission Resolved',
-                status: 'Not Started',
-                timestamp: '-'
-            });
-        } else if (mission.barangay_status === 'Resolved') {
-            assignedTeam = 'Bravo Rescue Team';
-            steps.push({
-                label: 'Endorsed to Barangay',
-                status: 'Resolved',
-                timestamp: mission.escalated_date,
-                note: 'Endorsed to Barangay Operations Hub.'
-            });
-            steps.push({
-                label: 'Rescue Team Assigned',
-                status: 'Resolved',
-                timestamp: '2024-05-10 09:00 AM',
-                note: 'Dispatched Bravo Rescue Team.'
-            });
-            steps.push({
-                label: 'Rescue In Progress',
-                status: 'Resolved',
-                timestamp: '2024-05-10 09:30 AM',
-                note: `Team conducted rescue operation near ${mission.landmark}.`
-            });
-            steps.push({
-                label: 'Mission Resolved',
-                status: 'Resolved',
-                timestamp: '2024-05-10 10:15 AM',
-                note: 'Mission resolved successfully. Animal relocated to safety.'
-            });
-        } else if (mission.barangay_status === 'Rejected') {
-            steps.push({
-                label: 'Endorsed to Barangay',
-                status: 'Pending',
-                timestamp: mission.escalated_date,
-                note: 'Endorsement rejected. Review required.'
-            });
-            steps.push({
-                label: 'Rescue Team Assigned',
-                status: 'Not Started',
-                timestamp: '-'
-            });
-            steps.push({
-                label: 'Rescue In Progress',
-                status: 'Not Started',
-                timestamp: '-'
-            });
-            steps.push({
-                label: 'Mission Resolved',
-                status: 'Not Started',
-                timestamp: '-'
-            });
-        }
+        steps.push({
+            label: 'Endorsed to Barangay',
+            status: 'Resolved',
+            timestamp: mission.escalated_date,
+            note: 'Official subdivision endorsement sent to Barangay.'
+        });
+
+        const currentStatus = raw.report?.status_id || raw.report?.current_status_id || raw.status_id || 4;
+        const hasAssignment = !!raw.assigned_staff_name;
+        const isResolved = currentStatus === 11 || currentStatus === 6 || raw.status_id === 6 || mission.barangay_status?.toLowerCase() === 'resolved';
+        const isInProgress = currentStatus === 5 || raw.status_id === 5 || raw.status_id === 4 || mission.barangay_status?.toLowerCase() === 'in progress';
+        const isTeamAssigned = hasAssignment || isResolved || isInProgress || currentStatus === 13 || (raw.assignments && raw.assignments.length > 0);
+
+        steps.push({
+            label: 'Rescue Team Assigned',
+            status: isTeamAssigned ? 'Resolved' : (currentStatus === 4 ? 'Pending' : 'Not Started'),
+            timestamp: raw.assignments && raw.assignments.length > 0 ? new Date(raw.assignments[0].assigned_at).toLocaleString() : '-',
+            note: hasAssignment ? `Dispatched ${raw.assigned_staff_name}.` : (isResolved ? 'Rescue team dispatched and operation completed.' : 'Awaiting Barangay staff assignment.')
+        });
+
+        steps.push({
+            label: 'Rescue In Progress',
+            status: isResolved ? 'Resolved' : (isInProgress ? 'In Progress' : 'Not Started'),
+            timestamp: '-',
+            note: isInProgress ? `Barangay rescue squad dispatched and on-site at ${mission.landmark}.` : (isResolved ? 'Dispatched and operations completed.' : '-')
+        });
+
+        steps.push({
+            label: 'Mission Resolved',
+            status: isResolved ? 'Resolved' : 'Not Started',
+            timestamp: '-',
+            note: isResolved ? 'Incident resolved successfully. Relocated to safety.' : '-'
+        });
 
         return { steps, assignedTeam };
-
     };
+
+    const totalEscalated = missions.length;
+    const pendingAction = missions.filter(m => m.barangay_status === 'Pending').length;
+    const inProgress = missions.filter(m => m.barangay_status === 'In Progress').length;
+    const resolved = missions.filter(m => m.barangay_status === 'Resolved').length;
 
     return (
         <div className="flex h-screen bg-[#F8FAFC]">
@@ -219,10 +294,10 @@ const EscelatedMissions = () => {
                         {/* Stats Overview */}
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                             {[
-                                { label: 'Total Escalated', value: '12', color: 'bg-orange-500' },
-                                { label: 'Pending Action', value: '4', color: 'bg-amber-500' },
-                                { label: 'In Progress', value: '3', color: 'bg-blue-500' },
-                                { label: 'Resolved', value: '5', color: 'bg-green-500' },
+                                { label: 'Total Escalated', value: totalEscalated.toString(), color: 'bg-orange-500' },
+                                { label: 'Pending Action', value: pendingAction.toString(), color: 'bg-amber-500' },
+                                { label: 'In Progress', value: inProgress.toString(), color: 'bg-blue-500' },
+                                { label: 'Resolved', value: resolved.toString(), color: 'bg-green-500' },
                             ].map((stat, i) => (
                                 <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md">
                                     <div className="flex items-center justify-between mb-4">
@@ -272,7 +347,7 @@ const EscelatedMissions = () => {
 
                                 {/* Results count */}
                                 <span className="text-xs text-gray-400 font-medium ml-auto shrink-0">
-                                    {filteredMissions.length} of {mockMissions.length} missions
+                                    {filteredMissions.length} of {missions.length} missions
                                 </span>
                             </div>
 
@@ -377,7 +452,8 @@ const EscelatedMissions = () => {
 
             {/* Mission Tracker Modal */}
             {selectedMission && (() => {
-                const timeline = getTimelineData(selectedMission);
+                const activeMission = missions.find(m => m.mission_id === selectedMission.mission_id) || selectedMission;
+                const timeline = getTimelineData(activeMission);
                 return (
                     <div 
                         onClick={() => setSelectedMission(null)}
@@ -396,11 +472,11 @@ const EscelatedMissions = () => {
                                             Mission Tracker
                                         </span>
                                         <span className="text-xs font-mono text-gray-400 font-bold">
-                                            Report #{selectedMission.report_id}
+                                            Report #{activeMission.report_id}
                                         </span>
                                     </div>
                                     <h2 className="text-xl font-black text-gray-900 mt-1 tracking-tight">
-                                        {selectedMission.mission_id}
+                                        {activeMission.mission_id}
                                     </h2>
                                 </div>
                                 <button 
@@ -420,24 +496,24 @@ const EscelatedMissions = () => {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div className="bg-gray-50/50 border border-gray-100 p-5 rounded-2xl">
                                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Mission Title</p>
-                                        <p className="text-sm font-bold text-gray-800 leading-tight">{selectedMission.title}</p>
+                                        <p className="text-sm font-bold text-gray-800 leading-tight">{activeMission.title}</p>
                                     </div>
                                     <div className="bg-gray-50/50 border border-gray-100 p-5 rounded-2xl">
                                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Report Location</p>
-                                        <p className="text-sm font-bold text-gray-800 leading-tight">{selectedMission.landmark}</p>
+                                        <p className="text-sm font-bold text-gray-800 leading-tight">{activeMission.landmark}</p>
                                     </div>
                                     <div className="bg-gray-50/50 border border-gray-100 p-5 rounded-2xl">
                                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Reporter Name</p>
-                                        <p className="text-sm font-bold text-gray-800 leading-tight">{selectedMission.reporter}</p>
+                                        <p className="text-sm font-bold text-gray-800 leading-tight">{activeMission.reporter}</p>
                                     </div>
                                     <div className="bg-gray-50/50 border border-gray-100 p-5 rounded-2xl">
                                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Escalated Date & Time</p>
-                                        <p className="text-sm font-bold text-gray-800 leading-tight">{selectedMission.escalated_date}</p>
+                                        <p className="text-sm font-bold text-gray-800 leading-tight">{activeMission.escalated_date}</p>
                                     </div>
                                     <div className="bg-gray-50/50 border border-gray-100 p-5 rounded-2xl">
                                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Current Status</p>
-                                        <span className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border mt-1 ${getStatusStyle(selectedMission.barangay_status)}`}>
-                                            {selectedMission.barangay_status}
+                                        <span className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border mt-1 ${getStatusStyle(activeMission.barangay_status)}`}>
+                                            {activeMission.barangay_status}
                                         </span>
                                     </div>
                                     <div className="bg-gray-50/50 border border-gray-100 p-5 rounded-2xl">
