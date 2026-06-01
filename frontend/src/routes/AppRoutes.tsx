@@ -18,6 +18,7 @@ import EscelatedMissions from '../pages/Subd_Leaders/EscelatedMissions';
 
 import EndorsementArch from '../pages/Subd_Leaders/EndorsementArch';
 import SubdPetRecords from '../pages/Subd_Leaders/SubdPetRecords';
+import SubdProfile from '../pages/Subd_Leaders/SubdProfile';
 
 
 import LandingPage from '../pages/citizen/LandingPage';
@@ -33,6 +34,7 @@ import BrgyDashboard from '../pages/Barangay_Staff/BrgyDashboard';
 import BrgyRescueRequests from '../pages/Barangay_Staff/BrgyRescueRequests';
 import BrgyOperation from '../pages/Barangay_Staff/BrgyOperation';
 import BrgyCommunityAlerts from '../pages/Barangay_Staff/BrgyCommunityAlerts';
+import BrgyProfile from '../pages/Barangay_Staff/BrgyProfile';
 import SubdHazardAlert from '../pages/Subd_Leaders/SubdHazardAlert';
 
 const AppRoutes = () => {
@@ -113,11 +115,13 @@ const AppRoutes = () => {
             <Route path="/subd/endorsements" element={<EndorsementArch />} />
             <Route path="/subd/pet-records" element={<SubdPetRecords />} />
             <Route path="/subd/hazard-alert" element={<SubdHazardAlert />} />
+            <Route path="/subd/profile" element={<SubdProfile />} />
 
             <Route path="/brgy/dashboard" element={<BrgyDashboard />} />
             <Route path="/brgy/rescue-requests" element={<BrgyRescueRequests />} />
             <Route path="/brgy/operations" element={<BrgyOperation />} />
             <Route path="/brgy/community-alerts" element={<BrgyCommunityAlerts />} />
+            <Route path="/brgy/profile" element={<BrgyProfile />} />
 
 
             {/* Landing Page Route */}

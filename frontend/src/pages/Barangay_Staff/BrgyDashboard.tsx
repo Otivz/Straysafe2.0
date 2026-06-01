@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
@@ -6,6 +6,7 @@ import MapComponent from '../../components/MapComponent';
 
 const BrgyDashboard = () => {
     const navigate = useNavigate();
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
     useEffect(() => {
         const rawUser = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
@@ -27,11 +28,22 @@ const BrgyDashboard = () => {
     return (
         <div className="min-h-screen w-full flex bg-[#F8F9FA] font-sans text-gray-800">
             {/* LEFT SIDEBAR */}
-            <BrgySidebar />
+            <BrgySidebar 
+                isMobileOpen={isMobileSidebarOpen}
+                onCloseMobile={() => setIsMobileSidebarOpen(false)}
+            />
 
             {/* MAIN CONTENT */}
-            <main className="flex-1 flex flex-col h-screen overflow-hidden">
-                <BrgyNavbar />
+            <main className="flex-1 flex flex-col h-screen overflow-hidden w-full">
+                <BrgyNavbar
+                    onMenuToggle={() => setIsMobileSidebarOpen(true)}
+                    leftContent={
+                        <div className="flex flex-col">
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">Barangay Operations</h1>
+                            <p className="text-[11px] text-gray-400 font-semibold mt-1.5 leading-none">Managing rescue requests and field operations for Brgy. San Vicente.</p>
+                        </div>
+                    }
+                />
 
                 {/* SCROLLABLE AREA */}
                 <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
@@ -41,11 +53,7 @@ const BrgyDashboard = () => {
                         <div className="flex-1 flex flex-col space-y-8">
                             
                             {/* Header */}
-                            <div className="flex justify-between items-end">
-                                <div>
-                                    <h1 className="text-3xl font-extrabold text-gray-900 mb-2">Barangay Operations</h1>
-                                    <p className="text-gray-500 text-sm">Managing rescue requests and field operations for Brgy. San Vicente.</p>
-                                </div>
+                            <div className="flex justify-end items-center">
                                 <div className="hidden sm:flex items-center space-x-3">
                                     <button className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-600 shadow-sm hover:bg-gray-50 transition-all">
                                         Export Reports

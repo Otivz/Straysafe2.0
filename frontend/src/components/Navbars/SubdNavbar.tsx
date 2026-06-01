@@ -54,11 +54,18 @@ const SubdNavbar = ({ leftContent }: SubdNavbarProps) => {
                             <p className="text-sm font-bold text-gray-900 leading-none">{user.name || 'Staff User'}</p>
                             <p className="text-[10px] font-medium text-gray-400 mt-1 uppercase tracking-wider">Subdivision Leader</p>
                         </div>
-                        <div className="w-10 h-10 rounded-full border-2 border-white shadow-sm overflow-hidden bg-gray-200">
-                            {/* Avatar Image Placeholder */}
-                            <div className="w-full h-full flex items-center justify-center bg-[#F97316] text-white font-extrabold text-sm uppercase">
-                                {user.name ? user.name.charAt(0) : 'S'}
-                            </div>
+                        <div className="w-10 h-10 rounded-full border-2 border-white shadow-sm overflow-hidden bg-gray-200 flex items-center justify-center">
+                            {user.profile_picture ? (
+                                <img 
+                                    src={user.profile_picture} 
+                                    alt={user.name} 
+                                    className="w-full h-full object-cover"
+                                />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-[#F97316] text-white font-extrabold text-sm uppercase">
+                                    {user.name ? user.name.charAt(0) : 'S'}
+                                </div>
+                            )}
                         </div>
                     </button>
 
@@ -72,7 +79,7 @@ const SubdNavbar = ({ leftContent }: SubdNavbarProps) => {
 
                             <div className="p-1">
                                 <button
-                                    onClick={() => navigate('/staff/account-settings')}
+                                    onClick={() => navigate('/subd/profile')}
                                     className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-gray-600 hover:text-[#F97316] hover:bg-orange-50 rounded-xl transition-all group/item"
                                 >
                                     <div className="p-1.5 bg-gray-100 rounded-lg text-gray-400 group-hover/item:bg-orange-100 group-hover/item:text-[#F97316] transition-colors">
@@ -80,7 +87,7 @@ const SubdNavbar = ({ leftContent }: SubdNavbarProps) => {
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                         </svg>
                                     </div>
-                                    <span className="font-semibold">Account Settings</span>
+                                    <span className="font-semibold">View Profile</span>
                                 </button>
 
                                 <button className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-gray-600 hover:text-[#F97316] hover:bg-orange-50 rounded-xl transition-all group/item">

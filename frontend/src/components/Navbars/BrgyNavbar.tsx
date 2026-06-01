@@ -1,6 +1,12 @@
+import { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const BrgyNavbar = () => {
+interface BrgyNavbarProps {
+    leftContent?: ReactNode;
+    onMenuToggle?: () => void;
+}
+
+const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
     const navigate = useNavigate();
 
     const handleLogout = () => {
@@ -14,7 +20,25 @@ const BrgyNavbar = () => {
     const user = userStr ? JSON.parse(userStr) : { name: 'Brgy Staff', email: 'staff@barangay.gov' };
 
     return (
-        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-end px-8 sticky top-0 z-10 w-full">
+        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-10 w-full shadow-sm">
+            {/* Left Content Area */}
+            <div className="flex items-center gap-4 min-w-0">
+                {onMenuToggle && (
+                    <button 
+                        onClick={onMenuToggle}
+                        className="lg:hidden p-2.5 text-[#1a1208] hover:bg-gray-50 rounded-xl transition-all border border-gray-100 shadow-sm active:scale-95 shrink-0"
+                        title="Open Menu"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                    </button>
+                )}
+                <div className="flex flex-col justify-center min-w-0">
+                    {leftContent}
+                </div>
+            </div>
+
             {/* Right Side Actions */}
             <div className="flex items-center space-x-6">
                 {/* Notifications */}
@@ -35,10 +59,18 @@ const BrgyNavbar = () => {
                             <p className="text-sm font-bold text-gray-900 leading-none">{user.name}</p>
                             <p className="text-[10px] font-medium text-gray-400 mt-1 uppercase tracking-wider">Barangay Action Officer</p>
                         </div>
-                        <div className="w-10 h-10 rounded-full border-2 border-white shadow-sm overflow-hidden bg-gray-200">
-                            <div className="w-full h-full flex items-center justify-center bg-[#F97316] text-white font-extrabold text-sm uppercase">
-                                {user.name.charAt(0)}
-                            </div>
+                        <div className="w-10 h-10 rounded-full border-2 border-white shadow-sm overflow-hidden bg-gray-200 flex items-center justify-center">
+                            {user.profile_picture ? (
+                                <img 
+                                    src={user.profile_picture} 
+                                    alt={user.name} 
+                                    className="w-full h-full object-cover"
+                                />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-[#F97316] text-white font-extrabold text-sm uppercase">
+                                    {user.name ? user.name.charAt(0) : 'B'}
+                                </div>
+                            )}
                         </div>
                     </button>
 
@@ -51,7 +83,10 @@ const BrgyNavbar = () => {
                             </div>
 
                             <div className="p-1">
-                                <button className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-gray-600 hover:text-[#F97316] hover:bg-orange-50 rounded-xl transition-all group/item">
+                                <button 
+                                    onClick={() => navigate('/brgy/profile')}
+                                    className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-gray-600 hover:text-[#F97316] hover:bg-orange-50 rounded-xl transition-all group/item"
+                                >
                                     <div className="p-1.5 bg-gray-100 rounded-lg text-gray-400 group-hover/item:bg-orange-100 group-hover/item:text-[#F97316] transition-colors">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />

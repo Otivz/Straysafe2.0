@@ -476,8 +476,53 @@ const ResidentPet = () => {
             />
 
             <main className="max-w-6xl mx-auto p-4 sm:p-8 pt-24 sm:pt-32">
+                {/* Title & Register Action Button */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+                    <div>
+                        <h1 className="text-4xl font-black text-[#1a1208] uppercase tracking-tighter">My Family <span className="text-[#F97316]">Pets</span></h1>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-2">Manage your pets' health and identification records</p>
+                    </div>
+                    <Button
+                        variant="primary"
+                        onClick={() => {
+                            setEditingPetId(null);
+                            setFormData({
+                                name: '',
+                                species: 'Dog',
+                                breed: '',
+                                gender: 'Male',
+                                color: '',
+                                age: '',
+                                status: 'Active',
+                                weight: '',
+                                mediaFiles: [],
+                                isVaccinated: true,
+                                vaccinationDate: '2026-05-10',
+                                isNeutered: true,
+                                healthNotes: '',
+                                vaccineCardFiles: [],
+                                temperament: 'Friendly',
+                                hasBiteHistory: null,
+                                chaseBehavior: null,
+                                existingVaccineCardUrl: null
+                            });
+                            setAiSuggestedSpecies(null);
+                            setAiSuggestedColor(null);
+                            setFormErrors({});
+                            setSubmitErrorMessage(null);
+                            setIsAddPetModalOpen(true);
+                        }}
+                        className="bg-[#F97316] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-200 hover:scale-105 transition-all flex items-center gap-3 cursor-pointer"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Register New Pet
+                    </Button>
+                </div>
+
                 {/* Premium Custom Search & Status Filter Bar */}
-                <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl p-6 sm:p-8 mb-8">
+                <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl p-6 sm:p-8 mb-10">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                         {/* Search Input & Info */}
                         <div className="flex-1 space-y-3">
@@ -531,50 +576,6 @@ const ResidentPet = () => {
                             </div>
                         </div>
                     </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-4">
-                    <div>
-                        <h1 className="text-4xl font-black text-[#1a1208] uppercase tracking-tighter">My Family <span className="text-[#F97316]">Pets</span></h1>
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-2">Manage your pets' health and identification records</p>
-                    </div>
-                    <Button
-                        variant="primary"
-                        onClick={() => {
-                            setEditingPetId(null);
-                            setFormData({
-                                name: '',
-                                species: 'Dog',
-                                breed: '',
-                                gender: 'Male',
-                                color: '',
-                                age: '',
-                                status: 'Active',
-                                weight: '',
-                                mediaFiles: [],
-                                isVaccinated: true,
-                                vaccinationDate: '2026-05-10',
-                                isNeutered: true,
-                                healthNotes: '',
-                                vaccineCardFiles: [],
-                                temperament: 'Friendly',
-                                hasBiteHistory: null,
-                                chaseBehavior: null,
-                                existingVaccineCardUrl: null
-                            });
-                            setAiSuggestedSpecies(null);
-                            setAiSuggestedColor(null);
-                            setFormErrors({});
-                            setSubmitErrorMessage(null);
-                            setIsAddPetModalOpen(true);
-                        }}
-                        className="bg-[#F97316] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-200 hover:scale-105 transition-all flex items-center gap-3"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
-                        </svg>
-                        Register New Pet
-                    </Button>
                 </div>
 
                 {/* Pets Grid */}

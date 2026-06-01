@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
@@ -7,6 +7,8 @@ import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 
 const ResiProfile = () => {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const showMobileReports = searchParams.get('tab') === 'reports';
     const [reports, setReports] = useState<any[]>([]);
     const [isNavbarMenuOpen, setIsNavbarMenuOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -156,8 +158,8 @@ const ResiProfile = () => {
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-32">
                 <div className="flex flex-col lg:flex-row gap-8">
 
-                    {/* Left Column: Profile Card */}
-                    <div className="lg:w-[400px] shrink-0">
+                    {/* Left Column: Profile Card — hidden on mobile when viewing reports */}
+                    <div className={`lg:w-[400px] shrink-0 ${showMobileReports ? 'hidden lg:block' : 'block'}`}>
                         <div className="bg-white border border-gray-200 rounded-lg p-8 shadow-sm text-center relative">
                             {/* Avatar */}
                             <div className="relative inline-block mb-4 mt-4 group">
@@ -260,11 +262,11 @@ const ResiProfile = () => {
                                 </div>
                             </div>
 
-                            <div className="mt-10 pt-6 border-t border-gray-100">
+                            <div className="mt-10 pt-6 border-t border-gray-100 flex flex-col gap-3">
                                 <Button
                                     variant="primary"
                                     fullWidth
-                                    className="py-3 gap-2"
+                                    className="py-3.5 gap-2"
                                     onClick={() => setIsEditModalOpen(true)}
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -276,18 +278,18 @@ const ResiProfile = () => {
                         </div>
                     </div>
 
-                    {/* Right Column: Active Gigs / Reports */}
-                    <div className="flex-1">
+                    {/* Right Column: Reports — hidden on mobile unless ?tab=reports */}
+                    <div className={`flex-1 ${showMobileReports ? 'block' : 'hidden lg:block'}`} id="my-reports-section">
                         <div className="bg-white border border-gray-200 rounded-lg shadow-sm mb-6">
-                            <div className="px-8 py-6 border-b border-gray-100">
-                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <div className="px-4 sm:px-8 py-5 border-b border-gray-100">
+                                <div className="flex flex-col gap-4">
                                     <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wider relative inline-block">
                                         My Reports
-                                        <div className="absolute -bottom-[25px] left-0 right-0 h-1 bg-[#F97316]"></div>
+                                        <div className="absolute -bottom-[6px] left-0 right-0 h-1 bg-[#F97316]"></div>
                                     </h2>
 
                                     {/* Search Input for Reports */}
-                                    <div className="relative w-full sm:w-64">
+                                    <div className="relative w-full">
                                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                             <svg className="h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                                                 <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
@@ -298,7 +300,7 @@ const ResiProfile = () => {
                                             value={searchQuery}
                                             onChange={(e) => setSearchQuery(e.target.value)}
                                             placeholder="Filter reports..."
-                                            className="block w-full pl-10 pr-3 py-2 border border-gray-100 rounded-xl text-[11px] bg-gray-50/50 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/10 focus:border-[#F97316] transition-all font-bold text-[#1a1208]"
+                                            className="block w-full pl-10 pr-3 py-2.5 border border-gray-100 rounded-xl text-[11px] bg-gray-50/50 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/10 focus:border-[#F97316] transition-all font-bold text-[#1a1208]"
                                         />
                                     </div>
                                 </div>

@@ -197,6 +197,10 @@ const ResiHomePage = () => {
         if (location.state?.from) {
             setReturnUrl(location.state.from);
         }
+        if (location.state?.selectAnnouncements) {
+            setFeedTab('announcements');
+            navigate(location.pathname, { replace: true, state: {} });
+        }
         if (location.state?.openAddModal) {
             setEditingReportId(null);
             setFormData({
@@ -794,10 +798,10 @@ const ResiHomePage = () => {
                 onFeedTabChange={setFeedTab}
             />
 
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-32 pb-24 sm:pb-8">
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-32 pb-24 md:pb-8">
 
                 {/* Top Actions - Hidden on mobile, shown on desktop */}
-                <div className="hidden sm:flex items-center justify-between relative mb-6">
+                <div className="hidden md:flex items-center justify-between relative mb-6">
                     {/* Left spacer to perfectly center the search bar relative to the page width */}
                     <div className="flex-1"></div>
 
@@ -855,7 +859,7 @@ const ResiHomePage = () => {
 
                 {/* Add Report Modal */}
                 {isAddReportModalOpen && (
-                    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 pb-28 sm:pb-4">
                         {/* Backdrop */}
                         <div
                             className="absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300"
@@ -2217,7 +2221,7 @@ const ResiHomePage = () => {
             )}
             {/* Detailed Report View Modal */}
             {viewingDetailedReport && (
-                <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 sm:p-6 md:p-10">
+                <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 pb-28 sm:pb-4">
                     {/* Backdrop */}
                     <div
                         className="absolute inset-0 bg-[#1a1208]/80 backdrop-blur-xl animate-in fade-in duration-500"
@@ -2225,15 +2229,15 @@ const ResiHomePage = () => {
                     />
 
                     {/* Modal Content */}
-                    <div className="relative w-full max-w-5xl bg-[#FBFBFB] rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-20 duration-700 flex flex-col max-h-[90vh]">
+                    <div className="relative w-full max-w-2xl bg-[#FBFBFB] rounded-[2.5rem] sm:rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-700 flex flex-col max-h-[85vh]">
                         {/* Header */}
-                        <div className="px-10 py-8 bg-white border-b border-gray-100 flex justify-between items-center shrink-0">
-                            <div className="flex items-center gap-6">
-                                <div className="w-16 h-16 rounded-[2rem] bg-orange-50 flex items-center justify-center text-orange-600 shadow-sm border border-orange-100">
-                                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                        <div className="px-6 sm:px-10 py-6 sm:py-8 bg-white border-b border-gray-100 flex justify-between items-center shrink-0">
+                            <div className="flex items-center gap-4 sm:gap-6">
+                                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl sm:rounded-[2rem] bg-orange-50 flex items-center justify-center text-orange-600 shadow-sm border border-orange-100">
+                                    <svg className="w-6 h-6 sm:w-8 sm:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                                 </div>
                                 <div>
-                                    <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Rescue Case Intelligence</h2>
+                                    <h2 className="text-lg sm:text-2xl font-black text-gray-900 uppercase tracking-tight">Rescue Case Intelligence</h2>
                                     <div className="flex items-center gap-3 mt-1">
                                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Report ID: #STR-{(viewingDetailedReport.report_id || 0).toString().padStart(4, '0')}</span>
                                         <div className="w-1 h-1 rounded-full bg-gray-200" />
@@ -2248,7 +2252,7 @@ const ResiHomePage = () => {
                                             handleEditClick(viewingDetailedReport);
                                             setViewingDetailedReport(null);
                                         }}
-                                        className="px-6 py-3.5 bg-[#F97316] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#EA580C] transition-all flex items-center gap-2 shadow-lg shadow-orange-100 cursor-pointer"
+                                        className="px-4 sm:px-6 py-2.5 sm:py-3.5 bg-[#F97316] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#EA580C] transition-all flex items-center gap-2 shadow-lg shadow-orange-100 cursor-pointer"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -2258,18 +2262,18 @@ const ResiHomePage = () => {
                                 )}
                                 <button
                                     onClick={() => setViewingDetailedReport(null)}
-                                    className="p-4 bg-gray-50 text-gray-400 hover:text-gray-900 rounded-2xl transition-all"
+                                    className="p-2.5 sm:p-4 bg-gray-50 text-gray-400 hover:text-gray-900 rounded-2xl transition-all"
                                 >
-                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                                    <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
                                 </button>
                             </div>
                         </div>
 
                         {/* Scrollable Body */}
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-10">
-                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 sm:p-10">
+                            <div className="grid grid-cols-1 gap-10">
                                 {/* Left Side: Report Details */}
-                                <div className="lg:col-span-5 space-y-10">
+                                <div className="space-y-10">
                                     {/* Main Image */}
                                     <div className="aspect-[4/3] rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl">
                                         {(() => {
@@ -2437,7 +2441,7 @@ const ResiHomePage = () => {
                                 </div>
 
                                 {/* Right Side: Timeline */}
-                                <div className="lg:col-span-7 space-y-8">
+                                <div className="space-y-8 pt-8 border-t border-gray-100">
                                     <div className="flex items-end justify-between px-2">
                                         <div>
                                             <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Rescue Timeline</h3>
@@ -2469,11 +2473,11 @@ const ResiHomePage = () => {
                         </div>
 
                         {/* Footer */}
-                        <div className="px-10 py-6 bg-white border-t border-gray-100 flex justify-between items-center shrink-0">
+                        <div className="px-6 sm:px-10 py-4 sm:py-6 bg-white border-t border-gray-100 flex justify-between items-center shrink-0">
                             <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">© 2026 STRAYSAFE MISSION CONTROL</p>
                             <button
                                 onClick={() => setViewingDetailedReport(null)}
-                                className="px-8 py-3 bg-[#F97316] text-[#FAFAF9] rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#EA580C] transition-all border border-orange-500/20 shadow-sm"
+                                className="px-6 sm:px-8 py-2.5 sm:py-3 bg-[#F97316] text-[#FAFAF9] rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#EA580C] transition-all border border-orange-500/20 shadow-sm"
                             >
                                 Close Intelligence View
                             </button>
@@ -2485,6 +2489,8 @@ const ResiHomePage = () => {
                 isNavbarMenuOpen={isNavbarMenuOpen}
                 isSearchOpen={isMobileSearchOpen}
                 onSearchClick={() => setIsMobileSearchOpen(true)}
+                feedTab={feedTab}
+                onFeedTabChange={setFeedTab}
                 onAddReportClick={() => {
                     setFeedTab('reports');
                     setEditingReportId(null);

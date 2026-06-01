@@ -19,6 +19,7 @@ const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, o
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+    const [isMobileHamburgerOpen, setIsMobileHamburgerOpen] = useState(false);
     const [notifications, setNotifications] = useState<any[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
 
@@ -281,34 +282,6 @@ const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, o
 
                         {/* MOBILE ACTIONS */}
                         <div className="md:hidden flex items-center gap-2">
-                            {feedTab && onFeedTabChange && (
-                                <div className="flex items-center gap-1.5 mr-1">
-                                    <button
-                                        onClick={() => onFeedTabChange('reports')}
-                                        className={`p-2 rounded-xl border transition-all active:scale-95 cursor-pointer ${
-                                            feedTab === 'reports'
-                                                ? 'bg-orange-50 border-orange-100 text-[#F97316]'
-                                                : 'bg-white border-gray-150 text-gray-400'
-                                        }`}
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
-                                    </button>
-                                    <button
-                                        onClick={() => onFeedTabChange('announcements')}
-                                        className={`p-2 rounded-xl border transition-all active:scale-95 cursor-pointer ${
-                                            feedTab === 'announcements'
-                                                ? 'bg-orange-50 border-orange-100 text-[#F97316]'
-                                                : 'bg-white border-gray-150 text-gray-400'
-                                        }`}
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
-                                        </svg>
-                                    </button>
-                                </div>
-                            )}
                             {/* Notification Bell */}
                             <button 
                                 onClick={() => {
@@ -329,13 +302,14 @@ const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, o
                                 )}
                             </button>
 
-                            {/* Menu Toggle */}
+                            {/* Hamburger Menu Button */}
                             <button
-                                onClick={toggleMenu}
-                                className="p-3 text-[#1a1208] hover:bg-gray-50 rounded-2xl transition-all flex items-center justify-center border border-gray-50 shadow-sm active:scale-95"
+                                onClick={() => setIsMobileHamburgerOpen(true)}
+                                className="p-2.5 text-[#4a3b28] hover:text-[#F97316] transition-all flex items-center justify-center active:scale-95"
+                                aria-label="Open menu"
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" />
                                 </svg>
                             </button>
                         </div>
@@ -343,7 +317,92 @@ const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, o
                 </div>
             </nav>
 
-            {/* MOBILE MENU (DASHBOARD LAYOUT) */}
+            {/* MOBILE HAMBURGER SIDE MENU */}
+            {isMobileHamburgerOpen && (
+                <div 
+                    className="fixed inset-0 z-[250] bg-[#1a1208]/40 backdrop-blur-md animate-in fade-in duration-300" 
+                    onClick={() => setIsMobileHamburgerOpen(false)} 
+                />
+            )}
+            <div 
+                className={`md:hidden fixed top-0 right-0 h-full w-72 z-[260] bg-gradient-to-b from-white via-[#FCFCFB] to-[#FAF9F6] rounded-l-[2.5rem] shadow-[-15px_0_45px_rgba(0,0,0,0.12)] border-l border-white/60 flex flex-col`}
+                style={{
+                    transition: 'transform 450ms cubic-bezier(0.16, 1, 0.3, 1)',
+                    transform: isMobileHamburgerOpen ? 'translateX(0)' : 'translateX(100%)'
+                }}
+            >
+                <div className="flex flex-col h-full">
+                    {/* Header */}
+                    <div className="px-6 pt-8 pb-6 flex justify-between items-center border-b border-gray-100/60">
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-[#F97316]/20 shadow-md ring-4 ring-[#F97316]/5 transition-transform duration-300 hover:scale-105">
+                                <img src={profilePic} alt="User" className="w-full h-full object-cover bg-gray-100" />
+                            </div>
+                            <div>
+                                <p className="text-[15px] font-black text-[#1a1208] leading-tight tracking-tight">{user?.name || 'User'}</p>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Resident</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => setIsMobileHamburgerOpen(false)}
+                            className="p-2 text-gray-400 hover:text-[#EF4444] rounded-full hover:bg-red-50/50 transition-all active:scale-90"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    {/* Menu Items */}
+                    <div className="flex-1 px-4 py-6 space-y-2.5">
+                        <Link
+                            to="/resident/pets"
+                            onClick={() => setIsMobileHamburgerOpen(false)}
+                            className="flex items-center gap-4 px-4 py-3.5 rounded-2xl hover:bg-orange-50/50 hover:pl-6 text-[#4a3b28] hover:text-[#F97316] transition-all duration-300 ease-out group active:scale-[0.98]"
+                        >
+                            <div className="w-10 h-10 bg-orange-50 group-hover:bg-orange-100 rounded-xl flex items-center justify-center text-[#F97316] shadow-sm shadow-orange-100/50 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shrink-0">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h.01M10 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-4l-4 4-1-4z" />
+                                </svg>
+                            </div>
+                            <span className="font-black text-xs uppercase tracking-[0.15em] transition-colors">My Pets</span>
+                        </Link>
+
+                        <Link
+                            to="/resident/profile?tab=reports"
+                            onClick={() => setIsMobileHamburgerOpen(false)}
+                            className="flex items-center gap-4 px-4 py-3.5 rounded-2xl hover:bg-orange-50/50 hover:pl-6 text-[#4a3b28] hover:text-[#F97316] transition-all duration-300 ease-out group active:scale-[0.98]"
+                        >
+                            <div className="w-10 h-10 bg-orange-50 group-hover:bg-orange-100 rounded-xl flex items-center justify-center text-[#F97316] shadow-sm shadow-orange-100/50 group-hover:scale-110 group-hover:-rotate-6 transition-all duration-300 shrink-0">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                            </div>
+                            <span className="font-black text-xs uppercase tracking-[0.15em] transition-colors">My Reports</span>
+                        </Link>
+                    </div>
+
+                    {/* Logout */}
+                    <div className="px-4 pb-8 pt-4 border-t border-gray-100/60">
+                        <button
+                            onClick={() => { setIsMobileHamburgerOpen(false); handleLogout(); }}
+                            className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl hover:bg-red-50 text-[#EF4444] transition-all duration-300 ease-out group active:scale-[0.98]"
+                        >
+                            <div className="w-10 h-10 bg-red-50 group-hover:bg-red-100 rounded-xl flex items-center justify-center text-[#EF4444] shadow-sm shadow-red-100/50 group-hover:scale-110 group-hover:rotate-12 transition-all duration-300 shrink-0">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                </svg>
+                            </div>
+                            <span className="font-black text-xs uppercase tracking-[0.15em] transition-colors">Logout</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* MOBILE MENU (DASHBOARD LAYOUT - kept for backward compat but not triggered) */}
             <div className={`md:hidden fixed inset-0 z-[200] bg-white transition-all duration-500 ease-in-out transform ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                 <div className="h-full flex flex-col overflow-y-auto">
 
