@@ -35,6 +35,7 @@ import BrgyRescueRequests from '../pages/Barangay_Staff/BrgyRescueRequests';
 import BrgyOperation from '../pages/Barangay_Staff/BrgyOperation';
 import BrgyCommunityAlerts from '../pages/Barangay_Staff/BrgyCommunityAlerts';
 import BrgyProfile from '../pages/Barangay_Staff/BrgyProfile';
+import BrgyHoldingFacility from '../pages/Barangay_Staff/BrgyHoldingFacility';
 import SubdHazardAlert from '../pages/Subd_Leaders/SubdHazardAlert';
 
 const AppRoutes = () => {
@@ -122,6 +123,7 @@ const AppRoutes = () => {
             <Route path="/brgy/operations" element={<BrgyOperation />} />
             <Route path="/brgy/community-alerts" element={<BrgyCommunityAlerts />} />
             <Route path="/brgy/profile" element={<BrgyProfile />} />
+            <Route path="/brgy/holding-facility" element={<BrgyHoldingFacility />} />
 
 
             {/* Landing Page Route */}
