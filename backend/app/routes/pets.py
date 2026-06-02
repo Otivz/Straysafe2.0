@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, cast
 from app.database import get_db
@@ -6,6 +6,7 @@ from app.models.pet import Pet
 from app.models.user import User
 from app.schemas.pet import PetCreate, PetUpdate, PetResponse
 from app.utils.cloudinary_config import upload_to_cloudinary
+from app.utils.audit import log_activity
 
 router = APIRouter(
     prefix="/pets",
@@ -37,7 +38,7 @@ def get_subdivision_pets(subdivision_id: int, db: Session = Depends(get_db)):
     return db.query(Pet).join(User).filter(User.subdivision_id == subdivision_id).options(joinedload(Pet.owner)).all()
 
 @router.post("/", response_model=PetResponse)
-def create_pet(pet: PetCreate, db: Session = Depends(get_db)):
+def create_pet(pet: PetCreate, req: Request, db: Session = Depends(get_db)):
     db_pet = Pet(**pet.model_dump())
     db.add(db_pet)
     db.commit()
@@ -52,30 +53,64 @@ def create_pet(pet: PetCreate, db: Session = Depends(get_db)):
         import logging
         logger = logging.getLogger(__name__)
         logger.error(f"Failed to auto-generate QR code for registered pet {db_pet.pet_id}: {e}")
-        
+
+    log_activity(
+        db=db,
+        action="CREATE_PET",
+        target_table="pets",
+        target_id=db_pet.pet_id,
+        description=f"Registered new pet: {db_pet.pet_name} ({db_pet.pet_type}), owner_id={db_pet.owner_id}",
+        log_type="operation",
+        new_values={"pet_name": db_pet.pet_name, "pet_type": str(db_pet.pet_type), "owner_id": db_pet.owner_id},
+        request=req
+    )
     return db_pet
 
 @router.put("/{pet_id}", response_model=PetResponse)
-def update_pet(pet_id: int, pet_update: PetUpdate, db: Session = Depends(get_db)):
+def update_pet(pet_id: int, pet_update: PetUpdate, req: Request, db: Session = Depends(get_db)):
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
     
+    old_snapshot = {"pet_name": db_pet.pet_name, "pet_type": str(db_pet.pet_type), "status": str(db_pet.status)}
     update_data = pet_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_pet, key, value)
     
     db.commit()
     db.refresh(db_pet)
+
+    log_activity(
+        db=db,
+        action="UPDATE_PET",
+        target_table="pets",
+        target_id=pet_id,
+        description=f"Updated pet record: {db_pet.pet_name} (pet_id={pet_id})",
+        log_type="operation",
+        old_values=old_snapshot,
+        new_values={"pet_name": db_pet.pet_name, "pet_type": str(db_pet.pet_type), "status": str(db_pet.status)},
+        request=req
+    )
     return db_pet
 
 @router.delete("/{pet_id}")
-def delete_pet(pet_id: int, db: Session = Depends(get_db)):
+def delete_pet(pet_id: int, req: Request, db: Session = Depends(get_db)):
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
+    pet_snapshot = {"pet_name": db_pet.pet_name, "pet_type": str(db_pet.pet_type), "owner_id": db_pet.owner_id}
     db.delete(db_pet)
     db.commit()
+    log_activity(
+        db=db,
+        action="DELETE_PET",
+        target_table="pets",
+        target_id=pet_id,
+        description=f"Deleted pet record: {pet_snapshot['pet_name']} (pet_id={pet_id})",
+        log_type="operation",
+        old_values=pet_snapshot,
+        request=req
+    )
     return {"message": "Pet deleted successfully"}
 
 @router.post("/{pet_id}/photo")

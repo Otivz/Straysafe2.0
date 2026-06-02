@@ -63,7 +63,6 @@ const SubdProfile = () => {
 
     // Update local storage helper so navbar reflects change instantly
     const updateLocalStorageUser = (updatedData: Partial<UserProfile>) => {
-        const key = localStorage.getItem('staff_user') ? 'staff_user' : 'session_user';
         const activeKey = localStorage.getItem('staff_user') ? 'staff_user' : (sessionStorage.getItem('staff_user') ? 'staff_user' : null);
         
         if (activeKey) {

@@ -14,11 +14,17 @@ interface Report {
     reporter_name?: string;
     created_at: string;
     priority_level: string;
+    latitude?: any;
+    longitude?: any;
+    [key: string]: any;
 }
 
 interface RescueRequest {
     rescue_id: number;
     status_id: number;
+    report_id?: number;
+    staff_id?: number | null;
+    [key: string]: any;
 }
 
 interface ActivityItem {
@@ -51,6 +57,13 @@ const SubdDashboard = () => {
     const [rescues, setRescues] = useState<RescueRequest[]>([]);
     const [petCount, setPetCount] = useState<number>(0);
     const [loading, setLoading] = useState(true);
+    const [mapMode, setMapMode] = useState<'pins' | 'heatmap' | 'both'>('both');
+    const [isMapExpanded, setIsMapExpanded] = useState(false);
+    const [selectedDetailReport, setSelectedDetailReport] = useState<any>(null);
+    const [selectedReport, setSelectedReport] = useState<any>(null);
+    const [isNavigating, setIsNavigating] = useState(false);
+    const [navSource, setNavSource] = useState<'hq' | 'brgy' | 'current'>('hq');
+    const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
 
     useEffect(() => {
         const rawUser = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
@@ -87,11 +100,88 @@ const SubdDashboard = () => {
         fetchAll();
     }, []);
 
+    useEffect(() => {
+        if (isNavigating && navSource === 'current') {
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        setUserLocation([position.coords.latitude, position.coords.longitude]);
+                    },
+                    (error) => {
+                        console.error("Error getting location:", error);
+                        setNavSource('hq');
+                    }
+                );
+            }
+        }
+    }, [isNavigating, navSource]);
+
+    const getStatusName = (statusId: number) => {
+        switch (statusId) {
+            case 1: return 'Pending Verification';
+            case 2: return 'Verified';
+            case 3: return 'Rejected';
+            case 4: return 'Forwarded to Barangay';
+            case 5: return 'Team Dispatched';
+            case 6: return 'Resolved';
+            case 7: return 'Picked Up';
+            case 8: return 'Under Observation';
+            case 9: return 'Impounded';
+            case 10: return 'Released';
+            case 11: return 'Incident Resolved';
+            case 12: return 'Deceased';
+            case 13: return 'Approved by Barangay';
+            default: return 'Active';
+        }
+    };
+
+    const getRescueStatusName = (statusId: number) => {
+        switch (statusId) {
+            case 1: return 'Pending Action';
+            case 2: return 'Approved';
+            case 3: return 'Rejected';
+            case 4: return 'Started (In Progress)';
+            case 5: return 'Dispatched (Assigned)';
+            case 6: return 'Resolved';
+            default: return 'Pending';
+        }
+    };
+
+    const getMarkerColor = (report: any, rescue: any) => {
+        const statusId = report.status_id;
+        if (statusId === 6 || statusId === 11) return 'green'; // Resolved
+        if (statusId === 12) return 'red'; // Deceased
+        if (statusId === 3) return 'red'; // Rejected
+
+        if (statusId === 7 || statusId === 8 || statusId === 9) return 'purple'; // Picked Up
+
+        if (rescue) {
+            const rescueStatus = rescue.status_id;
+            if (rescueStatus === 6) return 'green'; // Resolved
+            if (rescueStatus === 4) return 'yellow'; // In Progress
+            if (rescueStatus === 5) return 'blue'; // Assigned
+            if (rescue.staff_id) return 'blue'; // Assigned
+        }
+
+        if (statusId === 5) return 'yellow'; // In Progress (fallback)
+        if (statusId === 4 || statusId === 13) return 'orange'; // Endorsed / Approved
+        if (statusId === 1 || statusId === 2) return 'red'; // Pending
+
+        return 'red';
+    };
+
     // Derived stats
     const pendingCount = reports.filter(r => r.status_id === 1).length;
     const verifiedCount = reports.filter(r => r.status_id === 2 || r.status_id === 13).length;
-    // Active rescues = status 1 (Pending), 2 (Approved), 4 (Started), 5 (Dispatched)
     const activeRescueCount = rescues.filter(r => r.status_id >= 1 && r.status_id <= 5).length;
+
+    const ADMIN_HQ: [number, number] = [14.806906, 121.0039297];
+
+    const activeReports = reports.filter(r => [1, 2, 4, 5, 7, 8, 9, 13].includes(r.status_id));
+    const assignedReportsCount = rescues.filter(req => req.staff_id && [1, 2, 4, 5].includes(req.status_id)).length;
+    const inProgressReportsCount = rescues.filter(req => req.status_id === 4).length;
+    const pickedUpReportsCount = reports.filter(r => [7, 8, 9].includes(r.status_id)).length;
+    const resolvedReportsCount = reports.filter(r => [6, 11].includes(r.status_id)).length;
 
     // Trend chart: last 7 days
     const trendData = (() => {
@@ -191,6 +281,57 @@ const SubdDashboard = () => {
         },
     ];
 
+    const heatmapPoints: [number, number, number][] = reports
+        .filter(r => r.latitude && r.longitude)
+        .map((r: any) => [
+            parseFloat(r.latitude),
+            parseFloat(r.longitude),
+            r.priority_level === 'High' ? 1.0 : 0.6
+        ]);
+
+    const mapMarkers = [
+        {
+            id: -1,
+            lat: ADMIN_HQ[0],
+            lng: ADMIN_HQ[1],
+            title: "Barangay Hall HQ",
+            category: "Barangay Office",
+            time: "Base"
+        },
+        ...(userLocation ? [{
+            id: -2,
+            lat: userLocation[0],
+            lng: userLocation[1],
+            title: "Your Location",
+            category: "Operator",
+            time: "Live"
+        }] : []),
+        ...activeReports
+            .filter(r => r.latitude && r.longitude)
+            .map((r: any) => {
+                const associatedRescue = rescues.find(req => req.report_id === r.report_id);
+                const color = getMarkerColor(r, associatedRescue);
+                const statusName = r.status?.status_name || getStatusName(r.status_id);
+
+                return {
+                    id: r.report_id,
+                    lat: parseFloat(r.latitude),
+                    lng: parseFloat(r.longitude),
+                    title: r.description || `Incident #${r.report_id}`,
+                    priority: r.priority_level || "Regular",
+                    category: r.animal_type || "Stray Animal",
+                    color: color,
+                    time: r.created_at ? new Date(r.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : "N/A",
+                    rawData: {
+                        ...r,
+                        statusName: statusName,
+                        reporterName: r.reporter_name || r.reporter?.name || "Citizen",
+                        rescue: associatedRescue
+                    }
+                };
+            })
+    ];
+
     return (
         <div className="min-h-screen w-full flex bg-[#F8F9FA] font-sans text-gray-800">
             <SubdSidebar />
@@ -265,10 +406,108 @@ const SubdDashboard = () => {
                         {/* Map + Recent Activity side by side */}
                         <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
                             {/* Map */}
-                            <div className="xl:col-span-3 bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
-                                <h3 className="text-lg font-bold text-gray-900 mb-4">Incident Intelligence Map</h3>
-                                <div className="w-full h-[340px] rounded-2xl overflow-hidden border border-gray-100">
-                                    <MapComponent center={[14.8093, 121.0028]} zoom={16} />
+                            <div className="xl:col-span-3 bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col">
+                                <div className="flex justify-between items-center mb-4 shrink-0">
+                                    <h3 className="text-lg font-bold text-gray-900">Incident Intelligence Map</h3>
+                                    <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-end">
+                                        {/* Map Mode Toggles */}
+                                        <div className="flex bg-gray-100 p-1 rounded-xl text-[9px] font-black uppercase border border-gray-255">
+                                            <button
+                                                onClick={() => setMapMode('pins')}
+                                                className={`px-3 py-1.5 rounded-lg transition-all ${mapMode === 'pins' ? 'bg-[#1A4543] text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                                            >
+                                                Pins
+                                            </button>
+                                            <button
+                                                onClick={() => setMapMode('heatmap')}
+                                                className={`px-3 py-1.5 rounded-lg transition-all ${mapMode === 'heatmap' ? 'bg-[#1A4543] text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                                            >
+                                                Heatmap
+                                            </button>
+                                            <button
+                                                onClick={() => setMapMode('both')}
+                                                className={`px-3 py-1.5 rounded-lg transition-all ${mapMode === 'both' ? 'bg-[#1A4543] text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                                            >
+                                                Both
+                                            </button>
+                                        </div>
+
+                                        {/* Fullscreen Expand Button */}
+                                        <button
+                                            onClick={() => setIsMapExpanded(true)}
+                                            className="px-3.5 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl text-[10px] font-bold border border-gray-200 transition-all flex items-center gap-1.5 shadow-sm"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h3a1 1 0 010 2H5v2a1 1 0 01-2 0V4zm14 0a1 1 0 00-1-1h-3a1 1 0 110 2h2v2a1 1 0 112 0V4zM3 16a1 1 0 001 1h3a1 1 0 100-2H5v-2a1 1 0 10-2 0v3zm14 0a1 1 0 01-1 1h-3a1 1 0 100-2h2v-2a1 1 0 102 0v3z" />
+                                            </svg>
+                                            Expand Map
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="w-full h-[380px] rounded-2xl overflow-hidden border border-gray-100 relative">
+                                    <MapComponent
+                                        center={[14.8093, 121.0028]}
+                                        zoom={15}
+                                        markers={mapMode !== 'heatmap' ? mapMarkers : mapMarkers.filter(m => m.id < 0)}
+                                        showHeatmap={mapMode !== 'pins'}
+                                        heatmapPoints={heatmapPoints}
+                                        onViewDetails={(marker) => setSelectedDetailReport(marker.rawData)}
+                                        routing={isNavigating && selectedReport ? {
+                                            start: (navSource === 'hq' || navSource === 'brgy') ? ADMIN_HQ : (userLocation || ADMIN_HQ),
+                                            end: [parseFloat(selectedReport.latitude || selectedReport.lat), parseFloat(selectedReport.longitude || selectedReport.lng)],
+                                            waypointNames: [(navSource === 'hq' || navSource === 'brgy') ? "Barangay Hall HQ" : "Your Location", selectedReport.landmark || selectedReport.title],
+                                            onClose: () => setIsNavigating(false)
+                                        } : undefined}
+                                        onMarkerClick={(m) => {
+                                            if (m.id === -1) {
+                                                setSelectedReport(null);
+                                                setIsNavigating(false);
+                                            } else {
+                                                const fullReport = reports.find(r => r.report_id.toString() === m.id.toString());
+                                                if (fullReport) {
+                                                    setSelectedReport(fullReport);
+                                                    if (m.source) {
+                                                        setNavSource(m.source);
+                                                        setIsNavigating(true);
+                                                    } else {
+                                                        setIsNavigating(true);
+                                                        setNavSource('hq');
+                                                    }
+                                                }
+                                            }
+                                        }}
+                                    />
+
+                                    {/* Legend overlay */}
+                                    <div className="absolute bottom-4 left-4 z-[1000]">
+                                        <div className="bg-white/95 backdrop-blur-md p-3 rounded-2xl shadow-md border border-gray-100 text-[9px] font-bold text-gray-600 flex flex-col gap-1.5 min-w-[110px]">
+                                            <div className="text-[8px] font-black uppercase text-gray-400 tracking-wider mb-0.5">Status Legend</div>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444] shrink-0" />
+                                                <span>Pending</span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="w-2.5 h-2.5 rounded-full bg-[#F97316] shrink-0" />
+                                                <span>Endorsed</span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="w-2.5 h-2.5 rounded-full bg-[#3B82F6] shrink-0" />
+                                                <span>Assigned</span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B] shrink-0" />
+                                                <span>In Progress</span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="w-2.5 h-2.5 rounded-full bg-[#8B5CF6] shrink-0" />
+                                                <span>Picked Up</span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="w-2.5 h-2.5 rounded-full bg-[#10B981] shrink-0" />
+                                                <span>Resolved</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -306,6 +545,256 @@ const SubdDashboard = () => {
                     </div>
                 </div>
             </main>
+
+            {/* ENLARGED FULLSCREEN MAP MODAL */}
+            {isMapExpanded && (
+                <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl w-[95%] h-[92%] flex flex-col p-6 animate-in zoom-in-95 duration-200">
+                        {/* Header */}
+                        <div className="flex justify-between items-center mb-4 shrink-0">
+                            <div>
+                                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Geospatial Command Center</h3>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Full-Scale Incident & Rescuer Density Monitor</p>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="flex bg-gray-100 p-1 rounded-xl text-[9px] font-black uppercase border border-gray-200">
+                                    <button
+                                        onClick={() => setMapMode('pins')}
+                                        className={`px-3 py-1.5 rounded-lg transition-all ${mapMode === 'pins' ? 'bg-[#1A4543] text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                                    >
+                                        Pins
+                                    </button>
+                                    <button
+                                        onClick={() => setMapMode('heatmap')}
+                                        className={`px-3 py-1.5 rounded-lg transition-all ${mapMode === 'heatmap' ? 'bg-[#1A4543] text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                                    >
+                                        Heatmap
+                                    </button>
+                                    <button
+                                        onClick={() => setMapMode('both')}
+                                        className={`px-3 py-1.5 rounded-lg transition-all ${mapMode === 'both' ? 'bg-[#1A4543] text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                                    >
+                                        Both
+                                    </button>
+                                </div>
+                                <button
+                                    onClick={() => setIsMapExpanded(false)}
+                                    className="p-2 hover:bg-gray-150 rounded-full transition-colors text-gray-400 hover:text-gray-700"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Stats Panel */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4 w-full shrink-0">
+                            <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 shadow-sm flex flex-col justify-between">
+                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Total Reports</span>
+                                <span className="text-lg font-black text-gray-800 mt-1">{reports.length}</span>
+                            </div>
+                            <div className="bg-red-50 border border-red-100 rounded-xl p-3 shadow-sm flex flex-col justify-between">
+                                <span className="text-[9px] font-bold text-red-500 uppercase tracking-wider">Active Reports</span>
+                                <span className="text-lg font-black text-red-700 mt-1">{activeReports.length}</span>
+                            </div>
+                            <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 shadow-sm flex flex-col justify-between">
+                                <span className="text-[9px] font-bold text-blue-500 uppercase tracking-wider">Assigned</span>
+                                <span className="text-lg font-black text-blue-700 mt-1">{assignedReportsCount}</span>
+                            </div>
+                            <div className="bg-yellow-50 border border-yellow-100 rounded-xl p-3 shadow-sm flex flex-col justify-between">
+                                <span className="text-[9px] font-bold text-yellow-600 uppercase tracking-wider">In Progress</span>
+                                <span className="text-lg font-black text-yellow-800 mt-1">{inProgressReportsCount}</span>
+                            </div>
+                            <div className="bg-purple-50 border border-purple-100 rounded-xl p-3 shadow-sm flex flex-col justify-between">
+                                <span className="text-[9px] font-bold text-purple-500 uppercase tracking-wider">Picked Up</span>
+                                <span className="text-lg font-black text-purple-700 mt-1">{pickedUpReportsCount}</span>
+                            </div>
+                            <div className="bg-green-50 border border-green-100 rounded-xl p-3 shadow-sm flex flex-col justify-between">
+                                <span className="text-[9px] font-bold text-green-500 uppercase tracking-wider">Resolved</span>
+                                <span className="text-lg font-black text-green-700 mt-1">{resolvedReportsCount}</span>
+                            </div>
+                        </div>
+
+                        {/* Map Area */}
+                        <div className="flex-1 rounded-2xl overflow-hidden relative border border-gray-100 min-h-0">
+                            <MapComponent
+                                height="100%"
+                                center={[14.8093, 121.0028]}
+                                zoom={15.5}
+                                markers={mapMode !== 'heatmap' ? mapMarkers : mapMarkers.filter(m => m.id < 0)}
+                                showHeatmap={mapMode !== 'pins'}
+                                heatmapPoints={heatmapPoints}
+                                onViewDetails={(marker) => {
+                                    setIsMapExpanded(false);
+                                    setSelectedDetailReport(marker.rawData);
+                                }}
+                                routing={isNavigating && selectedReport ? {
+                                    start: (navSource === 'hq' || navSource === 'brgy') ? ADMIN_HQ : (userLocation || ADMIN_HQ),
+                                    end: [parseFloat(selectedReport.latitude || selectedReport.lat), parseFloat(selectedReport.longitude || selectedReport.lng)],
+                                    waypointNames: [(navSource === 'hq' || navSource === 'brgy') ? "Barangay Hall HQ" : "Your Location", selectedReport.landmark || selectedReport.title],
+                                    onClose: () => setIsNavigating(false)
+                                } : undefined}
+                                onMarkerClick={(m) => {
+                                    if (m.id === -1) {
+                                        setSelectedReport(null);
+                                        setIsNavigating(false);
+                                    } else {
+                                        const fullReport = reports.find(r => r.report_id.toString() === m.id.toString());
+                                        if (fullReport) {
+                                            setSelectedReport(fullReport);
+                                            if (m.source) {
+                                                setNavSource(m.source);
+                                                setIsNavigating(true);
+                                            } else {
+                                                setIsNavigating(true);
+                                                setNavSource('hq');
+                                            }
+                                        }
+                                    }
+                                }}
+                            />
+
+                            <div className="absolute bottom-4 left-4 z-[1000]">
+                                <div className="bg-white/95 backdrop-blur-md p-3.5 rounded-2xl shadow-md border border-gray-100 text-[10px] font-bold text-gray-600 flex flex-col gap-2 min-w-[120px]">
+                                    <div className="text-[9px] font-black uppercase text-gray-400 tracking-wider mb-0.5">Status Legend</div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444] shrink-0" />
+                                        <span>Pending</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#F97316] shrink-0" />
+                                        <span>Endorsed</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#3B82F6] shrink-0" />
+                                        <span>Assigned</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B] shrink-0" />
+                                        <span>In Progress</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#8B5CF6] shrink-0" />
+                                        <span>Picked Up</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#10B981] shrink-0" />
+                                        <span>Resolved</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* REPORT DETAILS MODAL */}
+            {selectedDetailReport && (
+                <div className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200">
+                        {/* Header */}
+                        <div className="flex justify-between items-center border-b border-gray-100 pb-4 mb-4 shrink-0">
+                            <div>
+                                <h3 className="text-base font-black text-gray-900 uppercase">Report Details</h3>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Case ID: #{selectedDetailReport.report_id}</p>
+                            </div>
+                            <button
+                                onClick={() => setSelectedDetailReport(null)}
+                                className="p-1.5 hover:bg-gray-150 rounded-full transition-colors text-gray-400 hover:text-gray-700"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="flex-1 overflow-y-auto space-y-4 pr-1 scrollbar-thin">
+                            {/* Media Image */}
+                            {selectedDetailReport.media && selectedDetailReport.media.length > 0 ? (
+                                <img
+                                    src={selectedDetailReport.media[0].file_url}
+                                    alt="Incident Report"
+                                    className="w-full h-44 object-cover rounded-2xl border border-gray-100 shadow-sm"
+                                />
+                            ) : (
+                                <div className="w-full h-24 bg-gray-50 border border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center text-gray-400 text-xs">
+                                    <span>🐾 No photo uploaded for this report</span>
+                                </div>
+                            )}
+
+                            {/* Details Grid */}
+                            <div className="grid grid-cols-2 gap-4 text-xs text-gray-750">
+                                <div>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Animal Species / Breed</span>
+                                    <span className="font-semibold text-gray-800">{selectedDetailReport.animal_type || 'Unknown'} {selectedDetailReport.animal_breed ? `(${selectedDetailReport.animal_breed})` : ''}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Priority Level</span>
+                                    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider mt-0.5 ${selectedDetailReport.priority_level === 'High' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
+                                        }`}>{selectedDetailReport.priority_level || 'Regular'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Health Condition</span>
+                                    <span className="font-semibold text-gray-800">{selectedDetailReport.condition || 'No specific condition listed'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Status</span>
+                                    <span className="font-semibold text-gray-800">{selectedDetailReport.status?.status_name || getStatusName(selectedDetailReport.status_id)}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Reporter Details</span>
+                                    <span className="font-semibold text-gray-800">{selectedDetailReport.reporterName || selectedDetailReport.reporter?.name || 'Citizen'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Contact Information</span>
+                                    <span className="font-semibold text-gray-800">{selectedDetailReport.reporter?.phone || selectedDetailReport.reporter?.email || 'No contact permission'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Date Reported</span>
+                                    <span className="font-semibold text-gray-800">{selectedDetailReport.created_at ? new Date(selectedDetailReport.created_at).toLocaleString() : 'N/A'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Exact Coordinates</span>
+                                    <span className="font-semibold text-gray-800 font-mono text-[10px]">{parseFloat(selectedDetailReport.latitude).toFixed(6)}, {parseFloat(selectedDetailReport.longitude).toFixed(6)}</span>
+                                </div>
+                            </div>
+
+                            {/* Description */}
+                            <div className="bg-gray-50/50 p-3 rounded-xl border border-gray-100">
+                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Report Description</span>
+                                <p className="text-xs text-gray-700 italic">"{selectedDetailReport.description || 'No description provided.'}"</p>
+                            </div>
+
+                            {/* Mission details */}
+                            <div className="bg-teal-50/20 p-3 rounded-xl border border-teal-150/40">
+                                <span className="text-[9px] font-bold text-[#1A4543] uppercase tracking-wider block mb-1">Current Mission Status</span>
+                                <div className="flex justify-between items-center mt-1.5">
+                                    <span className="text-xs font-bold text-gray-800">
+                                        {selectedDetailReport.rescue ? getRescueStatusName(selectedDetailReport.rescue.status_id) : 'Not Escalated to Barangay Rescue'}
+                                    </span>
+                                    {selectedDetailReport.rescue && selectedDetailReport.rescue.assigned_staff_name && (
+                                        <span className="text-[10px] font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-lg">
+                                            Assigned to: {selectedDetailReport.rescue.assigned_staff_name}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="border-t border-gray-100 pt-4 mt-4 flex justify-end shrink-0">
+                            <button
+                                onClick={() => setSelectedDetailReport(null)}
+                                className="px-5 py-2.5 bg-[#1A4543] hover:bg-[#112d2b] text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors shadow-sm"
+                            >
+                                Close Details
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

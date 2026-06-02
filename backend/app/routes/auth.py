@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.schemas.auth import LoginRequest, LoginResponse
 from app.utils.auth import verify_password
+from app.utils.audit import log_activity
 
 router = APIRouter(
     prefix="/auth",
@@ -11,11 +12,20 @@ router = APIRouter(
 )
 
 @router.post("/login", response_model=LoginResponse)
-def login(request: LoginRequest, db: Session = Depends(get_db)):
+def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
     # Find user by email
     user = db.query(User).filter(User.email == request.email).first()
     
     if not user:
+        # Log failed login — unknown user
+        log_activity(
+            db=db,
+            action="FAILED_LOGIN",
+            target_table="auth",
+            description=f"Failed login attempt for email: {request.email} (user not found)",
+            log_type="security",
+            request=req
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -24,6 +34,16 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     
     # Verify password
     if not verify_password(request.password, str(user.password)):
+        log_activity(
+            db=db,
+            action="FAILED_LOGIN",
+            target_table="auth",
+            target_id=user.user_id,
+            description=f"Failed login attempt for user: {user.name} ({user.email}) — wrong password",
+            user_id=user.user_id,
+            log_type="security",
+            request=req
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -32,13 +52,33 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     
     # Check if account is inactive
     if user.status == "Inactive":
+        log_activity(
+            db=db,
+            action="FAILED_LOGIN",
+            target_table="auth",
+            target_id=user.user_id,
+            description=f"Login blocked for inactive account: {user.name} ({user.email})",
+            user_id=user.user_id,
+            log_type="security",
+            request=req
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account inactive. Please contact the administrator for assistance.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Access control is handled by the frontend routes based on the returned role_id
+    # Successful login
+    log_activity(
+        db=db,
+        action="LOGIN",
+        target_table="users",
+        target_id=user.user_id,
+        description=f"Successful login: {user.name} ({user.email})",
+        user_id=user.user_id,
+        log_type="security",
+        request=req
+    )
     
     return {
         "user_id": user.user_id,

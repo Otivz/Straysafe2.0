@@ -81,6 +81,8 @@ class RescueRequestResponse(RescueBase):
     title: Optional[str] = None
     description: Optional[str] = None
     created_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     report: Optional[ReportResponse] = None
     leader_name: Optional[str] = None
     leader_position: Optional[str] = None

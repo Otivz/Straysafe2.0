@@ -24,12 +24,15 @@ const EscelatedMissions = () => {
     const [selectedStepDetails, setSelectedStepDetails] = useState<{
         label: string;
         image: string | null;
+        media?: any[];
         condition: string;
         message: string;
         timestamp: string;
         updatedBy: string;
     } | null>(null);
     const [isEnlarged, setIsEnlarged] = useState(false);
+    // Tracks which timeline steps are expanded (by step label)
+    const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
 
     // Mock Data for UI demonstration
     const mockMissions: EscalatedMission[] = [
@@ -530,6 +533,37 @@ const EscelatedMissions = () => {
                 const timeline = getTimelineData(activeMission);
                 const raw = (activeMission as any).raw_data;
 
+                const getStepMedia = (stepLabel: string, matchedHistory: any) => {
+                    if (!raw) return [];
+                    const allMedia = raw.report?.media || [];
+                    let stepStatusIds: number[] = [];
+                    if (stepLabel === 'Report Received') {
+                        stepStatusIds = [1, 2];
+                    } else if (stepLabel === 'Endorsed to Barangay') {
+                        stepStatusIds = [4];
+                    } else if (stepLabel === 'Rescue Team Assigned') {
+                        stepStatusIds = [13];
+                    } else if (stepLabel === 'Rescue In Progress') {
+                        stepStatusIds = [5];
+                    } else if (stepLabel === 'Animal Picked Up') {
+                        stepStatusIds = [6, 7, 8, 9, 10];
+                    } else if (stepLabel === 'Mission Resolved') {
+                        stepStatusIds = [11, 12];
+                    }
+
+                    return allMedia.filter((m: any) => {
+                        // Match by history_id if we have a matched history
+                        if (matchedHistory?.history_id && m.history_id === matchedHistory.history_id) {
+                            return true;
+                        }
+                        // Match by status_id
+                        if (m.status_id && stepStatusIds.includes(m.status_id)) {
+                            return true;
+                        }
+                        return false;
+                    });
+                };
+
                 const getStepDetails = (stepLabel: string) => {
                     if (!raw) {
                         // Mock data details fallback
@@ -559,6 +593,7 @@ const EscelatedMissions = () => {
 
                         return {
                             image: mockImage,
+                            media: [],
                             condition: mockCondition,
                             message: mockMessage,
                             timestamp: mockTimestamp,
@@ -584,6 +619,7 @@ const EscelatedMissions = () => {
                             const firstAsg = raw.assignments[0];
                             return {
                                 image: null,
+                                media: [],
                                 condition: raw.report?.condition || 'No information provided.',
                                 message: firstAsg.remarks || 'Rescue team has been assigned.',
                                 timestamp: new Date(firstAsg.assigned_at).toLocaleString(),
@@ -592,6 +628,7 @@ const EscelatedMissions = () => {
                         }
                         return {
                             image: null,
+                            media: [],
                             condition: raw.report?.condition || 'No information provided.',
                             message: 'No information provided.',
                             timestamp: '-',
@@ -599,9 +636,8 @@ const EscelatedMissions = () => {
                         };
                     }
 
-                    const image = matchedHistory.media && matchedHistory.media.length > 0
-                        ? matchedHistory.media[0].file_url
-                        : null;
+                    const stepMedia = getStepMedia(stepLabel, matchedHistory);
+                    const image = stepMedia.length > 0 ? stepMedia[0].file_url : null;
 
                     const condition = raw.report?.condition || 'No information provided.';
                     const message = matchedHistory.remarks || 'No information provided.';
@@ -610,6 +646,7 @@ const EscelatedMissions = () => {
 
                     return {
                         image,
+                        media: stepMedia,
                         condition,
                         message,
                         timestamp,
@@ -700,6 +737,9 @@ const EscelatedMissions = () => {
                                             const isInProgress = step.status === 'In Progress';
                                             const isPending = step.status === 'Pending';
                                             const isNotStarted = step.status === 'Not Started';
+                                            const isActive = isCompleted || isInProgress || isPending;
+                                            const isExpanded = !!expandedSteps[step.label];
+                                            const stepDetail = isActive ? getStepDetails(step.label) : null;
 
                                             let circleBg = 'bg-gray-50 border-gray-200 text-gray-400';
                                             let lineBg = 'bg-gray-100';
@@ -762,6 +802,91 @@ const EscelatedMissions = () => {
                                                         {step.note && (
                                                             <p className={`text-xs leading-relaxed ${isNotStarted ? 'text-gray-300 font-medium' : 'text-gray-500 font-medium'}`}>{step.note}</p>
                                                         )}
+
+                                                        {/* ── View More toggle ── */}
+                                                        {isActive && (
+                                                            <button
+                                                                onClick={() => setExpandedSteps(prev => ({ ...prev, [step.label]: !prev[step.label] }))}
+                                                                className="mt-2 flex items-center gap-1 text-[10px] font-black text-[#F97316] hover:text-[#EA580C] uppercase tracking-wider transition-colors"
+                                                            >
+                                                                <svg className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                                                </svg>
+                                                                {isExpanded ? 'Hide' : 'View More'}
+                                                            </button>
+                                                        )}
+
+                                                        {/* ── Expandable Detail Panel ── */}
+                                                        {isActive && isExpanded && stepDetail && (
+                                                            <div className="mt-3 rounded-2xl border border-gray-100 bg-gray-50/60 overflow-hidden animate-in slide-in-from-top-2 duration-200">
+
+                                                                {/* Assigned Personnel */}
+                                                                <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-3">
+                                                                    <div className="w-7 h-7 rounded-full bg-orange-100 text-[#F97316] flex items-center justify-center font-bold text-[10px] shrink-0">
+                                                                        {stepDetail.updatedBy.charAt(0)}
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none">Assigned Personnel</p>
+                                                                        <p className="text-xs font-bold text-gray-800 mt-0.5">{stepDetail.updatedBy}</p>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Status Message / Title */}
+                                                                <div className="px-4 py-3 border-b border-gray-100">
+                                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Status Message</p>
+                                                                    <p className="text-xs font-semibold text-gray-700 leading-relaxed">
+                                                                        {stepDetail.message || 'No message provided.'}
+                                                                    </p>
+                                                                </div>
+
+                                                                {/* Current Animal Condition */}
+                                                                <div className="px-4 py-3 border-b border-gray-100">
+                                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Current Animal Condition</p>
+                                                                    <span className="inline-flex px-2.5 py-1 rounded-lg text-[10px] font-black bg-orange-50 text-[#F97316] border border-orange-100 uppercase tracking-wide">
+                                                                        {stepDetail.condition || 'Not recorded'}
+                                                                    </span>
+                                                                </div>
+
+                                                                {/* Step Evidence Gallery (if any exists) */}
+                                                                {stepDetail.media && stepDetail.media.length > 0 && (
+                                                                    <div className="px-4 py-3 border-b border-gray-100">
+                                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Evidence Gallery</p>
+                                                                        <div className="flex gap-2 flex-wrap">
+                                                                            {stepDetail.media.map((mediaFile: any, mi: number) => {
+                                                                                const isVideo = mediaFile.media_type === 'Video' || mediaFile.file_url.match(/\.(mp4|mov|avi|webm)$/i);
+                                                                                return (
+                                                                                    <div 
+                                                                                        key={mi} 
+                                                                                        onClick={() => {
+                                                                                            setSelectedStepDetails({
+                                                                                                label: step.label,
+                                                                                                ...stepDetail,
+                                                                                                image: mediaFile.file_url
+                                                                                            });
+                                                                                        }}
+                                                                                        className="relative w-14 h-14 rounded-xl overflow-hidden border border-gray-100 shadow-sm cursor-pointer hover:border-[#F97316] transition-all bg-black flex items-center justify-center group"
+                                                                                    >
+                                                                                        {isVideo ? (
+                                                                                            <div className="flex flex-col items-center justify-center text-white">
+                                                                                                <svg className="w-5 h-5 text-white/80" fill="currentColor" viewBox="0 0 20 20">
+                                                                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                                                                                                </svg>
+                                                                                            </div>
+                                                                                        ) : (
+                                                                                            <img src={mediaFile.file_url} alt="Evidence preview" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                                                                        )}
+                                                                                        <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+
+
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             );
@@ -819,26 +944,65 @@ const EscelatedMissions = () => {
                         <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                             {/* Image Section */}
                             <div>
-                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Uploaded Image</h4>
-                                {selectedStepDetails.image ? (
-                                    <div className="relative rounded-2xl overflow-hidden group border border-gray-100 shadow-sm aspect-video bg-gray-50">
-                                        <img 
-                                            src={selectedStepDetails.image} 
-                                            alt="Step update" 
-                                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                        />
-                                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                            <button 
-                                                onClick={() => setIsEnlarged(true)}
-                                                className="px-4 py-2 bg-white/95 text-gray-900 rounded-xl text-xs font-bold shadow-md hover:bg-white transition-all transform translate-y-2 group-hover:translate-y-0 duration-300"
-                                            >
-                                                Enlarge Image
-                                            </button>
+                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Uploaded Image / Video</h4>
+                                {selectedStepDetails.image ? (() => {
+                                    const isVideo = selectedStepDetails.image.match(/\.(mp4|mov|avi|webm)$/i) || 
+                                                    selectedStepDetails.media?.find((m: any) => m.file_url === selectedStepDetails.image)?.media_type === 'Video';
+                                    return (
+                                        <div className="relative rounded-2xl overflow-hidden group border border-gray-100 shadow-sm aspect-video bg-black flex items-center justify-center">
+                                            {isVideo ? (
+                                                <video 
+                                                    src={selectedStepDetails.image} 
+                                                    controls 
+                                                    className="w-full h-full object-contain"
+                                                />
+                                            ) : (
+                                                <>
+                                                    <img 
+                                                        src={selectedStepDetails.image} 
+                                                        alt="Step update" 
+                                                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                        <button 
+                                                            onClick={() => setIsEnlarged(true)}
+                                                            className="px-4 py-2 bg-white/95 text-gray-900 rounded-xl text-xs font-bold shadow-md hover:bg-white transition-all transform translate-y-2 group-hover:translate-y-0 duration-300"
+                                                        >
+                                                            Enlarge Image
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
-                                    </div>
-                                ) : (
+                                    );
+                                })() : (
                                     <div className="bg-gray-50/80 border border-dashed border-gray-200 rounded-2xl p-6 text-center text-xs text-gray-400 font-semibold">
-                                        No image provided.
+                                        No image or video provided.
+                                    </div>
+                                )}
+
+                                {/* Media Gallery selection inside the modal */}
+                                {selectedStepDetails.media && selectedStepDetails.media.length > 1 && (
+                                    <div className="mt-3 flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                                        {selectedStepDetails.media.map((med: any, mi: number) => {
+                                            const isSelected = selectedStepDetails.image === med.file_url;
+                                            const isVideo = med.media_type === 'Video' || med.file_url.match(/\.(mp4|mov|avi|webm)$/i);
+                                            return (
+                                                <button
+                                                    key={mi}
+                                                    onClick={() => setSelectedStepDetails(prev => prev ? { ...prev, image: med.file_url } : null)}
+                                                    className={`relative w-12 h-12 rounded-xl overflow-hidden border shrink-0 bg-black flex items-center justify-center transition-all ${isSelected ? 'border-[#F97316] ring-2 ring-orange-500/20 scale-95' : 'border-gray-100 opacity-75 hover:opacity-100'}`}
+                                                >
+                                                    {isVideo ? (
+                                                        <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                                                        </svg>
+                                                    ) : (
+                                                        <img src={med.file_url} alt="Thumbnail" className="w-full h-full object-cover" />
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>

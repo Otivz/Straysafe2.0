@@ -167,6 +167,8 @@ const ResiHomePage = () => {
     const [revertSize, setRevertSize] = useState(false);
     const [breeds, setBreeds] = useState<string[]>([]);
     const [breedsData, setBreedsData] = useState<any[]>([]);
+    const [breedImageUrl, setBreedImageUrl] = useState<string | null>(null);
+    const [isFetchingBreedImage, setIsFetchingBreedImage] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
     const [formData, setFormData] = useState({
@@ -348,6 +350,73 @@ const ResiHomePage = () => {
         };
         fetchBreeds();
     }, [formData.animalType]);
+
+    useEffect(() => {
+        const query = formData.animalBreed.trim().toLowerCase();
+        if (!query || breedsData.length === 0) {
+            setBreedImageUrl(null);
+            return;
+        }
+
+        // Standardize common phonetic typos and shortcuts
+        const normalizedQuery = query
+            .replace('dalmation', 'dalmatian')
+            .replace('shihtzu', 'shih tzu')
+            .replace('shepard', 'shepherd')
+            .replace('coly', 'collie');
+
+        const matchedBreed = breedsData.find((b) => {
+            const breedName = b.name.toLowerCase();
+            if (breedName === normalizedQuery) return true;
+            if (normalizedQuery.length >= 3) {
+                return breedName.includes(normalizedQuery) || normalizedQuery.includes(breedName);
+            }
+            return false;
+        });
+
+        if (!matchedBreed) {
+            setBreedImageUrl(null);
+            return;
+        }
+
+        if (matchedBreed.image?.url) {
+            setBreedImageUrl(matchedBreed.image.url);
+        } else if (matchedBreed.id) {
+            // Fetch dynamically from images search
+            const fetchImage = async () => {
+                setIsFetchingBreedImage(true);
+                try {
+                    const isDog = formData.animalType === 'Dog';
+                    const baseUrl = isDog ? 'https://api.thedogapi.com' : 'https://api.thecatapi.com';
+                    const apiKey = isDog 
+                        ? (import.meta.env.VITE_DOG_API_KEY || 'live_J9RdXZq7OGRCUigDyq3y8rGqcG3Brarp46ohljsIMO572q0KYcW1alD0z88OADKs')
+                        : (import.meta.env.VITE_CAT_API_KEY || 'live_GqD4rtVuossncqXxRcSvcmptrS9rD7NFoigE6UP59wNG69yZ0YhLh35HRma3ZbEm');
+                    
+                    const res = await fetch(`${baseUrl}/v1/images/search?breed_id=${matchedBreed.id}`, {
+                        headers: apiKey ? { 'x-api-key': apiKey } : {}
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && data.length > 0 && data[0].url) {
+                            setBreedImageUrl(data[0].url);
+                        } else {
+                            setBreedImageUrl(null);
+                        }
+                    } else {
+                        setBreedImageUrl(null);
+                    }
+                } catch (err) {
+                    console.error('Error fetching breed image:', err);
+                    setBreedImageUrl(null);
+                } finally {
+                    setIsFetchingBreedImage(false);
+                }
+            };
+            fetchImage();
+        } else {
+            setBreedImageUrl(null);
+        }
+    }, [formData.animalBreed, formData.animalType, breedsData]);
 
     const handleDeleteReport = async (reportId: number) => {
         if (!window.confirm('Are you sure you want to delete this report?')) return;
@@ -1042,14 +1111,20 @@ const ResiHomePage = () => {
                                                  return false;
                                              });
 
-                                             if (matchedBreed && matchedBreed.image?.url) {
+                                             if (matchedBreed && (breedImageUrl || isFetchingBreedImage)) {
                                                  return (
                                                      <div className="mt-3 flex items-center gap-3.5 bg-orange-50/40 border border-orange-100 rounded-2xl p-3.5 animate-in slide-in-from-top-2 duration-300">
-                                                         <img 
-                                                             src={matchedBreed.image.url} 
-                                                             alt="Breed Preview" 
-                                                             className="w-12 h-12 object-cover rounded-xl shadow-sm border border-white"
-                                                         />
+                                                         {isFetchingBreedImage ? (
+                                                             <div className="w-12 h-12 rounded-xl border border-white bg-white/50 flex items-center justify-center shrink-0 shadow-sm">
+                                                                 <div className="w-4 h-4 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin" />
+                                                             </div>
+                                                         ) : breedImageUrl ? (
+                                                             <img 
+                                                                 src={breedImageUrl} 
+                                                                 alt="Breed Preview" 
+                                                                 className="w-12 h-12 object-cover rounded-xl shadow-sm border border-white shrink-0"
+                                                             />
+                                                         ) : null}
                                                          <div>
                                                              <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest leading-none">StraySafe Reference Photo</p>
                                                              <p className="text-[11px] font-black text-[#1a1208] mt-1">{matchedBreed.name} Standard Profile</p>
