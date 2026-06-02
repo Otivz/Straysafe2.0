@@ -275,8 +275,8 @@ const BrgyRescueRequests = () => {
                     onMenuToggle={() => setIsMobileSidebarOpen(true)}
                     leftContent={
                         <div className="flex flex-col">
-                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">Rescue Requests</h1>
-                            <p className="text-[11px] text-gray-400 font-semibold mt-1.5 leading-none">Review and approve rescue operations escalated by Subdivision Leaders.</p>
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Rescue Requests</h1>
+                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">Review and approve rescue operations escalated by Subdivision Leaders</p>
                         </div>
                     }
                 />
@@ -610,7 +610,8 @@ const BrgyRescueRequests = () => {
                                                 routing={isNavigating ? {
                                                     start: navSource === 'brgy' ? BRGY_OFFICE : (userLocation || BRGY_OFFICE),
                                                     end: [viewingRequest.report?.latitude || BRGY_OFFICE[0], viewingRequest.report?.longitude || BRGY_OFFICE[1]],
-                                                    waypointNames: [navSource === 'brgy' ? "Barangay Office" : "Your Location", viewingRequest.report?.landmark || "Rescue Site"]
+                                                    waypointNames: [navSource === 'brgy' ? "Barangay Office" : "Your Location", viewingRequest.report?.landmark || "Rescue Site"],
+                                                    onClose: () => setIsNavigating(false)
                                                 } : undefined}
                                                 onMarkerClick={(m) => {
                                                     if (m.source) {

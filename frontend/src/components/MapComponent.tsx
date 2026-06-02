@@ -156,6 +156,7 @@ interface MapComponentProps {
         end: [number, number];
         waypointNames?: [string, string];
         onRoutingUpdate?: (data: { distance: string; time: string }) => void;
+        onClose?: () => void;
     };
     onMarkerClick?: (marker: any) => void;
     showGeofence?: boolean;
@@ -314,6 +315,7 @@ const MapComponent = ({
                     end={routing.end}
                     waypointNames={routing.waypointNames}
                     onRoutingUpdate={routing.onRoutingUpdate}
+                    onClose={routing.onClose}
                 />
             )}
 

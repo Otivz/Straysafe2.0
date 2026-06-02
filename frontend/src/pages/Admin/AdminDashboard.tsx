@@ -9,7 +9,14 @@ const AdminDashboard = () => {
             {/* MAIN CONTENT DIV */}
             <main className="flex-1 flex flex-col h-screen overflow-hidden">
                 {/* TOP NAVIGATION */}
-                <AdminNavbar />
+                <AdminNavbar
+                    leftContent={
+                        <div className="flex flex-col">
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Admin Dashboard</h1>
+                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">System-wide overview of operations, reports, and registry stats</p>
+                        </div>
+                    }
+                />
 
                 {/* SCROLLABLE AREA with Custom Scrollbar */}
                 <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
@@ -22,11 +29,7 @@ const AdminDashboard = () => {
                         <div className="flex-1 flex flex-col space-y-8">
 
                             {/* Header Block */}
-                            <div className="flex justify-between items-end">
-                                <div>
-                                    <h1 className="text-3xl font-extrabold text-gray-900 mb-2">System Overview</h1>
-                                    <p className="text-gray-500 text-sm">Real-time surveillance and rescue coordination status.</p>
-                                </div>
+                            <div className="flex justify-end items-center">
                                 <div className="relative flex items-center">
                                     <span className="absolute left-3 text-gray-400">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

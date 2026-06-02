@@ -394,16 +394,19 @@ const AdminReport = () => {
             <AdminSidebar />
 
             <div className="flex-1 flex flex-col overflow-hidden">
-                <AdminNavbar />
+                <AdminNavbar
+                    leftContent={
+                        <div className="flex flex-col">
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Incident Reports</h1>
+                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">Monitor and resolve incoming animal incident submissions</p>
+                        </div>
+                    }
+                />
 
                 <main className="flex-1 overflow-y-auto p-8">
                     <div className="max-w-7xl mx-auto">
                         {/* Header */}
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                            <div>
-                                <h1 className="text-2xl font-bold text-gray-900">Incident Reports</h1>
-                                <p className="text-gray-500 text-sm mt-1">Monitor and manage reported animal incidents across subdivisions.</p>
-                            </div>
+                        <div className="flex justify-end items-center mb-8">
                             <div className="flex items-center space-x-3">
                                 <Button variant="light" className="flex items-center space-x-2" onClick={fetchReports}>
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1273,35 +1276,7 @@ const AdminReport = () => {
                                     </div>
                                 </div>
 
-                                {/* Animal Count */}
-                                <div className="space-y-1.5">
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4 block">Number of Animals</label>
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex items-center bg-gray-50 rounded-xl p-1 border border-gray-100">
-                                            <button
-                                                type="button"
-                                                onClick={() => setFormData({ ...formData, animal_count: Math.max(1, formData.animal_count - 1) })}
-                                                className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-[#F97316] hover:bg-orange-50 transition-all active:scale-90"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M20 12H4" />
-                                                </svg>
-                                            </button>
-                                            <div className="w-10 text-center text-sm font-black text-[#1a1208]">
-                                                {formData.animal_count}
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => setFormData({ ...formData, animal_count: formData.animal_count + 1 })}
-                                                className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-[#F97316] hover:bg-orange-50 transition-all active:scale-90"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
-                                                </svg>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
+
 
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Landmark</label>

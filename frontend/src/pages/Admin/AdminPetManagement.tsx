@@ -49,16 +49,19 @@ const AdminPetManagement = () => {
         <div className="min-h-screen w-full flex bg-[#F8F9FA] font-sans text-gray-800">
             <AdminSidebar />
             <main className="flex-1 flex flex-col h-screen overflow-hidden">
-                <AdminNavbar />
+                <AdminNavbar
+                    leftContent={
+                        <div className="flex flex-col">
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Pet Owner Registry</h1>
+                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">Manage pet ownership profiles and registered domestic pets</p>
+                        </div>
+                    }
+                />
                 <div className="flex-1 overflow-y-auto p-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                     
                     <div className="flex flex-col gap-8">
                         {/* Header */}
-                        <div className="flex justify-between items-end">
-                            <div>
-                                <h1 className="text-3xl font-black text-gray-900 mb-2">Pet Management</h1>
-                                <p className="text-gray-500 text-sm">Overseeing all registered pets within the StraySafe ecosystem.</p>
-                            </div>
+                        <div className="flex justify-end items-center">
                             <div className="flex gap-3">
                                 <button className="px-6 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-black text-gray-600 shadow-sm hover:bg-gray-50 transition-all uppercase tracking-widest">
                                     Export List

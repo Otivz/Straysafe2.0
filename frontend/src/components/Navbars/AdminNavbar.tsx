@@ -1,6 +1,11 @@
+import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const AdminNavbar = () => {
+interface AdminNavbarProps {
+    leftContent?: ReactNode;
+}
+
+const AdminNavbar = ({ leftContent }: AdminNavbarProps) => {
     const navigate = useNavigate();
 
     const handleLogout = () => {
@@ -14,7 +19,12 @@ const AdminNavbar = () => {
     const user = userStr ? JSON.parse(userStr) : { email: 'admin@straysafe.com' };
 
     return (
-        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-end px-8 sticky top-0 z-10 w-full">
+        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-10 w-full shadow-sm">
+            {/* Left Content Area */}
+            <div className="flex flex-col justify-center min-w-0">
+                {leftContent}
+            </div>
+
             {/* Right Side Actions */}
             <div className="flex items-center space-x-6">
                 {/* Notifications */}

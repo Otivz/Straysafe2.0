@@ -99,15 +99,18 @@ const AdminLogs = () => {
             <AdminSidebar />
 
             <div className="flex-1 flex flex-col overflow-hidden">
-                <AdminNavbar />
+                <AdminNavbar
+                    leftContent={
+                        <div className="flex flex-col">
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">System Audit Logs</h1>
+                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">Track system activity, user logons, and operations</p>
+                        </div>
+                    }
+                />
 
                 <main className="flex-1 overflow-y-auto p-8 scrollbar-thin scrollbar-thumb-gray-200">
                     {/* Header Section */}
-                    <div className="flex justify-between items-end mb-8">
-                        <div>
-                            <h1 className="text-3xl font-black text-gray-900 tracking-tight mb-2">Audit Surveillance</h1>
-                            <p className="text-gray-500 text-sm font-medium">Real-time system activity and security tracking.</p>
-                        </div>
+                    <div className="flex justify-end items-center mb-8">
                         <div className="flex gap-4">
                             <div className="relative">
                                 <input 

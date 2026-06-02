@@ -20,9 +20,10 @@ interface RoutingControlProps {
   end: [number, number];
   waypointNames?: [string, string];
   onRoutingUpdate?: (data: { distance: string; time: string }) => void;
+  onClose?: () => void;
 }
 
-const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate }: RoutingControlProps) => {
+const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate, onClose }: RoutingControlProps) => {
   const map = useMap();
   const onUpdateRef = useRef(onRoutingUpdate);
   
@@ -59,6 +60,39 @@ const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate }: RoutingC
       createMarker: () => null
     }).addTo(map);
 
+    // Add a close (x) button to the directions panel container
+    const container = routingControl.getContainer();
+    if (container) {
+      container.style.position = 'relative';
+      const closeBtn = document.createElement('button');
+      closeBtn.innerHTML = '×';
+      closeBtn.title = 'Close directions';
+      closeBtn.style.position = 'absolute';
+      closeBtn.style.top = '6px';
+      closeBtn.style.right = '12px';
+      closeBtn.style.background = 'none';
+      closeBtn.style.border = 'none';
+      closeBtn.style.fontSize = '24px';
+      closeBtn.style.fontWeight = 'bold';
+      closeBtn.style.color = '#9ca3af';
+      closeBtn.style.cursor = 'pointer';
+      closeBtn.style.padding = '0';
+      closeBtn.style.lineHeight = '1';
+      closeBtn.style.zIndex = '1000';
+      closeBtn.style.transition = 'color 0.2s';
+
+      closeBtn.onmouseenter = () => { closeBtn.style.color = '#ef4444'; };
+      closeBtn.onmouseleave = () => { closeBtn.style.color = '#9ca3af'; };
+      
+      closeBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (onClose) onClose();
+      };
+      
+      container.appendChild(closeBtn);
+    }
+
     routingControl.on('routingerror', (e: any) => {
         console.error("Routing error:", e.error);
     });
@@ -76,6 +110,11 @@ const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate }: RoutingC
 
     return () => {
         if (map && routingControl) {
+            try {
+                routingControl.setWaypoints([]);
+            } catch (err) {
+                console.error("Error setting empty waypoints during cleanup:", err);
+            }
             map.removeControl(routingControl);
         }
     };

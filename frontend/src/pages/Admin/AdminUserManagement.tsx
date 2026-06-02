@@ -220,16 +220,19 @@ const AdminUserManagement = () => {
             <AdminSidebar />
 
             <div className="flex-1 flex flex-col overflow-hidden">
-                <AdminNavbar />
+                <AdminNavbar
+                    leftContent={
+                        <div className="flex flex-col">
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">User Management</h1>
+                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">Manage system users, roles, and subdivision leaders</p>
+                        </div>
+                    }
+                />
 
                 <main className="flex-1 overflow-y-auto p-8">
                     <div className="max-w-7xl mx-auto">
                         {/* Header */}
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                            <div>
-                                <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-                                <p className="text-gray-500 text-sm mt-1">Manage system citizens, leaders, barangay staff, and admins.</p>
-                            </div>
+                        <div className="flex justify-end items-center mb-8">
                             <Button variant="primary" className="flex items-center space-x-2 px-6" onClick={() => handleOpenModal()}>
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                     <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />

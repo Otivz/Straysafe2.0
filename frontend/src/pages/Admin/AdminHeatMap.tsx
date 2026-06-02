@@ -168,7 +168,14 @@ const AdminHeatMap = () => {
             <AdminSidebar />
 
             <div className="flex-1 flex flex-col h-screen relative">
-                <AdminNavbar />
+                <AdminNavbar
+                    leftContent={
+                        <div className="flex flex-col">
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Incident Heatmap</h1>
+                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">Geospatial analysis of reported stray and hazard incidents</p>
+                        </div>
+                    }
+                />
 
                 <main className="flex-1 relative overflow-hidden flex flex-col">
                     {loading && (
@@ -320,7 +327,8 @@ const AdminHeatMap = () => {
                             routing={isNavigating && selectedReport ? {
                                 start: navSource === 'hq' ? ADMIN_HQ : (userLocation || ADMIN_HQ),
                                 end: [parseFloat(selectedReport.latitude || selectedReport.lat), parseFloat(selectedReport.longitude || selectedReport.lng)],
-                                waypointNames: [navSource === 'hq' ? "Command Center" : "Your Location", selectedReport.landmark || selectedReport.title]
+                                waypointNames: [navSource === 'hq' ? "Command Center" : "Your Location", selectedReport.landmark || selectedReport.title],
+                                onClose: () => setIsNavigating(false)
                             } : undefined}
                             onMarkerClick={(m) => {
                                 if (m.id === -1) {

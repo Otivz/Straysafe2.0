@@ -199,8 +199,8 @@ const SubdDashboard = () => {
                 <SubdNavbar
                     leftContent={
                         <div className="flex flex-col">
-                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">Subdivision Dashboard</h1>
-                            <p className="text-[11px] text-gray-400 font-semibold mt-1.5 leading-none">Overview of reports, rescue operations, and registered pets</p>
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Subdivision Dashboard</h1>
+                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">Overview of reports, rescue operations, and registered pets</p>
                         </div>
                     }
                 />

@@ -10,7 +10,7 @@ interface EscalatedMission {
     title: string;
     description: string;
     escalated_date: string;
-    barangay_status: 'Pending' | 'In Progress' | 'Resolved' | 'Rejected';
+    barangay_status: 'Pending' | 'In Progress' | 'Picked Up' | 'Resolved' | 'Rejected';
     reporter: string;
     landmark: string;
 }
@@ -21,6 +21,15 @@ const EscelatedMissions = () => {
     const [selectedStatus, setSelectedStatus] = useState('All');
     const [missions, setMissions] = useState<EscalatedMission[]>([]);
     const [selectedMission, setSelectedMission] = useState<EscalatedMission | null>(null);
+    const [selectedStepDetails, setSelectedStepDetails] = useState<{
+        label: string;
+        image: string | null;
+        condition: string;
+        message: string;
+        timestamp: string;
+        updatedBy: string;
+    } | null>(null);
+    const [isEnlarged, setIsEnlarged] = useState(false);
 
     // Mock Data for UI demonstration
     const mockMissions: EscalatedMission[] = [
@@ -62,11 +71,12 @@ const EscelatedMissions = () => {
             const response = await axios.get('http://localhost:8000/rescue-requests/');
             if (response.data && response.data.length > 0) {
                 const mapped: EscalatedMission[] = response.data.map((m: any) => {
-                    let friendlyStatus: 'Pending' | 'In Progress' | 'Resolved' | 'Rejected' = 'Pending';
-                    const sid = m.status_id;
-                    if (sid === 3) friendlyStatus = 'Rejected';
-                    else if (sid === 4 || sid === 5) friendlyStatus = 'In Progress';
-                    else if (sid === 6) friendlyStatus = 'Resolved';
+                    let friendlyStatus: 'Pending' | 'In Progress' | 'Picked Up' | 'Resolved' | 'Rejected' = 'Pending';
+                    const reportStatus = m.report?.current_status_id || m.report?.status_id || m.status_id;
+                    if (reportStatus === 3 || m.status_id === 3) friendlyStatus = 'Rejected';
+                    else if (reportStatus === 6) friendlyStatus = 'Picked Up';
+                    else if (reportStatus === 11 || reportStatus === 12 || m.status_id === 6) friendlyStatus = 'Resolved';
+                    else if (reportStatus === 5 || m.status_id === 4 || m.status_id === 5) friendlyStatus = 'In Progress';
 
                     const escDate = m.created_at ? new Date(m.created_at).toLocaleString('en-US', {
                         year: 'numeric',
@@ -120,6 +130,7 @@ const EscelatedMissions = () => {
         switch (status) {
             case 'Pending': return 'bg-amber-50 text-amber-600 border-amber-100';
             case 'In Progress': return 'bg-blue-50 text-blue-600 border-blue-100';
+            case 'Picked Up': return 'bg-amber-100 text-amber-700 border-amber-200';
             case 'Resolved': return 'bg-green-50 text-green-600 border-green-100';
             case 'Rejected': return 'bg-red-50 text-red-600 border-red-100';
             default: return 'bg-gray-50 text-gray-600 border-gray-100';
@@ -159,6 +170,7 @@ const EscelatedMissions = () => {
                 });
                 steps.push({ label: 'Rescue Team Assigned', status: 'Not Started', timestamp: '-' });
                 steps.push({ label: 'Rescue In Progress', status: 'Not Started', timestamp: '-' });
+                steps.push({ label: 'Animal Picked Up', status: 'Not Started', timestamp: '-' });
                 steps.push({ label: 'Mission Resolved', status: 'Not Started', timestamp: '-' });
             } else if (mission.barangay_status === 'In Progress') {
                 assignedTeam = 'Alpha Rescue Squad';
@@ -179,6 +191,34 @@ const EscelatedMissions = () => {
                     status: 'In Progress',
                     timestamp: '2024-05-12 11:15 AM',
                     note: `Team has arrived at ${mission.landmark} and is conducting operations.`
+                });
+                steps.push({ label: 'Animal Picked Up', status: 'Not Started', timestamp: '-' });
+                steps.push({ label: 'Mission Resolved', status: 'Not Started', timestamp: '-' });
+            } else if (mission.barangay_status === 'Picked Up') {
+                assignedTeam = 'Alpha Rescue Squad';
+                steps.push({
+                    label: 'Endorsed to Barangay',
+                    status: 'Resolved',
+                    timestamp: mission.escalated_date,
+                    note: 'Endorsed to Barangay Operations Hub.'
+                });
+                steps.push({
+                    label: 'Rescue Team Assigned',
+                    status: 'Resolved',
+                    timestamp: '2024-05-12 11:00 AM',
+                    note: 'Dispatched Alpha Rescue Squad.'
+                });
+                steps.push({
+                    label: 'Rescue In Progress',
+                    status: 'Resolved',
+                    timestamp: '2024-05-12 11:15 AM',
+                    note: `Team arrived at ${mission.landmark} and conducted rescue operation.`
+                });
+                steps.push({
+                    label: 'Animal Picked Up',
+                    status: 'In Progress',
+                    timestamp: '2024-05-12 11:30 AM',
+                    note: 'Animal safely secured by the rescue team.'
                 });
                 steps.push({ label: 'Mission Resolved', status: 'Not Started', timestamp: '-' });
             } else if (mission.barangay_status === 'Resolved') {
@@ -202,6 +242,12 @@ const EscelatedMissions = () => {
                     note: `Team conducted rescue operation near ${mission.landmark}.`
                 });
                 steps.push({
+                    label: 'Animal Picked Up',
+                    status: 'Resolved',
+                    timestamp: '2024-05-10 09:45 AM',
+                    note: 'Animal safely secured by the rescue team.'
+                });
+                steps.push({
                     label: 'Mission Resolved',
                     status: 'Resolved',
                     timestamp: '2024-05-10 10:15 AM',
@@ -216,6 +262,7 @@ const EscelatedMissions = () => {
                 });
                 steps.push({ label: 'Rescue Team Assigned', status: 'Not Started', timestamp: '-' });
                 steps.push({ label: 'Rescue In Progress', status: 'Not Started', timestamp: '-' });
+                steps.push({ label: 'Animal Picked Up', status: 'Not Started', timestamp: '-' });
                 steps.push({ label: 'Mission Resolved', status: 'Not Started', timestamp: '-' });
             }
 
@@ -241,9 +288,28 @@ const EscelatedMissions = () => {
 
         const currentStatus = raw.report?.status_id || raw.report?.current_status_id || raw.status_id || 4;
         const hasAssignment = !!raw.assigned_staff_name;
-        const isResolved = currentStatus === 11 || currentStatus === 6 || raw.status_id === 6 || mission.barangay_status?.toLowerCase() === 'resolved';
-        const isInProgress = currentStatus === 5 || raw.status_id === 5 || raw.status_id === 4 || mission.barangay_status?.toLowerCase() === 'in progress';
-        const isTeamAssigned = hasAssignment || isResolved || isInProgress || currentStatus === 13 || (raw.assignments && raw.assignments.length > 0);
+        const isResolved = currentStatus === 11 || mission.barangay_status?.toLowerCase() === 'resolved';
+        const isPostPickup = (currentStatus === 7 || currentStatus === 8 || currentStatus === 9 || currentStatus === 10);
+        const isPickedUp = currentStatus === 6 || isPostPickup || isResolved;
+        const isInProgress = currentStatus === 5 || isPickedUp;
+        const isTeamAssigned = hasAssignment || (raw.assignments && raw.assignments.length > 0) || isInProgress || currentStatus === 13;
+
+        // Retrieve timestamps from raw report history
+        const historyList = raw.report?.history || [];
+        const inProgressHistory = historyList.find((h: any) => h.report_status_id === 5);
+        const inProgressTimestamp = inProgressHistory?.created_at
+            ? new Date(inProgressHistory.created_at).toLocaleString()
+            : '-';
+
+        const pickupHistory = historyList.find((h: any) => h.report_status_id === 6);
+        const pickupTimestamp = pickupHistory?.created_at
+            ? new Date(pickupHistory.created_at).toLocaleString()
+            : '-';
+
+        const resolvedHistory = historyList.find((h: any) => h.report_status_id === 11);
+        const resolvedTimestamp = resolvedHistory?.created_at
+            ? new Date(resolvedHistory.created_at).toLocaleString()
+            : '-';
 
         steps.push({
             label: 'Rescue Team Assigned',
@@ -254,15 +320,22 @@ const EscelatedMissions = () => {
 
         steps.push({
             label: 'Rescue In Progress',
-            status: isResolved ? 'Resolved' : (isInProgress ? 'In Progress' : 'Not Started'),
-            timestamp: '-',
-            note: isInProgress ? `Barangay rescue squad dispatched and on-site at ${mission.landmark}.` : (isResolved ? 'Dispatched and operations completed.' : '-')
+            status: isPickedUp ? 'Resolved' : (currentStatus === 5 ? 'In Progress' : 'Not Started'),
+            timestamp: inProgressTimestamp,
+            note: isInProgress ? `Barangay rescue squad dispatched and on-site at ${mission.landmark}.` : (isPickedUp ? 'Dispatched and operations completed.' : '-')
+        });
+
+        steps.push({
+            label: 'Animal Picked Up',
+            status: (isResolved || isPostPickup) ? 'Resolved' : (currentStatus === 6 ? 'In Progress' : 'Not Started'),
+            timestamp: pickupTimestamp,
+            note: isPickedUp ? 'Animal safely secured by the rescue team.' : '-'
         });
 
         steps.push({
             label: 'Mission Resolved',
             status: isResolved ? 'Resolved' : 'Not Started',
-            timestamp: '-',
+            timestamp: resolvedTimestamp,
             note: isResolved ? 'Incident resolved successfully. Relocated to safety.' : '-'
         });
 
@@ -271,7 +344,7 @@ const EscelatedMissions = () => {
 
     const totalEscalated = missions.length;
     const pendingAction = missions.filter(m => m.barangay_status === 'Pending').length;
-    const inProgress = missions.filter(m => m.barangay_status === 'In Progress').length;
+    const inProgress = missions.filter(m => m.barangay_status === 'In Progress' || m.barangay_status === 'Picked Up').length;
     const resolved = missions.filter(m => m.barangay_status === 'Resolved').length;
 
     return (
@@ -282,8 +355,8 @@ const EscelatedMissions = () => {
                 <SubdNavbar
                     leftContent={
                         <div className="flex flex-col">
-                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">Escalated Missions</h1>
-                            <p className="text-[11px] text-gray-400 font-semibold mt-1.5 leading-none">Track reports forwarded to Barangay operations for immediate rescue</p>
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Escalated Missions</h1>
+                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">Track reports forwarded to Barangay operations for immediate rescue</p>
                         </div>
                     }
                 />
@@ -337,6 +410,7 @@ const EscelatedMissions = () => {
                                         <option value="All">All Status</option>
                                         <option value="Pending">Pending</option>
                                         <option value="In Progress">In Progress</option>
+                                        <option value="Picked Up">Picked Up</option>
                                         <option value="Resolved">Resolved</option>
                                         <option value="Rejected">Rejected</option>
                                     </select>
@@ -454,6 +528,95 @@ const EscelatedMissions = () => {
             {selectedMission && (() => {
                 const activeMission = missions.find(m => m.mission_id === selectedMission.mission_id) || selectedMission;
                 const timeline = getTimelineData(activeMission);
+                const raw = (activeMission as any).raw_data;
+
+                const getStepDetails = (stepLabel: string) => {
+                    if (!raw) {
+                        // Mock data details fallback
+                        let mockImage = null;
+                        let mockCondition = 'Healthy';
+                        let mockMessage = 'Status updated.';
+                        let mockTimestamp = '2026-06-02 10:30 AM';
+                        let mockUpdatedBy = 'Barangay Rescue Team';
+
+                        if (stepLabel === 'Rescue Team Assigned') {
+                            mockMessage = 'Dispatched rescue team to subdivision location.';
+                            mockTimestamp = '2026-06-02 11:00 AM';
+                            mockUpdatedBy = 'Alpha Rescue Squad';
+                        } else if (stepLabel === 'Rescue In Progress') {
+                            mockMessage = `Team arrived and is conducting rescue operations near ${activeMission.landmark}.`;
+                            mockTimestamp = '2026-06-02 11:15 AM';
+                            mockUpdatedBy = 'Officer Reyes';
+                        } else if (stepLabel === 'Animal Picked Up') {
+                            mockMessage = 'Animal safely secured by the rescue team and prepared for shelter relocation.';
+                            mockTimestamp = '2026-06-02 11:30 AM';
+                            mockUpdatedBy = 'Officer Reyes';
+                        } else if (stepLabel === 'Mission Resolved') {
+                            mockMessage = 'Mission resolved successfully. Animal relocated to safety.';
+                            mockTimestamp = '2026-06-02 12:00 PM';
+                            mockUpdatedBy = 'Officer Reyes';
+                        }
+
+                        return {
+                            image: mockImage,
+                            condition: mockCondition,
+                            message: mockMessage,
+                            timestamp: mockTimestamp,
+                            updatedBy: mockUpdatedBy
+                        };
+                    }
+
+                    const historyList = raw.report?.history || [];
+                    let matchedHistory = null;
+                    if (stepLabel === 'Rescue Team Assigned') {
+                        matchedHistory = historyList.find((h: any) => h.report_status_id === 13) ||
+                                         historyList.find((h: any) => h.report_status_id === 5);
+                    } else if (stepLabel === 'Rescue In Progress') {
+                        matchedHistory = historyList.find((h: any) => h.report_status_id === 5);
+                    } else if (stepLabel === 'Animal Picked Up') {
+                        matchedHistory = historyList.find((h: any) => h.report_status_id === 6 || h.report_status_id === 7 || h.report_status_id === 8 || h.report_status_id === 9 || h.report_status_id === 10);
+                    } else if (stepLabel === 'Mission Resolved') {
+                        matchedHistory = historyList.find((h: any) => h.report_status_id === 11 || h.report_status_id === 12);
+                    }
+
+                    if (!matchedHistory) {
+                        if (stepLabel === 'Rescue Team Assigned' && raw.assignments && raw.assignments.length > 0) {
+                            const firstAsg = raw.assignments[0];
+                            return {
+                                image: null,
+                                condition: raw.report?.condition || 'No information provided.',
+                                message: firstAsg.remarks || 'Rescue team has been assigned.',
+                                timestamp: new Date(firstAsg.assigned_at).toLocaleString(),
+                                updatedBy: raw.assigned_staff_name || 'Barangay Staff'
+                            };
+                        }
+                        return {
+                            image: null,
+                            condition: raw.report?.condition || 'No information provided.',
+                            message: 'No information provided.',
+                            timestamp: '-',
+                            updatedBy: 'System'
+                        };
+                    }
+
+                    const image = matchedHistory.media && matchedHistory.media.length > 0
+                        ? matchedHistory.media[0].file_url
+                        : null;
+
+                    const condition = raw.report?.condition || 'No information provided.';
+                    const message = matchedHistory.remarks || 'No information provided.';
+                    const timestamp = new Date(matchedHistory.created_at).toLocaleString();
+                    const updatedBy = matchedHistory.updater_name || 'System';
+
+                    return {
+                        image,
+                        condition,
+                        message,
+                        timestamp,
+                        updatedBy
+                    };
+                };
+
                 return (
                     <div 
                         onClick={() => setSelectedMission(null)}
@@ -577,10 +740,23 @@ const EscelatedMissions = () => {
 
                                                     {/* Content */}
                                                     <div className="ml-4 flex-1">
-                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
+                                                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-1 mb-1">
                                                             <h4 className={`text-sm font-extrabold ${isNotStarted ? 'text-gray-400 font-semibold' : 'text-gray-900'}`}>{step.label}</h4>
-                                                            {!isNotStarted && step.timestamp && (
-                                                                <span className="text-[10px] font-bold text-gray-400 font-mono bg-gray-50 px-2 py-0.5 rounded-md border border-gray-100">{step.timestamp}</span>
+                                                            {!isNotStarted && step.timestamp && step.timestamp !== '-' && (
+                                                                <div className="flex flex-col items-end gap-1">
+                                                                    <span className="text-[10px] font-bold text-gray-400 font-mono bg-gray-50 px-2 py-0.5 rounded-md border border-gray-100">{step.timestamp}</span>
+                                                                    {['Rescue Team Assigned', 'Rescue In Progress', 'Animal Picked Up', 'Mission Resolved'].includes(step.label) && (
+                                                                        <button
+                                                                            onClick={() => setSelectedStepDetails({
+                                                                                label: step.label,
+                                                                                ...getStepDetails(step.label)
+                                                                            })}
+                                                                            className="text-[10px] font-bold text-[#F97316] hover:text-[#EA580C] underline transition-colors mt-1"
+                                                                        >
+                                                                            View Details
+                                                                        </button>
+                                                                    )}
+                                                                </div>
                                                             )}
                                                         </div>
                                                         {step.note && (
@@ -608,6 +784,129 @@ const EscelatedMissions = () => {
                     </div>
                 );
             })()}
+
+            {/* Step Details Modal */}
+            {selectedStepDetails && (
+                <div 
+                    onClick={() => setSelectedStepDetails(null)}
+                    className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200"
+                >
+                    <div 
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full max-w-lg bg-white rounded-[2rem] shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200"
+                    >
+                        {/* Modal Header */}
+                        <header className="px-6 py-5 border-b border-gray-50 flex items-center justify-between bg-white shrink-0">
+                            <div>
+                                <span className="text-[10px] font-black bg-orange-50 text-[#F97316] px-2 py-1 rounded-md uppercase tracking-widest">
+                                    Step Details
+                                </span>
+                                <h3 className="text-lg font-black text-gray-900 mt-1 tracking-tight">
+                                    {selectedStepDetails.label}
+                                </h3>
+                            </div>
+                            <button 
+                                onClick={() => setSelectedStepDetails(null)}
+                                className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#B35D25] hover:bg-orange-50/50 transition-all shrink-0"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </header>
+
+                        {/* Modal Body */}
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                            {/* Image Section */}
+                            <div>
+                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Uploaded Image</h4>
+                                {selectedStepDetails.image ? (
+                                    <div className="relative rounded-2xl overflow-hidden group border border-gray-100 shadow-sm aspect-video bg-gray-50">
+                                        <img 
+                                            src={selectedStepDetails.image} 
+                                            alt="Step update" 
+                                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                        />
+                                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                            <button 
+                                                onClick={() => setIsEnlarged(true)}
+                                                className="px-4 py-2 bg-white/95 text-gray-900 rounded-xl text-xs font-bold shadow-md hover:bg-white transition-all transform translate-y-2 group-hover:translate-y-0 duration-300"
+                                            >
+                                                Enlarge Image
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="bg-gray-50/80 border border-dashed border-gray-200 rounded-2xl p-6 text-center text-xs text-gray-400 font-semibold">
+                                        No image provided.
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Details Grid */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="bg-gray-50/50 border border-gray-100 p-4 rounded-xl">
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Health Condition</p>
+                                    <span className="text-xs font-bold text-gray-800 bg-orange-50 text-[#F97316] px-2 py-0.5 rounded border border-orange-100 mt-1 inline-block">
+                                        {selectedStepDetails.condition || 'No information provided.'}
+                                    </span>
+                                </div>
+                                <div className="bg-gray-50/50 border border-gray-100 p-4 rounded-xl">
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Timestamp</p>
+                                    <p className="text-xs font-bold text-gray-800 font-mono mt-1">{selectedStepDetails.timestamp}</p>
+                                </div>
+                            </div>
+
+                            {/* Status Message */}
+                            <div className="bg-gray-50/50 border border-gray-100 p-4 rounded-xl">
+                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Status Message</p>
+                                <p className="text-xs font-semibold text-gray-700 mt-1 leading-relaxed whitespace-pre-line">
+                                    {selectedStepDetails.message || 'No information provided.'}
+                                </p>
+                            </div>
+
+                            {/* Updated By */}
+                            <div className="bg-gray-50/50 border border-gray-100 p-4 rounded-xl flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-orange-100 text-[#F97316] flex items-center justify-center font-bold text-xs">
+                                    {selectedStepDetails.updatedBy.charAt(0)}
+                                </div>
+                                <div>
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Updated By</p>
+                                    <p className="text-xs font-bold text-gray-800 mt-0.5">{selectedStepDetails.updatedBy}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <footer className="px-6 py-4 border-t border-gray-50 bg-gray-50/30 flex justify-end shrink-0">
+                            <button 
+                                onClick={() => setSelectedStepDetails(null)}
+                                className="px-5 py-2 bg-[#F97316] text-white hover:bg-[#EA580C] rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
+                            >
+                                Close Details
+                            </button>
+                        </footer>
+                    </div>
+                </div>
+            )}
+
+            {/* Enlarged Image Viewer */}
+            {isEnlarged && selectedStepDetails && selectedStepDetails.image && (
+                <div 
+                    onClick={() => setIsEnlarged(false)}
+                    className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+                >
+                    <button className="absolute top-6 right-6 text-white/70 hover:text-white transition-all p-3 rounded-full hover:bg-white/10">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                    <img 
+                        src={selectedStepDetails.image} 
+                        className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl" 
+                        onClick={e => e.stopPropagation()} 
+                        alt="Enlarged view" 
+                    />
+                </div>
+            )}
         </div>
     );
 };

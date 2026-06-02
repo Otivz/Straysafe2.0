@@ -189,6 +189,61 @@ const ResiHomePage = () => {
         mediaIdsToDelete: [] as number[]
     });
 
+    const [resolvedAddress, setResolvedAddress] = useState('');
+    const [isGeocoding, setIsGeocoding] = useState(false);
+
+    useEffect(() => {
+        if (!isAddReportModalOpen) {
+            setResolvedAddress('');
+            return;
+        }
+
+        const fetchAddress = async () => {
+            setIsGeocoding(true);
+            try {
+                const response = await axios.get('https://nominatim.openstreetmap.org/reverse', {
+                    params: {
+                        format: 'jsonv2',
+                        lat: formData.latitude,
+                        lon: formData.longitude,
+                        addressdetails: 1
+                    },
+                    headers: {
+                        'Accept-Language': 'en'
+                    }
+                });
+                if (response.data && response.data.address) {
+                    const addr = response.data.address;
+                    const parts = [];
+                    const road = addr.road || addr.pedestrian || addr.path || '';
+                    if (road) parts.push(road);
+                    const neighbourhood = addr.neighbourhood || addr.village || addr.suburb || '';
+                    if (neighbourhood && neighbourhood !== road) {
+                        parts.push(neighbourhood);
+                    }
+                    const city = addr.city || addr.town || addr.municipality || '';
+                    if (city) parts.push(city);
+                    
+                    const addressStr = parts.join(', ') || response.data.display_name;
+                    setResolvedAddress(addressStr);
+                } else {
+                    setResolvedAddress(`${formData.latitude.toFixed(6)}, ${formData.longitude.toFixed(6)}`);
+                }
+            } catch (err) {
+                console.error('Error fetching address from Nominatim:', err);
+                setResolvedAddress(`${formData.latitude.toFixed(6)}, ${formData.longitude.toFixed(6)}`);
+            } finally {
+                setIsGeocoding(false);
+            }
+        };
+
+        const timer = setTimeout(() => {
+            fetchAddress();
+        }, 400);
+
+        return () => clearTimeout(timer);
+    }, [formData.latitude, formData.longitude, isAddReportModalOpen]);
+
     const userStr = localStorage.getItem('resident_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
     const currentUserId = currentUser ? currentUser.user_id : null;
@@ -1051,60 +1106,7 @@ const ResiHomePage = () => {
                                     </div>
                                 </div>
 
-                                {/* Number of Animals */}
-                                <div>
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4 block">Number of Animals</label>
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex items-center bg-gray-50 rounded-xl p-1 border border-gray-100 shadow-inner">
-                                            <button
-                                                type="button"
-                                                                                                onClick={() => setFormData({ ...formData, animalCount: Math.max(1, formData.animalCount - 1) })}
-                                                className={`w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-[#F97316] transition-all hover:bg-orange-50 active:scale-90`}
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M20 12H4" />
-                                                </svg>
-                                            </button>
-                                            <div className="w-10 text-center text-sm font-black text-[#1a1208]">
-                                                {formData.animalCount}
-                                            </div>
-                                            <button
-                                                type="button"
-                                                                                                onClick={() => setFormData({ ...formData, animalCount: formData.animalCount + 1 })}
-                                                className={`w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-[#F97316] transition-all hover:bg-orange-50 active:scale-90`}
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
-                                                </svg>
-                                            </button>
-                                        </div>
-                                        {formData.animalCount >= 3 && (
-                                            <div className="flex items-center gap-2 px-3 py-1 bg-orange-50 rounded-lg border border-orange-100 animate-pulse">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-[#F97316]" />
-                                                <span className="text-[8px] font-black text-[#F97316] uppercase tracking-[0.1em]">Pack Sighting</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
 
-                                {/* Is Possible Owned? */}
-                                <div className="flex items-center gap-4 p-6 bg-gray-50 rounded-[2rem] border border-gray-100">
-                                    <div className="relative flex items-center justify-center">
-                                        <input
-                                            type="checkbox"
-                                            className="peer appearance-none w-6 h-6 rounded-lg border-2 border-gray-200 checked:bg-[#F97316] checked:border-[#F97316] transition-all cursor-pointer"
-                                            checked={formData.isPossibleOwned}
-                                            onChange={(e) => setFormData({ ...formData, isPossibleOwned: e.target.checked })}
-                                                                                    />
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="absolute h-4 w-4 text-white scale-0 peer-checked:scale-100 transition-transform pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Possibly Owned Pet</label>
-                                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Check this if the animal looks like it has an owner</p>
-                                    </div>
-                                </div>
 
                                 {/* Consolidated Media Upload */}
                                 <div className="md:col-span-2">
@@ -1285,25 +1287,24 @@ const ResiHomePage = () => {
                                         </div>
                                     </div>
 
-                                    {/* Coordinates directly under map */}
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Latitude</label>
+                                    {/* Resolved Address directly under map */}
+                                    <div className="w-full">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Street Address</label>
+                                        <div className="relative">
                                             <input
                                                 type="text"
-                                                className="w-full bg-[#FAFAF9] border border-gray-50 rounded-2xl px-5 py-3 text-[11px] font-bold text-[#F97316] shadow-sm"
-                                                value={formData.latitude.toFixed(6)}
+                                                className={`w-full bg-[#FAFAF9] border border-gray-50 rounded-2xl px-5 py-3 text-[11px] font-bold text-[#F97316] shadow-sm pr-10 transition-opacity duration-200 ${isGeocoding ? 'opacity-60' : ''}`}
+                                                value={resolvedAddress || (isGeocoding ? 'Resolving street address...' : 'Loading address...')}
                                                 readOnly
                                             />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Longitude</label>
-                                            <input
-                                                type="text"
-                                                className="w-full bg-[#FAFAF9] border border-gray-50 rounded-2xl px-5 py-3 text-[11px] font-bold text-[#F97316] shadow-sm"
-                                                value={formData.longitude.toFixed(6)}
-                                                readOnly
-                                            />
+                                            {isGeocoding && (
+                                                <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center">
+                                                    <svg className="animate-spin h-4 w-4 text-[#F97316]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

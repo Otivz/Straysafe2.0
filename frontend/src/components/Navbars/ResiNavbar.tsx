@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 
@@ -15,7 +15,6 @@ interface ResiNavbarProps {
 
 const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, onCloseSearch, feedTab, onFeedTabChange }: ResiNavbarProps) => {
     const navigate = useNavigate();
-    const location = useLocation();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -87,12 +86,6 @@ const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, o
     };
 
     const profilePic = user?.profile_picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name || 'User'}`;
-
-    const toggleMenu = () => {
-        const newState = !isMenuOpen;
-        setIsMenuOpen(newState);
-        if (onMenuToggle) onMenuToggle(newState);
-    };
 
     const handleLogout = () => {
         localStorage.removeItem('resident_user');

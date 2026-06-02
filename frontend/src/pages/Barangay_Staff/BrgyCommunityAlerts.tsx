@@ -100,8 +100,8 @@ const BrgyCommunityAlerts = () => {
                     onMenuToggle={() => setIsMobileSidebarOpen(true)}
                     leftContent={
                         <div className="flex flex-col">
-                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">Community Alerts</h1>
-                            <p className="text-[11px] text-gray-400 font-semibold mt-1.5 leading-none">Broadcast safety alerts and advisories to the community</p>
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Community Alerts</h1>
+                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">Broadcast safety alerts and advisories to the community</p>
                         </div>
                     }
                 />

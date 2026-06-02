@@ -73,18 +73,20 @@ const PetRecords = () => {
 
             {/* Main Content */}
             <main className="flex-1 flex flex-col h-screen overflow-hidden">
-                {/* Navbar */}
-                <AdminNavbar />
+                <AdminNavbar
+                    leftContent={
+                        <div className="flex flex-col">
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Pet Registry</h1>
+                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">Manage and monitor all registered animals within the PetOps network</p>
+                        </div>
+                    }
+                />
 
                 {/* Content Area */}
                 <div className="flex-1 overflow-y-auto p-10 flex flex-col gap-10 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                     
                     {/* Header */}
-                    <div className="flex justify-between items-end shrink-0">
-                        <div>
-                            <h1 className="text-4xl font-black text-gray-900 mb-2">Pet Registry</h1>
-                            <p className="text-gray-500 text-sm font-medium">Manage and monitor all registered animals within the PetOps network.</p>
-                        </div>
+                    <div className="flex justify-end items-end shrink-0">
                         <div className="flex items-center gap-4">
                             <div className="relative flex items-center">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 absolute left-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

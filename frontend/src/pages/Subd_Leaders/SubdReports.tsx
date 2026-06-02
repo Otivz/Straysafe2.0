@@ -84,6 +84,60 @@ const SubdReports = () => {
     const [isResolving, setIsResolving] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
+    const [viewReportAddress, setViewReportAddress] = useState('');
+    const [isViewReportAddressLoading, setIsViewReportAddressLoading] = useState(false);
+
+    useEffect(() => {
+        if (viewingReportId === null) {
+            setViewReportAddress('');
+            return;
+        }
+        
+        const report = reports.find(r => r.report_id === viewingReportId);
+        if (!report) return;
+
+        const fetchAddress = async () => {
+            setIsViewReportAddressLoading(true);
+            try {
+                const response = await axios.get('https://nominatim.openstreetmap.org/reverse', {
+                    params: {
+                        format: 'jsonv2',
+                        lat: report.latitude,
+                        lon: report.longitude,
+                        addressdetails: 1
+                    },
+                    headers: {
+                        'Accept-Language': 'en'
+                    }
+                });
+                if (response.data && response.data.address) {
+                    const addr = response.data.address;
+                    const parts = [];
+                    const road = addr.road || addr.pedestrian || addr.path || '';
+                    if (road) parts.push(road);
+                    const neighbourhood = addr.neighbourhood || addr.village || addr.suburb || '';
+                    if (neighbourhood && neighbourhood !== road) {
+                        parts.push(neighbourhood);
+                    }
+                    const city = addr.city || addr.town || addr.municipality || '';
+                    if (city) parts.push(city);
+                    
+                    const addressStr = parts.join(', ') || response.data.display_name;
+                    setViewReportAddress(addressStr);
+                } else {
+                    setViewReportAddress(`${parseFloat(report.latitude.toString()).toFixed(6)}, ${parseFloat(report.longitude.toString()).toFixed(6)}`);
+                }
+            } catch (err) {
+                console.error('Error reverse geocoding report:', err);
+                setViewReportAddress(`${parseFloat(report.latitude.toString()).toFixed(6)}, ${parseFloat(report.longitude.toString()).toFixed(6)}`);
+            } finally {
+                setIsViewReportAddressLoading(false);
+            }
+        };
+
+        fetchAddress();
+    }, [viewingReportId, reports]);
+
     const [isNavigating, setIsNavigating] = useState(false);
     const [navSource, setNavSource] = useState<'brgy' | 'current'>('brgy');
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
@@ -452,8 +506,8 @@ const SubdReports = () => {
                 <SubdNavbar
                     leftContent={
                         <div className="flex flex-col">
-                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">Incident Reports</h1>
-                            <p className="text-[11px] text-gray-400 font-semibold mt-1.5 leading-none">Monitor and manage reported animal incidents in your subdivision</p>
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Incident Reports</h1>
+                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">Monitor and manage reported animal incidents in your subdivision</p>
                         </div>
                     }
                 />
@@ -737,9 +791,21 @@ const SubdReports = () => {
                                                 <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Landmark</span>
                                                 <span className="text-sm font-semibold text-gray-900">{viewReport.landmark || 'N/A'}</span>
                                             </div>
-                                            <div>
-                                                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Coordinates</span>
-                                                <span className="text-xs font-mono text-gray-600">{viewReport.latitude}, {viewReport.longitude}</span>
+                                            <div className="col-span-2 md:col-span-4">
+                                                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Street / Location</span>
+                                                <span className="text-sm font-semibold text-[#F97316]">
+                                                    {isViewReportAddressLoading ? (
+                                                        <span className="flex items-center gap-1.5">
+                                                            <svg className="animate-spin h-3.5 w-3.5 text-[#F97316]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                            </svg>
+                                                            Resolving street address...
+                                                        </span>
+                                                    ) : (
+                                                        viewReportAddress || `${parseFloat(viewReport.latitude.toString()).toFixed(6)}, ${parseFloat(viewReport.longitude.toString()).toFixed(6)}`
+                                                    )}
+                                                </span>
                                             </div>
                                         </div>
 
@@ -788,7 +854,8 @@ const SubdReports = () => {
                                                     routing={isNavigating ? {
                                                         start: navSource === 'brgy' ? BRGY_OFFICE : (userLocation || BRGY_OFFICE),
                                                         end: [viewReport.latitude, viewReport.longitude],
-                                                        waypointNames: [navSource === 'brgy' ? "Barangay Office" : "Your Location", viewReport.landmark]
+                                                        waypointNames: [navSource === 'brgy' ? "Barangay Office" : "Your Location", viewReport.landmark],
+                                                        onClose: () => setIsNavigating(false)
                                                     } : undefined}
                                                     onMarkerClick={(m) => {
                                                         if (m.source) {
@@ -1324,43 +1391,23 @@ const SubdReports = () => {
                                     />
                                 </div>
 
-                                {/* Row 3: Condition & Count */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div className="space-y-3">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-[0.2em] ml-1">Animal Condition</label>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {['Healthy', 'Injured', 'Aggressive', 'Thin'].map((cond) => (
-                                                <button
-                                                    key={cond}
-                                                    type="button"
-                                                    onClick={() => setFormData({ ...formData, condition: cond })}
-                                                    className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${formData.condition === cond
-                                                        ? 'bg-orange-50 border-orange-200 text-[#F97316]'
-                                                        : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200 hover:text-gray-600'
-                                                        }`}
-                                                >
-                                                    {cond}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div className="space-y-3">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-[0.2em] ml-1">Number of Animals</label>
-                                        <div className="flex gap-2">
-                                            {['1', '2', '3', '4+'].map((count) => (
-                                                <button
-                                                    key={count}
-                                                    type="button"
-                                                    onClick={() => setFormData({ ...formData, animal_count: parseInt(count) || 4 })}
-                                                    className={`flex-1 py-3 rounded-xl text-xs font-black transition-all border ${(count === '4+' ? formData.animal_count >= 4 : formData.animal_count === parseInt(count))
-                                                        ? 'bg-orange-50 border-orange-200 text-[#F97316]'
-                                                        : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200 hover:text-gray-600'
-                                                        }`}
-                                                >
-                                                    {count}
-                                                </button>
-                                            ))}
-                                        </div>
+                                {/* Row 3: Condition */}
+                                <div className="space-y-3">
+                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-[0.2em] ml-1">Animal Condition</label>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {['Healthy', 'Injured', 'Aggressive', 'Thin'].map((cond) => (
+                                            <button
+                                                key={cond}
+                                                type="button"
+                                                onClick={() => setFormData({ ...formData, condition: cond })}
+                                                className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${formData.condition === cond
+                                                    ? 'bg-orange-50 border-orange-200 text-[#F97316]'
+                                                    : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200 hover:text-gray-600'
+                                                    }`}
+                                            >
+                                                {cond}
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
 

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, cast
 from app.database import get_db
 from app.models.pet import Pet
 from app.models.user import User
@@ -46,7 +46,7 @@ def create_pet(pet: PetCreate, db: Session = Depends(get_db)):
     # Automatically generate QR Code for the pet on registration
     try:
         from app.routes.pet_qr import generate_qr_for_pet_internal
-        generate_qr_for_pet_internal(db_pet.pet_id, db)
+        generate_qr_for_pet_internal(cast(int, db_pet.pet_id), db)
     except Exception as e:
         # Avoid blocking registration if QR generation encounters an issue
         import logging

@@ -500,8 +500,8 @@ const SubdHazardAlert = () => {
                 <SubdNavbar
                     leftContent={
                         <div className="flex flex-col">
-                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">Announcements</h1>
-                            <p className="text-[11px] text-gray-400 font-semibold mt-1.5 leading-none">Manage and broadcast advisories to the Stray Safe community</p>
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Announcements</h1>
+                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">Manage and broadcast advisories to the Stray Safe community</p>
                         </div>
                     }
                 />
