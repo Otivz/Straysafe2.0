@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 import os
 import uuid
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -10,6 +10,7 @@ from app.models.notification import Notification
 from app.schemas.report import ReportCreate, ReportResponse, ReportStatusUpdate, ReportUpdate, ReportMediaResponse, CommentCreate, CommentResponse
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.color_detection import extract_dominant_colors
+from app.utils.audit import log_activity
 
 router = APIRouter(
     prefix="/reports",
@@ -132,7 +133,7 @@ def is_inside_selera_homes(lat: float, lng: float) -> bool:
     return inside
 
 @router.post("/", response_model=ReportResponse)
-def create_report(report_in: ReportCreate, db: Session = Depends(get_db)):
+def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(get_db)):
     try:
         # Geofence validation
         if not is_inside_selera_homes(report_in.latitude, report_in.longitude):
@@ -207,6 +208,18 @@ def create_report(report_in: ReportCreate, db: Session = Depends(get_db)):
         rep_data.ai_possible_breed = db_report.ai_possible_breed  # type: ignore
         rep_data.ai_suggested_risk_level = db_report.ai_suggested_risk_level  # type: ignore
         rep_data.ai_suggested_priority = db_report.ai_suggested_priority  # type: ignore
+
+        log_activity(
+            db=db,
+            action="CREATE_REPORT",
+            target_table="reports",
+            target_id=db_report.report_id,
+            description=f"New report submitted (report_id={db_report.report_id}): {db_report.animal_type}, priority={db_report.priority_level}",
+            user_id=db_report.user_id,
+            log_type="operation",
+            new_values={"animal_type": str(db_report.animal_type), "priority_level": str(db_report.priority_level), "subdivision_id": db_report.subdivision_id},
+            request=req
+        )
         return rep_data
     except Exception as e:
         db.rollback()
@@ -290,12 +303,23 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/{report_id}")
-def delete_report(report_id: int, db: Session = Depends(get_db)):
+def delete_report(report_id: int, req: Request, db: Session = Depends(get_db)):
     report = db.query(Report).filter(Report.report_id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+    report_snapshot = {"report_id": report.report_id, "animal_type": str(report.animal_type), "status_id": report.current_status_id}
     db.delete(report)
     db.commit()
+    log_activity(
+        db=db,
+        action="DELETE_REPORT",
+        target_table="reports",
+        target_id=report_id,
+        description=f"Deleted report #{report_id}",
+        log_type="operation",
+        old_values=report_snapshot,
+        request=req
+    )
     return {"message": "Report deleted successfully"}
 
 
@@ -522,7 +546,7 @@ async def upload_report_media(
 
 
 @router.patch("/{report_id}/status", response_model=ReportResponse)
-def update_report_status(report_id: int, status_update: ReportStatusUpdate, db: Session = Depends(get_db)):
+def update_report_status(report_id: int, status_update: ReportStatusUpdate, req: Request, db: Session = Depends(get_db)):
     report = db.query(Report).options(
         selectinload(Report.history)
     ).filter(Report.report_id == report_id).first()
@@ -611,7 +635,24 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, db: 
             if rep_data.history and i < len(rep_data.history):
                 rep_data.history[i].updater_name = hist.updater.name if hist.updater else "System"
                 rep_data.history[i].updater_photo = hist.updater.profile_picture if hist.updater else None
-                
+
+    status_names = {
+        1: "Reported", 2: "Verified", 3: "Rejected", 4: "Escalated to Barangay",
+        5: "Rescue In Progress", 6: "Picked Up", 7: "Under Observation", 8: "Impounded",
+        9: "Claimed by Owner", 10: "Released", 11: "Resolved", 12: "Deceased", 13: "Approved"
+    }
+    new_status_name = status_names.get(status_update.status_id, str(status_update.status_id))
+    log_activity(
+        db=db,
+        action="UPDATE_STATUS",
+        target_table="reports",
+        target_id=report_id,
+        description=f"Report #{report_id} status updated to '{new_status_name}'",
+        user_id=status_update.user_id,
+        log_type="operation",
+        new_values={"status_id": status_update.status_id, "status_name": new_status_name},
+        request=req
+    )
     return rep_data
 
 

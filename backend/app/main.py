@@ -12,7 +12,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Local imports (now safe to import after path fix)
 from app.database import engine, Base
 from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr
+from app.routes import audit_logs as audit_logs_router
 from app.models.pet_qr import PetQRCode, PetQRScan
+from app.models.audit_log import AuditLog  # noqa: F401 — ensures table is in Base.metadata
 
 
 def ensure_report_media_status_column():
@@ -123,6 +125,22 @@ def ensure_report_status_rows():
                 {"id": status_id, "name": status_name}
             )
 
+def ensure_audit_logs_columns():
+    """Add extra columns to audit_logs if they were created before this migration."""
+    with engine.begin() as conn:
+        for col_name, col_def in [
+            ("log_type", "VARCHAR(50) NOT NULL DEFAULT 'operation'"),
+            ("old_values", "JSON NULL"),
+            ("new_values", "JSON NULL"),
+        ]:
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'audit_logs' "
+                f"AND COLUMN_NAME = '{col_name}'"
+            ))
+            if result.scalar() == 0:
+                conn.execute(text(f"ALTER TABLE audit_logs ADD COLUMN {col_name} {col_def}"))
+
 def ensure_qr_tables_exist():
     with engine.begin() as conn:
         conn.execute(text("""
@@ -184,6 +202,7 @@ ensure_report_ai_suggestion_columns()
 ensure_report_condition_column()
 ensure_pet_vaccine_card_url_column()
 ensure_report_status_rows()
+ensure_audit_logs_columns()
 ensure_qr_tables_exist()
 
 app = FastAPI(title="StraySafe API")
@@ -212,6 +231,7 @@ app.include_router(pets.router)
 app.include_router(pet_qr.router)
 app.include_router(notifications.router)
 app.include_router(announcements.router)
+app.include_router(audit_logs_router.router)
 
 @app.get("/")
 def read_root():

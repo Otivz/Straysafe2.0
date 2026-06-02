@@ -17,6 +17,7 @@ const AdminHeatMap = () => {
     const [showSummary, setShowSummary] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
     const [reports, setReports] = useState<any[]>([]);
+    const [requests, setRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [timeFilter, setTimeFilter] = useState('7d');
     const [categoryFilter, setCategoryFilter] = useState('all');
@@ -24,8 +25,9 @@ const AdminHeatMap = () => {
     const [markers, setMarkers] = useState<any[]>([]);
     const [mapMode, setMapMode] = useState<'heatmap' | 'pinpoint'>('pinpoint');
     const [selectedReport, setSelectedReport] = useState<any>(null);
+    const [selectedDetailReport, setSelectedDetailReport] = useState<any>(null);
     const [isNavigating, setIsNavigating] = useState(false);
-    const [navSource, setNavSource] = useState<'hq' | 'current'>('hq');
+    const [navSource, setNavSource] = useState<'hq' | 'brgy' | 'current'>('hq');
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
 
     // Mock Hotspot Data
@@ -38,11 +40,61 @@ const AdminHeatMap = () => {
 
     const ADMIN_HQ: [number, number] = [14.806906, 121.0039297]; // San Vicente New Brgy Hall (R243+QH)
 
+    const getStatusName = (statusId: number) => {
+        switch (statusId) {
+            case 1: return 'Pending Verification';
+            case 2: return 'Verified';
+            case 3: return 'Rejected';
+            case 4: return 'Forwarded to Barangay';
+            case 5: return 'Team Dispatched';
+            case 6: return 'Resolved';
+            case 7: return 'Picked Up';
+            case 8: return 'Under Observation';
+            case 9: return 'Impounded';
+            case 10: return 'Released';
+            case 11: return 'Incident Resolved';
+            case 12: return 'Deceased';
+            case 13: return 'Approved by Barangay';
+            default: return 'Active';
+        }
+    };
+
+    const getMarkerColor = (report: any, rescue: any) => {
+        const statusId = report.status_id;
+        if (statusId === 6 || statusId === 11) return 'green'; // Resolved
+        if (statusId === 12) return 'red'; // Deceased
+        if (statusId === 3) return 'red'; // Rejected
+
+        if (statusId === 7 || statusId === 8 || statusId === 9) return 'purple'; // Picked Up
+
+        if (rescue) {
+            const rescueStatus = rescue.status_id;
+            if (rescueStatus === 6) return 'green'; // Resolved
+            if (rescueStatus === 4) return 'yellow'; // In Progress
+            if (rescueStatus === 5) return 'blue'; // Assigned
+            if (rescue.staff_id) return 'blue'; // Assigned
+        }
+
+        if (statusId === 5) return 'yellow'; // In Progress (fallback)
+        if (statusId === 4 || statusId === 13) return 'orange'; // Endorsed / Approved
+        if (statusId === 1 || statusId === 2) return 'red'; // Pending
+
+        return 'red';
+    };
+
     const fetchReports = async () => {
         try {
             setLoading(true);
-            const response = await axios.get('http://localhost:8000/reports/');
-            setReports(response.data);
+            const [reportsRes, requestsRes] = await Promise.allSettled([
+                axios.get('http://localhost:8000/reports/'),
+                axios.get('http://localhost:8000/rescue-requests/')
+            ]);
+            if (reportsRes.status === 'fulfilled') {
+                setReports(reportsRes.value.data || []);
+            }
+            if (requestsRes.status === 'fulfilled') {
+                setRequests(requestsRes.value.data || []);
+            }
         } catch (error) {
             console.error('Error fetching reports for heatmap:', error);
         } finally {
@@ -81,7 +133,7 @@ const AdminHeatMap = () => {
 
     useEffect(() => {
         processReports();
-    }, [reports, timeFilter, categoryFilter, userLocation]);
+    }, [reports, requests, timeFilter, categoryFilter, userLocation]);
 
     const processReports = () => {
         if (!reports.length) {
@@ -113,27 +165,32 @@ const AdminHeatMap = () => {
             ] as [number, number, number]);
         setHeatmapPoints(points);
 
-        const categoryMap: any = {
-            '1': 'Injured Animal',
-            '2': 'Aggressive Stray',
-            '3': 'Possible Rabies',
-            'all': 'Stray Animal'
-        };
-
         const marks = filtered
             .filter(r => r.latitude && r.longitude)
             .map((r: any) => {
                 const date = new Date(r.created_at);
                 const timeStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                const associatedRescue = requests.find(req => req.report_id === r.report_id);
+                const reportStatusId = r.status_id || r.current_status_id || 1;
+                const normalizedReport = { ...r, status_id: reportStatusId };
+                const color = getMarkerColor(normalizedReport, associatedRescue);
+                const statusName = r.status?.status_name || getStatusName(reportStatusId);
 
                 return {
                     id: r.report_id,
                     lat: parseFloat(r.latitude.toString()),
                     lng: parseFloat(r.longitude.toString()),
-                    title: r.description || 'No description provided.',
-                    priority: r.priority_level,
-                    category: categoryMap[r.category_id.toString()] || 'Stray Animal',
-                    time: timeStr
+                    title: r.description || `Incident #${r.report_id}`,
+                    priority: r.priority_level || 'Regular',
+                    category: r.animal_type || 'Stray Animal',
+                    color: color,
+                    time: timeStr,
+                    rawData: {
+                        ...normalizedReport,
+                        statusName: statusName,
+                        reporterName: r.reporter_name || r.reporter?.name || "Citizen",
+                        rescue: associatedRescue
+                    }
                 };
             });
 
@@ -146,7 +203,7 @@ const AdminHeatMap = () => {
             priority: "Office",
             category: "HQ",
             time: "BASE"
-        });
+        } as any);
 
         if (userLocation) {
             marks.push({
@@ -157,7 +214,7 @@ const AdminHeatMap = () => {
                 priority: "Me",
                 category: "Operator",
                 time: "LIVE"
-            });
+            } as any);
         }
 
         setMarkers(marks);
@@ -325,9 +382,9 @@ const AdminHeatMap = () => {
                             markers={mapMode === 'pinpoint' ? markers : markers.filter(m => m.id === -1)}
                             showHeatmap={mapMode === 'heatmap'}
                             routing={isNavigating && selectedReport ? {
-                                start: navSource === 'hq' ? ADMIN_HQ : (userLocation || ADMIN_HQ),
+                                start: (navSource === 'hq' || navSource === 'brgy') ? ADMIN_HQ : (userLocation || ADMIN_HQ),
                                 end: [parseFloat(selectedReport.latitude || selectedReport.lat), parseFloat(selectedReport.longitude || selectedReport.lng)],
-                                waypointNames: [navSource === 'hq' ? "Command Center" : "Your Location", selectedReport.landmark || selectedReport.title],
+                                waypointNames: [(navSource === 'hq' || navSource === 'brgy') ? "Command Center HQ" : "Your Location", selectedReport.landmark || selectedReport.title],
                                 onClose: () => setIsNavigating(false)
                             } : undefined}
                             onMarkerClick={(m) => {
@@ -348,10 +405,116 @@ const AdminHeatMap = () => {
                                     }
                                 }
                             }}
+                            onViewDetails={(marker) => setSelectedDetailReport(marker.rawData)}
                         />
                     </div>
                 </main>
             </div>
+
+            {/* REPORT DETAILS MODAL */}
+            {selectedDetailReport && (
+                <div className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200">
+                        {/* Header */}
+                        <div className="flex justify-between items-center border-b border-gray-100 pb-4 mb-4 shrink-0">
+                            <div>
+                                <h3 className="text-base font-black text-gray-900 uppercase">Report Details</h3>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Case ID: #{selectedDetailReport.report_id}</p>
+                            </div>
+                            <button
+                                onClick={() => setSelectedDetailReport(null)}
+                                className="p-1.5 hover:bg-gray-150 rounded-full transition-colors text-gray-400 hover:text-gray-700"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="flex-1 overflow-y-auto space-y-4 pr-1 scrollbar-thin">
+                            {/* Media Image */}
+                            {selectedDetailReport.media && selectedDetailReport.media.length > 0 ? (
+                                <img
+                                    src={selectedDetailReport.media[0].file_url}
+                                    alt="Incident Report"
+                                    className="w-full h-44 object-cover rounded-2xl border border-gray-100 shadow-sm"
+                                />
+                            ) : (
+                                <div className="w-full h-24 bg-gray-50 border border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center text-gray-400 text-xs">
+                                    <span>🐾 No photo uploaded for this report</span>
+                                </div>
+                            )}
+
+                            {/* Details Grid */}
+                            <div className="grid grid-cols-2 gap-4 text-xs text-gray-700">
+                                <div>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Animal Species / Breed</span>
+                                    <span className="font-semibold text-gray-850">{selectedDetailReport.animal_type || 'Unknown'} {selectedDetailReport.animal_breed ? `(${selectedDetailReport.animal_breed})` : ''}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Priority Level</span>
+                                    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider mt-0.5 ${selectedDetailReport.priority_level === 'High' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
+                                        }`}>{selectedDetailReport.priority_level || 'Regular'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Health Condition</span>
+                                    <span className="font-semibold text-gray-850">{selectedDetailReport.condition || 'No specific condition listed'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Status</span>
+                                    <span className="font-semibold text-gray-850">{selectedDetailReport.status?.status_name || getStatusName(selectedDetailReport.status_id)}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Reporter Details</span>
+                                    <span className="font-semibold text-gray-850">{selectedDetailReport.reporterName || selectedDetailReport.reporter?.name || 'Citizen'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Contact Information</span>
+                                    <span className="font-semibold text-gray-850">{selectedDetailReport.reporter?.phone || selectedDetailReport.reporter?.email || 'No contact permission'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Date Reported</span>
+                                    <span className="font-semibold text-gray-850">{selectedDetailReport.created_at ? new Date(selectedDetailReport.created_at).toLocaleString() : 'N/A'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Report Location / Landmark</span>
+                                    <span className="font-semibold text-gray-850">{selectedDetailReport.landmark || 'No landmark specified'}</span>
+                                </div>
+                            </div>
+
+                            {/* Description */}
+                            <div className="text-xs border-t border-gray-100 pt-3">
+                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Incident Description</span>
+                                <p className="text-gray-700 bg-gray-50 p-3.5 rounded-xl border border-gray-100 italic leading-relaxed">
+                                    "{selectedDetailReport.description || 'No description was written for this incident report.'}"
+                                </p>
+                            </div>
+
+                            {/* Rescue Assignment Details */}
+                            <div className="text-xs border-t border-gray-100 pt-3">
+                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Rescue Details</span>
+                                {selectedDetailReport.rescue ? (
+                                    <div className="bg-orange-50/50 border border-orange-100 rounded-xl p-3 flex flex-col gap-1.5">
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-bold text-orange-900">Rescue Case #{selectedDetailReport.rescue.rescue_id}</span>
+                                            <span className="px-2 py-0.5 bg-orange-100 text-orange-800 rounded font-bold text-[9px] uppercase">
+                                                Active Rescue
+                                            </span>
+                                        </div>
+                                        <div className="text-[11px] text-orange-850">
+                                            <p><span className="font-semibold text-orange-950">Assigned Rescuer:</span> {selectedDetailReport.rescue.assigned_staff_name || 'Pending dispatch assignment'}</p>
+                                            {selectedDetailReport.rescue.notes && <p className="mt-1 italic">Notes: "{selectedDetailReport.rescue.notes}"</p>}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-gray-400 italic">No rescue operations have been dispatched for this report.</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

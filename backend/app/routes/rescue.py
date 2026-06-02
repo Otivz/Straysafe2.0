@@ -2,6 +2,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 logger = logging.getLogger(__name__)
+from datetime import datetime
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from app.database import get_db
@@ -15,6 +16,72 @@ router = APIRouter(
     prefix="/rescue-requests",
     tags=["rescue-requests"]
 )
+
+def _populate_rescue_fields(rescue: Optional[Rescue], db: Session) -> Optional[Rescue]:
+    if not rescue:
+        return None
+    
+    # Populate dynamic fields for frontend compatibility
+    if rescue.report:
+        rescue.report.reporter_name = rescue.report.reporter.name if rescue.report.reporter else "Citizen"  # type: ignore[attr-defined]
+        rescue.report.status_id = rescue.report.current_status_id  # type: ignore[attr-defined]
+        rescue.title = f"Rescue: {rescue.report.animal_type} at {rescue.report.landmark}"
+        rescue.description = rescue.report.description
+        rescue.created_at = rescue.report.created_at  # type: ignore[attr-defined]
+    else:
+        rescue.title = f"Rescue Request #{rescue.rescue_id}"
+        rescue.description = str(rescue.notes) if rescue.notes else "No description provided."
+        rescue.created_at = None  # type: ignore[attr-defined]
+
+    # Determine the name of the Subdivision Leader who sent the request
+    if rescue.leader:
+        rescue.leader_name = rescue.leader.name
+        rescue.leader_position = rescue.leader.position.name if rescue.leader.position else "Subdivision Leader"
+    elif rescue.report and rescue.report.reporter and rescue.report.reporter.role_id == 2:
+        # Fallback 1: Report creator if they are a Subdivision Leader
+        rescue.leader_name = rescue.report.reporter.name
+        rescue.leader_position = rescue.report.reporter.position.name if rescue.report.reporter.position else "Subdivision Leader"
+    elif rescue.report and rescue.report.history:
+        # Fallback 2: Look for the person who escalated the report (Status 4) or ANY official who touched it
+        official_actions = [h for h in rescue.report.history if h.updater and h.updater.role_id == 2]
+        if official_actions:
+            # Use the most recent official action
+            latest_official = sorted(official_actions, key=lambda x: x.created_at, reverse=True)[0].updater
+            rescue.leader_name = latest_official.name
+            rescue.leader_position = latest_official.position.name if latest_official.position else "Subdivision Leader"
+        else:
+            rescue.leader_name = "Subdivision Leader"
+            rescue.leader_position = "Official"
+    else:
+        rescue.leader_name = "Subdivision Leader"
+        rescue.leader_position = "Official"
+    
+    # Determine assigned staff name
+    rescue.assigned_staff_name = None
+    if rescue.staff:
+         # If staff_id is set on the rescue, that's the primary assigned person
+         rescue.assigned_staff_name = rescue.staff.name
+    elif rescue.assignments:
+        # Fallback to history
+        latest = sorted(rescue.assignments, key=lambda x: x.assigned_at, reverse=True)[0]  # type: ignore[arg-type]
+        assigned_staff = db.query(User).filter(User.user_id == latest.staff_id).first()
+        rescue.assigned_staff_name = str(assigned_staff.name) if assigned_staff else None
+        
+    # Populate staff_name for each assignment
+    if rescue.assignments:
+        for asgn in rescue.assignments:
+            if asgn.staff:
+                asgn.staff_name = asgn.staff.name  # type: ignore[attr-defined]
+
+    # Populate request_id for frontend compatibility
+    rescue.request_id = rescue.rescue_id  # type: ignore[assignment]
+
+    # Populate updater names for report history entries
+    if rescue.report and rescue.report.history:
+        for hist in rescue.report.history:
+            hist.updater_name = hist.updater.name if hist.updater else "System"
+            
+    return rescue
 
 
 @router.post("/", response_model=RescueRequestResponse)
@@ -31,7 +98,16 @@ def create_rescue_request(request_in: RescueRequestCreate, db: Session = Depends
         db.add(db_rescue)
         db.commit()
         db.refresh(db_rescue)
-        return db_rescue
+        # Fetch fully loaded rescue to populate all relations for frontend
+        db_rescue = db.query(Rescue).options(
+            joinedload(Rescue.report).joinedload(Report.media),
+            joinedload(Rescue.report).joinedload(Report.reporter),
+            joinedload(Rescue.report).joinedload(Report.history).joinedload(StatusHistory.updater),
+            joinedload(Rescue.staff),
+            joinedload(Rescue.leader).joinedload(User.position),
+            joinedload(Rescue.assignments).joinedload(RescueAssignment.staff)
+        ).filter(Rescue.rescue_id == db_rescue.rescue_id).first()
+        return _populate_rescue_fields(db_rescue, db)
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
@@ -49,75 +125,22 @@ def get_rescue_requests(db: Session = Depends(get_db)):
     ).all()
 
     for rescue in rescues:
-        # Populate dynamic fields for frontend compatibility
-        if rescue.report:
-            rescue.report.reporter_name = rescue.report.reporter.name if rescue.report.reporter else "Citizen"  # type: ignore[attr-defined]
-            rescue.report.status_id = rescue.report.current_status_id  # type: ignore[attr-defined]
-            rescue.title = f"Rescue: {rescue.report.animal_type} at {rescue.report.landmark}"
-            rescue.description = rescue.report.description
-        else:
-            rescue.title = f"Rescue Request #{rescue.rescue_id}"
-            rescue.description = str(rescue.notes) if rescue.notes else "No description provided."
-
-        # Determine the name of the Subdivision Leader who sent the request
-        if rescue.leader:
-            rescue.leader_name = rescue.leader.name
-            rescue.leader_position = rescue.leader.position.name if rescue.leader.position else "Subdivision Leader"
-        elif rescue.report and rescue.report.reporter and rescue.report.reporter.role_id == 2:
-            # Fallback 1: Report creator if they are a Subdivision Leader
-            rescue.leader_name = rescue.report.reporter.name
-            rescue.leader_position = rescue.report.reporter.position.name if rescue.report.reporter.position else "Subdivision Leader"
-        elif rescue.report and rescue.report.history:
-            # Fallback 2: Look for the person who escalated the report (Status 4) or ANY official who touched it
-            # Sort history by created_at descending to find the most recent official action
-            official_actions = [h for h in rescue.report.history if h.updater and h.updater.role_id == 2]
-            if official_actions:
-                # Use the most recent official action
-                latest_official = sorted(official_actions, key=lambda x: x.created_at, reverse=True)[0].updater
-                rescue.leader_name = latest_official.name
-                rescue.leader_position = latest_official.position.name if latest_official.position else "Subdivision Leader"
-            else:
-                rescue.leader_name = "Subdivision Leader"
-                rescue.leader_position = "Official"
-        else:
-            rescue.leader_name = "Subdivision Leader"
-            rescue.leader_position = "Official"
-        
-        # Determine assigned staff name
-        rescue.assigned_staff_name = None
-        if rescue.staff:
-             # If staff_id is set on the rescue, that's the primary assigned person
-             rescue.assigned_staff_name = rescue.staff.name
-        elif rescue.assignments:
-            # Fallback to history
-            latest = sorted(rescue.assignments, key=lambda x: x.assigned_at, reverse=True)[0]  # type: ignore[arg-type]
-            assigned_staff = db.query(User).filter(User.user_id == latest.staff_id).first()
-            rescue.assigned_staff_name = str(assigned_staff.name) if assigned_staff else None
-            
-        # Populate staff_name for each assignment
-        if rescue.assignments:
-            for asgn in rescue.assignments:
-                if asgn.staff:
-                    asgn.staff_name = asgn.staff.name  # type: ignore[attr-defined]
-
-        # Populate request_id for frontend compatibility
-        rescue.request_id = rescue.rescue_id  # type: ignore[assignment]
-
-        # Populate updater names for report history entries
-        if rescue.report and rescue.report.history:
-            for hist in rescue.report.history:
-                hist.updater_name = hist.updater.name if hist.updater else "System"
+        _populate_rescue_fields(rescue, db)
 
     return rescues
 
 
 @router.get("/report/{report_id}", response_model=Optional[RescueRequestResponse])
 def get_request_by_report(report_id: int, db: Session = Depends(get_db)):
-    return db.query(Rescue).options(
+    rescue = db.query(Rescue).options(
         joinedload(Rescue.report).joinedload(Report.media),
         joinedload(Rescue.report).joinedload(Report.reporter),
-        joinedload(Rescue.assignments)
+        joinedload(Rescue.report).joinedload(Report.history).joinedload(StatusHistory.updater),
+        joinedload(Rescue.staff),
+        joinedload(Rescue.leader).joinedload(User.position),
+        joinedload(Rescue.assignments).joinedload(RescueAssignment.staff)
     ).filter(Rescue.report_id == report_id).first()
+    return _populate_rescue_fields(rescue, db)
 
 
 @router.patch("/{rescue_id}", response_model=RescueRequestResponse)
@@ -191,6 +214,10 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
             # Update Rescue status if mapping exists
             if rescue_status_id:
                 db_rescue.status_id = rescue_status_id
+                if rescue_status_id == 6:
+                    db_rescue.completed_at = datetime.utcnow()
+                elif rescue_status_id in (4, 5):
+                    db_rescue.started_at = datetime.utcnow()
 
             # Record history for both the rescue and the report
             history_remarks = remarks
@@ -259,13 +286,17 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
         db.commit()
         db.refresh(db_rescue)
         
-        # Populate updater names and photos for history entries in the response
-        if db_rescue.report and db_rescue.report.history:
-            for hist in db_rescue.report.history:
-                hist.updater_name = hist.updater.name if hist.updater else "System"
-                hist.updater_photo = hist.updater.profile_picture if hist.updater else None
-                
-        return db_rescue
+        # Re-fetch fully loaded rescue to populate all relations for frontend response
+        full_rescue = db.query(Rescue).options(
+            joinedload(Rescue.report).joinedload(Report.media),
+            joinedload(Rescue.report).joinedload(Report.reporter),
+            joinedload(Rescue.report).joinedload(Report.history).joinedload(StatusHistory.updater),
+            joinedload(Rescue.staff),
+            joinedload(Rescue.leader).joinedload(User.position),
+            joinedload(Rescue.assignments).joinedload(RescueAssignment.staff)
+        ).filter(Rescue.rescue_id == rescue_id).first()
+        
+        return _populate_rescue_fields(full_rescue, db)
     except HTTPException:
         raise
     except Exception as e:

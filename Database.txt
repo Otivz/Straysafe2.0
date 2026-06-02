@@ -1080,12 +1080,20 @@ CREATE TABLE audit_logs(
 
     user_agent TEXT,
 
+    -- Added for rich audit inspection (log category + before/after state)
+    log_type VARCHAR(50) NOT NULL DEFAULT 'operation',
+
+    old_values JSON NULL,
+
+    new_values JSON NULL,
+
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY(user_id)
     REFERENCES users(user_id)
     ON DELETE SET NULL
 );
+
 
 CREATE TABLE pet_qr_codes(
     qr_id INT AUTO_INCREMENT PRIMARY KEY,

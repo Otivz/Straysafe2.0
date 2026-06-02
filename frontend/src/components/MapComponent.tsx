@@ -1,6 +1,6 @@
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 
 const BrgyIcon = L.divIcon({
@@ -131,6 +131,45 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
+const createColoredIncidentIcon = (colorName: string = 'red', category: string = '') => {
+    const colors: Record<string, string> = {
+        red: '#EF4444',     // Pending
+        orange: '#F97316',  // Endorsed
+        blue: '#3B82F6',    // Assigned
+        yellow: '#F59E0B',  // In Progress
+        purple: '#8B5CF6',  // Picked Up
+        green: '#10B981',   // Resolved
+    };
+
+    const hexColor = colors[colorName.toLowerCase()] || '#EF4444';
+    const emoji = category.toLowerCase().includes('cat') ? '🐱' : '🐶';
+
+    return L.divIcon({
+        html: `
+            <div style="position: relative; display: flex; align-items: center; justify-content: center;">
+                <div style="
+                    background: ${hexColor};
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 50% 50% 50% 0;
+                    transform: rotate(-45deg);
+                    border: 2px solid white;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                ">
+                    <div style="transform: rotate(45deg); font-size: 14px;">${emoji}</div>
+                </div>
+            </div>
+        `,
+        className: '',
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32]
+    });
+};
+
 import HeatmapLayer from './HeatmapLayer';
 import RoutingControl from './RoutingControl';
 import ReturnToSeleraButton from './MapControls/ReturnToSeleraButton';
@@ -148,7 +187,9 @@ interface MapComponentProps {
         title: string,
         priority?: string,
         time?: string,
-        category?: string
+        category?: string,
+        color?: string,
+        rawData?: any
     }[];
     onLocationChange?: (lat: number, lng: number) => void;
     routing?: {
@@ -159,14 +200,25 @@ interface MapComponentProps {
         onClose?: () => void;
     };
     onMarkerClick?: (marker: any) => void;
+    onViewDetails?: (marker: any) => void;
     showGeofence?: boolean;
 }
 
 // Internal component to handle view changes
 const ChangeView = ({ center, zoom }: { center: [number, number], zoom: number }) => {
     const map = useMap();
+    const prevCenterRef = useRef<[number, number]>(center);
+    const prevZoomRef = useRef<number>(zoom);
+
     useEffect(() => {
-        map.setView(center, zoom);
+        const centerChanged = center[0] !== prevCenterRef.current[0] || center[1] !== prevCenterRef.current[1];
+        const zoomChanged = zoom !== prevZoomRef.current;
+
+        if (centerChanged || zoomChanged) {
+            map.setView(center, zoom);
+            prevCenterRef.current = center;
+            prevZoomRef.current = zoom;
+        }
     }, [center, zoom, map]);
     return null;
 };
@@ -193,6 +245,7 @@ const MapComponent = ({
     onLocationChange,
     routing,
     onMarkerClick,
+    onViewDetails,
     showGeofence = true
 }: MapComponentProps) => {
     const SELERA_BOUNDS: [number, number][] = [
@@ -258,51 +311,109 @@ const MapComponent = ({
                     position={[marker.lat, marker.lng]}
                     icon={
                         (marker.category === 'Barangay Office' || marker.category === 'HQ') ? BrgyIcon :
-                            (marker.category === 'User Location' || marker.category === 'Operator') ? MeIcon : IncidentIcon
+                            (marker.category === 'User Location' || marker.category === 'Operator') ? MeIcon :
+                                marker.color ? createColoredIncidentIcon(marker.color, marker.category) : IncidentIcon
                     }
                     eventHandlers={{
                         popupopen: () => onMarkerClick && onMarkerClick(marker)
                     }}
                 >
                     <Popup className="custom-popup">
-                        <div className="p-3 min-w-[180px]">
-                            <div className="flex justify-between items-start mb-2">
-                                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${marker.priority === 'High' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'
-                                    }`}>
-                                    {marker.priority || 'Regular'}
-                                </span>
-                                <span className="text-[8px] font-bold text-gray-400 uppercase">{marker.time}</span>
-                            </div>
-                            <h3 className="font-black text-xs uppercase text-[#1a1208] mb-1">{marker.category || 'Stray Animal'}</h3>
-                            <p className="text-[10px] text-gray-500 leading-tight mb-2 italic">"{marker.title}"</p>
-                            <div className="pt-2 border-t border-gray-100 flex flex-col gap-2">
-                                <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest text-center mt-1">Get Directions</p>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button
-                                        onClick={(e) => {
-                                            console.log("From Office clicked");
-                                            e.stopPropagation();
-                                            if (onMarkerClick) onMarkerClick({ ...marker, source: 'brgy' });
-                                        }}
-                                        className="py-2 bg-[#F97316] text-[#FAFAF9] text-[9px] font-black uppercase rounded-lg hover:bg-[#EA580C] transition-colors shadow-sm border border-orange-500/20"
-                                    >
-                                        From Office
-                                    </button>
-                                    <button
-                                        onClick={(e) => {
-                                            console.log("From Me clicked");
-                                            e.stopPropagation();
-                                            if (onMarkerClick) onMarkerClick({ ...marker, source: 'current' });
-                                        }}
-                                        className="py-2 bg-[#F97316] text-[#FAFAF9] text-[9px] font-black uppercase rounded-lg hover:bg-[#EA580C] transition-colors shadow-sm border border-orange-500/20"
-                                    >
-                                        From Me
-                                    </button>
+                        <div className="p-3 min-w-[200px]">
+                            {marker.rawData ? (
+                                <div className="flex flex-col gap-1.5 text-xs text-gray-700">
+                                    <div className="flex justify-between items-center border-b border-gray-100 pb-1.5 mb-1.5">
+                                        <span className="font-black text-gray-900">Report #{marker.id}</span>
+                                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${marker.priority === 'High' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'
+                                            }`}>
+                                            {marker.priority || 'Regular'}
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase">Animal:</span>
+                                        <span className="font-semibold text-gray-900">{marker.category || 'Stray'}</span>
+
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase">Status:</span>
+                                        <span className="font-semibold text-gray-900">{marker.rawData.statusName || 'Active'}</span>
+
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase">Reporter:</span>
+                                        <span className="font-semibold text-gray-900 truncate">{marker.rawData.reporterName || 'Citizen'}</span>
+
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase">Date:</span>
+                                        <span className="font-semibold text-gray-900 truncate">{marker.time}</span>
+
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase">Location:</span>
+                                        <span className="font-semibold text-gray-900 truncate">{marker.rawData.landmark || 'Selera Homes'}</span>
+                                    </div>
+                                    <div className="pt-2 border-t border-gray-100 mt-1 flex flex-col gap-2">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (onViewDetails) onViewDetails(marker);
+                                            }}
+                                            className="w-full py-2 bg-[#1A4543] text-white text-[9px] font-black uppercase rounded-lg hover:bg-[#112d2b] transition-colors shadow-sm"
+                                        >
+                                            View Full Details
+                                        </button>
+
+                                        <div className="grid grid-cols-2 gap-2 mt-0.5">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (onMarkerClick) onMarkerClick({ ...marker, source: 'brgy' });
+                                                }}
+                                                className="py-1.5 bg-[#F97316] text-white text-[8px] font-black uppercase rounded hover:bg-[#EA580C] transition-colors"
+                                            >
+                                                Directions (HQ)
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (onMarkerClick) onMarkerClick({ ...marker, source: 'current' });
+                                                }}
+                                                className="py-1.5 bg-[#F97316] text-white text-[8px] font-black uppercase rounded hover:bg-[#EA580C] transition-colors"
+                                            >
+                                                Directions (Me)
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
-                                <button className="w-full py-2 bg-gray-50 text-gray-400 text-[8px] font-black uppercase rounded-lg hover:bg-gray-100 transition-colors mt-1">
-                                    View Full Details
-                                </button>
-                            </div>
+                            ) : (
+                                <>
+                                    <div className="flex justify-between items-start mb-2">
+                                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${marker.priority === 'High' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'
+                                            }`}>
+                                            {marker.priority || 'Regular'}
+                                        </span>
+                                        <span className="text-[8px] font-bold text-gray-400 uppercase">{marker.time}</span>
+                                    </div>
+                                    <h3 className="font-black text-xs uppercase text-[#1a1208] mb-1">{marker.category || 'Stray Animal'}</h3>
+                                    <p className="text-[10px] text-gray-500 leading-tight mb-2 italic">"{marker.title}"</p>
+                                    <div className="pt-2 border-t border-gray-100 flex flex-col gap-2">
+                                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest text-center mt-1">Get Directions</p>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (onMarkerClick) onMarkerClick({ ...marker, source: 'brgy' });
+                                                }}
+                                                className="py-2 bg-[#F97316] text-[#FAFAF9] text-[9px] font-black uppercase rounded-lg hover:bg-[#EA580C] transition-colors shadow-sm border border-orange-500/20"
+                                            >
+                                                From Office
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (onMarkerClick) onMarkerClick({ ...marker, source: 'current' });
+                                                }}
+                                                className="py-2 bg-[#F97316] text-[#FAFAF9] text-[9px] font-black uppercase rounded-lg hover:bg-[#EA580C] transition-colors shadow-sm border border-orange-500/20"
+                                            >
+                                                From Me
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </Popup>
                 </Marker>

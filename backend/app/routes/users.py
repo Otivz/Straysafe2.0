@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
 import os
 import uuid
 from sqlalchemy.orm import Session
@@ -9,6 +9,7 @@ from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
 from app.utils.auth import get_password_hash
 from app.utils.cloudinary_config import upload_to_cloudinary
+from app.utils.audit import log_activity
 
 router = APIRouter(
     prefix="/users",
@@ -36,7 +37,7 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
     return user
 
 @router.post("/", response_model=UserResponse)
-def create_user(user_in: UserCreate, db: Session = Depends(get_db)):
+def create_user(user_in: UserCreate, req: Request, db: Session = Depends(get_db)):
     # Check if email exists
     if db.query(User).filter(User.email == user_in.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -53,6 +54,17 @@ def create_user(user_in: UserCreate, db: Session = Depends(get_db)):
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
+
+        log_activity(
+            db=db,
+            action="CREATE_USER",
+            target_table="users",
+            target_id=db_user.user_id,
+            description=f"Created new user account: {db_user.name} ({db_user.email}), role_id={db_user.role_id}",
+            log_type="operation",
+            new_values={"name": db_user.name, "email": db_user.email, "role_id": db_user.role_id, "status": db_user.status},
+            request=req
+        )
         return db_user
     except IntegrityError as e:
         db.rollback()
@@ -62,11 +74,12 @@ def create_user(user_in: UserCreate, db: Session = Depends(get_db)):
         )
 
 @router.put("/{user_id}", response_model=UserResponse)
-def update_user(user_id: int, user_in: UserUpdate, db: Session = Depends(get_db)):
+def update_user(user_id: int, user_in: UserUpdate, req: Request, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.user_id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    old_snapshot = {"name": db_user.name, "email": db_user.email, "role_id": db_user.role_id, "status": db_user.status}
     update_data = user_in.model_dump(exclude_unset=True)
     
     if "password" in update_data:
@@ -78,6 +91,19 @@ def update_user(user_id: int, user_in: UserUpdate, db: Session = Depends(get_db)
     try:
         db.commit()
         db.refresh(db_user)
+
+        new_snapshot = {k: getattr(db_user, k, None) for k in old_snapshot}
+        log_activity(
+            db=db,
+            action="UPDATE_USER",
+            target_table="users",
+            target_id=user_id,
+            description=f"Updated user account: {db_user.name} ({db_user.email})",
+            log_type="operation",
+            old_values=old_snapshot,
+            new_values=new_snapshot,
+            request=req
+        )
         return db_user
     except IntegrityError as e:
         db.rollback()
@@ -87,25 +113,50 @@ def update_user(user_id: int, user_in: UserUpdate, db: Session = Depends(get_db)
         )
 
 @router.patch("/{user_id}/status", response_model=UserResponse)
-def update_user_status(user_id: int, status_in: str, db: Session = Depends(get_db)):
+def update_user_status(user_id: int, status_in: str, req: Request, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.user_id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    old_status = db_user.status
     db_user.status = status_in
     db.commit()
     db.refresh(db_user)
+
+    log_activity(
+        db=db,
+        action="UPDATE_STATUS",
+        target_table="users",
+        target_id=user_id,
+        description=f"Updated status for user {db_user.name} ({db_user.email}): {old_status} → {status_in}",
+        log_type="operation",
+        old_values={"status": old_status},
+        new_values={"status": status_in},
+        request=req
+    )
     return db_user
 
 @router.delete("/{user_id}")
-def delete_user(user_id: int, db: Session = Depends(get_db)):
+def delete_user(user_id: int, req: Request, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.user_id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    user_snapshot = {"name": db_user.name, "email": db_user.email, "role_id": db_user.role_id, "status": db_user.status}
     try:
         db.delete(db_user)
         db.commit()
+
+        log_activity(
+            db=db,
+            action="DELETE_USER",
+            target_table="users",
+            target_id=user_id,
+            description=f"Permanently deleted user account: {user_snapshot['name']} ({user_snapshot['email']})",
+            log_type="security",
+            old_values=user_snapshot,
+            request=req
+        )
         return {"message": "User deleted successfully"}
     except IntegrityError as e:
         db.rollback()

@@ -437,60 +437,67 @@ const EndorsementArch = () => {
 
                         {/* Document Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {filteredDocs.map((doc) => (
-                                <div key={doc.doc_id} className="group bg-white rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 p-6 flex flex-col h-full">
-                                    <div className="flex items-start justify-between mb-6">
-                                        <div className="w-14 h-14 rounded-2xl bg-orange-50 flex items-center justify-center text-[#F97316] shadow-inner group-hover:bg-[#F97316] group-hover:text-white transition-colors duration-300">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                            </svg>
-                                        </div>
-                                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-                                            doc.status === 'Accepted' ? 'bg-green-50 text-green-600 border-green-100' : 
-                                            'bg-blue-50 text-blue-600 border-blue-100'
-                                        }`}>
-                                            {doc.status}
-                                        </span>
-                                    </div>
-
-                                    <h3 className="text-sm font-bold text-gray-900 mb-2 line-clamp-2 leading-relaxed">
-                                        {doc.title}
-                                    </h3>
-                                    
-                                    <div className="flex flex-col space-y-1.5 mb-6 mt-auto">
-                                        <div className="flex items-center text-[11px] text-gray-400 font-bold uppercase tracking-wider">
-                                            <span className="w-4">🆔</span> {doc.doc_id}
-                                        </div>
-                                        <div className="flex items-center text-[11px] text-gray-400 font-bold uppercase tracking-wider">
-                                            <span className="w-4">📅</span> {doc.date_sent}
-                                        </div>
-                                        <div className="flex items-center text-[11px] text-gray-400 font-bold uppercase tracking-wider">
-                                            <span className="w-4">📂</span> {doc.file_size} • {doc.file_type}
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-3 pt-4 border-t border-gray-50">
-                                        <Button 
-                                            variant="light" 
-                                            size="sm" 
-                                            className="!text-[10px] !font-black uppercase tracking-widest !rounded-xl"
-                                            onClick={() => handlePreview(doc)}
-                                        >
-                                            Preview
-                                        </Button>
-                                         <Button 
-                                             variant="primary" 
-                                             size="sm" 
-                                             className="!text-[10px] !font-black uppercase tracking-widest !rounded-xl"
-                                             onClick={() => handleDownload(doc)}
-                                         >
-                                             Download
-                                         </Button>
-                                    </div>
+                            {loadingDocs ? (
+                                <div className="col-span-full py-20 flex flex-col items-center justify-center">
+                                    <div className="w-12 h-12 border-4 border-[#F97316] border-t-transparent rounded-full animate-spin" />
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-4">Loading Archive Documents...</p>
                                 </div>
-                            ))}
+                            ) : (
+                                filteredDocs.map((doc) => (
+                                    <div key={doc.doc_id} className="group bg-white rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 p-6 flex flex-col h-full">
+                                        <div className="flex items-start justify-between mb-6">
+                                            <div className="w-14 h-14 rounded-2xl bg-orange-50 flex items-center justify-center text-[#F97316] shadow-inner group-hover:bg-[#F97316] group-hover:text-white transition-colors duration-300">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                </svg>
+                                            </div>
+                                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                                                doc.status === 'Accepted' ? 'bg-green-50 text-green-600 border-green-100' : 
+                                                'bg-blue-50 text-blue-600 border-blue-100'
+                                            }`}>
+                                                {doc.status}
+                                            </span>
+                                        </div>
 
-                            {filteredDocs.length === 0 && (
+                                        <h3 className="text-sm font-bold text-gray-900 mb-2 line-clamp-2 leading-relaxed">
+                                            {doc.title}
+                                        </h3>
+                                        
+                                        <div className="flex flex-col space-y-1.5 mb-6 mt-auto">
+                                            <div className="flex items-center text-[11px] text-gray-400 font-bold uppercase tracking-wider">
+                                                <span className="w-4">🆔</span> {doc.doc_id}
+                                            </div>
+                                            <div className="flex items-center text-[11px] text-gray-400 font-bold uppercase tracking-wider">
+                                                <span className="w-4">📅</span> {doc.date_sent}
+                                            </div>
+                                            <div className="flex items-center text-[11px] text-gray-400 font-bold uppercase tracking-wider">
+                                                <span className="w-4">📂</span> {doc.file_size} • {doc.file_type}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-3 pt-4 border-t border-gray-50">
+                                            <Button 
+                                                variant="light" 
+                                                size="sm" 
+                                                className="!text-[10px] !font-black uppercase tracking-widest !rounded-xl"
+                                                onClick={() => handlePreview(doc)}
+                                            >
+                                                Preview
+                                            </Button>
+                                             <Button 
+                                                 variant="primary" 
+                                                 size="sm" 
+                                                 className="!text-[10px] !font-black uppercase tracking-widest !rounded-xl"
+                                                 onClick={() => handleDownload(doc)}
+                                             >
+                                                 Download
+                                             </Button>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+
+                            {!loadingDocs && filteredDocs.length === 0 && (
                                 <div className="col-span-full bg-white rounded-3xl border border-dashed border-gray-200 p-20 text-center">
                                     <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">

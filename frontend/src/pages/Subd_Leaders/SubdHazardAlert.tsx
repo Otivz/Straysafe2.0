@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
-import { useEffect, useState, FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import axios from 'axios';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
@@ -52,7 +52,7 @@ const SubdHazardAlert = () => {
     const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
     const [newCommentText, setNewCommentText] = useState('');
 
-    const categories = ['All', 'Emergency', 'Animal Advisory', 'Vaccination Drive', 'Lost and Found'];
+    // const categories = ['All', 'Emergency', 'Animal Advisory', 'Vaccination Drive', 'Lost and Found'];
 
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
@@ -155,7 +155,7 @@ const SubdHazardAlert = () => {
         }
     };
 
-    const handleToggleStatus = async (id: string, currentStatus: string) => {
+    /* const handleToggleStatus = async (id: string, currentStatus: string) => {
         const nextStatus = currentStatus === 'Published' ? 'Draft' : 'Published';
         try {
             await axios.patch(`http://localhost:8000/announcements/${id}/status`, { status: nextStatus });
@@ -164,7 +164,7 @@ const SubdHazardAlert = () => {
             console.error('Failed to toggle status:', err);
             alert('Failed to update status.');
         }
-    };
+    }; */
 
     const handleDeleteAnnouncement = async (id: string) => {
         if (!window.confirm("Are you sure you want to delete this announcement?")) {
@@ -218,18 +218,18 @@ const SubdHazardAlert = () => {
         return 0;
     });
 
-    const pinnedAnnouncements = filteredAnnouncements.filter(ann => ann.pinned);
-    const normalAnnouncements = filteredAnnouncements.filter(ann => !ann.pinned);
+    // const pinnedAnnouncements = filteredAnnouncements.filter(ann => ann.pinned);
+    // const normalAnnouncements = filteredAnnouncements.filter(ann => !ann.pinned);
     const totalFiltered = filteredAnnouncements.length;
 
-    const categoryStyle = (cat: string) => {
+    /* const categoryStyle = (cat: string) => {
         switch (cat) {
             case 'Emergency': return 'bg-red-50 text-red-600 border-red-100';
             case 'Vaccination Drive': return 'bg-green-50 text-green-700 border-green-100';
             case 'Lost and Found': return 'bg-blue-50 text-blue-600 border-blue-100';
             default: return 'bg-indigo-50 text-indigo-600 border-indigo-100';
         }
-    };
+    }; */
 
     const renderUniformCard = (ann: Announcement) => {
         const isPinned = ann.pinned;
@@ -290,7 +290,7 @@ const SubdHazardAlert = () => {
             }
         };
 
-        const isLive = ann.status === 'Published';
+        // const isLive = ann.status === 'Published';
 
         return (
             <div
