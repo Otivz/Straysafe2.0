@@ -459,7 +459,7 @@ const ResiHomePage = () => {
                 // Also exclude resolved and deceased reports (status_id 11 and 12) from the home page feed
                 const visibleReports = data.filter((report: any) => {
                     const isVisible = report.visibility === 'Public' || report.user_id === currentUserId;
-                    const isNotResolved = report.status_id !== 11 && report.status_id !== 12 && report.current_status_id !== 11 && report.current_status_id !== 12;
+                    const isNotResolved = report.status_id !== 3 && report.status_id !== 11 && report.status_id !== 12 && report.current_status_id !== 3 && report.current_status_id !== 11 && report.current_status_id !== 12;
                     return isVisible && isNotResolved;
                 });
 
@@ -1167,28 +1167,6 @@ const ResiHomePage = () => {
                                         </select>
                                     </div>
                                 </div>
-
-                                {/* Priority Level Selection */}
-                                <div>
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4 block">Priority Level</label>
-                                    <div className="flex flex-wrap gap-3">
-                                        {['Low', 'Medium', 'High'].map((prio) => (
-                                            <button
-                                                key={prio}
-                                                type="button"
-                                                                                                onClick={() => setFormData({ ...formData, priorityLevel: prio })}
-                                                className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${formData.priorityLevel === prio
-                                                    ? 'bg-[#F97316] text-white border-[#F97316] shadow-lg shadow-orange-100'
-                                                    : `bg-white text-gray-400 border-gray-100 hover:border-orange-100`
-                                                    } `}
-                                            >
-                                                {prio}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-
 
                                 {/* Consolidated Media Upload */}
                                 <div className="md:col-span-2">

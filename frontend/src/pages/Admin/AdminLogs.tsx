@@ -29,6 +29,7 @@ const AdminLogs = () => {
     const [typeFilter, setTypeFilter] = useState<'all' | 'security' | 'operation' | 'system'>('all');
     const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'yesterday' | 'this_week'>('all');
     const [userFilter, setUserFilter] = useState<string>('all');
+    const [currentPage, setCurrentPage] = useState(1);
 
     // Fetch real audit logs from the backend
     const fetchLogs = async () => {
@@ -81,6 +82,19 @@ const AdminLogs = () => {
         const matchesUser = userFilter === 'all' || log.user === userFilter;
         return matchesSearch && matchesType && matchesDate(log.timestamp) && matchesUser;
     });
+
+    // Reset pagination to first page when any filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, typeFilter, dateFilter, userFilter]);
+
+    // Pagination calculations
+    const ITEMS_PER_PAGE = 10;
+    const totalPages = Math.ceil(filteredLogs.length / ITEMS_PER_PAGE);
+    const paginatedLogs = filteredLogs.slice(
+        (currentPage - 1) * ITEMS_PER_PAGE,
+        currentPage * ITEMS_PER_PAGE
+    );
 
     // Dynamic metrics calculations
     const totalActions = logs.length;
@@ -271,7 +285,7 @@ const AdminLogs = () => {
                     <div className="bg-white rounded-[2rem] shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 overflow-hidden">
                         <DataTable
                             loading={loading}
-                            data={filteredLogs}
+                            data={paginatedLogs}
                             onRowClick={(log) => setSelectedLog(log)}
                             emptyMessage="No audit logs found."
                             columns={[
@@ -334,6 +348,76 @@ const AdminLogs = () => {
                                 }
                             ]}
                         />
+
+                        {/* Pagination Controls */}
+                        {totalPages > 1 && (
+                            <div className="flex items-center justify-between px-8 py-4 bg-gray-50 border-t border-gray-100 flex-wrap gap-4">
+                                <span className="text-[10px] text-gray-500 font-black uppercase tracking-wider">
+                                    Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredLogs.length)} of {filteredLogs.length} logs
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                        disabled={currentPage === 1}
+                                        className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                                            currentPage === 1
+                                                ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                                                : 'bg-white border-gray-200 text-gray-600 hover:border-[#1B4340] hover:text-[#1B4340] cursor-pointer'
+                                        }`}
+                                    >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+                                        Prev
+                                    </button>
+                                    
+                                    <div className="flex items-center gap-1">
+                                        {Array.from({ length: totalPages }, (_, idx) => {
+                                            const pageNum = idx + 1;
+                                            const isFirst = pageNum === 1;
+                                            const isLast = pageNum === totalPages;
+                                            const isNearCurrent = Math.abs(pageNum - currentPage) <= 1;
+
+                                            if (isFirst || isLast || isNearCurrent) {
+                                                return (
+                                                    <button
+                                                        key={pageNum}
+                                                        onClick={() => setCurrentPage(pageNum)}
+                                                        className={`w-8 h-8 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                                                            currentPage === pageNum
+                                                                ? 'bg-[#1B4340] text-white shadow-md shadow-teal-900/10'
+                                                                : 'bg-white border border-gray-200 text-gray-600 hover:border-[#1B4340] hover:text-[#1B4340]'
+                                                        }`}
+                                                    >
+                                                        {pageNum}
+                                                    </button>
+                                                );
+                                            }
+
+                                            if (pageNum === 2 && currentPage > 3) {
+                                                return <span key={pageNum} className="px-1 text-gray-400 text-xs font-black">...</span>;
+                                            }
+                                            if (pageNum === totalPages - 1 && currentPage < totalPages - 2) {
+                                                return <span key={pageNum} className="px-1 text-gray-400 text-xs font-black">...</span>;
+                                            }
+
+                                            return null;
+                                        })}
+                                    </div>
+
+                                    <button
+                                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                        disabled={currentPage === totalPages}
+                                        className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                                            currentPage === totalPages
+                                                ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                                                : 'bg-white border-gray-200 text-gray-600 hover:border-[#1B4340] hover:text-[#1B4340] cursor-pointer'
+                                        }`}
+                                    >
+                                        Next
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Inspection Modal */}

@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
+from app.schemas.report import ReportMediaResponse
 
 
 class HoldingTimelineResponse(BaseModel):
@@ -12,6 +13,7 @@ class HoldingTimelineResponse(BaseModel):
     logged_by:  Optional[int] = None
     staff_name: Optional[str] = None
     logged_at:  datetime
+    media:      Optional[List[ReportMediaResponse]] = []
 
     class Config:
         from_attributes = True
@@ -22,6 +24,7 @@ class HoldingTimelineCreate(BaseModel):
     title:      str
     notes:      Optional[str] = None
     logged_by:  Optional[int] = None
+    media_ids:  Optional[List[int]] = None
 
 
 class HoldingAnimalCreate(BaseModel):
@@ -46,6 +49,7 @@ class HoldingAnimalUpdate(BaseModel):
     intake_date:     Optional[datetime] = None
     updated_by:      Optional[int] = None   # staff who made the change (for timeline)
     update_notes:    Optional[str] = None   # optional notes for the timeline entry
+    media_ids:       Optional[List[int]] = None
 
 
 class HoldingAnimalResponse(BaseModel):

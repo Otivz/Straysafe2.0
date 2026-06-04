@@ -60,6 +60,7 @@ class ReportMediaResponse(BaseModel):
     dominant_color: str | None = None
     history_id: Optional[int] = None
     status_id: Optional[int] = None
+    holding_log_id: Optional[int] = None
     is_evidence: Optional[bool] = False
     uploaded_at: datetime
     # AI Suggestions
@@ -88,6 +89,22 @@ class StatusHistoryResponse(BaseModel):
         from_attributes = True
 
 
+class EndorsementLetterResponse(BaseModel):
+    letter_id: int
+    report_id: int
+    title: Optional[str] = None
+    leader_id: int
+    letter_content: str
+    file_url: Optional[str] = None
+    status_id: Optional[int] = None
+    issued_at: datetime
+    leader_name: Optional[str] = None
+    leader_position: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 class ReportResponse(ReportBase):
     report_id: int
     created_at: datetime
@@ -96,6 +113,7 @@ class ReportResponse(ReportBase):
     media: Optional[list[ReportMediaResponse]] = []
     comments: Optional[list[CommentResponse]] = []
     history: Optional[list[StatusHistoryResponse]] = []
+    endorsement_letter: Optional[EndorsementLetterResponse] = None
     
     # AI Suggestions
     ai_animal_type: Optional[str] = None

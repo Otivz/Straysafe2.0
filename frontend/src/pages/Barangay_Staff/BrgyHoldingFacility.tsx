@@ -8,41 +8,48 @@ import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface TimelineEntry {
-    log_id:     number;
+    log_id: number;
     holding_id: number;
     event_type: string;
-    title:      string;
-    notes:      string | null;
-    logged_by:  number | null;
+    title: string;
+    notes: string | null;
+    logged_by: number | null;
     staff_name: string | null;
-    logged_at:  string;
+    logged_at: string;
 }
 
 interface HoldingAnimal {
-    holding_id:           number;
-    report_id:            number;
-    rescue_id:            number | null;
-    animal_type:          string | null;
-    animal_name:          string | null;
-    breed:                string | null;
-    color:                string | null;
-    estimated_size:       string | null;
-    facility_status:      number;
+    holding_id: number;
+    report_id: number;
+    rescue_id: number | null;
+    animal_type: string | null;
+    animal_name: string | null;
+    breed: string | null;
+    color: string | null;
+    estimated_size: string | null;
+    facility_status: number;
     facility_status_name: string | null;
-    kennel_slot:          string | null;
-    medical_notes:        string | null;
-    intake_date:          string | null;
-    discharge_date:       string | null;
-    intake_staff_name:    string | null;
-    report_landmark:      string | null;
-    report_category:      string | null;
-    timeline:             TimelineEntry[];
+    kennel_slot: string | null;
+    medical_notes: string | null;
+    intake_date: string | null;
+    discharge_date: string | null;
+    intake_staff_name: string | null;
+    report_landmark: string | null;
+    report_category: string | null;
+    timeline: TimelineEntry[];
+    report_media?: {
+        media_id: number;
+        file_url: string;
+        media_type: string;
+        is_evidence?: boolean;
+        uploaded_at?: string;
+    }[];
 }
 
 interface Metrics {
-    total:          number;
+    total: number;
     need_treatment: number;
-    healthy:        number;
+    healthy: number;
     nearing_expiry: number;
     resolved_today: number;
 }
@@ -52,22 +59,22 @@ interface Metrics {
 const IMPOUND_DAYS = 7;
 
 const FACILITY_STATUSES = [
-    { id: 1, name: 'Need Treatment',       color: 'bg-red-50 text-red-600 border-red-200' },
-    { id: 2, name: 'Healthy',              color: 'bg-green-50 text-green-600 border-green-200' },
-    { id: 3, name: 'Claimed by Owner',     color: 'bg-blue-50 text-blue-600 border-blue-200' },
-    { id: 4, name: 'Deceased',             color: 'bg-gray-100 text-gray-500 border-gray-200' },
+    { id: 1, name: 'Need Treatment', color: 'bg-red-50 text-red-600 border-red-200' },
+    { id: 2, name: 'Healthy', color: 'bg-green-50 text-green-600 border-green-200' },
+    { id: 3, name: 'Claimed by Owner', color: 'bg-blue-50 text-blue-600 border-blue-200' },
+    { id: 4, name: 'Deceased', color: 'bg-gray-100 text-gray-500 border-gray-200' },
     { id: 5, name: 'Transferred to Shelter', color: 'bg-purple-50 text-purple-600 border-purple-200' },
 ];
 
 const RESOLVED_IDS = new Set([3, 4, 5]);
 
 const EVENT_TYPE_META: Record<string, { icon: ReactNode; color: string }> = {
-    intake:        { icon: <span>🏠</span>, color: 'bg-blue-100 text-blue-600' },
+    intake: { icon: <span>🏠</span>, color: 'bg-blue-100 text-blue-600' },
     status_change: { icon: <span>🔄</span>, color: 'bg-amber-100 text-amber-700' },
-    medical:       { icon: <span>💊</span>, color: 'bg-purple-100 text-purple-600' },
-    treatment:     { icon: <span>🩺</span>, color: 'bg-pink-100 text-pink-600' },
-    observation:   { icon: <span>📋</span>, color: 'bg-gray-100 text-gray-600' },
-    outcome:       { icon: <span>✅</span>, color: 'bg-green-100 text-green-700' },
+    medical: { icon: <span>💊</span>, color: 'bg-purple-100 text-purple-600' },
+    treatment: { icon: <span>🩺</span>, color: 'bg-pink-100 text-pink-600' },
+    observation: { icon: <span>📋</span>, color: 'bg-gray-100 text-gray-600' },
+    outcome: { icon: <span>✅</span>, color: 'bg-green-100 text-green-700' },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -138,6 +145,10 @@ const BrgyHoldingFacility = () => {
     // Add timeline entry
     const [timelineForm, setTimelineForm] = useState({ event_type: 'observation', title: '', notes: '' });
     const [isAddingTimeline, setIsAddingTimeline] = useState(false);
+
+    // Lightbox / media preview state
+    const [lightboxMedia, setLightboxMedia] = useState<{ mediaList: any[]; index: number } | null>(null);
+    const [uploadFiles, setUploadFiles] = useState<File[]>([]);
 
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -218,6 +229,24 @@ const BrgyHoldingFacility = () => {
             d.setDate(d.getDate() - (updateForm.stay_duration - 3));
             const calculatedIntakeDate = d.toISOString();
 
+            // 1. Upload files first if any
+            const uploadedMediaIds: number[] = [];
+            if (uploadFiles.length > 0) {
+                for (const file of uploadFiles) {
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    fd.append('is_evidence', 'true');
+                    const uploadRes = await axios.post(`http://localhost:8000/reports/${selected.report_id}/media`, fd, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                    });
+                    if (uploadRes.data?.media_id) {
+                        uploadedMediaIds.push(uploadRes.data.media_id);
+                    }
+                }
+                setUploadFiles([]);
+            }
+
+            // 2. Perform patching
             await axios.patch(`http://localhost:8000/holding/${selected.holding_id}`, {
                 facility_status: updateForm.facility_status,
                 kennel_slot: updateForm.kennel_slot,
@@ -225,6 +254,7 @@ const BrgyHoldingFacility = () => {
                 intake_date: calculatedIntakeDate,
                 update_notes: updateForm.update_notes,
                 updated_by: currentUser?.user_id,
+                media_ids: uploadedMediaIds,
             });
             await fetchAll();
             // Refresh the selected modal too
@@ -423,9 +453,24 @@ const BrgyHoldingFacility = () => {
                                                         {/* Animal */}
                                                         <td className="px-5 py-4">
                                                             <div className="flex items-center gap-3">
-                                                                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-xl shrink-0">
-                                                                    {animalIcon(animal.animal_type)}
-                                                                </div>
+                                                                {(() => {
+                                                                    const firstImage = animal.report_media?.find(
+                                                                        m => m.media_type === 'Image' || m.file_url.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i)
+                                                                    );
+                                                                    return (
+                                                                        <div className="w-10 h-10 rounded-xl bg-indigo-50 overflow-hidden border border-indigo-100 flex items-center justify-center shrink-0">
+                                                                            {firstImage ? (
+                                                                                <img 
+                                                                                    src={firstImage.file_url} 
+                                                                                    alt={animal.animal_name || 'Animal'} 
+                                                                                    className="w-full h-full object-cover" 
+                                                                                />
+                                                                            ) : (
+                                                                                <span className="text-xl">{animalIcon(animal.animal_type)}</span>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })()}
                                                                 <div>
                                                                     <p className="font-bold text-gray-900 text-sm">
                                                                         {animal.animal_name || `${animal.animal_type || 'Unknown'} #${animal.holding_id}`}
@@ -560,11 +605,10 @@ const BrgyHoldingFacility = () => {
                                 <button
                                     key={tab}
                                     onClick={() => setDetailTab(tab)}
-                                    className={`px-4 py-3 text-xs font-bold uppercase tracking-widest transition-colors border-b-2 -mb-px ${
-                                        detailTab === tab
+                                    className={`px-4 py-3 text-xs font-bold uppercase tracking-widest transition-colors border-b-2 -mb-px ${detailTab === tab
                                             ? 'border-indigo-500 text-indigo-600'
                                             : 'border-transparent text-gray-400 hover:text-gray-600'
-                                    }`}
+                                        }`}
                                 >
                                     {tab === 'info' ? '📋 Animal Info & Update' : `📅 Timeline (${selected.timeline.length})`}
                                 </button>
@@ -577,16 +621,37 @@ const BrgyHoldingFacility = () => {
                             {detailTab === 'info' && (
                                 <div className="space-y-5">
 
+                                    {/* Resident Uploaded Image */}
+                                    {(() => {
+                                        const residentImage = selected.report_media?.find(
+                                            m => !m.is_evidence && (m.media_type === 'Image' || m.file_url.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i))
+                                        );
+                                        if (!residentImage) return null;
+                                        return (
+                                            <div className="relative w-full h-52 rounded-2xl overflow-hidden border border-gray-150 shadow-sm bg-gray-50 group">
+                                                <img 
+                                                    src={residentImage.file_url} 
+                                                    alt="Resident Uploaded Animal" 
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                />
+                                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex flex-col justify-end p-4">
+                                                    <span className="text-[9px] font-black text-white/80 uppercase tracking-widest leading-none">Resident Uploaded Photo</span>
+                                                    <h4 className="text-white font-bold text-sm mt-1">Stray Animal from Report #{selected.report_id}</h4>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
                                     {/* Current Info Grid */}
                                     <div className="grid grid-cols-2 gap-4">
                                         {[
-                                            { label: 'Animal Type',    value: selected.animal_type   || '—' },
-                                            { label: 'Breed',          value: selected.breed          || '—' },
-                                            { label: 'Color',          value: selected.color          || '—' },
+                                            { label: 'Animal Type', value: selected.animal_type || '—' },
+                                            { label: 'Breed', value: selected.breed || '—' },
+                                            { label: 'Color', value: selected.color || '—' },
                                             { label: 'Estimated Size', value: selected.estimated_size || '—' },
-                                            { label: 'Kennel Slot',    value: selected.kennel_slot    || '—' },
-                                            { label: 'Stay Duration',  value: RESOLVED_IDS.has(selected.facility_status) ? 'Discharged' : `${daysSince(selected.intake_date)} day(s)` },
-                                            { label: 'Intake Staff',   value: selected.intake_staff_name || '—' },
+                                            { label: 'Kennel Slot', value: selected.kennel_slot || '—' },
+                                            { label: 'Stay Duration', value: RESOLVED_IDS.has(selected.facility_status) ? 'Discharged' : `${daysSince(selected.intake_date)} day(s)` },
+                                            { label: 'Intake Staff', value: selected.intake_staff_name || '—' },
                                         ].map(row => (
                                             <div key={row.label} className={`bg-gray-50 rounded-xl p-3 ${row.label === 'Intake Staff' ? 'col-span-2' : ''}`}>
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{row.label}</p>
@@ -594,6 +659,48 @@ const BrgyHoldingFacility = () => {
                                             </div>
                                         ))}
                                     </div>
+
+                                    {/* Uploaded Media & Evidence Gallery */}
+                                    {selected.report_media && selected.report_media.length > 0 && (
+                                        <div className="border border-gray-100 rounded-2xl p-5 bg-white space-y-3">
+                                            <h3 className="text-xs font-black text-gray-800 uppercase tracking-widest flex items-center gap-1.5">
+                                                <span>📸</span> Uploaded Media & Evidence
+                                            </h3>
+                                            <div className="grid grid-cols-3 gap-3">
+                                                {selected.report_media.map((media, idx) => {
+                                                    const isVideo = media.media_type === 'Video' || media.file_url.toLowerCase().match(/\.(mp4|mov|avi|webm)$/i);
+                                                    const isDoc = media.media_type === 'Document' || media.file_url.toLowerCase().endsWith('.pdf') || media.file_url.toLowerCase().endsWith('.docx');
+                                                    
+                                                    return (
+                                                        <div 
+                                                            key={media.media_id} 
+                                                            onClick={() => setLightboxMedia({ mediaList: selected.report_media || [], index: idx })}
+                                                            className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-50 cursor-pointer group hover:border-indigo-400 hover:shadow-md transition-all duration-200"
+                                                        >
+                                                            {isDoc ? (
+                                                                <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center">
+                                                                    <span className="text-3xl">📄</span>
+                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-1 truncate w-full">Document</span>
+                                                                </div>
+                                                            ) : isVideo ? (
+                                                                <div className="w-full h-full relative">
+                                                                    <video src={media.file_url} className="w-full h-full object-cover pointer-events-none" />
+                                                                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center group-hover:bg-black/35 transition-colors">
+                                                                        <span className="text-white text-2xl drop-shadow-md">▶️</span>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="w-full h-full relative">
+                                                                    <img src={media.file_url} alt="Animal evidence" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
 
 
                                     {/* Discharge info */}
@@ -669,6 +776,51 @@ const BrgyHoldingFacility = () => {
                                                     value={updateForm.update_notes}
                                                     onChange={e => setUpdateForm(f => ({ ...f, update_notes: e.target.value }))}
                                                 />
+                                            </div>
+
+                                            <div>
+                                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Upload Media (for more proof)</label>
+                                                <div className="flex flex-col gap-2 bg-white border border-gray-200 rounded-xl p-3">
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*,video/*"
+                                                        multiple
+                                                        onChange={e => {
+                                                            if (e.target.files) {
+                                                                setUploadFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                                                            }
+                                                        }}
+                                                        className="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-wider file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 cursor-pointer"
+                                                    />
+                                                    {uploadFiles.length > 0 && (
+                                                        <div className="space-y-1.5 mt-1 border-t border-gray-100 pt-2">
+                                                            <div className="flex items-center justify-between text-[10px] font-black uppercase text-gray-400">
+                                                                <span>Selected files ({uploadFiles.length})</span>
+                                                                <button 
+                                                                    type="button" 
+                                                                    onClick={() => setUploadFiles([])}
+                                                                    className="text-red-500 hover:text-red-600 font-bold"
+                                                                >
+                                                                    Clear all
+                                                                </button>
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-1.5 max-h-24 overflow-y-auto custom-scrollbar">
+                                                                {uploadFiles.map((file, idx) => (
+                                                                    <div key={idx} className="flex items-center justify-between bg-gray-50 px-2 py-1 rounded border border-gray-100 text-[10px] text-gray-600">
+                                                                        <span className="truncate flex-1 pr-1">📎 {file.name}</span>
+                                                                        <button 
+                                                                            type="button" 
+                                                                            onClick={() => setUploadFiles(prev => prev.filter((_, i) => i !== idx))}
+                                                                            className="text-red-500 hover:text-red-750 font-extrabold shrink-0 ml-1"
+                                                                        >
+                                                                            ✕
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
 
                                             <button
@@ -768,6 +920,119 @@ const BrgyHoldingFacility = () => {
                                 </div>
                             )}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ─── Lightbox / Media Viewer Modal ───────────────────────────────── */}
+            {lightboxMedia && (
+                <div 
+                    className="fixed inset-0 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center z-[100] p-4 select-none"
+                    onClick={() => setLightboxMedia(null)}
+                >
+                    {/* Close Button */}
+                    <button 
+                        onClick={() => setLightboxMedia(null)}
+                        className="absolute top-4 right-4 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-xl transition-colors z-[110]"
+                    >
+                        ✕
+                    </button>
+
+                    {/* Media Container */}
+                    <div 
+                        className="w-full max-w-4xl max-h-[80vh] flex items-center justify-center p-2 relative"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {(() => {
+                            const current = lightboxMedia.mediaList[lightboxMedia.index];
+                            if (!current) return null;
+                            const isVideo = current.media_type === 'Video' || current.file_url.toLowerCase().match(/\.(mp4|mov|avi|webm)$/i);
+                            const isDoc = current.media_type === 'Document' || current.file_url.toLowerCase().endsWith('.pdf') || current.file_url.toLowerCase().endsWith('.docx');
+
+                            if (isDoc) {
+                                return (
+                                    <div className="bg-white rounded-3xl p-8 max-w-md w-full flex flex-col items-center text-center shadow-2xl animate-scale-up" onClick={e => e.stopPropagation()}>
+                                        <span className="text-6xl mb-4">📄</span>
+                                        <h3 className="text-lg font-black text-gray-900">Document Evidence</h3>
+                                        <p className="text-xs text-gray-400 mt-1 mb-6">This attachment is a document or verification letter.</p>
+                                        <div className="flex gap-3 w-full">
+                                            <a 
+                                                href={current.file_url} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer" 
+                                                className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-lg shadow-indigo-100 text-center"
+                                            >
+                                                Open Document
+                                            </a>
+                                            <button 
+                                                onClick={() => setLightboxMedia(null)}
+                                                className="flex-1 py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors"
+                                            >
+                                                Close
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            }
+
+                            if (isVideo) {
+                                return (
+                                    <video 
+                                        src={current.file_url} 
+                                        controls 
+                                        autoPlay 
+                                        className="max-w-full max-h-[80vh] rounded-2xl shadow-2xl animate-scale-up" 
+                                        onClick={e => e.stopPropagation()} 
+                                    />
+                                );
+                            }
+
+                            return (
+                                <img 
+                                    src={current.file_url} 
+                                    alt="Evidence view" 
+                                    className="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl animate-scale-up" 
+                                    onClick={e => e.stopPropagation()} 
+                                />
+                            );
+                        })()}
+
+                        {/* Navigation Arrows */}
+                        {lightboxMedia.mediaList.length > 1 && (
+                            <>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setLightboxMedia(prev => {
+                                            if (!prev) return null;
+                                            const newIndex = (prev.index - 1 + prev.mediaList.length) % prev.mediaList.length;
+                                            return { ...prev, index: newIndex };
+                                        });
+                                    }}
+                                    className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-2xl transition-colors z-[110]"
+                                >
+                                    ◀
+                                </button>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setLightboxMedia(prev => {
+                                            if (!prev) return null;
+                                            const newIndex = (prev.index + 1) % prev.mediaList.length;
+                                            return { ...prev, index: newIndex };
+                                        });
+                                    }}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-2xl transition-colors z-[110]"
+                                >
+                                    ▶
+                                </button>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Image Counter / Caption */}
+                    <div className="mt-4 text-xs font-bold text-gray-400 tracking-wider">
+                        {lightboxMedia.index + 1} of {lightboxMedia.mediaList.length}
                     </div>
                 </div>
             )}

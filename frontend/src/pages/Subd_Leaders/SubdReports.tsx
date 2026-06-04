@@ -1630,86 +1630,73 @@ const SubdReports = () => {
 
             {/* Escalate to Barangay Modal */}
             {isEscalateModalOpen && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-300">
+                        <div className="px-8 py-6 border-b border-gray-150 flex justify-between items-center bg-gray-50/50">
                             <div>
-                                <h3 className="text-xl font-bold text-gray-900">Escalate to Barangay</h3>
-                                <p className="text-xs text-gray-500 mt-1">Upload the endorsement letter to proceed.</p>
+                                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Escalation Letter</h3>
+                                <p className="text-xs text-gray-400 mt-1 font-medium">Attach endorsement document to forward request to Barangay.</p>
                             </div>
-                            <button onClick={() => setIsEscalateModalOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            <button onClick={() => setIsEscalateModalOpen(false)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-900 rounded-full hover:bg-gray-100 transition-all">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
                         </div>
-
                         <div className="p-8 space-y-6">
-                            <div className="space-y-4">
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Escalation Title</label>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Request Title</label>
+                                <input
+                                    type="text" required
+                                    className="w-full px-5 py-4 bg-white border border-gray-900 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300"
+                                    value={escalationTitle}
+                                    onChange={(e) => setEscalationTitle(e.target.value)}
+                                    placeholder="e.g. Endorsement for Report #18"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Additional Notes</label>
+                                <textarea required rows={4}
+                                    className="w-full px-5 py-4 bg-white border border-orange-400 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300 resize-none"
+                                    value={escalationDescription}
+                                    onChange={(e) => setEscalationDescription(e.target.value)}
+                                    placeholder="Provide detailed description of why emergency rescue is needed..."
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Endorsement Letter File (PDF/DOCX/IMAGE)</label>
+                                <div className="flex items-center gap-3 mt-1">
+                                    <label htmlFor="endorsement-file-input-reports" className="px-5 py-2 bg-[#FFF3E6] text-[#F97316] hover:bg-orange-100 rounded-full text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all border border-transparent">
+                                        Choose File
+                                    </label>
                                     <input
-                                        type="text"
-                                        placeholder="e.g. Endorsement for Rescue Team"
-                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-[#F97316] outline-none transition-all"
-                                        value={escalationTitle}
-                                        onChange={(e) => setEscalationTitle(e.target.value)}
+                                        id="endorsement-file-input-reports"
+                                        type="file"
+                                        required
+                                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                        onChange={(e) => setEndorsementFile(e.target.files?.[0] || null)}
+                                        className="hidden"
                                     />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Brief Description</label>
-                                    <textarea
-                                        placeholder="Provide a summary of why this is being escalated..."
-                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-[#F97316] outline-none transition-all min-h-[100px]"
-                                        value={escalationDescription}
-                                        onChange={(e) => setEscalationDescription(e.target.value)}
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Endorsement Letter (PDF/JPG/PNG)</label>
-                                    <div
-                                        className={`relative border-2 border-dashed rounded-2xl p-8 transition-all flex flex-col items-center justify-center gap-3 ${endorsementFile ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-orange-300 bg-gray-50'}`}
-                                        onDragOver={(e) => e.preventDefault()}
-                                        onDrop={(e) => {
-                                            e.preventDefault();
-                                            if (e.dataTransfer.files?.[0]) setEndorsementFile(e.dataTransfer.files[0]);
-                                        }}
-                                    >
-                                        <input
-                                            type="file"
-                                            className="absolute inset-0 opacity-0 cursor-pointer"
-                                            onChange={(e) => {
-                                                if (e.target.files?.[0]) setEndorsementFile(e.target.files[0]);
-                                            }}
-                                        />
-                                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${endorsementFile ? 'bg-orange-500 text-white' : 'bg-white text-gray-400 shadow-sm'}`}>
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                            </svg>
-                                        </div>
-                                        <div className="text-center">
-                                            <p className="text-sm font-bold text-gray-900">{endorsementFile ? endorsementFile.name : 'Select or drag file'}</p>
-                                            <p className="text-xs text-gray-500 mt-1">{endorsementFile ? `${(endorsementFile.size / 1024).toFixed(1)} KB` : 'PDF, PNG or JPG'}</p>
-                                        </div>
-                                    </div>
+                                    <span className="text-xs font-semibold text-gray-500">
+                                        {endorsementFile ? endorsementFile.name : 'No file chosen'}
+                                    </span>
                                 </div>
                             </div>
-
-                            <div className="flex items-center justify-end gap-3 pt-4">
+                            <div className="w-full h-[1px] bg-gray-150 my-6" />
+                            <div className="flex gap-4 pt-1">
                                 <button
                                     onClick={() => setIsEscalateModalOpen(false)}
-                                    className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors"
+                                    className="flex-1 py-3.5 bg-[#F1F3F6] hover:bg-gray-200 text-gray-700 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all"
                                 >
                                     Cancel
                                 </button>
-                                <Button
-                                    variant="primary"
+                                <button
                                     onClick={handleEscalate}
-                                    disabled={!endorsementFile || isEscalating}
-                                    className="px-10 !bg-[#F97316] hover:!bg-[#EA580C] !border-[#F97316]"
+                                    disabled={isEscalating || !endorsementFile}
+                                    className="flex-1 py-3.5 bg-[#FBB065] hover:bg-[#F99D43] disabled:bg-orange-200 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                                 >
-                                    {isEscalating ? 'Escalating...' : 'Submit Escalation'}
-                                </Button>
+                                    {isEscalating ? 'Escalating...' : 'SEND ESCALATION'}
+                                </button>
                             </div>
                         </div>
                     </div>

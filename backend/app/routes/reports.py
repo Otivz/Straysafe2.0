@@ -4,7 +4,7 @@ import uuid
 from sqlalchemy.orm import Session, joinedload, selectinload
 from typing import List, Optional
 from app.database import get_db
-from app.models.report import Report, ReportMedia, Comment, StatusHistory, ReportCategory
+from app.models.report import Report, ReportMedia, Comment, StatusHistory, ReportCategory, EndorsementLetter
 from app.models.user import User, Subdivision
 from app.models.notification import Notification
 from app.schemas.report import ReportCreate, ReportResponse, ReportStatusUpdate, ReportUpdate, ReportMediaResponse, CommentCreate, CommentResponse
@@ -32,8 +32,18 @@ def get_reports(subdivision_id: Optional[int] = None, db: Session = Depends(get_
         selectinload(Report.media),
         selectinload(Report.comments).joinedload(Comment.user),
         selectinload(Report.history).joinedload(StatusHistory.updater),
-        selectinload(Report.history).selectinload(StatusHistory.media)
+        selectinload(Report.history).selectinload(StatusHistory.media),
+        joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
     ).all()
+    
+    for rep in reports:
+        if rep.endorsement_letter:
+            let = rep.endorsement_letter
+            if let.leader:
+                let.leader_name = let.leader.name
+                if let.leader.position:
+                    let.leader_position = let.leader.position.position_name
+                    
     results = []
     
     from app.utils.ai_suggestions import generate_ai_suggestions
@@ -57,8 +67,8 @@ def get_reports(subdivision_id: Optional[int] = None, db: Session = Depends(get_
                 suggestions = generate_ai_suggestions(
                     description=rep.description,  # type: ignore
                     category_name=category_name,  # type: ignore
-                    media_animal_type=media_animal,
-                    media_dominant_color=media_color
+                    media_animal_type=media_animal,  # type: ignore
+                    media_dominant_color=media_color  # type: ignore
                 )
                 
                 rep.ai_animal_type = suggestions["ai_animal_type"]  # type: ignore
@@ -283,11 +293,19 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
         selectinload(Report.media),
         selectinload(Report.comments).joinedload(Comment.user),
         selectinload(Report.history).joinedload(StatusHistory.updater),
-        selectinload(Report.history).selectinload(StatusHistory.media)
+        selectinload(Report.history).selectinload(StatusHistory.media),
+        joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
     ).filter(Report.report_id == report_id).first()
 
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+        
+    if report.endorsement_letter:
+        let = report.endorsement_letter
+        if let.leader:
+            let.leader_name = let.leader.name
+            if let.leader.position:
+                let.leader_position = let.leader.position.position_name
 
     from app.utils.ai_suggestions import generate_ai_suggestions
 
@@ -307,8 +325,8 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
             suggestions = generate_ai_suggestions(
                 description=report.description,  # type: ignore
                 category_name=category_name,  # type: ignore
-                media_animal_type=media_animal,
-                media_dominant_color=media_color
+                media_animal_type=media_animal,  # type: ignore
+                media_dominant_color=media_color  # type: ignore
             )
             report.ai_animal_type = suggestions["ai_animal_type"]  # type: ignore
             report.ai_dominant_color = suggestions["ai_dominant_color"]  # type: ignore
@@ -596,7 +614,8 @@ async def upload_report_media(
 @router.patch("/{report_id}/status", response_model=ReportResponse)
 def update_report_status(report_id: int, status_update: ReportStatusUpdate, req: Request, db: Session = Depends(get_db)):
     report = db.query(Report).options(
-        selectinload(Report.history)
+        selectinload(Report.history),
+        joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
     ).filter(Report.report_id == report_id).first()
 
     if not report:
@@ -677,6 +696,13 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
     rep_data.reporter_name = report.reporter.name if report.reporter else "Unknown User"
     rep_data.reporter_photo = report.reporter.profile_picture if report.reporter else None
     
+    if report.endorsement_letter:
+        let = report.endorsement_letter
+        if let.leader:
+            rep_data.endorsement_letter.leader_name = let.leader.name  # type: ignore[union-attr]
+            if let.leader.position:
+                rep_data.endorsement_letter.leader_position = let.leader.position.position_name  # type: ignore[union-attr]
+    
     # Populate updater names for history entries in the response
     if report.history:
         for i, hist in enumerate(report.history):  # type: ignore[arg-type]
@@ -719,14 +745,14 @@ def add_comment(report_id: int, comment_in: CommentCreate, db: Session = Depends
     db.add(db_comment)
     db.commit()
     db.refresh(db_comment)
-
     # Create notification for report owner if commenter is different
     if report.user_id != comment_in.user_id:
         commenter_name = db_comment.user.name if db_comment.user else "Someone"
+        comment_text = comment_in.comment
         new_notif = Notification(
             user_id=report.user_id,
             title="New Comment on Your Report",
-            message=f"{commenter_name} commented on your report #{report.report_id}: \"{db_comment.comment[:50]}{'...' if len(db_comment.comment) > 50 else ''}\"",
+            message=f"{commenter_name} commented on your report #{report.report_id}: \"{comment_text[:50]}{'...' if len(comment_text) > 50 else ''}\"",
             type="comment",
             related_id=report.report_id
         )

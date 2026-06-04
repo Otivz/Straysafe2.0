@@ -334,15 +334,19 @@ const SubdViewReport = () => {
         }
     };
 
-    const handleDelete = async () => {
+    const handleReject = async () => {
         if (!report) return;
-        if (window.confirm('Are you sure you want to delete this incident report?')) {
+        if (window.confirm('Are you sure you want to reject this incident report?')) {
             try {
-                await axios.delete(`http://localhost:8000/reports/${report.report_id}`);
+                await axios.patch(`http://localhost:8000/reports/${report.report_id}/status`, {
+                    status_id: 3,
+                    user_id: currentUserId,
+                    remarks: "Report rejected based on Subdivision Leader verification criteria."
+                });
                 navigate('/subd/reports');
             } catch (error) {
-                console.error('Error deleting report:', error);
-                alert('Failed to delete report.');
+                console.error('Error rejecting report:', error);
+                alert('Failed to reject report.');
             }
         }
     };
@@ -961,10 +965,10 @@ const SubdViewReport = () => {
                                         )}
 
                                         <button
-                                            onClick={handleDelete}
+                                            onClick={handleReject}
                                             className="w-full py-3 border border-gray-100 rounded-2xl text-[10px] font-bold text-gray-400 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all uppercase tracking-widest"
                                         >
-                                            Delete Report
+                                            Reject Report
                                         </button>
                                     </div>
                                 </div>
@@ -991,43 +995,55 @@ const SubdViewReport = () => {
                         </div>
                         <div className="p-8 space-y-6">
                             <div className="space-y-2">
-                                <label className="text-[11px] font-black text-gray-900 uppercase tracking-[0.2em] ml-1">Request Title</label>
+                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Request Title</label>
                                 <input
                                     type="text" required
-                                    className="w-full px-5 py-4 bg-gray-50 border border-gray-150 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300"
+                                    className="w-full px-5 py-4 bg-white border border-gray-900 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300"
                                     value={escalationTitle}
                                     onChange={(e) => setEscalationTitle(e.target.value)}
-                                    placeholder="e.g. Request for Aggressive Dog Rescue - Sector 4"
+                                    placeholder="e.g. Endorsement for Report #18"
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[11px] font-black text-gray-900 uppercase tracking-[0.2em] ml-1">Additional Notes</label>
+                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Additional Notes</label>
                                 <textarea required rows={4}
-                                    className="w-full px-5 py-4 bg-gray-50 border border-gray-150 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300 resize-none"
+                                    className="w-full px-5 py-4 bg-white border border-orange-400 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300 resize-none"
                                     value={escalationDescription}
                                     onChange={(e) => setEscalationDescription(e.target.value)}
                                     placeholder="Provide detailed description of why emergency rescue is needed..."
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[11px] font-black text-gray-900 uppercase tracking-[0.2em] ml-1">Endorsement Letter File (PDF/DOCX/Image)</label>
-                                <input
-                                    type="file" required accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                                    onChange={(e) => setEndorsementFile(e.target.files?.[0] || null)}
-                                    className="w-full text-xs text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 transition-all"
-                                />
+                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Endorsement Letter File (PDF/DOCX/IMAGE)</label>
+                                <div className="flex items-center gap-3 mt-1">
+                                    <label htmlFor="endorsement-file-input-view" className="px-5 py-2 bg-[#FFF3E6] text-[#F97316] hover:bg-orange-100 rounded-full text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all border border-transparent">
+                                        Choose File
+                                    </label>
+                                    <input
+                                        id="endorsement-file-input-view"
+                                        type="file"
+                                        required
+                                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                        onChange={(e) => setEndorsementFile(e.target.files?.[0] || null)}
+                                        className="hidden"
+                                    />
+                                    <span className="text-xs font-semibold text-gray-500">
+                                        {endorsementFile ? endorsementFile.name : 'No file chosen'}
+                                    </span>
+                                </div>
                             </div>
-                            <div className="flex gap-3 pt-4 border-t border-gray-100">
+                            <div className="w-full h-[1px] bg-gray-150 my-6" />
+                            <div className="flex gap-4 pt-1">
                                 <button
                                     onClick={() => setIsEscalateModalOpen(false)}
-                                    className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+                                    className="flex-1 py-3.5 bg-[#F1F3F6] hover:bg-gray-200 text-gray-700 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={handleEscalate}
                                     disabled={isEscalating || !endorsementFile}
-                                    className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-md shadow-orange-100 flex items-center justify-center gap-2"
+                                    className="flex-1 py-3.5 bg-[#FBB065] hover:bg-[#F99D43] disabled:bg-orange-200 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                                 >
                                     {isEscalating ? 'Escalating...' : 'SEND ESCALATION'}
                                 </button>

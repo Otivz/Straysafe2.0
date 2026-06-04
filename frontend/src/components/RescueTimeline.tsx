@@ -21,6 +21,15 @@ interface TimelineEntry {
 interface RescueTimelineProps {
     history: TimelineEntry[];
     currentStatusId: number;
+    endorsementLetter?: {
+        letter_id: number;
+        report_id: number;
+        leader_id: number;
+        letter_content: string;
+        file_url?: string;
+        status_id?: number;
+        issued_at: string;
+    } | null;
 }
 
 const statusConfig: Record<number, { label: string, color: string, icon: React.ReactNode }> = {
@@ -100,7 +109,7 @@ const rescueStatusLabels: Record<number, string> = {
     6: 'Resolved'
 };
 
-const RescueTimeline: React.FC<RescueTimelineProps> = ({ history, currentStatusId }) => {
+const RescueTimeline: React.FC<RescueTimelineProps> = ({ history, currentStatusId, endorsementLetter }) => {
     const [filter, setFilter] = useState<number | 'all'>('all');
     const [activeMedia, setActiveMedia] = useState<Media | null>(null);
 
@@ -196,6 +205,37 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({ history, currentStatusI
                                             )}
                                             <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest">Updated by {entry.updater_name || 'System'}</span>
                                         </div>
+
+                                        {/* Endorsement Letter table details */}
+                                        {entry.report_status_id === 4 && endorsementLetter && (
+                                             <div className="mb-6 p-5 bg-orange-50/40 rounded-2xl border border-orange-100/60 space-y-3">
+                                                 <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">Official Endorsement Sighting</p>
+                                                 <p className="text-sm text-gray-750 leading-relaxed font-semibold italic">
+                                                     "{endorsementLetter.letter_content}"
+                                                 </p>
+                                                 {endorsementLetter.file_url && (
+                                                     <a
+                                                         href={endorsementLetter.file_url}
+                                                         target="_blank"
+                                                         rel="noopener noreferrer"
+                                                         className="flex items-center gap-4 p-4 bg-white hover:bg-orange-50/50 rounded-xl border border-orange-100/60 transition-all group/letter"
+                                                     >
+                                                         <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600 group-hover/letter:bg-orange-200 transition-colors">
+                                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                             </svg>
+                                                         </div>
+                                                         <div className="flex-1 min-w-0">
+                                                             <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest">Official Endorsement Letter</p>
+                                                             <p className="text-[11px] font-bold text-gray-700 truncate">{endorsementLetter.file_url.split('/').pop()}</p>
+                                                         </div>
+                                                         <svg className="w-4 h-4 text-orange-400 group-hover/letter:text-orange-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                         </svg>
+                                                     </a>
+                                                 )}
+                                             </div>
+                                         )}
 
                                         {/* Stage-Specific Media */}
                                         {entry.media && entry.media.length > 0 && (

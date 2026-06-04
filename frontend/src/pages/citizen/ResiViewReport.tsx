@@ -397,44 +397,67 @@ const ResiViewReport = () => {
                                             </div>
                                         )}
 
-                                        {/* Endorsement Letter section */}
-                                        {(() => {
-                                            const evidenceFiles = report.media?.filter((m: any) => m.is_evidence) || [];
-                                            if (evidenceFiles.length === 0) return null;
-                                            return (
-                                                <div className="pt-6 mt-6 border-t border-gray-50">
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">Endorsement Letter</p>
-                                                    <div className="space-y-3">
-                                                        {evidenceFiles.map((m: any) => {
-                                                            const url = m.file_url || '';
-                                                            return (
-                                                                <div key={m.media_id}>
-                                                                    <a
-                                                                        href={url}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="flex items-center gap-4 p-5 bg-orange-50/60 rounded-2xl border border-orange-100 hover:bg-orange-50 transition-all group"
-                                                                    >
-                                                                        <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600 shrink-0 group-hover:bg-orange-200 transition-colors">
-                                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                                                            </svg>
-                                                                        </div>
-                                                                        <div className="flex-1 min-w-0">
-                                                                            <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-0.5">Official Document</p>
-                                                                            <p className="text-xs font-bold text-gray-700 truncate">{url.split('/').pop()}</p>
-                                                                        </div>
-                                                                        <svg className="w-4 h-4 text-orange-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                                                        </svg>
-                                                                    </a>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })()}
+                                         {/* Endorsement Letter section */}
+                                         {report.endorsement_letter && (
+                                              <div className="pt-6 mt-6 border-t border-gray-50 space-y-3">
+                                                  <div className="bg-orange-50 border border-orange-100 rounded-3xl p-6">
+                                                      <h4 className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-4">Subdivision Escalation Note</h4>
+                                                      
+                                                      {report.endorsement_letter.title && (
+                                                          <p className="text-xs font-black text-orange-600 uppercase tracking-wider mb-2">
+                                                              {report.endorsement_letter.title}
+                                                          </p>
+                                                      )}
+                                                      
+                                                      <p className="text-sm font-bold text-gray-900 leading-relaxed italic">
+                                                          "{report.endorsement_letter.letter_content}"
+                                                      </p>
+                                                      
+                                                      <div className="mt-4 flex items-center gap-3">
+                                                          <div className="w-8 h-8 rounded-full bg-orange-200 flex items-center justify-center text-[10px] font-bold text-orange-700 border-2 border-white">
+                                                              {report.endorsement_letter.leader_name?.charAt(0) || 'L'}
+                                                          </div>
+                                                          <div>
+                                                              <p className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Sent by:</p>
+                                                              <p className="text-sm font-black text-orange-700">{report.endorsement_letter.leader_name || "Subdivision Leader"}</p>
+                                                              <p className="text-[9px] text-gray-500 uppercase tracking-widest font-medium">
+                                                                  {report.endorsement_letter.leader_position || "Subdivision Official"} • {new Date(report.endorsement_letter.issued_at).toLocaleDateString()}
+                                                              </p>
+                                                          </div>
+                                                      </div>
+
+                                                      {report.endorsement_letter.file_url && (() => {
+                                                          const fileUrl = report.endorsement_letter.file_url;
+                                                          const urlLower = fileUrl.toLowerCase();
+                                                          const isDoc = urlLower.endsWith('.pdf') || urlLower.endsWith('.doc') || urlLower.endsWith('.docx');
+                                                          const isImg = !isDoc && (urlLower.endsWith('.jpg') || urlLower.endsWith('.jpeg') || urlLower.endsWith('.png') || urlLower.endsWith('.webp'));
+                                                          
+                                                          return (
+                                                              <div className="mt-5 space-y-3">
+                                                                  <p className="text-[9px] font-black text-orange-600 uppercase tracking-[0.2em]">Endorsement Letter / Evidence</p>
+                                                                  {isImg ? (
+                                                                      <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="block rounded-2xl overflow-hidden border border-orange-100 hover:opacity-90 transition-opacity shadow-sm">
+                                                                          <img src={fileUrl} className="w-full max-h-64 object-cover" alt="Endorsement letter" />
+                                                                      </a>
+                                                                  ) : (
+                                                                      <a
+                                                                          href={fileUrl}
+                                                                          target="_blank"
+                                                                          rel="noopener noreferrer"
+                                                                          className="w-full py-3 bg-white border border-orange-200 text-[#F97316] text-[9px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-orange-600 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
+                                                                      >
+                                                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                          </svg>
+                                                                          View Official Endorsement Letter
+                                                                      </a>
+                                                                  )}
+                                                              </div>
+                                                          );
+                                                      })()}
+                                                  </div>
+                                              </div>
+                                          )}
                                     </div>
                                 );
                             })()}
@@ -460,18 +483,46 @@ const ResiViewReport = () => {
                                         const h = [...(report.history || [])];
                                         if (holdingAnimal && holdingAnimal.timeline) {
                                             holdingAnimal.timeline.forEach((log: any) => {
+                                                // Find media associated with this timeline log (prioritize database relationship)
+                                                let logMedia = log.media || [];
+                                                if (logMedia.length === 0) {
+                                                    logMedia = report.media?.filter((m: any) => {
+                                                        if (!m.is_evidence) return false;
+                                                        if (m.holding_log_id && m.holding_log_id !== log.log_id) return false;
+                                                        const diff = Math.abs(new Date(m.uploaded_at).getTime() - new Date(log.logged_at).getTime());
+                                                        return diff <= 120000; // 2 minutes window
+                                                    }) || [];
+                                                }
+
+                                                // Determine the mapped report status ID based on log title/event
+                                                let statusId = 7; // default: Under Observation
+                                                const titleLower = log.title.toLowerCase();
+                                                if (log.event_type === 'outcome') {
+                                                    if (titleLower.includes('deceased')) {
+                                                        statusId = 12; // Deceased
+                                                    } else if (titleLower.includes('claimed')) {
+                                                        statusId = 9; // Claimed by Owner
+                                                    } else if (titleLower.includes('released')) {
+                                                        statusId = 10; // Released
+                                                    } else {
+                                                        statusId = 11; // Resolved
+                                                    }
+                                                }
+
                                                 h.push({
                                                     history_id: 100000 + log.log_id,
-                                                    report_status_id: log.event_type === 'outcome' ? 11 : 7,
+                                                    report_status_id: statusId,
                                                     remarks: `${log.title}${log.notes ? ` — ${log.notes}` : ''}`,
                                                     created_at: log.logged_at,
-                                                    updater_name: log.staff_name || 'Barangay Staff'
+                                                    updater_name: log.staff_name || 'Barangay Staff',
+                                                    media: logMedia
                                                 });
                                             });
                                         }
                                         return h.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
                                     })()}
                                     currentStatusId={report.status_id}
+                                    endorsementLetter={report.endorsement_letter}
                                 />
                             </div>
                         </div>

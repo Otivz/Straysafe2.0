@@ -185,8 +185,12 @@ const BrgyRescueRequests = () => {
             const response = await axios.get('http://localhost:8000/rescue-requests/');
             // Sort by rescue_id descending to show new requests at the top
             const sortedData = (response.data || []).sort((a: any, b: any) => b.rescue_id - a.rescue_id);
-            // ONLY show reports that are NOT resolved (status 11)
-            const activeRequests = sortedData.filter((req: any) => req.report?.status_id !== 11);
+            // ONLY show reports that are active (not status 11, 12, or 3)
+            const activeRequests = sortedData.filter((req: any) => 
+                req.report?.status_id !== 11 && 
+                req.report?.status_id !== 12 && 
+                req.report?.status_id !== 3
+            );
             setRequests(activeRequests);
         } catch (error) {
             console.error('Error fetching rescue requests:', error);
@@ -544,18 +548,63 @@ const BrgyRescueRequests = () => {
                             <div className="p-8 flex flex-col gap-6">
                                 <div className="bg-orange-50 border border-orange-100 rounded-2xl p-6">
                                     <h4 className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-4">Subdivision Escalation Note</h4>
-                                    <p className="text-sm font-bold text-gray-900 leading-relaxed italic">"{viewingRequest.description}"</p>
+                                    
+                                    {(viewingRequest.report?.endorsement_letter?.title || viewingRequest.title) && (
+                                        <p className="text-xs font-black text-orange-600 uppercase tracking-wider mb-2">
+                                            {viewingRequest.report?.endorsement_letter?.title || viewingRequest.title}
+                                        </p>
+                                    )}
+
+                                    <p className="text-sm font-bold text-gray-900 leading-relaxed italic">
+                                        "{viewingRequest.report?.endorsement_letter?.letter_content || viewingRequest.description || viewingRequest.notes}"
+                                    </p>
+                                    
                                     <div className="mt-4 flex items-center gap-3">
                                         <div className="w-8 h-8 rounded-full bg-orange-200 flex items-center justify-center text-[10px] font-bold text-orange-700 border-2 border-white">
-                                            {viewingRequest.leader_name?.charAt(0) || 'L'}
+                                            {(viewingRequest.report?.endorsement_letter?.leader_name || viewingRequest.leader_name)?.charAt(0) || 'L'}
                                         </div>
                                         <div>
                                             <p className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Sent by:</p>
-                                            <p className="text-sm font-black text-orange-700">{viewingRequest.leader_name || "Subdivision Leader"}</p>
-                                            <p className="text-[9px] text-gray-500 uppercase tracking-widest font-medium">{viewingRequest.leader_position || "Subdivision Official"} • {new Date(viewingRequest.created_at || viewingRequest.report?.created_at || Date.now()).toLocaleDateString()}</p>
+                                            <p className="text-sm font-black text-orange-700">
+                                                {viewingRequest.report?.endorsement_letter?.leader_name || viewingRequest.leader_name || "Subdivision Leader"}
+                                            </p>
+                                            <p className="text-[9px] text-gray-500 uppercase tracking-widest font-medium">
+                                                {viewingRequest.report?.endorsement_letter?.leader_position || viewingRequest.leader_position || "Subdivision Official"} • {new Date(viewingRequest.report?.endorsement_letter?.issued_at || viewingRequest.created_at || viewingRequest.report?.created_at || Date.now()).toLocaleDateString()}
+                                            </p>
                                         </div>
                                     </div>
+                                    
                                     {(() => {
+                                        const fileUrl = viewingRequest.report?.endorsement_letter?.file_url;
+                                        if (fileUrl) {
+                                            const urlLower = fileUrl.toLowerCase();
+                                            const isDoc = urlLower.endsWith('.pdf') || urlLower.endsWith('.doc') || urlLower.endsWith('.docx');
+                                            const isImg = !isDoc && (urlLower.endsWith('.jpg') || urlLower.endsWith('.jpeg') || urlLower.endsWith('.png') || urlLower.endsWith('.webp'));
+                                            return (
+                                                <div className="mt-5 space-y-3">
+                                                    <p className="text-[9px] font-black text-orange-600 uppercase tracking-[0.2em]">Endorsement Letter / Evidence</p>
+                                                    {isImg ? (
+                                                        <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="block rounded-2xl overflow-hidden border border-orange-100 hover:opacity-90 transition-opacity shadow-sm">
+                                                            <img src={fileUrl} className="w-full max-h-64 object-cover" alt="Endorsement letter" />
+                                                        </a>
+                                                    ) : (
+                                                        <a
+                                                            href={fileUrl}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="w-full py-3 bg-white border border-orange-200 text-orange-600 text-[9px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-orange-600 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                            </svg>
+                                                            View Official Endorsement Letter
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            );
+                                        }
+
+                                        // Fallback to media table if no endorsement letter is loaded
                                         const evidenceFiles = viewingRequest.report?.media?.filter(m => m.is_evidence) || [];
                                         if (evidenceFiles.length === 0) return null;
                                         return (
