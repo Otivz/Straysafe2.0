@@ -504,6 +504,8 @@ CREATE TABLE endorsement_letters(
 
     report_id INT NOT NULL UNIQUE,
 
+    title VARCHAR(255) NULL,
+
     leader_id INT NOT NULL,
 
     letter_content TEXT NOT NULL,
@@ -649,6 +651,8 @@ CREATE TABLE report_media(
 
     status_id INT NULL,
 
+    holding_log_id INT NULL,
+
     file_url VARCHAR(255) NOT NULL,
 
     media_type ENUM(
@@ -675,6 +679,10 @@ CREATE TABLE report_media(
 
     FOREIGN KEY(status_id)
     REFERENCES report_status(status_id)
+    ON DELETE SET NULL,
+
+    FOREIGN KEY(holding_log_id)
+    REFERENCES holding_timeline(log_id)
     ON DELETE SET NULL
 );
 
@@ -1112,6 +1120,10 @@ CREATE TABLE pet_qr_codes(
     is_active BOOLEAN DEFAULT TRUE,
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    scan_count INT DEFAULT 0,
+
+    last_scanned_at TIMESTAMP NULL,
 
     FOREIGN KEY(pet_id)
     REFERENCES pets(pet_id)
