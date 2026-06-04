@@ -463,8 +463,11 @@ const SubdReports = () => {
         const matchesSearch = catName.includes(searchTerm.toLowerCase()) || land.includes(searchTerm.toLowerCase()) || reporter.includes(searchTerm.toLowerCase());
         const statName = statusMap[rep.status_id] || '';
         const matchesStatus = statusFilter === 'all' || statName.toLowerCase() === statusFilter.toLowerCase();
-        // optionally filter by subdId: if (rep.subdivision_id !== currentUser?.subdivision_id) return false;
-        return matchesSearch && matchesStatus;
+        
+        // Exclude resolved (11), deceased (12), and rejected (3) reports from the active list
+        const isActive = rep.status_id !== 11 && rep.status_id !== 12 && rep.status_id !== 3;
+        
+        return matchesSearch && matchesStatus && isActive;
     });
 
     const getPriorityColor = (priority: string) => {

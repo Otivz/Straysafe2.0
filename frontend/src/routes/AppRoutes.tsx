@@ -16,6 +16,7 @@ import SubdDashboard from '../pages/Subd_Leaders/SubdDashboard';
 import SubdReports from '../pages/Subd_Leaders/SubdReports';
 import SubdViewReport from '../pages/Subd_Leaders/SubdViewReport';
 import EscelatedMissions from '../pages/Subd_Leaders/EscelatedMissions';
+import SubdHistoryReport from '../pages/Subd_Leaders/SubdHistoryReport';
 
 import EndorsementArch from '../pages/Subd_Leaders/EndorsementArch';
 import SubdPetRecords from '../pages/Subd_Leaders/SubdPetRecords';
@@ -114,6 +115,7 @@ const AppRoutes = () => {
             <Route path="/subd/dashboard" element={<SubdDashboard />} />
             <Route path="/subd/reports" element={<SubdReports />} />
             <Route path="/subd/reports/:id" element={<SubdViewReport />} />
+            <Route path="/subd/history" element={<SubdHistoryReport />} />
             <Route path="/subd/escalated" element={<EscelatedMissions />} />
 
             <Route path="/subd/endorsements" element={<EndorsementArch />} />
