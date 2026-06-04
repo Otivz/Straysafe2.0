@@ -58,6 +58,7 @@ const ResiViewReport = () => {
 
     const [report, setReport] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
+    const [holdingAnimal, setHoldingAnimal] = useState<any | null>(null);
     const [isNavbarMenuOpen, setIsNavbarMenuOpen] = useState(false);
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
     const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
@@ -77,12 +78,29 @@ const ResiViewReport = () => {
             const response = await axios.get(`http://localhost:8000/reports/${id}`);
             if (response.data) {
                 setReport(response.data);
+
+                // Fetch holding animal details if status suggests it is/was in holding
+                try {
+                    const holdingRes = await axios.get('http://localhost:8000/holding/');
+                    const matchingAnimal = holdingRes.data.find((a: any) => a.report_id === Number(id));
+                    if (matchingAnimal) {
+                        const detailRes = await axios.get(`http://localhost:8000/holding/${matchingAnimal.holding_id}`);
+                        setHoldingAnimal(detailRes.data);
+                    } else {
+                        setHoldingAnimal(null);
+                    }
+                } catch (err) {
+                    console.error('Error fetching holding details:', err);
+                    setHoldingAnimal(null);
+                }
             } else {
                 setReport(null);
+                setHoldingAnimal(null);
             }
         } catch (error) {
             console.error('Error fetching report details:', error);
             setReport(null);
+            setHoldingAnimal(null);
         } finally {
             setLoading(false);
         }
@@ -251,7 +269,7 @@ const ResiViewReport = () => {
 
                 {/* Main Details Grid: Combined Media & Information Card on left, Rescue Timeline Card on right */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-stretch mt-10">
-                    
+
                     {/* Left Column: Combined Media & Information Card (7/12) */}
                     <div className="lg:col-span-7">
                         <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-8 flex flex-col">
@@ -379,46 +397,37 @@ const ResiViewReport = () => {
                                             </div>
                                         )}
 
-                                        {/* Endorsement and Evidence section (if any) */}
+                                        {/* Endorsement Letter section */}
                                         {(() => {
                                             const evidenceFiles = report.media?.filter((m: any) => m.is_evidence) || [];
                                             if (evidenceFiles.length === 0) return null;
                                             return (
                                                 <div className="pt-6 mt-6 border-t border-gray-50">
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">Endorsement Letter / Evidence</p>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">Endorsement Letter</p>
                                                     <div className="space-y-3">
-                                                        {evidenceFiles.map((m: any, idx: number) => {
+                                                        {evidenceFiles.map((m: any) => {
                                                             const url = m.file_url || '';
-                                                            const urlLower = url.toLowerCase();
-                                                            const isDoc = urlLower.endsWith('.pdf') || urlLower.endsWith('.doc') || urlLower.endsWith('.docx');
-                                                            const isImg = m.media_type === 'Image' || (!isDoc && (urlLower.endsWith('.jpg') || urlLower.endsWith('.jpeg') || urlLower.endsWith('.png') || urlLower.endsWith('.webp')));
                                                             return (
                                                                 <div key={m.media_id}>
-                                                                    {isImg ? (
-                                                                        <a href={url} target="_blank" rel="noopener noreferrer" className="block rounded-2xl overflow-hidden border border-orange-50 hover:opacity-90 transition-opacity shadow-sm">
-                                                                            <img src={url} className="w-full max-h-64 object-cover" alt={`Endorsement ${idx + 1}`} />
-                                                                        </a>
-                                                                    ) : (
-                                                                        <a
-                                                                            href={url}
-                                                                            target="_blank"
-                                                                            rel="noopener noreferrer"
-                                                                            className="flex items-center gap-4 p-5 bg-orange-50/60 rounded-2xl border border-orange-100 hover:bg-orange-50 transition-all group"
-                                                                        >
-                                                                            <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600 shrink-0 group-hover:bg-orange-200 transition-colors">
-                                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                                                                </svg>
-                                                                            </div>
-                                                                            <div className="flex-1 min-w-0">
-                                                                                <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-0.5">Official Document</p>
-                                                                                <p className="text-xs font-bold text-gray-700 truncate">{url.split('/').pop()}</p>
-                                                                            </div>
-                                                                            <svg className="w-4 h-4 text-orange-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                                    <a
+                                                                        href={url}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="flex items-center gap-4 p-5 bg-orange-50/60 rounded-2xl border border-orange-100 hover:bg-orange-50 transition-all group"
+                                                                    >
+                                                                        <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600 shrink-0 group-hover:bg-orange-200 transition-colors">
+                                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                                                             </svg>
-                                                                        </a>
-                                                                    )}
+                                                                        </div>
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-0.5">Official Document</p>
+                                                                            <p className="text-xs font-bold text-gray-700 truncate">{url.split('/').pop()}</p>
+                                                                        </div>
+                                                                        <svg className="w-4 h-4 text-orange-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                                        </svg>
+                                                                    </a>
                                                                 </div>
                                                             );
                                                         })}
@@ -447,7 +456,21 @@ const ResiViewReport = () => {
                             </div>
                             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
                                 <RescueTimeline
-                                    history={report.history || []}
+                                    history={(() => {
+                                        const h = [...(report.history || [])];
+                                        if (holdingAnimal && holdingAnimal.timeline) {
+                                            holdingAnimal.timeline.forEach((log: any) => {
+                                                h.push({
+                                                    history_id: 100000 + log.log_id,
+                                                    report_status_id: log.event_type === 'outcome' ? 11 : 7,
+                                                    remarks: `${log.title}${log.notes ? ` — ${log.notes}` : ''}`,
+                                                    created_at: log.logged_at,
+                                                    updater_name: log.staff_name || 'Barangay Staff'
+                                                });
+                                            });
+                                        }
+                                        return h.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+                                    })()}
                                     currentStatusId={report.status_id}
                                 />
                             </div>
