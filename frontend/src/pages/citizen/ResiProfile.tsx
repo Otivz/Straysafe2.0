@@ -364,7 +364,7 @@ const ResiProfile = () => {
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                navigate('/resident-home', { state: { editReport: report, isViewMode: true, from: '/resident/profile' } });
+                                                                navigate(`/resident/reports/${report.report_id}`);
                                                             }}
                                                             className="w-full flex items-center gap-3 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-[#F97316] hover:bg-orange-50 transition-colors"
                                                         >
@@ -445,7 +445,7 @@ const ResiProfile = () => {
                                                 </div>
 
                                                 <button
-                                                    onClick={() => navigate('/resident-home', { state: { editReport: report, isViewMode: true, from: '/resident/profile' } })}
+                                                    onClick={() => navigate(`/resident/reports/${report.report_id}`)}
                                                     className="w-full py-3 bg-[#F97316] text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-[#EA580C] transition-all flex items-center justify-center gap-2 shadow-lg shadow-orange-100"
                                                 >
                                                     View Intelligence

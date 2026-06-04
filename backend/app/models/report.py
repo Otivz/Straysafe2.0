@@ -41,8 +41,8 @@ class Report(Base):
     animal_count: Mapped[int] = mapped_column(Integer, default=1)
     landmark: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
-    # DB ENUM: 'Low','Regular','High' only
-    priority_level: Mapped[Optional[str]] = mapped_column(Enum('Low', 'Regular', 'High'), nullable=True, default='Regular')
+    # DB ENUM: 'Low','Medium','High' only
+    priority_level: Mapped[Optional[str]] = mapped_column(Enum('Low', 'Medium', 'High'), nullable=True, default='Medium')
     visibility: Mapped[Optional[str]] = mapped_column(Enum('Public', 'Private'), nullable=True, default='Public')
 
     is_possible_owned: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -54,6 +54,7 @@ class Report(Base):
     ai_possible_breed: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     ai_suggested_risk_level: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     ai_suggested_priority: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    ai_suggested_priority_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # DB column is current_status_id (not status_id)
     current_status_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("report_status.status_id"), nullable=True)

@@ -7,6 +7,9 @@ interface AISuggestionPanelProps {
     suggestedRiskLevel?: string | null;
     suggestedPriority?: string | null;
     possibleBreed?: string | null;
+    description?: string | null;
+    categoryName?: string | null;
+    suggestedPriorityReason?: string | null;
 }
 
 const getColorHex = (colorName: string): string => {
@@ -41,7 +44,10 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
     estimatedSize,
     suggestedRiskLevel,
     suggestedPriority,
-    possibleBreed
+    possibleBreed,
+    description,
+    categoryName,
+    suggestedPriorityReason
 }) => {
     // If no suggestions exist yet, display a premium loading state
     const hasData = animalType || dominantColor || estimatedSize || suggestedRiskLevel || suggestedPriority || possibleBreed;
@@ -148,6 +154,44 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
         return 'bg-amber-500/10 border-amber-500/25 text-amber-300'; // Medium
     };
 
+    const getPriorityExplanation = (): string => {
+        const prioVal = (suggestedPriority || '').toLowerCase();
+        const descVal = (description || '').toLowerCase();
+        const catVal = (categoryName || '').toLowerCase();
+
+        if (prioVal.includes('high')) {
+            if (descVal.includes('aggressive') || descVal.includes('bite') || descVal.includes('biting') || descVal.includes('attack') || descVal.includes('growl') || descVal.includes('rabid') || descVal.includes('rabies') || catVal.includes('aggressive') || catVal.includes('rabies')) {
+                return "High Priority was assigned because the animal exhibits hostile, aggressive, or potential rabies risk behavior, presenting a direct safety hazard to the neighborhood.";
+            }
+            if (descVal.includes('injured') || descVal.includes('bleeding') || descVal.includes('wound') || descVal.includes('hurt') || descVal.includes('broken leg') || descVal.includes('blood') || descVal.includes('accident')) {
+                return "High Priority was assigned because the system detected injury or trauma indicators, denoting an animal requiring urgent medical/veterinary dispatch.";
+            }
+            if (descVal.includes('emergency') || descVal.includes('urgent') || descVal.includes('dying') || descVal.includes('danger') || descVal.includes('asap')) {
+                return "High Priority was assigned due to the explicit presence of critical urgency cues ('emergency', 'urgent', 'danger') in the description.";
+            }
+            return "High Priority was assigned because the system classified this incident as high risk, necessitating immediate coordination and response.";
+        }
+
+        if (prioVal.includes('regular') || prioVal.includes('medium')) {
+            if (descVal.includes('sick') || descVal.includes('weak') || descVal.includes('skinny') || descVal.includes('mangy') || descVal.includes('hungry') || descVal.includes('limp')) {
+                return "Medium Priority was assigned because the report indicates the animal is weak, sick, or malnourished, requiring rescue attention but without an active physical threat.";
+            }
+            if (descVal.includes('chasing') || descVal.includes('barking') || descVal.includes('nuisance') || catVal.includes('pack') || descVal.includes('pack')) {
+                return "Medium Priority was assigned because of public nuisance factors (e.g. barking, chasing behavior, or roaming packs) requiring systematic monitoring.";
+            }
+            if (descVal.includes('scared') || descVal.includes('fearful') || descVal.includes('distress') || descVal.includes('cry') || descVal.includes('howl')) {
+                return "Medium Priority was assigned as the stray animal displays distress or fearful behavior, requiring retrieval by subdivision personnel.";
+            }
+            return "Medium Priority was assigned because the stray animal exhibits moderate behavioral or health issues that warrant dispatch within normal service windows.";
+        }
+
+        if (prioVal.includes('low')) {
+            return "Low Priority was assigned as the stray animal is reported in normal condition and does not exhibit aggressive behavior, injuries, or severe distress.";
+        }
+
+        return "Priority suggestion is determined based on the correlation of the report's text descriptions, category classification, and risk level.";
+    };
+
     const risk = getRiskStyles(suggestedRiskLevel);
     const prio = getPriorityStyles(suggestedPriority);
     const animal = getAnimalStyles(animalType);
@@ -229,6 +273,21 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                     <span className="text-xs font-black uppercase tracking-widest">{prio.label}</span>
                 </div>
             </div>
+
+            {/* AI Decision Reasoning */}
+            {(suggestedPriorityReason || hasData) && (
+                <div className="mt-3 bg-white/3 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-1.5 transition-all hover:bg-white/5">
+                    <div className="flex items-center gap-1.5 text-indigo-400">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="text-[9px] font-black uppercase tracking-widest">AI Decision Reasoning</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed font-medium">
+                        {suggestedPriorityReason || getPriorityExplanation()}
+                    </p>
+                </div>
+            )}
         </div>
     );
 };

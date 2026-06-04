@@ -128,7 +128,7 @@ const LandingPage = () => {
                                         <div className="text-[9px] text-[#9c8670] mt-0.5">📍 Rizal Ave.</div>
                                         <span className="inline-block px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 text-[8px] font-bold mt-1.5 uppercase tracking-wider">In Progress</span>
                                     </div>
-                                    <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-orange-200 text-orange-800">REG</span>
+                                    <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-orange-200 text-orange-800">MED</span>
                                 </div>
                                 <div className="bg-white rounded-xl p-3 border border-[#ede8e0] flex gap-2.5 items-start shadow-sm opacity-60">
                                     <div className="w-10 h-10 bg-[#FAFAF9] rounded-lg flex items-center justify-center text-xl shrink-0">🐕</div>
@@ -137,7 +137,7 @@ const LandingPage = () => {
                                         <div className="text-[9px] text-[#9c8670] mt-0.5">📍 Bonifacio St.</div>
                                         <span className="inline-block px-2 py-0.5 rounded-full bg-green-50 text-green-600 text-[8px] font-bold mt-1.5 uppercase tracking-wider">Resolved</span>
                                     </div>
-                                    <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600">REG</span>
+                                    <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600">LOW</span>
                                 </div>
                             </div>
                         </div>
@@ -256,7 +256,7 @@ const LandingPage = () => {
                     {[
                         { num: '01', icon: '🔍', title: 'Animal Type Identification', desc: 'The AI analyzes uploaded photos and instantly classifies whether the animal is a dog or cat — no manual tagging needed.', output: [{ l: 'Detected', v: 'Dog', c: 'text-[#FACC15]' }, { l: 'Confidence', v: '97.3%', c: 'text-green-400' }] },
                         { num: '02', icon: '🩺', title: 'Condition Detection', desc: 'Visual features are evaluated to determine if the animal appears Injured, Weak/Sick, or Normal — enabling triage at first report.', output: [{ l: 'Condition', v: 'Injured', c: 'text-red-500' }, { l: 'Severity', v: 'High', c: 'text-red-500' }], meter: 88 },
-                        { num: '03', icon: '⚡', title: 'Automatic Case Prioritization', desc: 'Reports are auto-ranked by the AI: Injured cases get High Priority, Normal cases get Regular Priority — so responders always know what\'s urgent.', output: [{ l: 'Priority', v: 'HIGH', c: 'text-red-500' }, { l: 'Queue Pos', v: '#1', c: 'text-[#FACC15]' }] },
+                        { num: '03', icon: '⚡', title: 'Automatic Case Prioritization', desc: 'Reports are auto-ranked by the AI: Injured cases get High Priority, Normal cases get Medium Priority — so responders always know what\'s urgent.', output: [{ l: 'Priority', v: 'HIGH', c: 'text-red-500' }, { l: 'Queue Pos', v: '#1', c: 'text-[#FACC15]' }] },
                         { num: '04', icon: '🧭', title: 'Decision Support for Authorities', desc: 'Subdivision leaders and barangay staff receive AI-backed insights — which report to handle first, which area needs the most attention.', output: [{ l: 'Top Area', v: 'Purok 3', c: 'text-[#FACC15]' }, { l: 'Pending', v: '7 urgent', c: 'text-red-500' }] },
                     ].map((card, i) => (
                         <div key={i} className="group border border-white/10 rounded-3xl p-8 bg-white/[0.03] transition-all hover:border-[#F97316]/30 hover:-translate-y-1 reveal" style={{ transitionDelay: `${(i % 2) * 0.1}s` }}>

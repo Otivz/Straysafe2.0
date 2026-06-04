@@ -13,14 +13,76 @@ def generate_ai_suggestions(
 ) -> Dict[str, str]:
     """
     Generate AI suggestions based on report text and media metadata.
-    
-    Returns a dictionary with:
-    - ai_animal_type: 'Dog' | 'Cat' | 'Unknown'
-    - ai_dominant_color: str
-    - ai_estimated_size: 'Small' | 'Medium' | 'Large' | 'Unknown'
-    - ai_suggested_risk_level: 'Low Risk' | 'Medium Risk' | 'High Risk'
-    - ai_suggested_priority: 'Low Priority' | 'Regular Priority' | 'High Priority'
+    Uses Google Gemini API if GEMINI_API_KEY is configured in the environment.
+    Falls back to a rule-based local scanner if Gemini fails or is unconfigured.
     """
+    import os
+    import json
+    
+    api_key = os.getenv("GEMINI_API_KEY")
+    if api_key:
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel("gemini-2.5-flash")
+            
+            prompt = f"""
+            You are the StraySafe Copilot, an AI assistant for a subdivision's stray animal reporting and safety system.
+            Analyze the following report information:
+            - User Description: "{description}"
+            - Category: "{category_name}"
+            - YOLOv8 Visual Detections (if any):
+                * Animal Type: {media_animal_type}
+                * Dominant Color: {media_dominant_color}
+                * Estimated Size: {media_estimated_size}
+
+            Your task is to classify this stray animal sighting and output a JSON object with the following fields:
+            1. "ai_animal_type": Must be "Dog", "Cat", or "Unknown". Prefer the YOLOv8 Visual detection if provided, otherwise infer from the description.
+            2. "ai_dominant_color": Dominant color or colors (e.g. "Brown", "Black, White"). Prefer YOLOv8 visual detection if provided, otherwise infer from description.
+            3. "ai_estimated_size": Must be "Small", "Medium", "Large", or "Unknown". For cats, default to "Small".
+            4. "ai_suggested_risk_level": Must be "Low Risk", "Medium Risk", or "High Risk".
+               - High Risk: Aggressive behaviors (biting, snarling, attacks, foaming) or severe injury/trauma.
+               - Medium Risk: Nuisance behaviors (barking, chasing cars, roaming pack, crying, skinny/sick).
+               - Low Risk: Normal stray animal condition (healthy, calm, not aggressive).
+            5. "ai_suggested_priority": Must be "Low Priority", "Medium Priority", or "High Priority". Matches the risk level or urgency.
+            6. "ai_possible_breed": Likely breed (e.g., "Aspin", "Puspin", "Golden Retriever", "Siamese"). Default to "Aspin" for unknown dogs, "Puspin" for unknown cats.
+            7. "ai_suggested_priority_reason": A short, conversational, warm, and helpful explanation (1-2 sentences) of why this priority level was suggested. Do not sound technical or mention 'rules', 'heuristics', or 'database columns'. Explain it as a friendly dispatcher would (e.g., "High Priority suggested because the animal appears to have a leg injury and needs immediate medical attention.").
+
+            Respond ONLY with a valid JSON block.
+            """
+            
+            response = model.generate_content(
+                prompt,
+                generation_config={"response_mime_type": "application/json"}
+            )
+            
+            text_resp = response.text.strip()
+            # Handle markdown code blocks
+            if text_resp.startswith("```"):
+                lines = text_resp.split("\n")
+                if lines[0].startswith("```json"):
+                    text_resp = "\n".join(lines[1:-1])
+                elif lines[0].startswith("```"):
+                    text_resp = "\n".join(lines[1:-1])
+                    
+            data = json.loads(text_resp)
+            
+            # Basic validation
+            required_keys = ["ai_animal_type", "ai_dominant_color", "ai_estimated_size", "ai_suggested_risk_level", "ai_suggested_priority", "ai_possible_breed", "ai_suggested_priority_reason"]
+            if all(k in data for k in required_keys):
+                return {
+                    "ai_animal_type": str(data["ai_animal_type"]),
+                    "ai_dominant_color": str(data["ai_dominant_color"]),
+                    "ai_estimated_size": str(data["ai_estimated_size"]),
+                    "ai_possible_breed": str(data["ai_possible_breed"]),
+                    "ai_suggested_risk_level": str(data["ai_suggested_risk_level"]),
+                    "ai_suggested_priority": str(data["ai_suggested_priority"]),
+                    "ai_suggested_priority_reason": str(data["ai_suggested_priority_reason"])
+                }
+        except Exception as gemini_err:
+            print(f"Gemini API error (falling back to heuristics): {gemini_err}")
+
+    # Fallback to local rule-based heuristics
     text = (description or "").lower()
     cat = (category_name or "").lower()
     
@@ -137,21 +199,9 @@ def generate_ai_suggestions(
     if risk_level == "High Risk" or urgent_hits > 0:
         priority = "High Priority"
     elif risk_level == "Medium Risk" or "stray" in cat:
-        priority = "High Priority" if urgent_hits > 0 else "Medium Priority"  # Standardized to high/medium/low priority suggestions
+        priority = "High Priority" if urgent_hits > 0 else "Medium Priority"
     else:
         priority = "Low Priority"
-        
-    # Standardize suggestions according to the prompt's specifications:
-    # "High Priority" or "Medium Priority" (Wait, the example says "High Priority", "High Priority")
-    # Let's adjust to support the formats: High Priority, Regular Priority, Low Priority.
-    # Wait, does the prompt say:
-    # * Suggested Report Priority
-    # Example AI Suggestions:
-    # Suggested Priority: High Priority
-    # Yes, "High Priority", "Regular Priority", or "Low Priority" would match standard naming! 
-    # Let's make sure priority suggestions are: "High Priority", "Regular Priority", or "Low Priority".
-    if priority == "Medium Priority":
-         priority = "Regular Priority"
 
     # 6. Possible Breed Selection
     possible_breed = "Unknown"
@@ -196,11 +246,31 @@ def generate_ai_suggestions(
             # Default to Puspin if no specific cat breed is mentioned in description
             possible_breed = "Puspin"
 
+    # 7. Fallback Priority Reason Generation
+    reason = "Priority suggested based on report categories and description details."
+    if priority == "High Priority":
+        if any(kw in text for kw in ["injured", "bleeding", "wound", "hurt", "broken", "blood", "accident"]):
+            reason = "High Priority suggested because the animal is reported as injured or bleeding, requiring urgent medical care."
+        elif any(kw in text for kw in ["aggressive", "bite", "biting", "attack", "attacking", "growl", "growling", "snarl", "snarling", "snap", "snapping", "hostile"]):
+            reason = "High Priority suggested because of reports of aggressive behavior (like biting or growling), posing a safety risk to the area."
+        else:
+            reason = "High Priority suggested because the description indicates a critical situation requiring immediate response."
+    elif priority == "Medium Priority":
+        if any(kw in text for kw in ["sick", "weak", "skinny", "mangy", "hungry", "limp"]):
+            reason = "Medium Priority suggested because the animal appears sick, weak, or undernourished. Needs attention, but doesn't pose an immediate threat."
+        elif any(kw in text for kw in ["roaming", "pack", "group", "multiple", "horde"]):
+            reason = "Medium Priority suggested because roaming behavior is causing a public nuisance."
+        else:
+            reason = "Medium Priority suggested because the animal is reported as scared or in distress, requiring a careful rescue."
+    else:
+        reason = "Low Priority suggested because the animal appears healthy and doesn't show signs of injury or aggressive behavior."
+
     return {
         "ai_animal_type": animal_type,
         "ai_dominant_color": dominant_color,
         "ai_estimated_size": estimated_size,
         "ai_possible_breed": possible_breed,
         "ai_suggested_risk_level": risk_level,
-        "ai_suggested_priority": priority
+        "ai_suggested_priority": priority,
+        "ai_suggested_priority_reason": reason
     }

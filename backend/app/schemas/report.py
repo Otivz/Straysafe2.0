@@ -6,7 +6,7 @@ from datetime import datetime
 class ReportBase(BaseModel):
     user_id: int
     subdivision_id: int
-    category_id: int
+    category_id: Optional[int] = None
     pet_id: Optional[int] = None
     animal_type: Optional[str] = 'Unknown'
     animal_breed: Optional[str] = None
@@ -18,7 +18,7 @@ class ReportBase(BaseModel):
     longitude: float
     animal_count: Optional[int] = 1
     landmark: Optional[str] = None
-    priority_level: Optional[str] = 'Regular'
+    priority_level: Optional[str] = 'Medium'
     visibility: Optional[str] = 'Public'
     is_possible_owned: Optional[bool] = False
     # Frontend sends "status_id"; we accept it here and map to current_status_id in the route
@@ -104,6 +104,7 @@ class ReportResponse(ReportBase):
     ai_possible_breed: Optional[str] = None
     ai_suggested_risk_level: Optional[str] = None
     ai_suggested_priority: Optional[str] = None
+    ai_suggested_priority_reason: Optional[str] = None
 
     class Config:
         from_attributes = True

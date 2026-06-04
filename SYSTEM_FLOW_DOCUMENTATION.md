@@ -116,7 +116,7 @@ ConditionDetection
 Injured / Sick / Normal
 3.3
 AutomaticPrioritization
-High / Medium / Regular
+High / Medium / Low
 3.4
 DecisionSupport
 Prioritize, identify, accelerate
@@ -128,7 +128,7 @@ HIGH PRIORITY
 Injured animal
 MEDIUM PRIORITY
 Weak or sick animal
-REGULAR PRIORITY
+LOW PRIORITY
 Normal condition
 
 

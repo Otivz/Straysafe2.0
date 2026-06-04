@@ -132,6 +132,47 @@ def is_inside_selera_homes(lat: float, lng: float) -> bool:
         p1x, p1y = p2x, p2y
     return inside
 
+
+def classify_category_from_description(description: str) -> int:
+    """Classify report category based on description keywords.
+    Uses a priority precedence order based on urgency and risk:
+    1. Possible Rabies Risk (Category 3)
+    2. Aggressive Stray (Category 2)
+    3. Injured Animal (Category 1)
+    4. Roaming Pack (Category 4)
+    5. Animal Rescue Needed (Category 5) - fallback
+    """
+    text = (description or "").lower()
+    
+    # 1. Possible Rabies Risk (highest threat priority)
+    rabies_keywords = ["rabies", "rabid", "foaming", "frothing", "drooling", "furious"]
+    if any(kw in text for kw in rabies_keywords):
+        return 3
+        
+    # 2. Aggressive Stray (active hazard)
+    aggressive_keywords = [
+        "aggressive", "bite", "biting", "attack", "attacking", "growl", "growling", 
+        "snarl", "snarling", "snap", "snapping", "hostile"
+    ]
+    if any(kw in text for kw in aggressive_keywords):
+        return 2
+        
+    # 3. Injured Animal (physical trauma/distress)
+    injured_keywords = [
+        "injured", "bleeding", "wound", "hurt", "broken", "hit by car", "blood", "accident"
+    ]
+    if any(kw in text for kw in injured_keywords):
+        return 1
+        
+    # 4. Roaming Pack (grouping & roaming behaviors)
+    roaming_keywords = ["roaming", "pack", "group", "multiple", "horde"]
+    if any(kw in text for kw in roaming_keywords):
+        return 4
+        
+    # 5. Fallback/Animal Rescue Needed
+    return 5
+
+
 @router.post("/", response_model=ReportResponse)
 def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(get_db)):
     try:
@@ -150,6 +191,10 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
         # Drop any frontend-only fields not in the DB (condition, behavior_tags, is_archived are not in reports table)
         for field in ["condition", "behavior_tags", "is_archived", "status_remarks"]:
             report_data.pop(field, None)
+
+        # Auto-classify category if not provided by frontend (missing, None, or 0)
+        if not report_data.get("category_id"):
+            report_data["category_id"] = classify_category_from_description(report_data.get("description", ""))
 
         db_report = Report(**report_data)
         db.add(db_report)
@@ -173,6 +218,7 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
         db_report.ai_possible_breed = suggestions["ai_possible_breed"]  # type: ignore
         db_report.ai_suggested_risk_level = suggestions["ai_suggested_risk_level"]  # type: ignore
         db_report.ai_suggested_priority = suggestions["ai_suggested_priority"]  # type: ignore
+        db_report.ai_suggested_priority_reason = suggestions.get("ai_suggested_priority_reason")  # type: ignore
 
         # Create initial history entry for status 1 (Reported)
         initial_history = StatusHistory(
@@ -208,6 +254,7 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
         rep_data.ai_possible_breed = db_report.ai_possible_breed  # type: ignore
         rep_data.ai_suggested_risk_level = db_report.ai_suggested_risk_level  # type: ignore
         rep_data.ai_suggested_priority = db_report.ai_suggested_priority  # type: ignore
+        rep_data.ai_suggested_priority_reason = db_report.ai_suggested_priority_reason  # type: ignore
 
         log_activity(
             db=db,
@@ -523,6 +570,7 @@ async def upload_report_media(
                 report.ai_possible_breed = suggestions["ai_possible_breed"]  # type: ignore
                 report.ai_suggested_risk_level = suggestions["ai_suggested_risk_level"]  # type: ignore
                 report.ai_suggested_priority = suggestions["ai_suggested_priority"]  # type: ignore
+                report.ai_suggested_priority_reason = suggestions.get("ai_suggested_priority_reason")  # type: ignore
 
                 # Dynamically set suggestion fields on db_media to be serialized in ReportMediaResponse
                 db_media.ai_animal_type = suggestions.get("ai_animal_type")  # type: ignore

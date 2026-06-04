@@ -883,9 +883,9 @@ const SubdHazardAlert = () => {
                                 <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${selectedAnnouncement.category === 'Emergency' ? 'bg-red-50 text-red-600' :
-                                                selectedAnnouncement.category === 'Vaccination Drive' ? 'bg-green-50 text-green-700' :
-                                                    selectedAnnouncement.category === 'Lost and Found' ? 'bg-blue-50 text-blue-700' :
-                                                        'bg-violet-50 text-violet-700'
+                                            selectedAnnouncement.category === 'Vaccination Drive' ? 'bg-green-50 text-green-700' :
+                                                selectedAnnouncement.category === 'Lost and Found' ? 'bg-blue-50 text-blue-700' :
+                                                    'bg-violet-50 text-violet-700'
                                             }`}>
                                             {selectedAnnouncement.category}
                                         </span>

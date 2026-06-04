@@ -34,40 +34,6 @@ const EscelatedMissions = () => {
     // Tracks which timeline steps are expanded (by step label)
     const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
 
-    // Mock Data for UI demonstration
-    const mockMissions: EscalatedMission[] = [
-        {
-            mission_id: "MSN-2024-001",
-            report_id: 1042,
-            title: "Aggressive Stray near Park",
-            description: "Requesting immediate rescue for a large aggressive dog near the central playground.",
-            escalated_date: "2024-05-12 10:30 AM",
-            barangay_status: "In Progress",
-            reporter: "John Doe",
-            landmark: "Central Park Playground"
-        },
-        {
-            mission_id: "MSN-2024-002",
-            report_id: 1039,
-            title: "Injured Cat Rescue",
-            description: "Calico cat with injured leg found near block 5 entrance.",
-            escalated_date: "2024-05-11 02:15 PM",
-            barangay_status: "Pending",
-            reporter: "Jane Smith",
-            landmark: "Block 5 Main Gate"
-        },
-        {
-            mission_id: "MSN-2024-003",
-            report_id: 1025,
-            title: "Roaming Pack Alert",
-            description: "Pack of 5-6 dogs roaming near the subdivision perimeter fence.",
-            escalated_date: "2024-05-10 08:00 AM",
-            barangay_status: "Resolved",
-            reporter: "Mike Ross",
-            landmark: "North Perimeter Wall"
-        }
-    ];
-
     const fetchMissions = async (showLoading = true) => {
         try {
             if (showLoading) setLoading(true);
@@ -104,11 +70,11 @@ const EscelatedMissions = () => {
                 });
                 setMissions(mapped);
             } else {
-                setMissions(mockMissions);
+                setMissions([]);
             }
         } catch (error) {
             console.error('Error fetching escalated missions:', error);
-            setMissions(mockMissions);
+            setMissions([]);
         } finally {
             if (showLoading) setLoading(false);
         }
@@ -566,38 +532,13 @@ const EscelatedMissions = () => {
 
                 const getStepDetails = (stepLabel: string) => {
                     if (!raw) {
-                        // Mock data details fallback
-                        let mockImage = null;
-                        let mockCondition = 'Healthy';
-                        let mockMessage = 'Status updated.';
-                        let mockTimestamp = '2026-06-02 10:30 AM';
-                        let mockUpdatedBy = 'Barangay Rescue Team';
-
-                        if (stepLabel === 'Rescue Team Assigned') {
-                            mockMessage = 'Dispatched rescue team to subdivision location.';
-                            mockTimestamp = '2026-06-02 11:00 AM';
-                            mockUpdatedBy = 'Alpha Rescue Squad';
-                        } else if (stepLabel === 'Rescue In Progress') {
-                            mockMessage = `Team arrived and is conducting rescue operations near ${activeMission.landmark}.`;
-                            mockTimestamp = '2026-06-02 11:15 AM';
-                            mockUpdatedBy = 'Officer Reyes';
-                        } else if (stepLabel === 'Animal Picked Up') {
-                            mockMessage = 'Animal safely secured by the rescue team and prepared for shelter relocation.';
-                            mockTimestamp = '2026-06-02 11:30 AM';
-                            mockUpdatedBy = 'Officer Reyes';
-                        } else if (stepLabel === 'Mission Resolved') {
-                            mockMessage = 'Mission resolved successfully. Animal relocated to safety.';
-                            mockTimestamp = '2026-06-02 12:00 PM';
-                            mockUpdatedBy = 'Officer Reyes';
-                        }
-
                         return {
-                            image: mockImage,
+                            image: null,
                             media: [],
-                            condition: mockCondition,
-                            message: mockMessage,
-                            timestamp: mockTimestamp,
-                            updatedBy: mockUpdatedBy
+                            condition: 'No information provided.',
+                            message: 'No information provided.',
+                            timestamp: '-',
+                            updatedBy: 'System'
                         };
                     }
 
@@ -657,7 +598,7 @@ const EscelatedMissions = () => {
                 return (
                     <div 
                         onClick={() => setSelectedMission(null)}
-                        className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300"
+                        className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300"
                     >
                         {/* Modal container */}
                         <div 
@@ -785,17 +726,6 @@ const EscelatedMissions = () => {
                                                             {!isNotStarted && step.timestamp && step.timestamp !== '-' && (
                                                                 <div className="flex flex-col items-end gap-1">
                                                                     <span className="text-[10px] font-bold text-gray-400 font-mono bg-gray-50 px-2 py-0.5 rounded-md border border-gray-100">{step.timestamp}</span>
-                                                                    {['Rescue Team Assigned', 'Rescue In Progress', 'Animal Picked Up', 'Mission Resolved'].includes(step.label) && (
-                                                                        <button
-                                                                            onClick={() => setSelectedStepDetails({
-                                                                                label: step.label,
-                                                                                ...getStepDetails(step.label)
-                                                                            })}
-                                                                            className="text-[10px] font-bold text-[#F97316] hover:text-[#EA580C] underline transition-colors mt-1"
-                                                                        >
-                                                                            View Details
-                                                                        </button>
-                                                                    )}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -914,7 +844,7 @@ const EscelatedMissions = () => {
             {selectedStepDetails && (
                 <div 
                     onClick={() => setSelectedStepDetails(null)}
-                    className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200"
+                    className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200"
                 >
                     <div 
                         onClick={(e) => e.stopPropagation()}
@@ -1058,7 +988,7 @@ const EscelatedMissions = () => {
             {isEnlarged && selectedStepDetails && selectedStepDetails.image && (
                 <div 
                     onClick={() => setIsEnlarged(false)}
-                    className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+                    className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
                 >
                     <button className="absolute top-6 right-6 text-white/70 hover:text-white transition-all p-3 rounded-full hover:bg-white/10">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>

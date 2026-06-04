@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import RelativeTimestamp from '../../components/RelativeTimestamp';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import Button from '../../components/Button';
@@ -101,6 +102,7 @@ interface Report {
     ai_suggested_risk_level?: string | null;
     ai_suggested_priority?: string | null;
     ai_possible_breed?: string | null;
+    ai_suggested_priority_reason?: string | null;
 }
 
 const statusMap: Record<number, string> = {
@@ -166,7 +168,7 @@ const AdminReport = () => {
         latitude: 14.8013,
         longitude: 121.0031,
         landmark: '',
-        priority_level: 'Regular',
+        priority_level: 'Medium',
         description: '',
         animal_count: 1,
         visibility: 'Public',
@@ -335,7 +337,7 @@ const AdminReport = () => {
                 latitude: 14.8013,
                 longitude: 121.0031,
                 landmark: '',
-                priority_level: 'Regular',
+                priority_level: 'Medium',
                 description: '',
                 animal_count: 1,
                 visibility: 'Public',
@@ -615,7 +617,7 @@ const AdminReport = () => {
 
             {/* View Report Modal */}
             {viewingReportId !== null && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
                         <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 shrink-0">
                             <div>
@@ -695,7 +697,7 @@ const AdminReport = () => {
                                                     </div>
                                                     <div>
                                                         <h4 className="text-sm font-bold text-gray-900">{viewReport.reporter_name || `User ${viewReport.user_id}`}</h4>
-                                                        <p className="text-xs text-gray-500">{new Date(viewReport.created_at).toLocaleString()}</p>
+                                                        <p className="text-xs text-gray-500"><RelativeTimestamp date={viewReport.created_at} /></p>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-4">
@@ -770,6 +772,9 @@ const AdminReport = () => {
                                                  suggestedRiskLevel={viewReport.ai_suggested_risk_level}
                                                  suggestedPriority={viewReport.ai_suggested_priority}
                                                  possibleBreed={viewReport.ai_possible_breed}
+                                                 description={viewReport.description}
+                                                 categoryName={categoryMap[viewReport.category_id]}
+                                                 suggestedPriorityReason={viewReport.ai_suggested_priority_reason}
                                              />
 
                                             {/* Behavior Tags */}
@@ -1012,7 +1017,7 @@ const AdminReport = () => {
                                                                                     </div>
                                                                                     {/* Parent Actions */}
                                                                                     <div className="flex items-center gap-4 mt-1.5 ml-3">
-                                                                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{new Date(c.created_at).toLocaleDateString()}</span>
+                                                                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest"><RelativeTimestamp date={c.created_at} /></span>
                                                                                         <button
                                                                                             onClick={() => setReplyingTo(prev => ({ ...prev, [viewReport.report_id]: { commentId: c.comment_id, userName: c.user_name || 'User' } }))}
                                                                                             className="text-[10px] font-bold text-gray-500 hover:text-[#F97316] transition-colors"
@@ -1047,7 +1052,7 @@ const AdminReport = () => {
                                                                                                         </div>
                                                                                                         {/* Child Actions */}
                                                                                                         <div className="flex items-center gap-4 mt-1.5 ml-3">
-                                                                                                            <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">{new Date(reply.created_at).toLocaleDateString()}</span>
+                                                                                                            <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest"><RelativeTimestamp date={reply.created_at} /></span>
                                                                                                             <button
                                                                                                                 onClick={() => setReplyingTo(prev => ({ ...prev, [viewReport.report_id]: { commentId: c.comment_id, userName: reply.user_name || 'User' } }))}
                                                                                                                 className="text-[9px] font-bold text-gray-500 hover:text-[#F97316] transition-colors"
@@ -1250,7 +1255,7 @@ const AdminReport = () => {
                                     onChange={(e) => setFormData({ ...formData, priority_level: e.target.value })}
                                     options={[
                                         { value: 'Low', label: 'Low' },
-                                        { value: 'Regular', label: 'Regular' },
+                                        { value: 'Medium', label: 'Medium' },
                                         { value: 'High', label: 'High' },
                                         { value: 'Emergency', label: 'Emergency' }
                                     ]}
@@ -1551,7 +1556,7 @@ const AdminReport = () => {
             />
             {/* Escalate to Barangay Modal */}
             {isEscalateModalOpen && (
-                <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
                         <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                             <div>
