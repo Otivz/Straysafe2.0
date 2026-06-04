@@ -640,6 +640,78 @@ CREATE TABLE status_history(
 );
 
 -- =========================================
+-- FACILITY STATUS
+-- =========================================
+CREATE TABLE facility_status(
+    status_id INT AUTO_INCREMENT PRIMARY KEY,
+    status_name VARCHAR(50) UNIQUE NOT NULL
+);
+
+INSERT INTO facility_status(status_name) VALUES
+('Need Treatment'),
+('Healthy'),
+('Claimed by Owner'),
+('Deceased'),
+('Transferred to Shelter');
+
+-- =========================================
+-- HOLDING ANIMALS
+-- =========================================
+CREATE TABLE holding_animals(
+    holding_id INT AUTO_INCREMENT PRIMARY KEY,
+    report_id INT NOT NULL,
+    rescue_id INT NULL,
+    animal_type ENUM('Dog', 'Cat', 'Unknown') DEFAULT 'Unknown',
+    animal_name VARCHAR(100) NULL,
+    breed VARCHAR(100) NULL,
+    color VARCHAR(100) NULL,
+    estimated_size VARCHAR(50) NULL,
+    facility_status INT NOT NULL DEFAULT 1,
+    kennel_slot VARCHAR(50) NULL,
+    medical_notes TEXT NULL,
+    intake_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    discharge_date TIMESTAMP NULL,
+    intake_staff_id INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY(report_id)
+        REFERENCES reports(report_id)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY(rescue_id)
+        REFERENCES rescues(rescue_id)
+        ON DELETE SET NULL,
+
+    FOREIGN KEY(facility_status)
+        REFERENCES facility_status(status_id),
+
+    FOREIGN KEY(intake_staff_id)
+        REFERENCES users(user_id)
+        ON DELETE SET NULL
+);
+
+-- =========================================
+-- HOLDING TIMELINE
+-- =========================================
+CREATE TABLE holding_timeline(
+    log_id INT AUTO_INCREMENT PRIMARY KEY,
+    holding_id INT NOT NULL,
+    event_type VARCHAR(50) NOT NULL DEFAULT 'observation',
+    title VARCHAR(255) NOT NULL,
+    notes TEXT NULL,
+    logged_by INT NULL,
+    logged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY(holding_id)
+        REFERENCES holding_animals(holding_id)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY(logged_by)
+        REFERENCES users(user_id)
+        ON DELETE SET NULL
+);
+
+-- =========================================
 -- REPORT MEDIA
 -- =========================================
 CREATE TABLE report_media(
@@ -1181,74 +1253,3 @@ CREATE TABLE pet_qr_scans(
     ON DELETE SET NULL
 );
 
--- =========================================
--- FACILITY STATUS
--- =========================================
-CREATE TABLE facility_status(
-    status_id INT AUTO_INCREMENT PRIMARY KEY,
-    status_name VARCHAR(50) UNIQUE NOT NULL
-);
-
-INSERT INTO facility_status(status_name) VALUES
-('Need Treatment'),
-('Healthy'),
-('Claimed by Owner'),
-('Deceased'),
-('Transferred to Shelter');
-
--- =========================================
--- HOLDING ANIMALS
--- =========================================
-CREATE TABLE holding_animals(
-    holding_id INT AUTO_INCREMENT PRIMARY KEY,
-    report_id INT NOT NULL,
-    rescue_id INT NULL,
-    animal_type ENUM('Dog', 'Cat', 'Unknown') DEFAULT 'Unknown',
-    animal_name VARCHAR(100) NULL,
-    breed VARCHAR(100) NULL,
-    color VARCHAR(100) NULL,
-    estimated_size VARCHAR(50) NULL,
-    facility_status INT NOT NULL DEFAULT 1,
-    kennel_slot VARCHAR(50) NULL,
-    medical_notes TEXT NULL,
-    intake_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    discharge_date TIMESTAMP NULL,
-    intake_staff_id INT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    FOREIGN KEY(report_id)
-        REFERENCES reports(report_id)
-        ON DELETE CASCADE,
-
-    FOREIGN KEY(rescue_id)
-        REFERENCES rescues(rescue_id)
-        ON DELETE SET NULL,
-
-    FOREIGN KEY(facility_status)
-        REFERENCES facility_status(status_id),
-
-    FOREIGN KEY(intake_staff_id)
-        REFERENCES users(user_id)
-        ON DELETE SET NULL
-);
-
--- =========================================
--- HOLDING TIMELINE
--- =========================================
-CREATE TABLE holding_timeline(
-    log_id INT AUTO_INCREMENT PRIMARY KEY,
-    holding_id INT NOT NULL,
-    event_type VARCHAR(50) NOT NULL DEFAULT 'observation',
-    title VARCHAR(255) NOT NULL,
-    notes TEXT NULL,
-    logged_by INT NULL,
-    logged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    FOREIGN KEY(holding_id)
-        REFERENCES holding_animals(holding_id)
-        ON DELETE CASCADE,
-
-    FOREIGN KEY(logged_by)
-        REFERENCES users(user_id)
-        ON DELETE SET NULL
-);
