@@ -17,6 +17,7 @@ import SubdReports from '../pages/Subd_Leaders/SubdReports';
 import SubdViewReport from '../pages/Subd_Leaders/SubdViewReport';
 import EscelatedMissions from '../pages/Subd_Leaders/EscelatedMissions';
 import SubdHistoryReport from '../pages/Subd_Leaders/SubdHistoryReport';
+import SubdViewHistory from '../pages/Subd_Leaders/SubdViewHistory';
 
 import EndorsementArch from '../pages/Subd_Leaders/EndorsementArch';
 import SubdPetRecords from '../pages/Subd_Leaders/SubdPetRecords';
@@ -35,10 +36,11 @@ import PetQrCardPage from '../pages/citizen/PetQrCardPage';
 import PetScanHistoryPage from '../pages/citizen/PetScanHistoryPage';
 import BrgyDashboard from '../pages/Barangay_Staff/BrgyDashboard';
 import BrgyRescueRequests from '../pages/Barangay_Staff/BrgyRescueRequests';
-import BrgyOperation from '../pages/Barangay_Staff/BrgyOperation';
 import BrgyCommunityAlerts from '../pages/Barangay_Staff/BrgyCommunityAlerts';
 import BrgyProfile from '../pages/Barangay_Staff/BrgyProfile';
 import BrgyHoldingFacility from '../pages/Barangay_Staff/BrgyHoldingFacility';
+import BrgyHistoryReports from '../pages/Barangay_Staff/BrgyHistoryReports';
+import BrgyViewHistory from '../pages/Barangay_Staff/BrgyViewHistory';
 import SubdHazardAlert from '../pages/Subd_Leaders/SubdHazardAlert';
 
 const AppRoutes = () => {
@@ -116,6 +118,7 @@ const AppRoutes = () => {
             <Route path="/subd/reports" element={<SubdReports />} />
             <Route path="/subd/reports/:id" element={<SubdViewReport />} />
             <Route path="/subd/history" element={<SubdHistoryReport />} />
+            <Route path="/subd/history/:id" element={<SubdViewHistory />} />
             <Route path="/subd/escalated" element={<EscelatedMissions />} />
 
             <Route path="/subd/endorsements" element={<EndorsementArch />} />
@@ -125,10 +128,12 @@ const AppRoutes = () => {
 
             <Route path="/brgy/dashboard" element={<BrgyDashboard />} />
             <Route path="/brgy/rescue-requests" element={<BrgyRescueRequests />} />
-            <Route path="/brgy/operations" element={<BrgyOperation />} />
+            <Route path="/brgy/history-reports" element={<BrgyHistoryReports />} />
             <Route path="/brgy/community-alerts" element={<BrgyCommunityAlerts />} />
             <Route path="/brgy/profile" element={<BrgyProfile />} />
             <Route path="/brgy/holding-facility" element={<BrgyHoldingFacility />} />
+            <Route path="/brgy/history" element={<BrgyHistoryReports />} />
+            <Route path="/brgy/history/:id" element={<BrgyViewHistory />} />
 
 
             {/* Landing Page Route */}

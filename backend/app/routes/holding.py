@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models.report import HoldingAnimal, HoldingTimeline, Report, FacilityStatus
+from app.utils.audit import log_activity
 from app.schemas.holding import (
     HoldingAnimalCreate,
     HoldingAnimalUpdate,
@@ -57,6 +58,7 @@ def _load(holding_id: int, db: Session) -> Optional[HoldingAnimal]:
             joinedload(HoldingAnimal.intake_staff),
             joinedload(HoldingAnimal.status_obj),
             joinedload(HoldingAnimal.timeline).joinedload(HoldingTimeline.staff),
+            joinedload(HoldingAnimal.timeline).joinedload(HoldingTimeline.media),
         )
         .filter(HoldingAnimal.holding_id == holding_id)
         .first()
@@ -117,6 +119,7 @@ def list_animals(db: Session = Depends(get_db)):
             joinedload(HoldingAnimal.intake_staff),
             joinedload(HoldingAnimal.status_obj),
             joinedload(HoldingAnimal.timeline).joinedload(HoldingTimeline.staff),
+            joinedload(HoldingAnimal.timeline).joinedload(HoldingTimeline.media),
         )
         .order_by(HoldingAnimal.intake_date.desc())
         .all()
@@ -157,6 +160,18 @@ def create_animal(body: HoldingAnimalCreate, db: Session = Depends(get_db)):
             logged_by=body.intake_staff_id,
         )
         db.add(first_log)
+        
+        # Log activity
+        log_activity(
+            db=db,
+            action="Intake Holding Animal",
+            target_table="holding_animals",
+            target_id=animal.holding_id,
+            description=f"Stray animal from Report #{body.report_id} admitted to holding facility (ID: {animal.holding_id}).",
+            user_id=body.intake_staff_id,
+            log_type="operation"
+        )
+
         db.commit()
         db.refresh(animal)
 
@@ -183,12 +198,14 @@ def update_animal(holding_id: int, body: HoldingAnimalUpdate, db: Session = Depe
 
         updated_by   = update_data.pop("updated_by", None)
         update_notes = update_data.pop("update_notes", None)
+        media_ids    = update_data.pop("media_ids", None)
 
         for key, value in update_data.items():
             if hasattr(animal, key):
                 setattr(animal, key, value)
 
         new_status = animal.facility_status
+        db_log = None
 
         # ── Resolution logic ──────────────────────────────────────────────────
         if new_status in RESOLVED_STATUSES and old_status not in RESOLVED_STATUSES:
@@ -208,35 +225,71 @@ def update_animal(holding_id: int, body: HoldingAnimalUpdate, db: Session = Depe
             outcome_label = outcome_labels.get(new_status, "Resolved")
 
             # Timeline entry for outcome
-            db.add(HoldingTimeline(
+            db_log = HoldingTimeline(
                 holding_id=holding_id,
                 event_type="outcome",
                 title=f"Case Resolved — {outcome_label}",
                 notes=update_notes or f"Animal status updated to '{outcome_label}'. Linked report automatically closed.",
                 logged_by=updated_by,
-            ))
+            )
+            db.add(db_log)
 
         elif new_status != old_status:
             # Status changed but not to a resolution status
             status_obj = db.query(FacilityStatus).filter(FacilityStatus.status_id == new_status).first()
             status_name = status_obj.status_name if status_obj else str(new_status)
-            db.add(HoldingTimeline(
+            db_log = HoldingTimeline(
                 holding_id=holding_id,
                 event_type="status_change",
                 title=f"Status Updated to '{status_name}'",
                 notes=update_notes,
                 logged_by=updated_by,
-            ))
+            )
+            db.add(db_log)
 
         elif update_notes:
             # Notes added without a status change — treat as general observation
-            db.add(HoldingTimeline(
+            db_log = HoldingTimeline(
                 holding_id=holding_id,
                 event_type="observation",
                 title="Medical / Observation Note Added",
                 notes=update_notes,
                 logged_by=updated_by,
-            ))
+            )
+            db.add(db_log)
+
+        if db_log:
+            db.flush()
+            if media_ids:
+                from app.models.report import ReportMedia
+                db.query(ReportMedia).filter(
+                    ReportMedia.media_id.in_(media_ids),
+                    ReportMedia.report_id == animal.report_id
+                ).update({ReportMedia.holding_log_id: db_log.log_id}, synchronize_session=False)
+
+        # Log activity
+        if new_status != old_status:
+            status_obj = db.query(FacilityStatus).filter(FacilityStatus.status_id == new_status).first()
+            status_name = status_obj.status_name if status_obj else str(new_status)
+            log_desc = f"Updated holding animal #{holding_id} status to '{status_name}'."
+            if update_notes:
+                log_desc += f" Notes: {update_notes}"
+            log_act = "Update Holding Status"
+        else:
+            log_desc = f"Added medical/observation note to holding animal #{holding_id}."
+            if update_notes:
+                log_desc += f" Notes: {update_notes}"
+            log_act = "Add Holding Note"
+
+        log_activity(
+            db=db,
+            action=log_act,
+            target_table="holding_animals",
+            target_id=holding_id,
+            description=log_desc,
+            user_id=updated_by,
+            log_type="operation"
+        )
 
         db.commit()
         full = _load(holding_id, db)
@@ -265,6 +318,26 @@ def add_timeline_entry(holding_id: int, body: HoldingTimelineCreate, db: Session
             logged_by=body.logged_by,
         )
         db.add(log)
+        db.flush()
+        
+        if body.media_ids:
+            from app.models.report import ReportMedia
+            db.query(ReportMedia).filter(
+                ReportMedia.media_id.in_(body.media_ids),
+                ReportMedia.report_id == animal.report_id
+            ).update({ReportMedia.holding_log_id: log.log_id}, synchronize_session=False)
+
+        # Log activity
+        log_activity(
+            db=db,
+            action="Add Holding Timeline Entry",
+            target_table="holding_timeline",
+            target_id=log.log_id,
+            description=f"Added timeline event '{body.title}' to holding animal #{holding_id}.",
+            user_id=body.logged_by,
+            log_type="operation"
+        )
+
         db.commit()
         db.refresh(log)
         if log.staff:

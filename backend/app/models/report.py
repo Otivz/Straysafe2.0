@@ -73,10 +73,39 @@ class Report(Base):
     rescues: Mapped[List["Rescue"]] = relationship("Rescue", back_populates="report", cascade="all, delete-orphan")
     verifications: Mapped[List["ReportVerification"]] = relationship("ReportVerification", backref="report", cascade="all, delete-orphan")
     history: Mapped[List["StatusHistory"]] = relationship("StatusHistory", back_populates="report", cascade="all, delete-orphan", order_by="StatusHistory.created_at")
+    endorsement_letter: Mapped[Optional["EndorsementLetter"]] = relationship("EndorsementLetter", back_populates="report", uselist=False, cascade="all, delete-orphan")
 
     # Transient fields populated at runtime (not DB columns)
     reporter_name: Optional[str] = None
     status_id: Optional[int] = None
+
+
+class LetterStatus(Base):
+    __tablename__ = "letter_status"
+    status_id = Column(Integer, primary_key=True, index=True)
+    status_name = Column(String(50), unique=True, nullable=False)
+
+
+class EndorsementLetter(Base):
+    __tablename__ = "endorsement_letters"
+    __allow_unmapped__ = True
+
+    letter_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    report_id: Mapped[int] = mapped_column(Integer, ForeignKey("reports.report_id", ondelete="CASCADE"), nullable=False, unique=True)
+    title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    leader_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    letter_content: Mapped[str] = mapped_column(Text, nullable=False)
+    file_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    status_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("letter_status.status_id"), nullable=True)
+    issued_at = Column(DateTime, server_default=func.now())
+
+    # Relationships
+    report = relationship("Report", back_populates="endorsement_letter")
+    leader = relationship("User")
+
+    # Transient fields
+    leader_name: Optional[str] = None
+    leader_position: Optional[str] = None
 
 
 class ReportMedia(Base):
@@ -93,10 +122,12 @@ class ReportMedia(Base):
     dominant_color = Column(String(100), nullable=True)  # e.g., 'Brown', 'Black and White', 'Golden'
     is_evidence = Column(Boolean, default=False)
     uploaded_at = Column(DateTime, server_default=func.now())
+    holding_log_id = Column(Integer, ForeignKey("holding_timeline.log_id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     report = relationship("Report", back_populates="media")
     history = relationship("StatusHistory", back_populates="media")
+    holding_log = relationship("HoldingTimeline", back_populates="media")
 
 
 class Comment(Base):
@@ -279,3 +310,4 @@ class HoldingTimeline(Base):
     # Relationships
     animal = relationship("HoldingAnimal", back_populates="timeline")
     staff  = relationship("User", foreign_keys=[logged_by])
+    media  = relationship("ReportMedia", back_populates="holding_log")

@@ -33,12 +33,39 @@ const EscelatedMissions = () => {
     const [isEnlarged, setIsEnlarged] = useState(false);
     // Tracks which timeline steps are expanded (by step label)
     const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
+    const [resolvedTodayCount, setResolvedTodayCount] = useState(0);
 
     const fetchMissions = async (showLoading = true) => {
         try {
             if (showLoading) setLoading(true);
             const response = await axios.get('http://localhost:8000/rescue-requests/');
             if (response.data && response.data.length > 0) {
+                // Calculate resolved today
+                const resolvedToday = response.data.filter((m: any) => {
+                    const reportStatus = m.report?.current_status_id || m.report?.status_id || m.status_id;
+                    const isResolved = reportStatus === 11 || reportStatus === 12 || m.status_id === 6;
+                    if (!isResolved) return false;
+                    
+                    const completedDate = m.completed_at ? new Date(m.completed_at) : null;
+                    let historyDate = null;
+                    if (m.report?.history) {
+                        const resolvedHist = m.report.history.find((h: any) => h.report_status_id === 11 || h.report_status_id === 12);
+                        if (resolvedHist?.created_at) {
+                            historyDate = new Date(resolvedHist.created_at);
+                        }
+                    }
+                    const finalDate = completedDate || historyDate;
+                    if (finalDate) {
+                        const date = new Date(finalDate);
+                        const today = new Date();
+                        return date.getDate() === today.getDate() &&
+                               date.getMonth() === today.getMonth() &&
+                               date.getFullYear() === today.getFullYear();
+                    }
+                    return false;
+                }).length;
+                setResolvedTodayCount(resolvedToday);
+
                 const mapped: EscalatedMission[] = response.data.map((m: any) => {
                     let friendlyStatus: 'Pending' | 'In Progress' | 'Picked Up' | 'Resolved' | 'Rejected' = 'Pending';
                     const reportStatus = m.report?.current_status_id || m.report?.status_id || m.status_id;
@@ -68,13 +95,15 @@ const EscelatedMissions = () => {
                         raw_data: m
                     };
                 });
-                setMissions(mapped);
+                setMissions(mapped.filter(m => m.barangay_status !== 'Resolved'));
             } else {
                 setMissions([]);
+                setResolvedTodayCount(0);
             }
         } catch (error) {
             console.error('Error fetching escalated missions:', error);
             setMissions([]);
+            setResolvedTodayCount(0);
         } finally {
             if (showLoading) setLoading(false);
         }
@@ -314,7 +343,6 @@ const EscelatedMissions = () => {
     const totalEscalated = missions.length;
     const pendingAction = missions.filter(m => m.barangay_status === 'Pending').length;
     const inProgress = missions.filter(m => m.barangay_status === 'In Progress' || m.barangay_status === 'Picked Up').length;
-    const resolved = missions.filter(m => m.barangay_status === 'Resolved').length;
 
     return (
         <div className="flex h-screen bg-[#F8FAFC]">
@@ -339,7 +367,7 @@ const EscelatedMissions = () => {
                                 { label: 'Total Escalated', value: totalEscalated.toString(), color: 'bg-orange-500' },
                                 { label: 'Pending Action', value: pendingAction.toString(), color: 'bg-amber-500' },
                                 { label: 'In Progress', value: inProgress.toString(), color: 'bg-blue-500' },
-                                { label: 'Resolved', value: resolved.toString(), color: 'bg-green-500' },
+                                { label: 'Resolved Today', value: resolvedTodayCount.toString(), color: 'bg-green-500' },
                             ].map((stat, i) => (
                                 <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md">
                                     <div className="flex items-center justify-between mb-4">

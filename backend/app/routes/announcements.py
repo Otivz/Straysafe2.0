@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.database import get_db
 from app.models.announcement import Announcement, AnnouncementMedia, AnnouncementCategory, AnnouncementComment, AnnouncementReaction
+from app.utils.audit import log_activity
 from app.models.user import User
 from app.schemas.announcement import (
     AnnouncementCreate,
@@ -175,6 +176,19 @@ def create_announcement(payload: AnnouncementCreate, db: Session = Depends(get_d
         expires_at=payload.expiration,  # type: ignore
     )
     db.add(row)
+    db.flush()
+    
+    # Log activity
+    log_activity(
+        db=db,
+        action="Create Announcement",
+        target_table="announcements",
+        target_id=row.announcement_id,  # type: ignore
+        description=f"Created announcement '{payload.title}' with visibility '{payload.visibility}' (Status: {target_status}).",
+        user_id=payload.created_by,
+        log_type="operation"
+    )
+
     db.commit()
     db.refresh(row)
 
@@ -323,6 +337,17 @@ def update_announcement_status(announcement_id: int, payload: dict, db: Session 
     ann.status = new_status  # type: ignore
     if new_status == "Published" and not ann.published_at:  # type: ignore
         ann.published_at = datetime.now()  # type: ignore
+    # Log activity
+    log_activity(
+        db=db,
+        action="Update Announcement Status",
+        target_table="announcements",
+        target_id=announcement_id,
+        description=f"Updated status of announcement '{ann.title}' to '{new_status}'.",
+        user_id=ann.created_by,  # type: ignore
+        log_type="operation"
+    )
+
     db.commit()
     db.refresh(ann)
     # Re-fetch with joinedloads to match _to_response requirements
@@ -368,6 +393,17 @@ def update_announcement(announcement_id: int, payload: AnnouncementCreate, db: S
         if payload.status == "Published" and not ann.published_at:  # type: ignore
             ann.published_at = datetime.now()  # type: ignore
 
+    # Log activity
+    log_activity(
+        db=db,
+        action="Update Announcement",
+        target_table="announcements",
+        target_id=announcement_id,
+        description=f"Updated announcement '{payload.title}' visibility to '{payload.visibility}' (Status: {payload.status or ann.status}).",
+        user_id=payload.created_by,
+        log_type="operation"
+    )
+
     db.commit()
     db.refresh(ann)
     
@@ -395,6 +431,18 @@ def delete_announcement(announcement_id: int, db: Session = Depends(get_db)):
     ann = db.query(Announcement).filter(Announcement.announcement_id == announcement_id).first()
     if not ann:
         raise HTTPException(status_code=404, detail="Announcement not found")
+        
+    # Log activity
+    log_activity(
+        db=db,
+        action="Delete Announcement",
+        target_table="announcements",
+        target_id=announcement_id,
+        description=f"Deleted announcement '{ann.title}'.",
+        user_id=ann.created_by,  # type: ignore
+        log_type="operation"
+    )
+
     db.delete(ann)
     db.commit()
     return {"message": "Announcement deleted successfully"}

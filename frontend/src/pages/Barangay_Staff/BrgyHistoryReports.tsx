@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate } from 'react-router-dom';
-import SubdSidebar from '../../components/SubdSidebar';
-import SubdNavbar from '../../components/Navbars/SubdNavbar';
+import BrgySidebar from '../../components/BrgySidebar';
+import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import DataTable from '../../components/DataTable';
 import Select from '../../components/Dropdown';
 
@@ -12,21 +12,15 @@ interface Report {
     category_id: number;
     status_id: number;
     priority_level: string;
-    latitude: number;
-    longitude: number;
     landmark: string;
-    animal_count: number;
     animal_type: string;
-    breed?: string;
-    condition: string;
-    behavior_tags?: string;
     description: string;
     visibility: string;
     created_at: string;
     user_id: number;
     reporter_name?: string;
     media?: any[];
-    comments?: any[];
+    history?: any[];
 }
 
 const statusMap: Record<number, string> = {
@@ -34,7 +28,6 @@ const statusMap: Record<number, string> = {
     2: 'Verified',
     3: 'Rejected',
     4: 'Escalated to Barangay',
-    13: 'Approved',
     5: 'Rescue In Progress',
     6: 'Picked Up',
     7: 'Under Observation',
@@ -42,19 +35,21 @@ const statusMap: Record<number, string> = {
     9: 'Claimed by Owner',
     10: 'Released',
     11: 'Resolved',
-    12: 'Deceased'
+    12: 'Deceased',
+    13: 'Approved',
 };
 
 const categoryMap: Record<number, string> = {
-    1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
-    4: 'Roaming Pack', 5: 'Animal Rescue Needed'
+    1: 'Injured Animal',
+    2: 'Aggressive Stray',
+    3: 'Possible Rabies Risk',
+    4: 'Roaming Pack',
+    5: 'Animal Rescue Needed',
 };
 
-const HISTORY_STATUSES = [11, 12, 3]; // Resolved, Deceased, Rejected
-
-const SubdHistoryReport = () => {
+const BrgyHistoryReports = () => {
     const navigate = useNavigate();
-
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [reports, setReports] = useState<Report[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -68,24 +63,21 @@ const SubdHistoryReport = () => {
             navigate('/staff/login');
         } else {
             try {
-                if (currentUser.role_id !== 2) {
+                if (currentUser.role_id !== 3) {
                     navigate('/staff/login');
                 }
             } catch {
                 navigate('/staff/login');
             }
         }
-    }, [navigate, userStr, currentUser]);
+    }, [navigate]);
 
     const fetchReports = async () => {
         try {
             setLoading(true);
             const response = await axios.get('http://localhost:8000/reports/');
-            const sortedData = (response.data || []).sort((a: any, b: any) => b.report_id - a.report_id);
-            const uniqueReports = sortedData.filter((report: any, index: number, self: any[]) =>
-                index === self.findIndex((t: any) => t.report_id === report.report_id)
-            );
-            setReports(uniqueReports);
+            const sorted = (response.data || []).sort((a: any, b: any) => b.report_id - a.report_id);
+            setReports(sorted);
         } catch (error) {
             console.error('Error fetching reports:', error);
             setReports([]);
@@ -98,8 +90,11 @@ const SubdHistoryReport = () => {
         fetchReports();
     }, []);
 
-    // Only include history (closed) reports
-    const historyReports = reports.filter(rep => HISTORY_STATUSES.includes(rep.status_id));
+    const historyReports = reports.filter(rep => 
+        rep.status_id === 11 || 
+        rep.status_id === 12 || 
+        (rep.status_id === 3 && rep.history?.some((h: any) => h.report_status_id === 4))
+    );
 
     const filteredReports = historyReports.filter(rep => {
         const catName = categoryMap[rep.category_id]?.toLowerCase() || '';
@@ -116,14 +111,13 @@ const SubdHistoryReport = () => {
         return matchesSearch && matchesStatus;
     });
 
-    // Metrics
     const totalHistory = historyReports.length;
     const resolvedCount = historyReports.filter(r => r.status_id === 11).length;
     const deceasedCount = historyReports.filter(r => r.status_id === 12).length;
     const rejectedCount = historyReports.filter(r => r.status_id === 3).length;
 
     const getPriorityColor = (priority: string) => {
-        switch (priority.toLowerCase()) {
+        switch ((priority || '').toLowerCase()) {
             case 'emergency':
             case 'high': return 'bg-red-50 text-red-600 border-red-100';
             case 'regular':
@@ -134,32 +128,27 @@ const SubdHistoryReport = () => {
     };
 
     const getStatusColor = (status: string) => {
-        switch (status.toLowerCase()) {
-            case 'resolved':
-                return 'bg-green-50 text-green-600 border-green-100';
-            case 'deceased':
-                return 'bg-gray-100 text-gray-600 border-gray-200';
-            case 'rejected':
-                return 'bg-red-50 text-red-600 border-red-100';
-            default:
-                return 'bg-gray-50 text-gray-600 border-gray-100';
+        switch ((status || '').toLowerCase()) {
+            case 'resolved': return 'bg-green-50 text-green-600 border-green-100';
+            case 'deceased': return 'bg-gray-100 text-gray-600 border-gray-200';
+            case 'rejected': return 'bg-red-50 text-red-600 border-red-100';
+            default: return 'bg-gray-50 text-gray-600 border-gray-100';
         }
     };
 
     const getStatusIcon = (statusId: number) => {
         if (statusId === 11) return (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
             </svg>
         );
         if (statusId === 12) return (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
             </svg>
         );
-        // Rejected
         return (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524L13.477 14.89zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
             </svg>
         );
@@ -169,7 +158,6 @@ const SubdHistoryReport = () => {
         {
             label: 'Total History',
             value: totalHistory,
-            color: 'bg-purple-500',
             lightColor: 'bg-purple-50',
             textColor: 'text-purple-600',
             icon: (
@@ -181,7 +169,6 @@ const SubdHistoryReport = () => {
         {
             label: 'Resolved',
             value: resolvedCount,
-            color: 'bg-green-500',
             lightColor: 'bg-green-50',
             textColor: 'text-green-600',
             icon: (
@@ -193,7 +180,6 @@ const SubdHistoryReport = () => {
         {
             label: 'Deceased',
             value: deceasedCount,
-            color: 'bg-gray-500',
             lightColor: 'bg-gray-100',
             textColor: 'text-gray-600',
             icon: (
@@ -205,7 +191,6 @@ const SubdHistoryReport = () => {
         {
             label: 'Rejected',
             value: rejectedCount,
-            color: 'bg-red-500',
             lightColor: 'bg-red-50',
             textColor: 'text-red-600',
             icon: (
@@ -217,30 +202,30 @@ const SubdHistoryReport = () => {
     ];
 
     return (
-        <div className="flex h-screen bg-[#F8FAFC]">
-            <SubdSidebar />
+        <div className="min-h-screen w-full flex bg-[#F8F9FA] font-sans text-gray-800">
+            <BrgySidebar
+                isMobileOpen={isMobileSidebarOpen}
+                onCloseMobile={() => setIsMobileSidebarOpen(false)}
+            />
 
-            <div className="flex-1 flex flex-col overflow-hidden">
-                {/* TOP NAVIGATION */}
-                <SubdNavbar
+            <main className="flex-1 flex flex-col h-screen overflow-hidden w-full">
+                <BrgyNavbar
+                    onMenuToggle={() => setIsMobileSidebarOpen(true)}
                     leftContent={
                         <div className="flex flex-col">
-                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">History Reports</h1>
-                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">All past and closed incident reports in your subdivision</p>
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Report History</h1>
+                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">All closed and archived incident reports</p>
                         </div>
                     }
                 />
 
-                <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                    <div className="max-w-7xl mx-auto space-y-8">
+                <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                    <div className="max-w-7xl mx-auto w-full space-y-8">
 
                         {/* Metrics Row */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             {metrics.map((metric, i) => (
-                                <div
-                                    key={i}
-                                    className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4 hover:shadow-md transition-all"
-                                >
+                                <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4 hover:shadow-md transition-all">
                                     <div className={`w-11 h-11 rounded-xl ${metric.lightColor} ${metric.textColor} flex items-center justify-center shrink-0`}>
                                         {metric.icon}
                                     </div>
@@ -252,7 +237,7 @@ const SubdHistoryReport = () => {
                             ))}
                         </div>
 
-                        {/* Search & Filters + Refresh */}
+                        {/* Search & Filters */}
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div className="relative flex-1 max-w-md">
                                 <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
@@ -263,7 +248,7 @@ const SubdHistoryReport = () => {
                                 <input
                                     type="text"
                                     placeholder="Search by category, landmark or reporter..."
-                                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-200 outline-none transition-all"
+                                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-200 outline-none transition-all"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                 />
@@ -298,7 +283,7 @@ const SubdHistoryReport = () => {
                             data={filteredReports}
                             emptyMessage="No history reports found."
                             loadingMessage="Loading history reports..."
-                            onRowClick={(rep) => navigate(`/subd/history/${rep.report_id}`)}
+                            onRowClick={(rep) => navigate(`/brgy/history/${rep.report_id}`)}
                             columns={[
                                 {
                                     header: "ID",
@@ -312,7 +297,7 @@ const SubdHistoryReport = () => {
                                     key: "category",
                                     render: (rep) => (
                                         <div className="flex items-center space-x-2">
-                                            <span className="w-2 h-2 rounded-full bg-purple-400"></span>
+                                            <span className="w-2 h-2 rounded-full bg-orange-400"></span>
                                             <span className="text-sm font-bold text-gray-900">{categoryMap[rep.category_id] || 'Other'}</span>
                                         </div>
                                     )
@@ -382,9 +367,9 @@ const SubdHistoryReport = () => {
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                navigate(`/subd/history/${rep.report_id}`);
+                                                navigate(`/brgy/history/${rep.report_id}`);
                                             }}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-purple-600 bg-purple-50 border border-purple-100 rounded-lg hover:bg-purple-100 transition-all uppercase tracking-widest"
+                                            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-100 rounded-lg hover:bg-orange-100 transition-all uppercase tracking-widest"
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -398,26 +383,26 @@ const SubdHistoryReport = () => {
                         />
 
                         {/* Info Banner */}
-                        <div className="bg-purple-50/60 border border-purple-100 rounded-2xl p-5 flex items-start gap-4">
-                            <div className="w-9 h-9 rounded-xl bg-purple-500 text-white flex items-center justify-center shrink-0">
+                        <div className="bg-orange-50/60 border border-orange-100 rounded-2xl p-5 flex items-start gap-4">
+                            <div className="w-9 h-9 rounded-xl bg-[#F97316] text-white flex items-center justify-center shrink-0">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                             </div>
                             <div>
-                                <h4 className="text-sm font-bold text-purple-900">History Archive</h4>
-                                <p className="text-xs text-purple-700 mt-1 leading-relaxed">
+                                <h4 className="text-sm font-bold text-orange-900">History Archive</h4>
+                                <p className="text-xs text-orange-700 mt-1 leading-relaxed">
                                     This page contains all closed and past incident reports — including Resolved, Deceased, and Rejected cases.
-                                    These reports are read-only and cannot be modified. Click any row to view the full report details.
+                                    These records are read-only and cannot be modified.
                                 </p>
                             </div>
                         </div>
 
                     </div>
-                </main>
-            </div>
+                </div>
+            </main>
         </div>
     );
 };
 
-export default SubdHistoryReport;
+export default BrgyHistoryReports;

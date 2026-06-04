@@ -6,11 +6,11 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from app.database import get_db
-# Import Rescue (not RescueRequest) to match the DB "rescues" table
-from app.models.report import Rescue, Report, RescueAssignment, StatusHistory, HoldingAnimal, HoldingTimeline
+from app.models.report import Rescue, Report, RescueAssignment, StatusHistory, HoldingAnimal, HoldingTimeline, ReportMedia, EndorsementLetter
 from app.models.user import User
 from app.models.notification import Notification
 from app.schemas.rescue import RescueRequestCreate, RescueRequestResponse, RescueRequestUpdate
+from app.utils.audit import log_activity
 
 router = APIRouter(
     prefix="/rescue-requests",
@@ -96,6 +96,46 @@ def create_rescue_request(request_in: RescueRequestCreate, db: Session = Depends
         }
         db_rescue = Rescue(**{k: v for k, v in rescue_data.items() if v is not None or k == "report_id"})
         db.add(db_rescue)
+        
+        # Create or update EndorsementLetter record if escalated by subdivision leader (leader_id is set)
+        if request_in.leader_id:
+            # Find the latest evidence file uploaded for this report
+            media_file = db.query(ReportMedia).filter(
+                ReportMedia.report_id == request_in.report_id,
+                ReportMedia.is_evidence == True
+            ).order_by(ReportMedia.media_id.desc()).first()
+            file_url = media_file.file_url if media_file else None
+
+            existing_letter = db.query(EndorsementLetter).filter(EndorsementLetter.report_id == request_in.report_id).first()
+            if existing_letter:
+                existing_letter.leader_id = request_in.leader_id
+                existing_letter.title = request_in.title or f"Endorsement for Report #{request_in.report_id}"
+                existing_letter.letter_content = request_in.description or "Official subdivision endorsement letter."
+                if file_url:
+                    existing_letter.file_url = file_url
+                existing_letter.status_id = 2 # Sent
+            else:
+                db_letter = EndorsementLetter(
+                    report_id=request_in.report_id,
+                    leader_id=request_in.leader_id,
+                    title=request_in.title or f"Endorsement for Report #{request_in.report_id}",
+                    letter_content=request_in.description or "Official subdivision endorsement letter.",
+                    file_url=file_url,
+                    status_id=2 # Sent
+                )
+                db.add(db_letter)
+
+        # Log activity
+        log_activity(
+            db=db,
+            action="Create Rescue Request",
+            target_table="rescues",
+            target_id=db_rescue.rescue_id,
+            description=f"Rescue request created for Report #{request_in.report_id} by Subdivision Leader #{request_in.leader_id}.",
+            user_id=request_in.leader_id or (request_in.barangay_staff_id if hasattr(request_in, 'barangay_staff_id') else None),
+            log_type="operation"
+        )
+
         db.commit()
         db.refresh(db_rescue)
         # Fetch fully loaded rescue to populate all relations for frontend
@@ -103,6 +143,7 @@ def create_rescue_request(request_in: RescueRequestCreate, db: Session = Depends
             joinedload(Rescue.report).joinedload(Report.media),
             joinedload(Rescue.report).joinedload(Report.reporter),
             joinedload(Rescue.report).joinedload(Report.history).joinedload(StatusHistory.updater),
+            joinedload(Rescue.report).joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position),
             joinedload(Rescue.staff),
             joinedload(Rescue.leader).joinedload(User.position),
             joinedload(Rescue.assignments).joinedload(RescueAssignment.staff)
@@ -119,6 +160,7 @@ def get_rescue_requests(db: Session = Depends(get_db)):
         joinedload(Rescue.report).joinedload(Report.media),
         joinedload(Rescue.report).joinedload(Report.reporter),
         joinedload(Rescue.report).joinedload(Report.history).joinedload(StatusHistory.updater),
+        joinedload(Rescue.report).joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position),
         joinedload(Rescue.staff),
         joinedload(Rescue.leader).joinedload(User.position),
         joinedload(Rescue.assignments).joinedload(RescueAssignment.staff)
@@ -136,6 +178,7 @@ def get_request_by_report(report_id: int, db: Session = Depends(get_db)):
         joinedload(Rescue.report).joinedload(Report.media),
         joinedload(Rescue.report).joinedload(Report.reporter),
         joinedload(Rescue.report).joinedload(Report.history).joinedload(StatusHistory.updater),
+        joinedload(Rescue.report).joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position),
         joinedload(Rescue.staff),
         joinedload(Rescue.leader).joinedload(User.position),
         joinedload(Rescue.assignments).joinedload(RescueAssignment.staff)
@@ -200,6 +243,7 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
             report_to_rescue_map = {
                 1: 1, # Reported -> Pending
                 2: 1, # Verified -> Pending
+                3: 3, # Rejected -> Rejected
                 4: 1, # Escalated -> Pending
                 13: 2, # Approved by Barangay -> Approved
                 5: 5, # Dispatched -> Dispatched
@@ -214,7 +258,7 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
             # Update Rescue status if mapping exists
             if rescue_status_id:
                 db_rescue.status_id = rescue_status_id
-                if rescue_status_id == 6:
+                if rescue_status_id in (3, 6):
                     db_rescue.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 elif rescue_status_id in (4, 5):
                     db_rescue.started_at = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -309,6 +353,32 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                                 logged_by  = staff_id_for_history,
                             ))
 
+        # Log to audit log
+        log_action = "Update Rescue Request"
+        log_desc = f"Rescue request #{rescue_id} updated."
+        if "status_id" in update_data:
+            status_names = {
+                1: "Reported", 2: "Verified", 3: "Rejected", 4: "Escalated to Barangay",
+                5: "Team Dispatched", 6: "Picked Up", 7: "Under Observation", 8: "Impounded",
+                9: "Claimed by Owner", 10: "Released", 11: "Resolved", 12: "Deceased", 13: "Approved"
+            }
+            status_name = status_names.get(update_data["status_id"], "Updated")
+            log_action = f"Update Rescue Status: {status_name}"
+            log_desc = f"Rescue request #{rescue_id} (Report #{db_rescue.report_id}) status updated to {status_name}. Remarks: {remarks or '-'}"
+        elif assigned_id:
+            log_action = "Assign Rescue Personnel"
+            log_desc = f"Assigned personnel #{assigned_id} to rescue request #{rescue_id}."
+        
+        log_activity(
+            db=db,
+            action=log_action,
+            target_table="rescues",
+            target_id=rescue_id,
+            description=log_desc,
+            user_id=staff_id_for_history or original_staff_id,
+            log_type="operation"
+        )
+
         db.commit()
         db.refresh(db_rescue)
         
@@ -317,6 +387,7 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
             joinedload(Rescue.report).joinedload(Report.media),
             joinedload(Rescue.report).joinedload(Report.reporter),
             joinedload(Rescue.report).joinedload(Report.history).joinedload(StatusHistory.updater),
+            joinedload(Rescue.report).joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position),
             joinedload(Rescue.staff),
             joinedload(Rescue.leader).joinedload(User.position),
             joinedload(Rescue.assignments).joinedload(RescueAssignment.staff)
