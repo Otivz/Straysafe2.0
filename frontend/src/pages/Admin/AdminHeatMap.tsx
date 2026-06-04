@@ -181,7 +181,7 @@ const AdminHeatMap = () => {
                     lat: parseFloat(r.latitude.toString()),
                     lng: parseFloat(r.longitude.toString()),
                     title: r.description || `Incident #${r.report_id}`,
-                    priority: r.priority_level || 'Regular',
+                    priority: r.priority_level || 'Medium',
                     category: r.animal_type || 'Stray Animal',
                     color: color,
                     time: timeStr,
@@ -455,7 +455,7 @@ const AdminHeatMap = () => {
                                 <div>
                                     <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Priority Level</span>
                                     <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider mt-0.5 ${selectedDetailReport.priority_level === 'High' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
-                                        }`}>{selectedDetailReport.priority_level || 'Regular'}</span>
+                                        }`}>{selectedDetailReport.priority_level || 'Medium'}</span>
                                 </div>
                                 <div>
                                     <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Health Condition</span>

@@ -412,11 +412,15 @@ CREATE TABLE reports(
 
     landmark VARCHAR(255),
 
+    -- priority_level:
+    --   - 'Low': Normal stray animal condition (no immediate threat or injuries).
+    --   - 'Medium': Weak, sick, or scared stray animals (needs rescue/attention, not immediately dangerous).
+    --   - 'High': Injured, aggressive, rabid, or attacking animals (requires immediate emergency response).
     priority_level ENUM(
         'Low',
-        'Regular',
+        'Medium',
         'High'
-    ) DEFAULT 'Regular',
+    ) DEFAULT 'Medium',
 
     visibility ENUM(
         'Public',
@@ -435,6 +439,7 @@ CREATE TABLE reports(
     ai_possible_breed VARCHAR(100) NULL,
     ai_suggested_risk_level VARCHAR(50) NULL,
     ai_suggested_priority VARCHAR(50) NULL,
+    ai_suggested_priority_reason TEXT NULL,
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 

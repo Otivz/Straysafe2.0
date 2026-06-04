@@ -113,7 +113,7 @@ const PetScanHistoryPage = () => {
             lat: Number(s.scan_lat),
             lng: Number(s.scan_lng),
             title: s.notes || `Scanned by ${s.finder_name || 'Guest'}`,
-            priority: 'Regular',
+            priority: 'Medium',
             time: new Date(s.scanned_at).toLocaleString(),
             category: s.location_type || 'Found Location'
         }));

@@ -14,6 +14,7 @@ import ProtectedRoute from '../components/ProtectedRoute';
 import CommunityStaffLogin from '../pages/Subd_Leaders/CommunityStaffLogin';
 import SubdDashboard from '../pages/Subd_Leaders/SubdDashboard';
 import SubdReports from '../pages/Subd_Leaders/SubdReports';
+import SubdViewReport from '../pages/Subd_Leaders/SubdViewReport';
 import EscelatedMissions from '../pages/Subd_Leaders/EscelatedMissions';
 
 import EndorsementArch from '../pages/Subd_Leaders/EndorsementArch';
@@ -24,6 +25,7 @@ import SubdProfile from '../pages/Subd_Leaders/SubdProfile';
 import LandingPage from '../pages/citizen/LandingPage';
 import ResidentsLogin from '../pages/citizen/ResidentsLogin';
 import ResiHomePage from '../pages/citizen/ResiHomePage';
+import ResiViewReport from '../pages/citizen/ResiViewReport';
 import ResidentPet from '../pages/citizen/ResidentPet';
 import ResiProfile from '../pages/citizen/ResiProfile';
 import PetScanPage from '../pages/citizen/PetScanPage';
@@ -111,6 +113,7 @@ const AppRoutes = () => {
             <Route path="/staff/login" element={<CommunityStaffLogin />} />
             <Route path="/subd/dashboard" element={<SubdDashboard />} />
             <Route path="/subd/reports" element={<SubdReports />} />
+            <Route path="/subd/reports/:id" element={<SubdViewReport />} />
             <Route path="/subd/escalated" element={<EscelatedMissions />} />
 
             <Route path="/subd/endorsements" element={<EndorsementArch />} />
@@ -130,6 +133,7 @@ const AppRoutes = () => {
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<ResidentsLogin />} />
             <Route path="/resident-home" element={<ResiHomePage />} />
+            <Route path="/resident/reports/:id" element={<ResiViewReport />} />
             <Route path="/resident/pets" element={<ResidentPet />} />
             <Route path="/resident/profile" element={<ResiProfile />} />
 

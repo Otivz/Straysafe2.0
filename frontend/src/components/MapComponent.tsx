@@ -324,9 +324,11 @@ const MapComponent = ({
                                 <div className="flex flex-col gap-1.5 text-xs text-gray-700">
                                     <div className="flex justify-between items-center border-b border-gray-100 pb-1.5 mb-1.5">
                                         <span className="font-black text-gray-900">Report #{marker.id}</span>
-                                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${marker.priority === 'High' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'
-                                            }`}>
-                                            {marker.priority || 'Regular'}
+                                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${
+                                            marker.priority === 'High' ? 'bg-red-50 text-red-500' : 
+                                            (marker.priority === 'Medium' || marker.priority === 'Regular') ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-500'
+                                        }`}>
+                                            {marker.priority || 'Medium'}
                                         </span>
                                     </div>
                                     <div className="grid grid-cols-2 gap-x-2 gap-y-1">
@@ -381,9 +383,11 @@ const MapComponent = ({
                             ) : (
                                 <>
                                     <div className="flex justify-between items-start mb-2">
-                                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${marker.priority === 'High' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'
-                                            }`}>
-                                            {marker.priority || 'Regular'}
+                                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${
+                                            marker.priority === 'High' ? 'bg-red-50 text-red-500' : 
+                                            (marker.priority === 'Medium' || marker.priority === 'Regular') ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-500'
+                                        }`}>
+                                            {marker.priority || 'Medium'}
                                         </span>
                                         <span className="text-[8px] font-bold text-gray-400 uppercase">{marker.time}</span>
                                     </div>

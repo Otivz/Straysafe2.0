@@ -24,107 +24,7 @@ const EndorsementArch = () => {
     const [docs, setDocs] = useState<EndorsementDocument[]>([]);
     const [loadingDocs, setLoadingDocs] = useState(true);
 
-    const mockMissions = [
-        {
-            rescue_id: 1042,
-            report_id: 1042,
-            title: "Aggressive Stray Rescue - Sector 4",
-            description: "Requesting immediate rescue for a large aggressive dog near the central playground.",
-            escalated_date: "May 12, 2026 10:30 AM",
-            status_id: 5, // In Progress (Dispatched)
-            leader_name: "Kyla Joy Arriola",
-            assigned_staff_name: "Alpha Rescue Squad",
-            report: {
-                current_status_id: 5,
-                animal_type: "Dog",
-                animal_breed: "German Shepherd Mix",
-                condition: "Aggressive behavior, chasing children near playground",
-                landmark: "Central Park Playground",
-                priority_level: "High",
-                created_at: "2026-05-12T08:30:00Z",
-                media: [
-                    {
-                        media_id: 101,
-                        file_url: "https://images.unsplash.com/photo-1589941013453-ec89f33b5e95?auto=format&fit=crop&q=80&w=800",
-                        media_type: "Image",
-                        is_evidence: false
-                    },
-                    {
-                        media_id: 102,
-                        file_url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-                        media_type: "Document",
-                        is_evidence: true
-                    }
-                ]
-            }
-        },
-        {
-            rescue_id: 1039,
-            report_id: 1039,
-            title: "Injured Animal Rescue - Block 5",
-            description: "Calico cat with injured leg found near block 5 entrance.",
-            escalated_date: "May 11, 2026 02:15 PM",
-            status_id: 1, // Pending
-            leader_name: "Kyla Joy Arriola",
-            assigned_staff_name: null,
-            report: {
-                current_status_id: 4, // Escalated
-                animal_type: "Cat",
-                animal_breed: "Calico",
-                condition: "Limping, possible fracture in front left leg",
-                landmark: "Block 5 Main Gate",
-                priority_level: "Regular",
-                created_at: "2026-05-11T14:15:00Z",
-                media: [
-                    {
-                        media_id: 201,
-                        file_url: "https://images.unsplash.com/photo-1533738363-b7f9aef128ce?auto=format&fit=crop&q=80&w=800",
-                        media_type: "Image",
-                        is_evidence: false
-                    },
-                    {
-                        media_id: 202,
-                        file_url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-                        media_type: "Document",
-                        is_evidence: true
-                    }
-                ]
-            }
-        },
-        {
-            rescue_id: 1025,
-            report_id: 1025,
-            title: "Perimeter Pack Control",
-            description: "Pack of 5-6 dogs roaming near the subdivision perimeter fence.",
-            escalated_date: "May 10, 2026 08:00 AM",
-            status_id: 6, // Resolved
-            leader_name: "Kyla Joy Arriola",
-            assigned_staff_name: "Bravo Rescue Team",
-            report: {
-                current_status_id: 11, // Resolved
-                animal_type: "Dog",
-                animal_breed: "Mixed Breed",
-                condition: "Roaming in pack, possible rabies risk",
-                landmark: "North Perimeter Wall",
-                priority_level: "Regular",
-                created_at: "2026-05-10T08:00:00Z",
-                media: [
-                    {
-                        media_id: 301,
-                        file_url: "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?auto=format&fit=crop&q=80&w=800",
-                        media_type: "Image",
-                        is_evidence: false
-                    },
-                    {
-                        media_id: 302,
-                        file_url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-                        media_type: "Document",
-                        is_evidence: true
-                    }
-                ]
-            }
-        }
-    ];
+
 
     const getStatusStyle = (status: string) => {
         switch (status) {
@@ -214,13 +114,11 @@ const EndorsementArch = () => {
                             report: reportRes.data
                         });
                     } else {
-                        const mockMatch = mockMissions.find(m => m.report_id === doc.report_id);
-                        setMissionData(mockMatch || null);
+                        setMissionData(null);
                     }
                 } catch (reportErr) {
                     console.error('Failed to fetch direct report details too:', reportErr);
-                    const mockMatch = mockMissions.find(m => m.report_id === doc.report_id);
-                    setMissionData(mockMatch || null);
+                    setMissionData(null);
                 }
             }
         } catch (err) {
@@ -243,48 +141,11 @@ const EndorsementArch = () => {
             } catch (innerErr) {
                 console.error('Failed to fetch direct report details too:', innerErr);
             }
-            const mockMatch = mockMissions.find(m => m.report_id === doc.report_id);
-            setMissionData(mockMatch || null);
+            setMissionData(null);
         } finally {
             setLoadingMission(false);
         }
     };
-
-    const mockDocs: EndorsementDocument[] = [
-        {
-            doc_id: "END-2024-0512",
-            report_id: 1042,
-            title: "Endorsement for Aggressive Stray Rescue - Sector 4",
-            date_sent: "May 12, 2024",
-            recipient: "Barangay San Vicente Ops",
-            status: "Received",
-            file_type: "PDF",
-            file_size: "1.2 MB",
-            file_url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
-        },
-        {
-            doc_id: "END-2024-0511",
-            report_id: 1039,
-            title: "Endorsement for Injured Animal Rescue - Block 5",
-            date_sent: "May 11, 2024",
-            recipient: "Barangay San Vicente Ops",
-            status: "Accepted",
-            file_type: "PDF",
-            file_size: "850 KB",
-            file_url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
-        },
-        {
-            doc_id: "END-2024-0510",
-            report_id: 1025,
-            title: "Endorsement for Perimeter Pack Control",
-            date_sent: "May 10, 2024",
-            recipient: "Barangay San Vicente Ops",
-            status: "Accepted",
-            file_type: "PDF",
-            file_size: "1.1 MB",
-            file_url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
-        }
-    ];
 
     const fetchDocs = async (showLoading = true) => {
         try {
@@ -328,11 +189,11 @@ const EndorsementArch = () => {
                 });
                 setDocs(mapped);
             } else {
-                setDocs(mockDocs);
+                setDocs([]);
             }
         } catch (error) {
             console.error('Error fetching endorsement documents:', error);
-            setDocs(mockDocs);
+            setDocs([]);
         } finally {
             if (showLoading) setLoadingDocs(false);
         }

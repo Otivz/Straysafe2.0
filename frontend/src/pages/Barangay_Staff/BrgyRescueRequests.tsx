@@ -40,6 +40,7 @@ interface RescueRequest {
         ai_possible_breed?: string | null;
         ai_suggested_risk_level?: string | null;
         ai_suggested_priority?: string | null;
+        ai_suggested_priority_reason?: string | null;
     };
     leader_name?: string;
     leader_position?: string;
@@ -100,6 +101,8 @@ const BrgyRescueRequests = () => {
     const [personnel, setPersonnel] = useState<any[]>([]);
     const [selectedPersonnelId, setSelectedPersonnelId] = useState<number | null>(null);
     const [assignmentRemarks, setAssignmentRemarks] = useState('');
+    const [resolvedAddress, setResolvedAddress] = useState('');
+    const [isGeocoding, setIsGeocoding] = useState(false);
 
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -125,6 +128,56 @@ const BrgyRescueRequests = () => {
             }
         }
     }, [isNavigating, navSource]);
+
+    useEffect(() => {
+        if (!viewingRequest?.report) {
+            setResolvedAddress('');
+            return;
+        }
+
+        const report = viewingRequest.report;
+
+        const fetchAddress = async () => {
+            setIsGeocoding(true);
+            try {
+                const response = await axios.get('https://nominatim.openstreetmap.org/reverse', {
+                    params: {
+                        format: 'jsonv2',
+                        lat: report.latitude,
+                        lon: report.longitude,
+                        addressdetails: 1
+                    },
+                    headers: {
+                        'Accept-Language': 'en'
+                    }
+                });
+                if (response.data && response.data.address) {
+                    const addr = response.data.address;
+                    const parts = [];
+                    const road = addr.road || addr.pedestrian || addr.path || '';
+                    if (road) parts.push(road);
+                    const neighbourhood = addr.neighbourhood || addr.village || addr.suburb || '';
+                    if (neighbourhood && neighbourhood !== road) {
+                        parts.push(neighbourhood);
+                    }
+                    const city = addr.city || addr.town || addr.municipality || '';
+                    if (city) parts.push(city);
+
+                    const addressStr = parts.join(', ') || response.data.display_name;
+                    setResolvedAddress(addressStr);
+                } else {
+                    setResolvedAddress(`${parseFloat(report.latitude.toString()).toFixed(6)}, ${parseFloat(report.longitude.toString()).toFixed(6)}`);
+                }
+            } catch (err) {
+                console.error('Error fetching address from Nominatim:', err);
+                setResolvedAddress(`${parseFloat(report.latitude.toString()).toFixed(6)}, ${parseFloat(report.longitude.toString()).toFixed(6)}`);
+            } finally {
+                setIsGeocoding(false);
+            }
+        };
+
+        fetchAddress();
+    }, [viewingRequest]);
 
     const fetchRequests = async () => {
         try {
@@ -197,12 +250,12 @@ const BrgyRescueRequests = () => {
                 barangay_staff_id: currentUser.user_id,
                 assigned_personnel_id: selectedPersonnelId,
                 remarks: statusUpdateMessage || defaultRemark,
-                animal_condition: statusUpdateCondition
+                animal_condition: (statusToUpdate.statusId === 6 || statusToUpdate.statusId === 11) ? statusUpdateCondition : undefined
             };
             const rescueResponse = await axios.patch(`http://localhost:8000/rescue-requests/${statusToUpdate.requestId}`, rescuePayload);
 
             // 3. Upload Media if any
-            if (statusMediaFiles.length > 0) {
+            if (statusMediaFiles.length > 0 && (statusToUpdate.statusId === 6 || statusToUpdate.statusId === 11)) {
                 // Find the history entry we just created in the response
                 const newHistoryEntry = rescueResponse.data.report?.history
                     ?.filter((h: any) => h.report_status_id === statusToUpdate.statusId)
@@ -250,6 +303,7 @@ const BrgyRescueRequests = () => {
     const openStatusUpdate = (requestId: number, reportId: number, statusId: number) => {
         setStatusToUpdate({ requestId, reportId, statusId });
         setIsStatusModalOpen(true);
+        setStatusMediaFiles([]);
 
         // Pre-fill animal condition from citizen report
         if (viewingRequest?.report?.condition) {
@@ -346,6 +400,26 @@ const BrgyRescueRequests = () => {
                                     )
                                 },
                                 {
+                                    header: "Prioritization",
+                                    key: "priority",
+                                    render: (req) => {
+                                        const priority = req.report?.priority_level || 'Medium';
+                                        let colorClass = 'bg-gray-50 text-gray-600 border-gray-100';
+                                        if (priority.toLowerCase() === 'high' || priority.toLowerCase() === 'emergency') {
+                                            colorClass = 'bg-red-50 text-red-600 border-red-100';
+                                        } else if (priority.toLowerCase() === 'medium' || priority.toLowerCase() === 'regular') {
+                                            colorClass = 'bg-amber-50 text-amber-600 border-amber-100';
+                                        } else if (priority.toLowerCase() === 'low') {
+                                            colorClass = 'bg-blue-50 text-blue-600 border-blue-100';
+                                        }
+                                        return (
+                                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${colorClass}`}>
+                                                {priority}
+                                            </span>
+                                        );
+                                    }
+                                },
+                                {
                                     header: "Date",
                                     key: "date",
                                     render: (req) => (
@@ -399,7 +473,7 @@ const BrgyRescueRequests = () => {
 
             {/* Review Modal */}
             {viewingRequest && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
                         <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                             <div>
@@ -560,6 +634,9 @@ const BrgyRescueRequests = () => {
                                     suggestedRiskLevel={viewingRequest.report?.ai_suggested_risk_level}
                                     suggestedPriority={viewingRequest.report?.ai_suggested_priority}
                                     possibleBreed={viewingRequest.report?.ai_possible_breed}
+                                    description={viewingRequest.report?.description}
+                                    categoryName={categoryMap[viewingRequest.report?.category_id || 0]}
+                                    suggestedPriorityReason={viewingRequest.report?.ai_suggested_priority_reason}
                                 />
 
                                 <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
@@ -575,7 +652,10 @@ const BrgyRescueRequests = () => {
                                             </div>
                                             <div>
                                                 <p className="text-[10px] font-black text-gray-900 uppercase tracking-widest">{viewingRequest.report?.landmark}</p>
-                                                <p className="text-[9px] text-gray-400 uppercase tracking-widest font-medium">Pinpoint Accuracy Verified</p>
+                                                <p className="text-[11px] text-gray-700 font-semibold mt-0.5">
+                                                    {isGeocoding ? 'Resolving street/location...' : resolvedAddress || 'Street address not found'}
+                                                </p>
+                                                <p className="text-[9px] text-gray-400 uppercase tracking-widest font-medium mt-0.5">Pinpoint Accuracy Verified</p>
                                             </div>
                                         </div>
                                         <div className="w-full h-[300px] rounded-[2rem] overflow-hidden border border-gray-100 relative">
@@ -724,7 +804,7 @@ const BrgyRescueRequests = () => {
 
             {/* Status Update Modal */}
             {isStatusModalOpen && statusToUpdate && (
-                <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
                     <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300">
                         <div className="p-10">
                             <div className="w-16 h-16 rounded-[2rem] bg-orange-50 text-orange-600 flex items-center justify-center mb-8">
@@ -777,60 +857,65 @@ const BrgyRescueRequests = () => {
                                     />
                                 </div>
 
-                                <div className="space-y-3">
-                                    <div className="flex justify-between items-end ml-1">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Current Animal Condition</label>
-                                        {viewingRequest?.report?.condition && (
-                                            <span className="text-[9px] font-black text-orange-600 uppercase tracking-tight bg-orange-50 px-2 py-0.5 rounded-lg border border-orange-100">
-                                                Initially Reported: {viewingRequest.report.condition}
-                                            </span>
-                                        )}
+                                {(statusToUpdate.statusId === 6 || statusToUpdate.statusId === 11) && (
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between items-end ml-1">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Current Animal Condition</label>
+                                            {viewingRequest?.report?.condition && (
+                                                <span className="text-[9px] font-black text-orange-600 uppercase tracking-tight bg-orange-50 px-2 py-0.5 rounded-lg border border-orange-100">
+                                                    Initially Reported: {viewingRequest.report.condition}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {['Healthy', 'Injured', 'Aggressive', 'Thin', 'Nursing', 'Deceased'].map((cond) => (
+                                                <button
+                                                    key={cond}
+                                                    type="button"
+                                                    onClick={() => setStatusUpdateCondition(cond)}
+                                                    className={`py-2.5 px-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border ${statusUpdateCondition === cond
+                                                        ? 'bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-100'
+                                                        : 'bg-white text-gray-400 border-gray-100 hover:border-orange-200'
+                                                        }`}
+                                                >
+                                                    {cond}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {['Healthy', 'Injured', 'Aggressive', 'Thin', 'Nursing', 'Deceased'].map((cond) => (
-                                            <button
-                                                key={cond}
-                                                onClick={() => setStatusUpdateCondition(cond)}
-                                                className={`py-2.5 px-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border ${statusUpdateCondition === cond
-                                                    ? 'bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-100'
-                                                    : 'bg-white text-gray-400 border-gray-100 hover:border-orange-200'
-                                                    }`}
-                                            >
-                                                {cond}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
+                                )}
 
-                                <div className="space-y-4">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Add Evidence Photos/Videos</label>
-                                    <div
-                                        onClick={() => document.getElementById('status-media-upload')?.click()}
-                                        className="w-full aspect-video rounded-[2rem] border-2 border-dashed border-gray-200 bg-white flex flex-col items-center justify-center gap-4 cursor-pointer hover:border-orange-500 hover:bg-orange-50/10 transition-all group"
-                                    >
-                                        {statusMediaFiles.length > 0 ? (
-                                            <div className="flex flex-col items-center">
-                                                <span className="text-2xl font-black text-orange-600">{statusMediaFiles.length}</span>
-                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Files Selected</span>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <div className="w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-300 group-hover:text-orange-500 transition-colors">
-                                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                {(statusToUpdate.statusId === 6 || statusToUpdate.statusId === 11) && (
+                                    <div className="space-y-4">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Add Evidence Photos/Videos</label>
+                                        <div
+                                            onClick={() => document.getElementById('status-media-upload')?.click()}
+                                            className="w-full aspect-video rounded-[2rem] border-2 border-dashed border-gray-200 bg-white flex flex-col items-center justify-center gap-4 cursor-pointer hover:border-orange-500 hover:bg-orange-50/10 transition-all group"
+                                        >
+                                            {statusMediaFiles.length > 0 ? (
+                                                <div className="flex flex-col items-center">
+                                                    <span className="text-2xl font-black text-orange-600">{statusMediaFiles.length}</span>
+                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Files Selected</span>
                                                 </div>
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Tap to select multiple</p>
-                                            </>
-                                        )}
+                                            ) : (
+                                                <>
+                                                    <div className="w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-300 group-hover:text-orange-500 transition-colors">
+                                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                                    </div>
+                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Tap to select multiple</p>
+                                                </>
+                                            )}
+                                        </div>
+                                        <input
+                                            id="status-media-upload"
+                                            type="file"
+                                            multiple
+                                            accept="image/*,video/*"
+                                            className="hidden"
+                                            onChange={(e) => setStatusMediaFiles(Array.from(e.target.files || []))}
+                                        />
                                     </div>
-                                    <input
-                                        id="status-media-upload"
-                                        type="file"
-                                        multiple
-                                        accept="image/*,video/*"
-                                        className="hidden"
-                                        onChange={(e) => setStatusMediaFiles(Array.from(e.target.files || []))}
-                                    />
-                                </div>
+                                )}
                             </div>
 
                             <div className="flex flex-col gap-3 mt-10">
@@ -864,7 +949,7 @@ const BrgyRescueRequests = () => {
 
             {/* Gallery Viewer */}
             {activeGallery && (
-                <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4 md:p-12" onClick={() => setActiveGallery(null)}>
+                <div className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4 md:p-12" onClick={() => setActiveGallery(null)}>
                     <button className="absolute top-8 right-8 text-white/50 hover:text-white transition-all p-4 rounded-full hover:bg-white/10">
                         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>

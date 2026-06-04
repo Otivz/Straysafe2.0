@@ -3,14 +3,22 @@ import React from 'react';
 interface SuccessModalProps {
     isOpen: boolean;
     message: string;
+    onClose?: () => void;
+    title?: string;
 }
 
-const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, message }) => {
+const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, message, onClose, title }) => {
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-white/60 backdrop-blur-sm animate-in fade-in duration-300">
-            <div className="bg-white rounded-[40px] shadow-2xl p-12 flex flex-col items-center max-w-sm w-full animate-in zoom-in-95 duration-300 border border-gray-100">
+        <div 
+            onClick={() => onClose?.()}
+            className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-white/60 backdrop-blur-sm animate-in fade-in duration-300"
+        >
+            <div 
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-[40px] shadow-2xl p-12 flex flex-col items-center max-w-sm w-full animate-in zoom-in-95 duration-300 border border-gray-100"
+            >
                 {/* Animated Checkmark */}
                 <div className="w-24 h-24 mb-8 relative">
                     <div className="absolute inset-0 bg-[#22C55E]/10 rounded-full animate-ping duration-1000"></div>
@@ -35,9 +43,19 @@ const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, message }) => {
                         </svg>
                     </div>
                 </div>
-                <h3 className="text-3xl font-black text-[#1a1208] tracking-tighter uppercase mb-2">Success!</h3>
-                <p className="text-[#9c8670] font-bold text-center text-sm tracking-wide leading-relaxed">{message}</p>
+                <h3 className="text-3xl font-black text-[#1a1208] tracking-tighter uppercase mb-2">
+                    {title || "Success!"}
+                </h3>
+                <p className="text-[#9c8670] font-bold text-center text-sm tracking-wide leading-relaxed mb-2">{message}</p>
                 
+                {onClose && (
+                    <button
+                        onClick={onClose}
+                        className="mt-6 w-full py-3.5 bg-[#F97316] hover:bg-[#EA580C] text-white font-black rounded-2xl uppercase tracking-widest text-xs transition-all shadow-lg active:scale-95 hover:shadow-orange-600/20"
+                    >
+                        Dismiss
+                    </button>
+                )}
 
                 <style>{`
                     @keyframes draw {

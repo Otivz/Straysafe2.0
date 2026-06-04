@@ -13,8 +13,6 @@ import L from 'leaflet';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-import RescueTimeline from '../../components/RescueTimeline';
-import AISuggestionPanel from '../../components/AISuggestionPanel';
 import ReturnToSeleraButton from '../../components/MapControls/ReturnToSeleraButton';
 
 const DefaultIcon = L.icon({
@@ -86,29 +84,6 @@ const isInsideSeleraHomes = (lat: number, lng: number) => {
     return inside;
 };
 
-const reportStatusMap: Record<number, string> = {
-    1: 'Reported',
-    2: 'Verified',
-    3: 'Rejected',
-    4: 'Escalated to Barangay',
-    5: 'Rescue In Progress',
-    6: 'Picked Up',
-    7: 'Under Observation',
-    8: 'Impounded',
-    9: 'Claimed by Owner',
-    10: 'Released',
-    11: 'Resolved',
-    12: 'Deceased',
-    13: 'Approved'
-};
-
-const categoryMap: Record<number, string> = {
-    1: 'Injured Animal',
-    2: 'Aggressive Stray',
-    3: 'Possible Rabies Risk',
-    4: 'Roaming Pack',
-    5: 'Animal Rescue Needed'
-};
 
 // Custom component to handle map clicks and move marker
 const LocationPicker = ({ onLocationSelect, position, disabled }: { onLocationSelect: (lat: number, lng: number) => void, position: [number, number], disabled?: boolean }) => {
@@ -130,7 +105,6 @@ const ResiHomePage = () => {
     const [originalData, setOriginalData] = useState<any>(null);
     const [isNavbarMenuOpen, setIsNavbarMenuOpen] = useState(false);
     const [returnUrl, setReturnUrl] = useState<string | null>(null);
-    const [viewingDetailedReport, setViewingDetailedReport] = useState<any | null>(null);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [reports, setReports] = useState<any[]>([]);
@@ -172,12 +146,12 @@ const ResiHomePage = () => {
     const menuRef = useRef<HTMLDivElement>(null);
 
     const [formData, setFormData] = useState({
-        category: 'Injured Animal',
-        category_id: 1,
+        category: undefined as string | undefined,
+        category_id: undefined as number | undefined,
         animalCount: 1,
         landmark: '',
         visibility: 'Public',
-        priorityLevel: 'Regular',
+        priorityLevel: 'Medium',
         isPossibleOwned: false,
         animalType: 'Dog',
         animalBreed: '',
@@ -261,8 +235,8 @@ const ResiHomePage = () => {
         if (location.state?.openAddModal) {
             setEditingReportId(null);
             setFormData({
-                category: 'Injured Animal', category_id: 1, animalCount: 1, landmark: '',
-                visibility: 'Public', priorityLevel: 'Regular', isPossibleOwned: false,
+                category: undefined, category_id: undefined, animalCount: 1, landmark: '',
+                visibility: 'Public', priorityLevel: 'Medium', isPossibleOwned: false,
                 animalType: 'Dog', animalBreed: '', animalColor: '', estimatedSize: 'Medium',
                 description: '', latitude: 14.801313, longitude: 121.003109,
                 mediaFiles: [], existingMedia: [], mediaIdsToDelete: []
@@ -448,7 +422,7 @@ const ResiHomePage = () => {
             animalCount: report.animal_count || 1,
             landmark: report.landmark || '',
             visibility: report.visibility || 'Public',
-            priorityLevel: report.priority_level || 'Regular',
+            priorityLevel: report.priority_level || 'Medium',
             isPossibleOwned: report.is_possible_owned || false,
             animalType: report.animal_type || 'Unknown',
             animalBreed: report.animal_breed || '',
@@ -482,8 +456,11 @@ const ResiHomePage = () => {
                 const data = await response.json();
 
                 // Filter out Private reports that do not belong to the current user
+                // Also exclude resolved and deceased reports (status_id 11 and 12) from the home page feed
                 const visibleReports = data.filter((report: any) => {
-                    return report.visibility === 'Public' || report.user_id === currentUserId;
+                    const isVisible = report.visibility === 'Public' || report.user_id === currentUserId;
+                    const isNotResolved = report.status_id !== 11 && report.status_id !== 12 && report.current_status_id !== 11 && report.current_status_id !== 12;
+                    return isVisible && isNotResolved;
                 });
 
                 setReports(visibleReports.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
@@ -493,19 +470,9 @@ const ResiHomePage = () => {
         }
     };
 
-    // Fetch a single report fresh from the API (with guaranteed AI suggestion fields)
-    const openReportDetail = async (reportId: number, fallback?: any) => {
-        try {
-            const response = await fetch(`http://localhost:8000/reports/${reportId}`);
-            if (response.ok) {
-                const freshReport = await response.json();
-                setViewingDetailedReport(freshReport);
-            } else if (fallback) {
-                setViewingDetailedReport(fallback);
-            }
-        } catch {
-            if (fallback) setViewingDetailedReport(fallback);
-        }
+    // Navigate to the standalone report detail page
+    const openReportDetail = (reportId: number, _fallback?: any) => {
+        navigate(`/resident/reports/${reportId}`);
     };
 
     const fetchAnnouncements = async () => {
@@ -549,10 +516,75 @@ const ResiHomePage = () => {
         }
     };
 
+    const formatTimestamp = (raw: string | Date | number) => {
+        if (!raw) return '';
+        let dt: Date;
+        if (typeof raw === 'string') {
+            let normalized = raw.trim();
+            if (normalized.includes(' ') && !normalized.includes('T')) {
+                normalized = normalized.replace(' ', 'T');
+            }
+            dt = new Date(normalized);
+        } else {
+            dt = new Date(raw);
+        }
+
+        if (Number.isNaN(dt.getTime())) return String(raw);
+
+        const now = new Date();
+        const diffMs = now.getTime() - dt.getTime();
+        const diffSecs = Math.floor(diffMs / 1000);
+        
+        if (diffSecs < 60) {
+            const secs = Math.max(1, diffSecs);
+            return `${secs}s`;
+        }
+        const diffMins = Math.floor(diffSecs / 60);
+        if (diffMins < 60) {
+            return `${diffMins}m`;
+        }
+        const diffHours = Math.floor(diffMins / 60);
+        if (diffHours < 24) {
+            return `${diffHours}h`;
+        }
+        const diffDays = Math.floor(diffHours / 24);
+        if (diffDays < 7) {
+            return `${diffDays}d`;
+        }
+
+        // Older than 7 days
+        const month = dt.toLocaleDateString('en-US', { month: 'short' });
+        const day = dt.toLocaleDateString('en-US', { day: 'numeric' });
+        const time = dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+        if (dt.getFullYear() < now.getFullYear()) {
+            return `${month} ${day}, ${dt.getFullYear()} at ${time}`;
+        } else {
+            return `${month} ${day} at ${time}`;
+        }
+    };
+
     const formatAnnouncementDate = (raw: string) => {
-        const dt = new Date(raw);
+        if (!raw) return '';
+        let dt: Date;
+        if (typeof raw === 'string') {
+            let normalized = raw.trim();
+            if (normalized.includes(' ') && !normalized.includes('T')) {
+                normalized = normalized.replace(' ', 'T');
+            }
+            dt = new Date(normalized);
+        } else {
+            dt = new Date(raw);
+        }
+
         if (Number.isNaN(dt.getTime())) return raw;
-        return dt.toLocaleDateString('en-US') + ' • ' + dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+        const month = dt.toLocaleDateString('en-US', { month: 'short' });
+        const day = dt.toLocaleDateString('en-US', { day: 'numeric' });
+        const year = dt.getFullYear();
+        const time = dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+        return `${month} ${day}, ${year} at ${time}`;
     };
 
     const API_URL = 'http://localhost:8000/reports';
@@ -626,8 +658,8 @@ const ResiHomePage = () => {
         try {
             const priorityMapped = animalTypeValidation.ai_suggested_priority ? (
                 animalTypeValidation.ai_suggested_priority.includes('High') ? 'High' :
-                    animalTypeValidation.ai_suggested_priority.includes('Low') ? 'Low' : 'Regular'
-            ) : 'Regular';
+                    animalTypeValidation.ai_suggested_priority.includes('Low') ? 'Low' : 'Medium'
+            ) : 'Medium';
 
             const patchPayload: any = {
                 priority_level: priorityMapped
@@ -664,12 +696,12 @@ const ResiHomePage = () => {
             setEditingReportId(null);
             fetchReports();
             setFormData({
-                category: 'Injured Animal',
-                category_id: 1,
+                category: undefined,
+                category_id: undefined,
                 animalCount: 1,
                 landmark: '',
                 visibility: 'Public',
-                priorityLevel: 'Regular',
+                priorityLevel: 'Medium',
                 isPossibleOwned: false,
                 animalType: 'Dog',
                 animalBreed: '',
@@ -695,12 +727,12 @@ const ResiHomePage = () => {
         setEditingReportId(null);
         fetchReports();
         setFormData({
-            category: 'Injured Animal',
-            category_id: 1,
+            category: undefined,
+            category_id: undefined,
             animalCount: 1,
             landmark: '',
             visibility: 'Public',
-            priorityLevel: 'Regular',
+            priorityLevel: 'Medium',
             isPossibleOwned: false,
             animalType: 'Dog',
             animalBreed: '',
@@ -748,11 +780,10 @@ const ResiHomePage = () => {
             const userStr = localStorage.getItem('resident_user');
             const userId = userStr ? JSON.parse(userStr).user_id : 1;
 
-            // Mapping frontend state strictly to reports table schema
             const payload = {
                 user_id: userId,
                 subdivision_id: 1, // Hardcoded for demo/MVP
-                category_id: formData.category_id,
+                category_id: formData.category_id || undefined,
                 animal_type: formData.animalType,
                 animal_breed: formData.animalBreed,
                 animal_color: formData.animalColor,
@@ -853,12 +884,12 @@ const ResiHomePage = () => {
                     setEditingReportId(null);
                     fetchReports(); // Refresh the feed
                     setFormData({
-                        category: 'Injured Animal',
-                        category_id: 1,
+                        category: undefined,
+                        category_id: undefined,
                         animalCount: 1,
                         landmark: '',
                         visibility: 'Public',
-                        priorityLevel: 'Regular',
+                        priorityLevel: 'Medium',
                         isPossibleOwned: false,
                         animalType: 'Dog',
                         animalBreed: '',
@@ -954,12 +985,12 @@ const ResiHomePage = () => {
                                     setEditingReportId(null);
                                     setFormData({
                                         ...formData,
-                                        category: 'Injured Animal',
-                                        category_id: 1,
+                                        category: undefined,
+                                        category_id: undefined,
                                         animalCount: 1,
                                         landmark: '',
                                         visibility: 'Public',
-                                        priorityLevel: 'Regular',
+                                        priorityLevel: 'Medium',
                                         isPossibleOwned: false,
                                         description: '',
                                         latitude: 14.801313,
@@ -1013,31 +1044,7 @@ const ResiHomePage = () => {
                             </div>
 
                             <div className="p-10 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
-                                {/* Report Category */}
-                                <div>
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4 block">Report Category</label>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        {[
-                                            { id: 1, label: 'Injured Animal', name: 'Injured Animal' },
-                                            { id: 4, label: 'Roaming Pack', name: 'Roaming Pack' },
-                                            { id: 2, label: 'Aggressive Stray', name: 'Aggressive Stray' },
-                                            { id: 5, label: 'Animal Rescue Needed', name: 'Animal Rescue Needed' }
-                                        ].map((cat) => (
-                                            <CustomRadio
-                                                key={cat.id}
-                                                name="category"
-                                                label={cat.label}
-                                                checked={formData.category_id === cat.id}
-                                                onChange={() => setFormData({ ...formData, category: cat.name, category_id: cat.id })}
-                                                className={`bg-[#FAFAF9] border rounded-2xl p-4 transition-all hover:border-orange-200 ${
-                                                    formData.category_id === cat.id
-                                                        ? 'border-[#F97316]/30 bg-orange-50/10 shadow-sm'
-                                                        : 'border-gray-50'
-                                                }`}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
+                                {/* Report Category removed: now handled by AI classification based on description */}
 
                                 {/* Animal Specifications */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1165,7 +1172,7 @@ const ResiHomePage = () => {
                                 <div>
                                     <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4 block">Priority Level</label>
                                     <div className="flex flex-wrap gap-3">
-                                        {['Low', 'Regular', 'High'].map((prio) => (
+                                        {['Low', 'Medium', 'High'].map((prio) => (
                                             <button
                                                 key={prio}
                                                 type="button"
@@ -1586,7 +1593,6 @@ const ResiHomePage = () => {
                         ) : (
                             <div className="max-w-3xl mx-auto">
                                 {filteredAnnouncements.map((ann) => {
-                                    const cover = ann.media?.find((m: any) => m.media_type === 'Image')?.file_url || ann.media?.[0]?.file_url;
                                     return (
                                         <div
                                             key={ann.announcement_id}
@@ -1612,14 +1618,19 @@ const ResiHomePage = () => {
                                                         📍 {ann.location}
                                                     </p>
                                                 )}
-                                                {cover && ann.media?.[0]?.media_type === 'Image' && (
-                                                    <img src={cover} alt={ann.title} className="w-full h-48 object-cover rounded-2xl border border-gray-100 mb-4" />
+                                                {/* Main Media (first item) */}
+                                                {ann.media?.[0] && (
+                                                    ann.media[0].media_type === 'Image' ? (
+                                                        <img src={ann.media[0].file_url} alt={ann.title} className="w-full h-64 sm:h-96 object-cover rounded-2xl border border-gray-100 mb-4" />
+                                                    ) : ann.media[0].media_type === 'Video' ? (
+                                                        <video src={ann.media[0].file_url} controls className="w-full h-64 sm:h-96 object-cover rounded-2xl border border-gray-100 mb-4" />
+                                                    ) : null
                                                 )}
                                                 
-                                                {(ann.media || []).length > 0 && (ann.media[0]?.media_type !== 'Image' || ann.media.length > 1) && (
+                                                {(ann.media || []).length > 1 && (
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
                                                         {ann.media.map((media: any, idx: number) => {
-                                                            if (idx === 0 && media.media_type === 'Image') return null; // already rendered as cover
+                                                            if (idx === 0) return null; // already rendered as main media
                                                             return (
                                                                 <div key={idx} className="border border-gray-100 rounded-xl p-2 bg-gray-50/50 shadow-sm">
                                                                     {media.media_type === 'Image' ? (
@@ -1869,14 +1880,16 @@ const ResiHomePage = () => {
                     </div>
                 ) : (
                     currentTabReports.map((report) => {
-                        const date = new Date(report.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+                        const date = formatTimestamp(report.created_at);
 
                         return (
                             <div key={report.report_id} className="max-w-3xl mx-auto">
                                 <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden mb-12 hover:shadow-2xl transition-all duration-300">
-                                    {/* Top Thin Bar: Date (Left) + ID (Right) */}
+                                    {/* Top Thin Bar: ID (Left) + Menu (Right) */}
                                     <div className="px-4 sm:px-8 py-2.5 border-b border-gray-50 flex items-center justify-between bg-gray-50/20">
-                                        <p className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">{date}</p>
+                                        <p className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                            Report #STR-{(report.report_id || 0).toString().padStart(4, '0')}
+                                        </p>
                                         <div className="flex items-center gap-4">
                                             <div className="relative" ref={openMenuId === report.report_id ? menuRef : null}>
                                                 <button
@@ -1949,18 +1962,22 @@ const ResiHomePage = () => {
                                                 )}
                                                 <div>
                                                     <p className="text-[13px] font-black text-[#1a1208] uppercase tracking-tight leading-none mb-1.5">{report.reporter_name}</p>
-                                                    <div className="flex items-center gap-2 px-2 py-0.5 bg-[#FAFAF9] border border-gray-100 rounded-md w-fit">
-                                                        {report.visibility === 'Private' ? (
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                                            </svg>
-                                                        ) : (
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                            </svg>
-                                                        )}
-                                                        <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest leading-none">{report.visibility}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none">{date}</span>
+                                                        <span className="text-gray-300 font-bold text-[9px] leading-none">•</span>
+                                                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[#FAFAF9] border border-gray-100 rounded-md w-fit">
+                                                            {report.visibility === 'Private' ? (
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                                                </svg>
+                                                            ) : (
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                </svg>
+                                                            )}
+                                                            <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest leading-none">{report.visibility}</span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -2295,272 +2312,6 @@ const ResiHomePage = () => {
                     </div>
                 </div>
             )}
-            {/* Detailed Report View Modal */}
-            {viewingDetailedReport && (
-                <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 pb-28 sm:pb-4">
-                    {/* Backdrop */}
-                    <div
-                        className="absolute inset-0 bg-[#1a1208]/80 backdrop-blur-xl animate-in fade-in duration-500"
-                        onClick={() => setViewingDetailedReport(null)}
-                    />
-
-                    {/* Modal Content */}
-                    <div className="relative w-full max-w-2xl bg-[#FBFBFB] rounded-[2.5rem] sm:rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-700 flex flex-col max-h-[85vh]">
-                        {/* Header */}
-                        <div className="px-6 sm:px-10 py-6 sm:py-8 bg-white border-b border-gray-100 flex justify-between items-center shrink-0">
-                            <div className="flex items-center gap-4 sm:gap-6">
-                                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl sm:rounded-[2rem] bg-orange-50 flex items-center justify-center text-orange-600 shadow-sm border border-orange-100">
-                                    <svg className="w-6 h-6 sm:w-8 sm:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                                </div>
-                                <div>
-                                    <h2 className="text-lg sm:text-2xl font-black text-gray-900 uppercase tracking-tight">Rescue Case Intelligence</h2>
-                                    <div className="flex items-center gap-3 mt-1">
-                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Report ID: #STR-{(viewingDetailedReport.report_id || 0).toString().padStart(4, '0')}</span>
-                                        <div className="w-1 h-1 rounded-full bg-gray-200" />
-                                        <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest">{categoryMap[viewingDetailedReport.category_id]}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                {viewingDetailedReport.user_id === currentUserId && viewingDetailedReport.status_id === 1 && (
-                                    <button
-                                        onClick={() => {
-                                            handleEditClick(viewingDetailedReport);
-                                            setViewingDetailedReport(null);
-                                        }}
-                                        className="px-4 sm:px-6 py-2.5 sm:py-3.5 bg-[#F97316] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#EA580C] transition-all flex items-center gap-2 shadow-lg shadow-orange-100 cursor-pointer"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                        </svg>
-                                        Edit Details
-                                    </button>
-                                )}
-                                <button
-                                    onClick={() => setViewingDetailedReport(null)}
-                                    className="p-2.5 sm:p-4 bg-gray-50 text-gray-400 hover:text-gray-900 rounded-2xl transition-all"
-                                >
-                                    <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Scrollable Body */}
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 sm:p-10">
-                            <div className="grid grid-cols-1 gap-10">
-                                {/* Left Side: Report Details */}
-                                <div className="space-y-10">
-                                    {/* Main Image */}
-                                    <div className="aspect-[4/3] rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl">
-                                        {(() => {
-                                            const originalMedia = viewingDetailedReport.media?.filter((m: any) => !m.is_evidence) || [];
-                                            return (
-                                                <img
-                                                    src={originalMedia[0]?.file_url || 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?q=80&w=2069&auto=format&fit=crop'}
-                                                    className="w-full h-full object-cover"
-                                                    alt="Animal sighting"
-                                                />
-                                            );
-                                        })()}
-                                    </div>
-
-                                    {/* Stats Grid */}
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-white p-6 rounded-3xl border border-gray-100">
-                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Status</p>
-                                            <p className="text-sm font-black text-orange-600 uppercase">{reportStatusMap[viewingDetailedReport.status_id]}</p>
-                                        </div>
-                                        <div className="bg-white p-6 rounded-3xl border border-gray-100">
-                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date Reported</p>
-                                            <p className="text-sm font-black text-gray-900 uppercase">{new Date(viewingDetailedReport.created_at).toLocaleDateString()}</p>
-                                        </div>
-                                        {!(viewingDetailedReport.ai_animal_type && viewingDetailedReport.ai_animal_type.toLowerCase() === viewingDetailedReport.animal_type?.toLowerCase()) && (
-                                            <div className="bg-white p-6 rounded-3xl border border-gray-100">
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Animal Type</p>
-                                                <p className="text-sm font-black text-gray-900 uppercase">{viewingDetailedReport.animal_type}</p>
-                                            </div>
-                                        )}
-                                        {!(viewingDetailedReport.ai_suggested_priority &&
-                                            ((p1, p2) => p1.toLowerCase().replace('priority', '').replace('level', '').trim() === p2.toLowerCase().replace('priority', '').replace('level', '').trim())(viewingDetailedReport.ai_suggested_priority, viewingDetailedReport.priority_level)) && (
-                                                <div className="bg-white p-6 rounded-3xl border border-gray-100">
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Priority</p>
-                                                    <p className="text-sm font-black text-red-600 uppercase">{viewingDetailedReport.priority_level}</p>
-                                                </div>
-                                            )}
-                                    </div>
-
-                                    {/* AI Suggestion Panel */}
-                                    <AISuggestionPanel
-                                        animalType={viewingDetailedReport.ai_animal_type}
-                                        dominantColor={viewingDetailedReport.ai_dominant_color}
-                                        estimatedSize={viewingDetailedReport.ai_estimated_size}
-                                        suggestedRiskLevel={viewingDetailedReport.ai_suggested_risk_level}
-                                        suggestedPriority={viewingDetailedReport.ai_suggested_priority}
-                                        possibleBreed={viewingDetailedReport.ai_possible_breed}
-                                    />
-
-                                    {/* Subject Identification */}
-                                    {(() => {
-                                        const hasAIData = !!(viewingDetailedReport.ai_animal_type || viewingDetailedReport.ai_dominant_color || viewingDetailedReport.ai_estimated_size);
-                                        const showBreed = !!(viewingDetailedReport.animal_breed &&
-                                            viewingDetailedReport.animal_breed.toLowerCase() !== 'unknown' &&
-                                            viewingDetailedReport.animal_breed.toLowerCase() !== 'not specified');
-                                        const showColor = !!(viewingDetailedReport.animal_color &&
-                                            viewingDetailedReport.animal_color.toLowerCase() !== 'unknown' &&
-                                            (!viewingDetailedReport.ai_dominant_color ||
-                                                viewingDetailedReport.animal_color.toLowerCase() !== viewingDetailedReport.ai_dominant_color.toLowerCase()));
-                                        const showSize = !!(viewingDetailedReport.estimated_size &&
-                                            (!viewingDetailedReport.ai_estimated_size ||
-                                                viewingDetailedReport.estimated_size.toLowerCase() !== viewingDetailedReport.ai_estimated_size.toLowerCase()));
-                                        const showSubjectIdCard = !hasAIData || showBreed || showColor || showSize;
-
-                                        if (!showSubjectIdCard) return null;
-                                        return (
-                                            <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100">
-                                                <h4 className="text-[10px] font-black text-gray-900 uppercase tracking-[0.2em] mb-6">Subject Identification</h4>
-                                                <div className="space-y-4">
-                                                    {(!hasAIData || showBreed) && (
-                                                        <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Breed / Variety</span>
-                                                            <span className="text-xs font-black text-gray-900 uppercase">{viewingDetailedReport.animal_breed || 'Unknown'}</span>
-                                                        </div>
-                                                    )}
-                                                    {(!hasAIData || showColor) && (
-                                                        <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Coat Color</span>
-                                                            <span className="text-xs font-black text-gray-900 uppercase">{viewingDetailedReport.animal_color || 'Unknown'}</span>
-                                                        </div>
-                                                    )}
-                                                    {(!hasAIData || showSize) && (
-                                                        <div className="flex justify-between items-center py-2">
-                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Estimated Size</span>
-                                                            <span className="text-xs font-black text-gray-900 uppercase">{viewingDetailedReport.estimated_size || 'Medium'}</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    })()}
-
-
-                                    {/* Endorsement Letter / Evidence Files */}
-                                    {(() => {
-                                        const evidenceFiles = viewingDetailedReport.media?.filter((m: any) => m.is_evidence) || [];
-                                        if (evidenceFiles.length === 0) return null;
-                                        return (
-                                            <div className="bg-white p-8 rounded-[2.5rem] border border-orange-100">
-                                                <h4 className="text-[10px] font-black text-orange-600 uppercase tracking-[0.2em] mb-5">Endorsement Letter / Evidence</h4>
-                                                <div className="space-y-3">
-                                                    {evidenceFiles.map((m: any, idx: number) => {
-                                                        const url: string = m.file_url || '';
-                                                        const urlLower = url.toLowerCase();
-                                                        const isDoc = urlLower.endsWith('.pdf') || urlLower.endsWith('.doc') || urlLower.endsWith('.docx');
-                                                        const isImg = m.media_type === 'Image' || (!isDoc && (urlLower.endsWith('.jpg') || urlLower.endsWith('.jpeg') || urlLower.endsWith('.png') || urlLower.endsWith('.webp')));
-                                                        return (
-                                                            <div key={m.media_id}>
-                                                                {isImg ? (
-                                                                    <a href={url} target="_blank" rel="noopener noreferrer" className="block rounded-2xl overflow-hidden border border-orange-50 hover:opacity-90 transition-opacity shadow-sm">
-                                                                        <img src={url} className="w-full max-h-64 object-cover" alt={`Endorsement ${idx + 1}`} />
-                                                                    </a>
-                                                                ) : (
-                                                                    <a
-                                                                        href={url}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="flex items-center gap-4 p-5 bg-orange-50/60 rounded-2xl border border-orange-100 hover:bg-orange-50 transition-all group"
-                                                                    >
-                                                                        <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600 shrink-0 group-hover:bg-orange-200 transition-colors">
-                                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                                                            </svg>
-                                                                        </div>
-                                                                        <div className="flex-1 min-w-0">
-                                                                            <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-0.5">Official Document</p>
-                                                                            <p className="text-xs font-bold text-gray-700 truncate">{url.split('/').pop()}</p>
-                                                                        </div>
-                                                                        <svg className="w-4 h-4 text-orange-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                                                        </svg>
-                                                                    </a>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        );
-                                    })()}
-
-                                    {/* Location Card */}
-                                    <div className="bg-gray-900 text-white p-8 rounded-[2.5rem] shadow-xl relative overflow-hidden group">
-                                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-150 transition-transform duration-700" />
-                                        <div className="relative z-10">
-                                            <h4 className="text-[10px] font-black text-orange-400 uppercase tracking-[0.2em] mb-4">Location Intelligence</h4>
-                                            <div className="flex items-start gap-4 mb-6">
-                                                <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center text-orange-400">
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm font-black tracking-tight">{viewingDetailedReport.landmark || 'No landmark specified'}</p>
-                                                    <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-1">Santa Maria, Bulacan • Selera Homes</p>
-                                                </div>
-                                            </div>
-                                            <div className="w-full h-40 rounded-2xl overflow-hidden border border-white/10 grayscale-[0.5] hover:grayscale-0 transition-all duration-500">
-                                                <MapContainer center={[viewingDetailedReport.latitude, viewingDetailedReport.longitude]} zoom={16} className="h-full w-full">
-                                                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                                                    <Marker position={[viewingDetailedReport.latitude, viewingDetailedReport.longitude]} />
-                                                    <ReturnToSeleraButton />
-                                                </MapContainer>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Right Side: Timeline */}
-                                <div className="space-y-8 pt-8 border-t border-gray-100">
-                                    <div className="flex items-end justify-between px-2">
-                                        <div>
-                                            <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Rescue Timeline</h3>
-                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Live updates from our barangay responders</p>
-                                        </div>
-                                        <div className="flex items-center gap-2 px-4 py-2 bg-green-50 rounded-full border border-green-100">
-                                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                                            <span className="text-[9px] font-black text-green-600 uppercase tracking-widest">Live Syncing</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Case Description */}
-                                    {viewingDetailedReport.description && (
-                                        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Case Description</h4>
-                                            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                                                "{viewingDetailedReport.description}"
-                                            </p>
-                                        </div>
-                                    )}
-
-                                    {/* The Timeline Component */}
-                                    <RescueTimeline
-                                        history={viewingDetailedReport.history || []}
-                                        currentStatusId={viewingDetailedReport.status_id}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Footer */}
-                        <div className="px-6 sm:px-10 py-4 sm:py-6 bg-white border-t border-gray-100 flex justify-between items-center shrink-0">
-                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">© 2026 STRAYSAFE MISSION CONTROL</p>
-                            <button
-                                onClick={() => setViewingDetailedReport(null)}
-                                className="px-6 sm:px-8 py-2.5 sm:py-3 bg-[#F97316] text-[#FAFAF9] rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#EA580C] transition-all border border-orange-500/20 shadow-sm"
-                            >
-                                Close Intelligence View
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
             <ResiMobileNav
                 isNavbarMenuOpen={isNavbarMenuOpen}
                 isSearchOpen={isMobileSearchOpen}
@@ -2571,12 +2322,12 @@ const ResiHomePage = () => {
                     setFeedTab('reports');
                     setEditingReportId(null);
                     setFormData({
-                        category: 'Injured Animal',
-                        category_id: 1,
+                        category: undefined,
+                        category_id: undefined,
                         animalCount: 1,
                         landmark: '',
                         visibility: 'Public',
-                        priorityLevel: 'Regular',
+                        priorityLevel: 'Medium',
                         isPossibleOwned: false,
                         animalType: 'Dog',
                         animalBreed: '',

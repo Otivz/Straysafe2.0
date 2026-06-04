@@ -82,6 +82,15 @@ def ensure_report_ai_suggestion_columns():
         if result_breed.scalar() == 0:
             conn.execute(text("ALTER TABLE reports ADD COLUMN ai_possible_breed VARCHAR(100) NULL"))
 
+        # Check for the new ai_suggested_priority_reason column
+        result_reason = conn.execute(text(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'reports' "
+            "AND COLUMN_NAME = 'ai_suggested_priority_reason'"
+        ))
+        if result_reason.scalar() == 0:
+            conn.execute(text("ALTER TABLE reports ADD COLUMN ai_suggested_priority_reason TEXT NULL"))
+
 def ensure_report_condition_column():
     with engine.begin() as conn:
         result = conn.execute(text(
@@ -140,6 +149,31 @@ def ensure_audit_logs_columns():
             ))
             if result.scalar() == 0:
                 conn.execute(text(f"ALTER TABLE audit_logs ADD COLUMN {col_name} {col_def}"))
+
+def ensure_report_priority_enum():
+    """Migrate reports.priority_level ENUM values from 'Low','Regular','High' to 'Low','Medium','High'.
+    Updates existing 'Regular' records to 'Medium'.
+    """
+    with engine.begin() as conn:
+        try:
+            result = conn.execute(text(
+                "SELECT COLUMN_TYPE FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'reports' "
+                "AND COLUMN_NAME = 'priority_level'"
+            ))
+            row = result.fetchone()
+            if row:
+                col_type = str(row[0])
+                if 'Regular' in col_type:
+                    # Temporarily change to VARCHAR to avoid enum restriction during update
+                    conn.execute(text("ALTER TABLE reports MODIFY COLUMN priority_level VARCHAR(50) DEFAULT 'Medium'"))
+                    # Update values
+                    conn.execute(text("UPDATE reports SET priority_level = 'Medium' WHERE priority_level = 'Regular' OR priority_level IS NULL"))
+                    # Re-apply ENUM column with Medium instead of Regular
+                    conn.execute(text("ALTER TABLE reports MODIFY COLUMN priority_level ENUM('Low', 'Medium', 'High') DEFAULT 'Medium'"))
+                    print("Successfully migrated reports.priority_level from ENUM('Low', 'Regular', 'High') to ENUM('Low', 'Medium', 'High')")
+        except Exception as e:
+            print(f"Error migrating reports.priority_level: {e}")
 
 def ensure_qr_tables_exist():
     with engine.begin() as conn:
@@ -204,6 +238,7 @@ ensure_pet_vaccine_card_url_column()
 ensure_report_status_rows()
 ensure_audit_logs_columns()
 ensure_qr_tables_exist()
+ensure_report_priority_enum()
 
 app = FastAPI(title="StraySafe API")
 
