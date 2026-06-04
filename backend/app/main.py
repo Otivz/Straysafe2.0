@@ -11,7 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Local imports (now safe to import after path fix)
 from app.database import engine, Base
-from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr
+from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding
 from app.routes import audit_logs as audit_logs_router
 from app.models.pet_qr import PetQRCode, PetQRScan
 from app.models.audit_log import AuditLog  # noqa: F401 — ensures table is in Base.metadata
@@ -175,6 +175,74 @@ def ensure_report_priority_enum():
         except Exception as e:
             print(f"Error migrating reports.priority_level: {e}")
 
+
+def ensure_holding_tables():
+    """Create Holding Facility tables and seed facility_status lookup rows."""
+    with engine.begin() as conn:
+        # facility_status lookup
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS facility_status (
+                status_id   INT AUTO_INCREMENT PRIMARY KEY,
+                status_name VARCHAR(50) UNIQUE NOT NULL
+            )
+        """))
+
+        # Seed the 5 facility statuses
+        statuses = [
+            (1, 'Need Treatment'),
+            (2, 'Healthy'),
+            (3, 'Claimed by Owner'),
+            (4, 'Deceased'),
+            (5, 'Transferred to Shelter'),
+        ]
+        for sid, sname in statuses:
+            conn.execute(text(
+                "INSERT INTO facility_status (status_id, status_name) "
+                "SELECT :id, :name FROM DUAL "
+                "WHERE NOT EXISTS (SELECT 1 FROM facility_status WHERE status_id = :id)"
+            ), {"id": sid, "name": sname})
+
+        # holding_animals
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS holding_animals (
+                holding_id      INT AUTO_INCREMENT PRIMARY KEY,
+                report_id       INT NOT NULL,
+                rescue_id       INT NULL,
+                animal_type     ENUM('Dog','Cat','Unknown') DEFAULT 'Unknown',
+                animal_name     VARCHAR(100) NULL,
+                breed           VARCHAR(100) NULL,
+                color           VARCHAR(100) NULL,
+                estimated_size  VARCHAR(50) NULL,
+                facility_status INT NOT NULL DEFAULT 1,
+                kennel_slot     VARCHAR(50) NULL,
+                medical_notes   TEXT NULL,
+                intake_date     DATETIME DEFAULT CURRENT_TIMESTAMP,
+                discharge_date  DATETIME NULL,
+                intake_staff_id INT NULL,
+                created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (report_id)       REFERENCES reports(report_id)       ON DELETE CASCADE,
+                FOREIGN KEY (rescue_id)       REFERENCES rescues(rescue_id)       ON DELETE SET NULL,
+                FOREIGN KEY (facility_status) REFERENCES facility_status(status_id),
+                FOREIGN KEY (intake_staff_id) REFERENCES users(user_id)           ON DELETE SET NULL
+            )
+        """))
+
+        # holding_timeline
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS holding_timeline (
+                log_id     INT AUTO_INCREMENT PRIMARY KEY,
+                holding_id INT NOT NULL,
+                event_type VARCHAR(50) NOT NULL DEFAULT 'observation',
+                title      VARCHAR(255) NOT NULL,
+                notes      TEXT NULL,
+                logged_by  INT NULL,
+                logged_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (holding_id) REFERENCES holding_animals(holding_id) ON DELETE CASCADE,
+                FOREIGN KEY (logged_by)  REFERENCES users(user_id)              ON DELETE SET NULL
+            )
+        """)
+        )
+
 def ensure_qr_tables_exist():
     with engine.begin() as conn:
         conn.execute(text("""
@@ -239,6 +307,7 @@ ensure_report_status_rows()
 ensure_audit_logs_columns()
 ensure_qr_tables_exist()
 ensure_report_priority_enum()
+ensure_holding_tables()
 
 app = FastAPI(title="StraySafe API")
 
@@ -267,6 +336,7 @@ app.include_router(pet_qr.router)
 app.include_router(notifications.router)
 app.include_router(announcements.router)
 app.include_router(audit_logs_router.router)
+app.include_router(holding.router)
 
 @app.get("/")
 def read_root():

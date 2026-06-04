@@ -1,7 +1,9 @@
+from datetime import datetime
 from typing import Optional, List
 from sqlalchemy import Column, Integer, String, Text, DateTime, func, ForeignKey, Numeric, Boolean, Enum
 from sqlalchemy.orm import relationship, backref, Mapped, mapped_column
 from app.database import Base
+from app.models.user import User
 
 
 class ReportCategory(Base):
@@ -128,9 +130,9 @@ class Rescue(Base):
     staff_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
     status_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("rescue_status.status_id"), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    leader_id = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    leader_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     report: Mapped[Optional["Report"]] = relationship("Report", back_populates="rescues")
@@ -202,3 +204,78 @@ class RescueAssignment(Base):
     rescue = relationship("Rescue", back_populates="assignments")
     staff = relationship("User", foreign_keys=[staff_id])
     assigner = relationship("User", foreign_keys=[assigned_by])
+
+
+# ─── Holding Facility Models ───────────────────────────────────────────────────
+
+class FacilityStatus(Base):
+    """Lookup table for holding facility statuses (separate from report_status)."""
+    __tablename__ = "facility_status"
+
+    status_id   = Column(Integer, primary_key=True, index=True)
+    status_name = Column(String(50), unique=True, nullable=False)
+
+
+class HoldingAnimal(Base):
+    """One record per animal admitted to the holding facility."""
+    __tablename__ = "holding_animals"
+    __allow_unmapped__ = True
+
+    holding_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    report_id: Mapped[int] = mapped_column(Integer, ForeignKey("reports.report_id", ondelete="CASCADE"), nullable=False)
+    rescue_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("rescues.rescue_id", ondelete="SET NULL"), nullable=True)
+
+    animal_type: Mapped[Optional[str]] = mapped_column(Enum('Dog', 'Cat', 'Unknown'), nullable=True, default='Unknown')
+    animal_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    breed: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    color: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    estimated_size: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
+    # facility_status FK: 1=Need Treatment, 2=Healthy, 3=Claimed, 4=Deceased, 5=Transferred
+    facility_status: Mapped[int] = mapped_column(Integer, ForeignKey("facility_status.status_id"), default=1, nullable=False)
+
+    kennel_slot: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    medical_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    intake_date: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    discharge_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    intake_staff_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    # Transient fields populated at runtime
+    intake_staff_name: Optional[str] = None
+    report_category: Optional[str] = None
+
+    # Relationships
+    report       = relationship("Report")
+    intake_staff = relationship("User", foreign_keys=[intake_staff_id])
+    status_obj   = relationship("FacilityStatus")
+    timeline     = relationship(
+        "HoldingTimeline",
+        back_populates="animal",
+        cascade="all, delete-orphan",
+        order_by="HoldingTimeline.logged_at"
+    )
+
+
+class HoldingTimeline(Base):
+    """Audit log — every event recorded for an animal in the holding facility."""
+    __tablename__ = "holding_timeline"
+    __allow_unmapped__ = True
+
+    log_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    holding_id: Mapped[int] = mapped_column(Integer, ForeignKey("holding_animals.holding_id", ondelete="CASCADE"), nullable=False)
+    # event_type: 'intake', 'status_change', 'medical', 'treatment', 'observation', 'outcome'
+    event_type: Mapped[str] = mapped_column(String(50), nullable=False, default='observation')
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    logged_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    logged_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    # Transient
+    staff_name: Optional[str] = None
+
+    # Relationships
+    animal = relationship("HoldingAnimal", back_populates="timeline")
+    staff  = relationship("User", foreign_keys=[logged_by])

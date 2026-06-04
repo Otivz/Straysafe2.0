@@ -2,12 +2,12 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 logger = logging.getLogger(__name__)
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from app.database import get_db
 # Import Rescue (not RescueRequest) to match the DB "rescues" table
-from app.models.report import Rescue, Report, RescueAssignment, StatusHistory
+from app.models.report import Rescue, Report, RescueAssignment, StatusHistory, HoldingAnimal, HoldingTimeline
 from app.models.user import User
 from app.models.notification import Notification
 from app.schemas.rescue import RescueRequestCreate, RescueRequestResponse, RescueRequestUpdate
@@ -30,7 +30,7 @@ def _populate_rescue_fields(rescue: Optional[Rescue], db: Session) -> Optional[R
         rescue.created_at = rescue.report.created_at  # type: ignore[attr-defined]
     else:
         rescue.title = f"Rescue Request #{rescue.rescue_id}"
-        rescue.description = str(rescue.notes) if rescue.notes else "No description provided."
+        rescue.description = rescue.notes if rescue.notes else "No description provided."
         rescue.created_at = None  # type: ignore[attr-defined]
 
     # Determine the name of the Subdivision Leader who sent the request
@@ -65,7 +65,7 @@ def _populate_rescue_fields(rescue: Optional[Rescue], db: Session) -> Optional[R
         # Fallback to history
         latest = sorted(rescue.assignments, key=lambda x: x.assigned_at, reverse=True)[0]  # type: ignore[arg-type]
         assigned_staff = db.query(User).filter(User.user_id == latest.staff_id).first()
-        rescue.assigned_staff_name = str(assigned_staff.name) if assigned_staff else None
+        rescue.assigned_staff_name = assigned_staff.name if assigned_staff else None
         
     # Populate staff_name for each assignment
     if rescue.assignments:
@@ -215,9 +215,9 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
             if rescue_status_id:
                 db_rescue.status_id = rescue_status_id
                 if rescue_status_id == 6:
-                    db_rescue.completed_at = datetime.utcnow()
+                    db_rescue.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 elif rescue_status_id in (4, 5):
-                    db_rescue.started_at = datetime.utcnow()
+                    db_rescue.started_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
             # Record history for both the rescue and the report
             history_remarks = remarks
@@ -282,6 +282,32 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                         related_id=report_obj.report_id
                     )
                     db.add(new_notif)
+
+                    # ── Auto-intake into Holding Facility when Picked Up ──────
+                    if report_status_id == 6:
+                        already_in = db.query(HoldingAnimal).filter(
+                            HoldingAnimal.report_id == report_obj.report_id
+                        ).first()
+                        if not already_in:
+                            new_holding = HoldingAnimal(
+                                report_id       = report_obj.report_id,
+                                rescue_id       = rescue_id,
+                                animal_type     = report_obj.animal_type,
+                                breed           = report_obj.animal_breed,
+                                color           = report_obj.animal_color,
+                                estimated_size  = report_obj.estimated_size,
+                                facility_status = 1,  # Default: Need Treatment
+                                intake_staff_id = staff_id_for_history,
+                            )
+                            db.add(new_holding)
+                            db.flush()  # get holding_id
+                            db.add(HoldingTimeline(
+                                holding_id = new_holding.holding_id,
+                                event_type = 'intake',
+                                title      = 'Animal Admitted to Holding Facility',
+                                notes      = f'Automatically admitted after pickup. Report #{report_obj.report_id}.',
+                                logged_by  = staff_id_for_history,
+                            ))
 
         db.commit()
         db.refresh(db_rescue)
