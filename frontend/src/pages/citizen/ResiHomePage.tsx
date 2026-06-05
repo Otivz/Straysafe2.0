@@ -107,6 +107,11 @@ const ResiHomePage = () => {
     const [returnUrl, setReturnUrl] = useState<string | null>(null);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isCheckingAI, setIsCheckingAI] = useState(false);
+    const [validationStatus, setValidationStatus] = useState('');
+    const [showInconclusiveModal, setShowInconclusiveModal] = useState(false);
+    const [inconclusiveText, setInconclusiveText] = useState('');
+    const [showFinalConfirmModal, setShowFinalConfirmModal] = useState(false);
     const [reports, setReports] = useState<any[]>([]);
     const [announcements, setAnnouncements] = useState<any[]>([]);
     const [annCommentInputs, setAnnCommentInputs] = useState<Record<number, string>>({});
@@ -765,6 +770,63 @@ const ResiHomePage = () => {
         }
     };
 
+    const handlePreSubmitValidation = async () => {
+        // Geofence validation
+        if (!isInsideSeleraHomes(formData.latitude, formData.longitude)) {
+            alert('Location outside Selera Homes. Reports are only accepted within the subdivision boundary (e.g., inside the residential streets).');
+            return;
+        }
+
+        // Filter out new mediaFiles that are images (excluding videos/docs for animal validation count)
+        const imageExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tiff'];
+        const newImages = formData.mediaFiles ? formData.mediaFiles.filter(file => {
+            const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+            return file.type.startsWith('image/') || imageExtensions.includes(ext);
+        }) : [];
+
+        if (newImages.length > 0) {
+            setIsCheckingAI(true);
+            setValidationStatus('Analyzing images with AI...');
+
+            try {
+                const validationData = new FormData();
+                for (const file of newImages) {
+                    validationData.append('files', file);
+                }
+
+                const response = await axios.post('http://localhost:8000/reports/validate-images', validationData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+
+                setIsCheckingAI(false);
+
+                if (response.data && response.data.valid === false) {
+                    const errType = response.data.error_type;
+                    const msg = response.data.message;
+
+                    if (errType === 'inconclusive') {
+                        setInconclusiveText(msg);
+                        setShowInconclusiveModal(true);
+                    } else {
+                        // Display error message and prevent submission
+                        alert(msg);
+                    }
+                    return;
+                }
+            } catch (err: any) {
+                setIsCheckingAI(false);
+                console.error('AI Image validation failed:', err);
+                // Fallback to inconclusive if validation endpoint fails/timeout
+                setInconclusiveText("The system could not confidently determine whether the uploaded images belong to the same animal. Please review your uploaded images before submitting.");
+                setShowInconclusiveModal(true);
+                return;
+            }
+        }
+
+        // If validation passed or no new images, show final warning confirmation modal
+        setShowFinalConfirmModal(true);
+    };
+
     const handleSubmit = async () => {
         if (isSubmitting) return;
 
@@ -1014,19 +1076,19 @@ const ResiHomePage = () => {
 
                 {/* Add Report Modal */}
                 {isAddReportModalOpen && (
-                    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 pb-28 sm:pb-4">
+                    <div className="fixed top-20 bottom-20 left-0 right-0 md:inset-0 z-[300] flex items-stretch md:items-center justify-center p-0 md:p-4 pb-0 md:pb-4">
                         {/* Backdrop */}
                         <div
-                            className="absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300"
+                            className="hidden md:block absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300"
                             onClick={handleCloseModal}
                         />
 
                         {/* Modal Content */}
-                        <div className="relative w-full max-w-2xl bg-white rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-500">
+                        <div className="relative w-full h-full md:h-auto md:max-w-2xl bg-white rounded-none md:rounded-[3rem] shadow-none md:shadow-2xl overflow-hidden flex flex-col animate-in md:zoom-in-95 md:slide-in-from-bottom-10 duration-500">
                             {/* Modal Header */}
-                            <div className="px-10 pt-10 pb-6 flex justify-between items-center border-b border-gray-50">
+                            <div className="px-6 md:px-10 pt-6 md:pt-10 pb-4 md:pb-6 flex justify-between items-center border-b border-gray-50">
                                 <div>
-                                    <h2 className="text-3xl font-black text-[#1a1208] uppercase tracking-tight">
+                                    <h2 className="text-2xl md:text-3xl font-black text-[#1a1208] uppercase tracking-tight">
                                         {editingReportId ? 'Edit Report' : 'Report a Stray'}
                                     </h2>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
@@ -1043,7 +1105,22 @@ const ResiHomePage = () => {
                                 </button>
                             </div>
 
-                            <div className="p-10 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                            <div className="p-6 md:p-10 space-y-8 flex-1 md:max-h-[70vh] overflow-y-auto custom-scrollbar">
+                                {/* One Animal Per Report Reminder */}
+                                <div className="bg-orange-50/50 border border-orange-100 rounded-3xl p-5 flex items-start gap-4 shadow-sm animate-in fade-in duration-300">
+                                    <div className="w-10 h-10 rounded-2xl bg-orange-100 flex items-center justify-center shrink-0 text-[#F97316]">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h4 className="text-[10px] font-black text-[#F97316] uppercase tracking-wider mb-1">Single Sighting Sourced</h4>
+                                        <p className="text-[11px] font-bold text-[#1a1208]/85 leading-relaxed">
+                                            Each report must contain only one animal. If you need to report multiple animals, please create separate reports for each animal.
+                                        </p>
+                                    </div>
+                                </div>
+
                                 {/* Report Category removed: now handled by AI classification based on description */}
 
                                 {/* Animal Specifications */}
@@ -1408,13 +1485,13 @@ const ResiHomePage = () => {
                             </div>
 
                             {/* Modal Footer */}
-                            <div className="p-10 pt-0 flex flex-col gap-4">
+                            <div className="p-6 md:p-10 pt-0 flex flex-col gap-4 shrink-0">
                                 <>
                                     <Button
                                         disabled={isSubmitting}
                                         className={`w-full py-5 text-white text-[12px] font-black uppercase tracking-[0.2em] rounded-[2rem] shadow-xl transition-all ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#F97316] shadow-orange-100 hover:scale-[1.02] active:scale-[0.98]'
                                             }`}
-                                        onClick={handleSubmit}
+                                        onClick={handlePreSubmitValidation}
                                     >
                                         {isSubmitting ? (
                                             <span className="flex items-center justify-center gap-2">
@@ -1551,6 +1628,114 @@ const ResiHomePage = () => {
                                     className="w-full py-3 text-[10px] font-black text-red-500 hover:text-red-700 uppercase tracking-widest transition-all block text-center border-t border-gray-100/50 mt-1 pt-3"
                                 >
                                     Back to Report
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* AI Checking/Loading Overlay */}
+                {isCheckingAI && (
+                    <div className="fixed inset-0 z-[400] flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300" />
+                        <div className="relative w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl p-10 text-center animate-in zoom-in-95 duration-300 border border-gray-50">
+                            <div className="flex flex-col items-center justify-center gap-6">
+                                <div className="relative flex items-center justify-center">
+                                    <div className="w-16 h-16 rounded-full border-4 border-orange-100 border-t-[#F97316] animate-spin" />
+                                    <div className="absolute text-xl">🔍</div>
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-black uppercase tracking-tight text-[#1a1208] mb-1">AI Scan Active</h3>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-3">Checking for Single Animal validation</p>
+                                    <p className="text-xs font-bold text-[#F97316] animate-pulse">{validationStatus}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Inconclusive Warning Modal */}
+                {showInconclusiveModal && (
+                    <div className="fixed inset-0 z-[380] flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setShowInconclusiveModal(false)} />
+                        <div className="relative w-full max-w-md bg-white rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 p-10 text-[#1a1208] border border-gray-50">
+                            <div className="mb-6 text-center">
+                                <div className="w-16 h-16 bg-yellow-50 text-yellow-600 rounded-2xl flex items-center justify-center mb-6 mx-auto border border-yellow-100">
+                                    <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                </div>
+                                <h3 className="text-xl font-black uppercase tracking-tight text-[#1a1208] mb-2">
+                                    Similarity Inconclusive
+                                </h3>
+                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                                    AI Similarity Scan Warning
+                                </p>
+                            </div>
+
+                            <div className="bg-yellow-50/50 border border-yellow-100 rounded-2xl p-5 mb-8 text-xs font-bold text-yellow-800 leading-relaxed text-center">
+                                {inconclusiveText}
+                            </div>
+
+                            <div className="space-y-3">
+                                <button
+                                    onClick={() => {
+                                        setShowInconclusiveModal(false);
+                                        setShowFinalConfirmModal(true);
+                                    }}
+                                    className="w-full py-4 bg-[#F97316] hover:bg-orange-600 text-white text-[11px] font-black uppercase tracking-[0.15em] rounded-2xl shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                >
+                                    Proceed Anyway
+                                </button>
+                                <button
+                                    onClick={() => setShowInconclusiveModal(false)}
+                                    className="w-full py-4 text-[10px] font-black text-gray-400 hover:text-gray-600 uppercase tracking-widest transition-all"
+                                >
+                                    Review Images
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Final Warning Sighting Confirmation Modal */}
+                {showFinalConfirmModal && (
+                    <div className="fixed inset-0 z-[390] flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setShowFinalConfirmModal(false)} />
+                        <div className="relative w-full max-w-md bg-white rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 p-10 text-[#1a1208] border border-gray-50">
+                            <div className="mb-6 text-center">
+                                <div className="w-16 h-16 bg-orange-50 text-[#F97316] rounded-2xl flex items-center justify-center mb-6 mx-auto border border-orange-100">
+                                    <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <h3 className="text-xl font-black uppercase tracking-tight text-[#1a1208] mb-2">
+                                    Confirm Sighting
+                                </h3>
+                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                                    Final Report Sighting Check
+                                </p>
+                            </div>
+
+                            <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-5 mb-8 text-xs font-bold text-[#F97316] leading-relaxed text-center">
+                                This report should only represent one stray animal. Please create separate reports for different animals.
+                            </div>
+
+                            <div className="space-y-3">
+                                <button
+                                    onClick={() => {
+                                        setShowFinalConfirmModal(false);
+                                        handleSubmit();
+                                    }}
+                                    className="w-full py-4 bg-[#F97316] hover:bg-orange-600 text-white text-[11px] font-black uppercase tracking-[0.15em] rounded-2xl shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                >
+                                    Confirm & Submit Sighting
+                                </button>
+                                <button
+                                    onClick={() => setShowFinalConfirmModal(false)}
+                                    className="w-full py-4 text-[10px] font-black text-gray-400 hover:text-gray-600 uppercase tracking-widest transition-all"
+                                >
+                                    Cancel
                                 </button>
                             </div>
                         </div>
