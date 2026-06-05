@@ -183,6 +183,180 @@ def classify_category_from_description(description: str) -> int:
     return 5
 
 
+@router.post("/validate-images")
+async def validate_report_images(
+    files: List[UploadFile] = File(...),
+    db: Session = Depends(get_db)
+):
+    try:
+        from ultralytics import YOLO
+        import tempfile
+        from PIL import Image
+        import io
+        import os
+        import json
+        import google.generativeai as genai
+    except ImportError as e:
+        raise HTTPException(status_code=500, detail=f"Required library missing: {str(e)}")
+
+    valid_images = []
+    pil_images = []
+
+    # First, validate each uploaded image using YOLOv8
+    for file in files:
+        filename = file.filename or ""
+        ext = os.path.splitext(filename)[1].lower()
+        if ext not in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff']:
+            # Skip non-image files if any are sent
+            continue
+
+        try:
+            # Read file content
+            content = await file.read()
+            await file.seek(0)
+            
+            # Load as PIL Image to verify it's valid
+            try:
+                img = Image.open(io.BytesIO(content))
+                img.verify()
+                # Re-open because verify() closes/invalidates the image object
+                img = Image.open(io.BytesIO(content))
+            except Exception:
+                return {
+                    "valid": False,
+                    "error_type": "invalid_image",
+                    "message": f"Uploaded file {filename} is not a valid image."
+                }
+
+            # Save to temporary file for YOLOv8
+            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+
+            try:
+                model = YOLO('yolov8n.pt')
+                results = model(tmp_path)
+                
+                animal_count = 0
+                for r in results:
+                    for c in r.boxes.cls:
+                        label = r.names[int(c)]
+                        if label.lower() in ['dog', 'cat']:
+                            animal_count += 1
+            finally:
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+
+            if animal_count == 0:
+                return {
+                    "valid": False,
+                    "error_type": "no_animal",
+                    "message": "No animal was detected in one or more uploaded images. Please upload a valid animal image."
+                }
+            elif animal_count > 1:
+                return {
+                    "valid": False,
+                    "error_type": "multiple_animals",
+                    "message": "Multiple animals were detected in one or more uploaded images. Please upload images containing only one animal per report."
+                }
+
+            # Keep valid image content and PIL image for similarity analysis
+            valid_images.append(content)
+            pil_images.append(img)
+
+        except Exception as e:
+            print(f"Error analyzing image {filename}: {e}")
+            return {
+                "valid": False,
+                "error_type": "error",
+                "message": f"Error analyzing image {filename}: {str(e)}"
+            }
+
+    # If multiple images, run visual similarity analysis
+    if len(pil_images) > 1:
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return {
+                "valid": False,
+                "error_type": "inconclusive",
+                "message": "The system could not confidently determine whether the uploaded images belong to the same animal. Please review your uploaded images before submitting."
+            }
+
+        try:
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel("gemini-2.5-flash")
+
+            prompt = """
+            You are the StraySafe Copilot, an AI assistant for a subdivision's stray animal reporting and safety system.
+            You are given multiple images of stray animals uploaded for a single report.
+            Your task is to analyze these images and determine if they depict the same individual animal.
+
+            Analyze visual characteristics of the animal in each image, including:
+            - Fur color and color patterns (e.g., solid, spotted, striped, patches)
+            - Body shape, size, and proportions
+            - Facial features (e.g., muzzle length, snout color, eyes)
+            - Ear shape and position (e.g., floppy, erect, cropped)
+            - Tail shape and length (e.g., bushy, long, docked)
+            - Distinctive markings or scars
+
+            Rules:
+            1. The purpose is solely to check that a single report focuses on a single animal. Do not attempt to determine ownership.
+            2. Respond ONLY with a valid JSON block containing two fields:
+               - "status": Must be one of the following strings:
+                 * "same": if you are confident that all images depict the same individual animal.
+                 * "different": if you detect that the images show different individual animals (e.g., a dog and a cat, or two dogs with different color/breed/markings).
+                 * "inconclusive": if you cannot confidently determine whether they are the same or different (e.g., poor lighting, blurry images, or only one image doesn't show the animal clearly).
+               - "reason": A short, conversational, and warm explanation (1-2 sentences) of your reasoning. Do not mention technical terms or 'JSON'.
+
+            Respond ONLY with a valid JSON block.
+            """
+
+            content_to_send = [prompt]
+            for img in pil_images:
+                content_to_send.append(img)
+
+            response = model.generate_content(
+                content_to_send,
+                generation_config={"response_mime_type": "application/json"}
+            )
+
+            text_resp = response.text.strip()
+            if text_resp.startswith("```"):
+                lines = text_resp.split("\n")
+                if lines[0].startswith("```json"):
+                    text_resp = "\n".join(lines[1:-1])
+                elif lines[0].startswith("```"):
+                    text_resp = "\n".join(lines[1:-1])
+
+            data = json.loads(text_resp)
+            status = data.get("status", "inconclusive")
+
+            if status == "same":
+                return {"valid": True, "status": "same"}
+            elif status == "different":
+                return {
+                    "valid": False,
+                    "error_type": "different_animals",
+                    "message": "The uploaded images appear to show different animals. Please create a separate report for each animal."
+                }
+            else:
+                return {
+                    "valid": False,
+                    "error_type": "inconclusive",
+                    "message": "The system could not confidently determine whether the uploaded images belong to the same animal. Please review your uploaded images before submitting."
+                }
+
+        except Exception as gemini_err:
+            print(f"Gemini similarity error: {gemini_err}")
+            return {
+                "valid": False,
+                "error_type": "inconclusive",
+                "message": "The system could not confidently determine whether the uploaded images belong to the same animal. Please review your uploaded images before submitting."
+            }
+
+    return {"valid": True, "status": "success"}
+
+
 @router.post("/", response_model=ReportResponse)
 def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(get_db)):
     try:

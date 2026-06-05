@@ -728,15 +728,15 @@ const ResidentPet = () => {
 
             {/* Registration/Update Modal */}
             {isAddPetModalOpen && (
-                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+                <div className="fixed top-20 bottom-20 left-0 right-0 md:inset-0 z-[300] flex items-stretch md:items-center justify-center p-0 md:p-4 pb-0 md:pb-4">
                     <div 
-                        className="absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300"
+                        className="hidden md:block absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300"
                         onClick={() => setIsAddPetModalOpen(false)}
                     />
-                    <div className="relative w-full max-w-2xl bg-white rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-500">
-                        <div className="px-10 pt-10 pb-6 flex justify-between items-center border-b border-gray-50">
+                    <div className="relative w-full h-full md:h-auto md:max-w-2xl bg-white rounded-none md:rounded-[3rem] shadow-none md:shadow-2xl overflow-hidden flex flex-col animate-in md:zoom-in-95 md:slide-in-from-bottom-10 duration-500">
+                        <div className="px-6 md:px-10 pt-6 md:pt-10 pb-4 md:pb-6 flex justify-between items-center border-b border-gray-50">
                             <div>
-                                <h2 className="text-3xl font-black text-[#1a1208] uppercase tracking-tight">{editingPetId ? 'Update Pet Info' : 'Register New Pet'}</h2>
+                                <h2 className="text-2xl md:text-3xl font-black text-[#1a1208] uppercase tracking-tight">{editingPetId ? 'Update Pet Info' : 'Register New Pet'}</h2>
                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Keep your pet's records up to date for safety</p>
                             </div>
                             <button onClick={() => setIsAddPetModalOpen(false)} className="p-3 bg-gray-50 text-gray-400 hover:text-[#1a1208] rounded-2xl transition-all">
@@ -744,7 +744,7 @@ const ResidentPet = () => {
                             </button>
                         </div>
 
-                        <div className="p-10 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                        <div className="p-6 md:p-10 space-y-8 flex-1 md:max-h-[70vh] overflow-y-auto custom-scrollbar">
                             {submitErrorMessage && (
                                 <div className="bg-red-50 border-2 border-dashed border-red-200 rounded-[2rem] p-6 flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
                                     <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0 shadow-sm">
@@ -1249,7 +1249,7 @@ const ResidentPet = () => {
                             </div>
                         </div>
 
-                        <div className="p-10 pt-0">
+                        <div className="p-6 md:p-10 pt-0 shrink-0">
                             <Button
                                 disabled={isSubmitting}
                                 className={`w-full py-5 text-white text-[12px] font-black uppercase tracking-[0.2em] rounded-[2rem] shadow-xl transition-all ${

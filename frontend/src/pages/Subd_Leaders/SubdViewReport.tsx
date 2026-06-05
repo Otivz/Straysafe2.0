@@ -264,7 +264,7 @@ const SubdViewReport = () => {
                 report_id: report.report_id,
                 leader_id: currentUserId,
                 title: escalationTitle || `Endorsement for Report #${report.report_id}`,
-                description: escalationDescription || report.description,
+                description: escalationDescription || 'No notes provided.',
                 status_id: 1 // Pending
             });
 
@@ -932,8 +932,8 @@ const SubdViewReport = () => {
                                         {report.status_id === 2 && (
                                             <button
                                                 onClick={() => {
-                                                    setEscalationTitle(`Endorsement for Report #${report.report_id}`);
-                                                    setEscalationDescription(report.description);
+                                                    setEscalationTitle('');
+                                                    setEscalationDescription('');
                                                     setIsEscalateModalOpen(true);
                                                 }}
                                                 className="w-full py-4 bg-orange-600 text-white rounded-2xl text-xs font-bold shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
