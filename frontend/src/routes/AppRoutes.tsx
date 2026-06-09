@@ -18,6 +18,7 @@ import SubdViewReport from '../pages/Subd_Leaders/SubdViewReport';
 import EscelatedMissions from '../pages/Subd_Leaders/EscelatedMissions';
 import SubdHistoryReport from '../pages/Subd_Leaders/SubdHistoryReport';
 import SubdViewHistory from '../pages/Subd_Leaders/SubdViewHistory';
+import SubdPetClaims from '../pages/Subd_Leaders/SubdPetClaims';
 
 import EndorsementArch from '../pages/Subd_Leaders/EndorsementArch';
 import SubdPetRecords from '../pages/Subd_Leaders/SubdPetRecords';
@@ -42,6 +43,11 @@ import BrgyHoldingFacility from '../pages/Barangay_Staff/BrgyHoldingFacility';
 import BrgyHistoryReports from '../pages/Barangay_Staff/BrgyHistoryReports';
 import BrgyViewHistory from '../pages/Barangay_Staff/BrgyViewHistory';
 import SubdHazardAlert from '../pages/Subd_Leaders/SubdHazardAlert';
+import PetMatchReview from '../pages/citizen/PetMatchReview';
+import PetClaimsDashboard from '../pages/citizen/PetClaimsDashboard';
+
+
+
 
 const AppRoutes = () => {
     const navigate = useNavigate();
@@ -120,7 +126,7 @@ const AppRoutes = () => {
             <Route path="/subd/history" element={<SubdHistoryReport />} />
             <Route path="/subd/history/:id" element={<SubdViewHistory />} />
             <Route path="/subd/escalated" element={<EscelatedMissions />} />
-
+            <Route path="/subd/pet-claims" element={<SubdPetClaims />} />
             <Route path="/subd/endorsements" element={<EndorsementArch />} />
             <Route path="/subd/pet-records" element={<SubdPetRecords />} />
             <Route path="/subd/hazard-alert" element={<SubdHazardAlert />} />
@@ -149,7 +155,8 @@ const AppRoutes = () => {
             <Route path="/pet/scan/:token/success" element={<PetScanSuccessPage />} />
             <Route path="/resident/pet/:petId/qr" element={<PetQrCardPage />} />
             <Route path="/resident/pet/:petId/scan-history" element={<PetScanHistoryPage />} />
-
+            <Route path="/resident/reports/:reportId/match-review" element={<PetMatchReview />} />
+            <Route path="/resident/pet/:petId/claims-dashboard" element={<PetClaimsDashboard />} />
 
             {/* Catch-all Redirect to Login */}
             <Route path="*" element={<AdminLogin />} />

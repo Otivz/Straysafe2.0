@@ -235,6 +235,18 @@ CREATE TABLE pets(
 
     emergency_contact_phone VARCHAR(20),
 
+    primary_color VARCHAR(100) NULL,
+
+    secondary_color VARCHAR(100) NULL,
+
+    distinctive_markings TEXT NULL,
+
+    registered_address VARCHAR(255) NULL,
+
+    registered_latitude DECIMAL(10,8) NULL,
+
+    registered_longitude DECIMAL(11,8) NULL,
+
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -302,7 +314,21 @@ CREATE TABLE pet_incidents(
 
     FOREIGN KEY(reported_by)
     REFERENCES users(user_id)
-    ON DELETE SET NULL
+);
+
+-- =========================================
+-- PET PHOTOS
+-- =========================================
+CREATE TABLE pet_photos(
+    photo_id INT AUTO_INCREMENT PRIMARY KEY,
+    pet_id INT NOT NULL,
+    view_type VARCHAR(50) NOT NULL,
+    photo_url VARCHAR(255) NOT NULL,
+    features_json TEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(pet_id)
+    REFERENCES pets(pet_id)
+    ON DELETE CASCADE
 );
 
 -- =========================================
@@ -467,6 +493,31 @@ ON reports(user_id);
 
 CREATE INDEX idx_reports_location
 ON reports(latitude, longitude);
+
+-- =========================================
+-- PET CLAIMS
+-- =========================================
+CREATE TABLE pet_claims(
+    claim_id INT AUTO_INCREMENT PRIMARY KEY,
+    report_id INT NOT NULL,
+    pet_id INT NOT NULL,
+    status ENUM(
+        'Potential Owner Match',
+        'Approved',
+        'Rejected',
+        'Evidence Requested'
+    ) DEFAULT 'Potential Owner Match' NOT NULL,
+    evidence_url VARCHAR(255) NULL,
+    remarks TEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY(report_id)
+    REFERENCES reports(report_id)
+    ON DELETE CASCADE,
+    FOREIGN KEY(pet_id)
+    REFERENCES pets(pet_id)
+    ON DELETE CASCADE
+);
 
 -- =========================================
 -- REPORT VERIFICATIONS

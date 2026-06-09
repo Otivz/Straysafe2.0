@@ -10,6 +10,8 @@ class UserBase(BaseModel):
     subdivision_id: Optional[int] = None
     position_id: Optional[int] = None
     address: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     status: Optional[str] = "Active"
     is_verified: Optional[bool] = False
     profile_picture: Optional[str] = None
@@ -26,6 +28,8 @@ class UserUpdate(BaseModel):
     subdivision_id: Optional[int] = None
     position_id: Optional[int] = None
     address: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     status: Optional[str] = None
     is_verified: Optional[bool] = None
 

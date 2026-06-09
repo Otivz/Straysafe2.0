@@ -1,5 +1,6 @@
 from typing import Optional
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, func, ForeignKey, Enum
+from decimal import Decimal
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, func, ForeignKey, Enum, Numeric
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from app.database import Base
 
@@ -41,6 +42,8 @@ class User(Base):
     subdivision_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("subdivisions.subdivision_id"), nullable=True)
     
     address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    latitude: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 8), nullable=True)
+    longitude: Mapped[Optional[Decimal]] = mapped_column(Numeric(11, 8), nullable=True)
     profile_picture: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     
     status: Mapped[Optional[str]] = mapped_column(Enum('Active','Inactive','Suspended', name='user_status'), nullable=True, default='Active')

@@ -161,6 +161,9 @@ const ResidentPet = () => {
         status: 'Active',
         weight: '',
         mediaFiles: [] as File[],
+        photoFrontFiles: [] as File[],
+        photoLeftFiles: [] as File[],
+        photoRightFiles: [] as File[],
         isVaccinated: true,
         vaccinationDate: '2026-05-10',
         isNeutered: true,
@@ -435,6 +438,30 @@ const ResidentPet = () => {
                 });
             }
 
+            // Handle side-view photo uploads
+            const petId = editingPetId || response.data.pet_id;
+            if (formData.photoFrontFiles.length > 0) {
+                const fd = new FormData();
+                fd.append('file', formData.photoFrontFiles[0]);
+                await axios.post(`http://localhost:8000/pets/${petId}/photo-front`, fd, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+            }
+            if (formData.photoLeftFiles.length > 0) {
+                const fd = new FormData();
+                fd.append('file', formData.photoLeftFiles[0]);
+                await axios.post(`http://localhost:8000/pets/${petId}/photo-left`, fd, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+            }
+            if (formData.photoRightFiles.length > 0) {
+                const fd = new FormData();
+                fd.append('file', formData.photoRightFiles[0]);
+                await axios.post(`http://localhost:8000/pets/${petId}/photo-right`, fd, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+            }
+
             // Handle vaccine card upload if any
             if (formData.vaccineCardFiles.length > 0) {
                 const petId = editingPetId || response.data.pet_id;
@@ -458,6 +485,9 @@ const ResidentPet = () => {
                 status: 'Active',
                 weight: '',
                 mediaFiles: [],
+                photoFrontFiles: [],
+                photoLeftFiles: [],
+                photoRightFiles: [],
                 isVaccinated: true,
                 vaccinationDate: '2026-05-10',
                 isNeutered: true,
@@ -497,6 +527,9 @@ const ResidentPet = () => {
             status: petObj.status || 'Active',
             weight: petObj.weight ? petObj.weight.toString() : '',
             mediaFiles: [],
+            photoFrontFiles: [],
+            photoLeftFiles: [],
+            photoRightFiles: [],
             isVaccinated: petObj.is_vaccinated || false,
             vaccinationDate: petObj.vaccination_date || '2026-05-10',
             isNeutered: petObj.is_neutered || false,
@@ -565,6 +598,9 @@ const ResidentPet = () => {
                                 status: 'Active',
                                 weight: '',
                                 mediaFiles: [],
+                                photoFrontFiles: [],
+                                photoLeftFiles: [],
+                                photoRightFiles: [],
                                 isVaccinated: true,
                                 vaccinationDate: '2026-05-10',
                                 isNeutered: true,
@@ -1041,6 +1077,122 @@ const ResidentPet = () => {
                                         </button>
                                     </div>
                                 )}
+                            </div>
+
+                            {/* Section 1b: Side-View Photos */}
+                            <div className="border-t border-gray-100 pt-8 space-y-5">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="h-6 w-1 bg-[#F97316] rounded-full"></span>
+                                    <h3 className="text-xs font-black text-[#1a1208] uppercase tracking-widest">Side-View Photos</h3>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100">Optional — helps with matching</span>
+                                </div>
+                                <p className="text-[10px] font-bold text-gray-400 leading-relaxed">Upload photos of your pet from different angles. These are used to improve identification accuracy when your pet is reported missing or found.</p>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                                    {/* Front Photo */}
+                                    <div className="space-y-3">
+                                        <label className="text-[10px] font-black text-[#1a1208] uppercase tracking-widest flex items-center gap-2">
+                                            <span className="w-5 h-5 rounded-lg bg-orange-100 text-[#F97316] flex items-center justify-center text-[8px] font-black shrink-0">F</span>
+                                            Front View
+                                        </label>
+                                        <label className={`flex flex-col items-center justify-center h-32 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${
+                                            formData.photoFrontFiles.length > 0
+                                                ? 'border-[#F97316] bg-orange-50/40'
+                                                : 'border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20'
+                                        }`}>
+                                            {formData.photoFrontFiles.length > 0 ? (
+                                                <img
+                                                    src={URL.createObjectURL(formData.photoFrontFiles[0])}
+                                                    alt="Front preview"
+                                                    className="w-full h-full object-cover rounded-2xl"
+                                                />
+                                            ) : (
+                                                <div className="flex flex-col items-center gap-2 text-gray-400">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                                    <span className="text-[9px] font-black uppercase tracking-widest">Tap to upload</span>
+                                                </div>
+                                            )}
+                                            <input
+                                                type="file"
+                                                className="hidden"
+                                                accept="image/*"
+                                                onChange={(e) => setFormData({...formData, photoFrontFiles: e.target.files ? Array.from(e.target.files) : []})}
+                                            />
+                                        </label>
+                                        {formData.photoFrontFiles.length > 0 && (
+                                            <button type="button" onClick={() => setFormData({...formData, photoFrontFiles: []})} className="text-[9px] font-black text-red-400 uppercase tracking-widest hover:text-red-600 transition-colors cursor-pointer">✕ Remove</button>
+                                        )}
+                                    </div>
+
+                                    {/* Left Side Photo */}
+                                    <div className="space-y-3">
+                                        <label className="text-[10px] font-black text-[#1a1208] uppercase tracking-widest flex items-center gap-2">
+                                            <span className="w-5 h-5 rounded-lg bg-orange-100 text-[#F97316] flex items-center justify-center text-[8px] font-black shrink-0">L</span>
+                                            Left Side
+                                        </label>
+                                        <label className={`flex flex-col items-center justify-center h-32 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${
+                                            formData.photoLeftFiles.length > 0
+                                                ? 'border-[#F97316] bg-orange-50/40'
+                                                : 'border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20'
+                                        }`}>
+                                            {formData.photoLeftFiles.length > 0 ? (
+                                                <img
+                                                    src={URL.createObjectURL(formData.photoLeftFiles[0])}
+                                                    alt="Left side preview"
+                                                    className="w-full h-full object-cover rounded-2xl"
+                                                />
+                                            ) : (
+                                                <div className="flex flex-col items-center gap-2 text-gray-400">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                                    <span className="text-[9px] font-black uppercase tracking-widest">Tap to upload</span>
+                                                </div>
+                                            )}
+                                            <input
+                                                type="file"
+                                                className="hidden"
+                                                accept="image/*"
+                                                onChange={(e) => setFormData({...formData, photoLeftFiles: e.target.files ? Array.from(e.target.files) : []})}
+                                            />
+                                        </label>
+                                        {formData.photoLeftFiles.length > 0 && (
+                                            <button type="button" onClick={() => setFormData({...formData, photoLeftFiles: []})} className="text-[9px] font-black text-red-400 uppercase tracking-widest hover:text-red-600 transition-colors cursor-pointer">✕ Remove</button>
+                                        )}
+                                    </div>
+
+                                    {/* Right Side Photo */}
+                                    <div className="space-y-3">
+                                        <label className="text-[10px] font-black text-[#1a1208] uppercase tracking-widest flex items-center gap-2">
+                                            <span className="w-5 h-5 rounded-lg bg-orange-100 text-[#F97316] flex items-center justify-center text-[8px] font-black shrink-0">R</span>
+                                            Right Side
+                                        </label>
+                                        <label className={`flex flex-col items-center justify-center h-32 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${
+                                            formData.photoRightFiles.length > 0
+                                                ? 'border-[#F97316] bg-orange-50/40'
+                                                : 'border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20'
+                                        }`}>
+                                            {formData.photoRightFiles.length > 0 ? (
+                                                <img
+                                                    src={URL.createObjectURL(formData.photoRightFiles[0])}
+                                                    alt="Right side preview"
+                                                    className="w-full h-full object-cover rounded-2xl"
+                                                />
+                                            ) : (
+                                                <div className="flex flex-col items-center gap-2 text-gray-400">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                                    <span className="text-[9px] font-black uppercase tracking-widest">Tap to upload</span>
+                                                </div>
+                                            )}
+                                            <input
+                                                type="file"
+                                                className="hidden"
+                                                accept="image/*"
+                                                onChange={(e) => setFormData({...formData, photoRightFiles: e.target.files ? Array.from(e.target.files) : []})}
+                                            />
+                                        </label>
+                                        {formData.photoRightFiles.length > 0 && (
+                                            <button type="button" onClick={() => setFormData({...formData, photoRightFiles: []})} className="text-[9px] font-black text-red-400 uppercase tracking-widest hover:text-red-600 transition-colors cursor-pointer">✕ Remove</button>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Section 2: Health & Vaccination Details */}

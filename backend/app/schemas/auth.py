@@ -15,6 +15,8 @@ class LoginResponse(BaseModel):
     profile_picture: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     status: Optional[str] = None
     is_verified: Optional[bool] = False
     created_at: Optional[datetime] = None

@@ -14,6 +14,9 @@ class PetBase(BaseModel):
     weight: Optional[Decimal] = None
     size_category: Optional[str] = "Medium"
     photo_url: Optional[str] = None
+    photo_front_url: Optional[str] = None
+    photo_left_url: Optional[str] = None
+    photo_right_url: Optional[str] = None
     health_condition: Optional[str] = None
     is_vaccinated: Optional[bool] = False
     vaccination_date: Optional[date] = None
@@ -31,6 +34,12 @@ class PetBase(BaseModel):
     last_seen_lng: Optional[Decimal] = None
     emergency_contact_name: Optional[str] = None
     emergency_contact_phone: Optional[str] = None
+    primary_color: Optional[str] = None
+    secondary_color: Optional[str] = None
+    distinctive_markings: Optional[str] = None
+    registered_address: Optional[str] = None
+    registered_latitude: Optional[Decimal] = None
+    registered_longitude: Optional[Decimal] = None
 
 class PetCreate(PetBase):
     owner_id: int
@@ -46,6 +55,9 @@ class PetUpdate(BaseModel):
     weight: Optional[Decimal] = None
     size_category: Optional[str] = None
     photo_url: Optional[str] = None
+    photo_front_url: Optional[str] = None
+    photo_left_url: Optional[str] = None
+    photo_right_url: Optional[str] = None
     health_condition: Optional[str] = None
     is_vaccinated: Optional[bool] = None
     vaccination_date: Optional[date] = None
@@ -63,6 +75,12 @@ class PetUpdate(BaseModel):
     last_seen_lng: Optional[Decimal] = None
     emergency_contact_name: Optional[str] = None
     emergency_contact_phone: Optional[str] = None
+    primary_color: Optional[str] = None
+    secondary_color: Optional[str] = None
+    distinctive_markings: Optional[str] = None
+    registered_address: Optional[str] = None
+    registered_latitude: Optional[Decimal] = None
+    registered_longitude: Optional[Decimal] = None
 
 class UserMini(BaseModel):
     name: str

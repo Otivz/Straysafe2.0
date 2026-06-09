@@ -11,10 +11,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Local imports (now safe to import after path fix)
 from app.database import engine, Base
-from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding
+from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims
 from app.routes import audit_logs as audit_logs_router
 from app.models.pet_qr import PetQRCode, PetQRScan
 from app.models.audit_log import AuditLog  # noqa: F401 — ensures table is in Base.metadata
+from app.models.pet_claim import PetClaim  # noqa: F401 — ensures table is in Base.metadata
 
 
 def ensure_report_media_status_column():
@@ -243,6 +244,43 @@ def ensure_holding_tables():
         """)
         )
 
+def ensure_pet_claims_status_enum():
+    """Modify the ENUM values of pet_claims.status to include new statuses expected by frontend."""
+    with engine.begin() as conn:
+        try:
+            conn.execute(text(
+                "ALTER TABLE pet_claims MODIFY COLUMN status "
+                "ENUM('Potential Owner Match', 'Possible Match Found', 'Pending Review', 'Approved', 'Rejected', 'Evidence Requested') "
+                "DEFAULT 'Potential Owner Match' NOT NULL"
+            ))
+            print("Successfully migrated pet_claims.status ENUM values.")
+        except Exception as e:
+            print(f"Error migrating pet_claims.status ENUM: {e}")
+
+def ensure_pet_side_photos_columns():
+    """Add photo_front_url, photo_left_url, photo_right_url columns to pets table if missing."""
+    with engine.begin() as conn:
+        for col_name in ["photo_front_url", "photo_left_url", "photo_right_url"]:
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pets' "
+                f"AND COLUMN_NAME = '{col_name}'"
+            ))
+            if result.scalar() == 0:
+                conn.execute(text(f"ALTER TABLE pets ADD COLUMN {col_name} VARCHAR(255) NULL"))
+
+def ensure_user_default_address_columns():
+    """Add latitude and longitude columns to the users table if missing."""
+    with engine.begin() as conn:
+        for col_name, col_type in [("latitude", "DECIMAL(10, 8)"), ("longitude", "DECIMAL(11, 8)")]:
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' "
+                f"AND COLUMN_NAME = '{col_name}'"
+            ))
+            if result.scalar() == 0:
+                conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type} NULL"))
+
 def ensure_qr_tables_exist():
     with engine.begin() as conn:
         conn.execute(text("""
@@ -308,6 +346,9 @@ ensure_audit_logs_columns()
 ensure_qr_tables_exist()
 ensure_report_priority_enum()
 ensure_holding_tables()
+ensure_pet_claims_status_enum()
+ensure_pet_side_photos_columns()
+ensure_user_default_address_columns()
 
 app = FastAPI(title="StraySafe API")
 
@@ -337,6 +378,7 @@ app.include_router(notifications.router)
 app.include_router(announcements.router)
 app.include_router(audit_logs_router.router)
 app.include_router(holding.router)
+app.include_router(claims.router)
 
 @app.get("/")
 def read_root():

@@ -89,6 +89,8 @@ def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
         "profile_picture": user.profile_picture,
         "phone": user.phone,
         "address": user.address,
+        "latitude": user.latitude,
+        "longitude": user.longitude,
         "status": user.status,
         "is_verified": user.is_verified,
         "created_at": user.created_at

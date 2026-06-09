@@ -29,6 +29,9 @@ class Pet(Base):
         Enum("Small", "Medium", "Large", name="size_category"), default="Medium"
     )
     photo_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    photo_front_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    photo_left_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    photo_right_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     health_condition: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_vaccinated: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -56,6 +59,13 @@ class Pet(Base):
 
     emergency_contact_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     emergency_contact_phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
+    primary_color: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    secondary_color: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    distinctive_markings: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    registered_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    registered_latitude: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 8), nullable=True)
+    registered_longitude: Mapped[Optional[Decimal]] = mapped_column(Numeric(11, 8), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

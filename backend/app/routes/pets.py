@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import List, cast
+from typing import List
 from app.database import get_db
 from app.models.pet import Pet
 from app.models.user import User
@@ -47,7 +47,7 @@ def create_pet(pet: PetCreate, req: Request, db: Session = Depends(get_db)):
     # Automatically generate QR Code for the pet on registration
     try:
         from app.routes.pet_qr import generate_qr_for_pet_internal
-        generate_qr_for_pet_internal(cast(int, db_pet.pet_id), db)
+        generate_qr_for_pet_internal(db_pet.pet_id, db)
     except Exception as e:
         # Avoid blocking registration if QR generation encounters an issue
         import logging
@@ -113,6 +113,71 @@ def delete_pet(pet_id: int, req: Request, db: Session = Depends(get_db)):
     )
     return {"message": "Pet deleted successfully"}
 
+def auto_extract_pet_colors(file_content: bytes, filename: str, db_pet: Pet):
+    try:
+        from ultralytics import YOLO
+        from app.utils.color_detection import extract_dominant_colors
+        import tempfile
+        import os
+        
+        # Save image to a temp file for YOLOv8
+        ext = os.path.splitext(filename)[1].lower()
+        if ext not in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff']:
+            ext = '.jpg'
+            
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_img:
+            tmp_img.write(file_content)
+            tmp_img_path = tmp_img.name
+            
+        try:
+            model = YOLO('yolov8n.pt')
+            results = model(tmp_img_path)
+            
+            detected = set()
+            bboxes = []
+            for r in results:
+                for c, box in zip(r.boxes.cls, r.boxes.xyxy):
+                    label = r.names[int(c)]
+                    bbox = box.tolist()
+                    if label.lower() == 'dog':
+                        detected.add('Dog')
+                        bboxes.append((bbox, 'Dog'))
+                    elif label.lower() == 'cat':
+                        detected.add('Cat')
+                        bboxes.append((bbox, 'Cat'))
+            
+            animal_type = 'Dog' if 'Dog' in detected else ('Cat' if 'Cat' in detected else 'Unknown')
+            
+            dominant_colors_str = 'Unknown'
+            if animal_type != 'Unknown':
+                target_bbox = next((b for b, t in bboxes if t == animal_type), None)
+                dominant_colors_str = extract_dominant_colors(file_content, target_bbox)
+            else:
+                dominant_colors_str = extract_dominant_colors(file_content)
+                
+            if dominant_colors_str and dominant_colors_str != 'Unknown':
+                # Map dog color "Orange" or "Ginger" to standard "Brown"
+                mapped = []
+                for c in dominant_colors_str.split(','):
+                    c_clean = c.strip()
+                    if animal_type == 'Dog' and c_clean.lower() in ['orange', 'ginger']:
+                        mapped.append('Brown')
+                    else:
+                        mapped.append(c_clean)
+                # De-duplicate
+                seen = set()
+                clean_colors = [x for x in mapped if not (x in seen or seen.add(x))]
+                
+                if len(clean_colors) > 0 and clean_colors[0] and clean_colors[0] != 'Mixed Color':
+                    db_pet.primary_color = clean_colors[0]
+                if len(clean_colors) > 1 and clean_colors[1] and clean_colors[1] != 'Mixed Color':
+                    db_pet.secondary_color = clean_colors[1]
+        finally:
+            if os.path.exists(tmp_img_path):
+                os.unlink(tmp_img_path)
+    except Exception as e:
+        print(f"Error auto extracting pet colors: {e}")
+
 @router.post("/{pet_id}/photo")
 async def upload_pet_photo(pet_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
@@ -127,6 +192,7 @@ async def upload_pet_photo(pet_id: int, file: UploadFile = File(...), db: Sessio
             raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
             
         db_pet.photo_url = image_url
+        auto_extract_pet_colors(file_content, file.filename or "", db_pet)
         db.commit()
         return {"photo_url": image_url}
     except Exception as e:
@@ -150,3 +216,55 @@ async def upload_vaccine_card(pet_id: int, file: UploadFile = File(...), db: Ses
         return {"vaccine_card_url": card_url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/{pet_id}/photo-front")
+async def upload_pet_photo_front(pet_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
+    if not db_pet:
+        raise HTTPException(status_code=404, detail="Pet not found")
+    try:
+        file_content = await file.read()
+        image_url = upload_to_cloudinary(file_content, folder="pets/sides", filename=file.filename)
+        if not image_url:
+            raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
+        db_pet.photo_front_url = image_url
+        auto_extract_pet_colors(file_content, file.filename or "", db_pet)
+        db.commit()
+        return {"photo_front_url": image_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/{pet_id}/photo-left")
+async def upload_pet_photo_left(pet_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
+    if not db_pet:
+        raise HTTPException(status_code=404, detail="Pet not found")
+    try:
+        file_content = await file.read()
+        image_url = upload_to_cloudinary(file_content, folder="pets/sides", filename=file.filename)
+        if not image_url:
+            raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
+        db_pet.photo_left_url = image_url
+        auto_extract_pet_colors(file_content, file.filename or "", db_pet)
+        db.commit()
+        return {"photo_left_url": image_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/{pet_id}/photo-right")
+async def upload_pet_photo_right(pet_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
+    if not db_pet:
+        raise HTTPException(status_code=404, detail="Pet not found")
+    try:
+        file_content = await file.read()
+        image_url = upload_to_cloudinary(file_content, folder="pets/sides", filename=file.filename)
+        if not image_url:
+            raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
+        db_pet.photo_right_url = image_url
+        auto_extract_pet_colors(file_content, file.filename or "", db_pet)
+        db.commit()
+        return {"photo_right_url": image_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

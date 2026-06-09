@@ -7,6 +7,7 @@ from app.database import get_db
 from app.models.report import Report, ReportMedia, Comment, StatusHistory, ReportCategory, EndorsementLetter
 from app.models.user import User, Subdivision
 from app.models.notification import Notification
+from app.models.pet import Pet
 from app.schemas.report import ReportCreate, ReportResponse, ReportStatusUpdate, ReportUpdate, ReportMediaResponse, CommentCreate, CommentResponse
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.color_detection import extract_dominant_colors
@@ -181,6 +182,182 @@ def classify_category_from_description(description: str) -> int:
         
     # 5. Fallback/Animal Rescue Needed
     return 5
+
+
+def trigger_looks_matching(report: Report, db: Session):
+    """Compare stray report AI suggestions against registered pets of other owners.
+    Triggers notification and pre-files a claim as 'Potential Owner Match' if matching.
+    """
+    if not report.ai_animal_type or report.ai_animal_type == "Unknown":
+        return
+
+    # Fetch registered pets of other owners that are active or lost
+    pets = db.query(Pet).filter(
+        Pet.owner_id != report.user_id,
+        Pet.status.in_(["Active", "Lost"]),
+        Pet.pet_type == report.ai_animal_type
+    ).all()
+
+    for pet in pets:
+        # 1. Base attribute matching
+        attribute_score = 20  # Base score for matching species
+        
+        # Breed Matching (up to 30 points)
+        breed_match = False
+        p_breed = (pet.breed or "").lower().strip()
+        r_breed = (report.ai_possible_breed or "").lower().strip()
+        
+        if p_breed and r_breed:
+            if p_breed == r_breed or p_breed in r_breed or r_breed in p_breed:
+                breed_match = True
+                attribute_score += 30
+            elif "aspin" in p_breed or "puspin" in p_breed or "aspin" in r_breed or "puspin" in r_breed:
+                # One is mixed breed, partial match
+                attribute_score += 15
+        
+        # Color Matching (up to 40 points)
+        color_match_points = 0
+        r_colors = [c.strip().lower() for c in (report.ai_dominant_color or "").split(",") if c.strip()]
+        
+        p_primary = (pet.primary_color or "").lower().strip()
+        p_secondary = (pet.secondary_color or "").lower().strip()
+        
+        # If primary color matches one of report colors
+        if p_primary and p_primary in r_colors:
+            color_match_points += 25
+        # If secondary color matches one of report colors
+        if p_secondary and p_secondary in r_colors:
+            color_match_points += 15
+            
+        if color_match_points == 0 and (p_primary or p_secondary) and r_colors:
+            # Check for color markings or general substring overlap
+            p_markings = (pet.color_markings or "").lower().strip()
+            if any(rc in p_markings for rc in r_colors) or any(rc in p_primary for rc in r_colors) or any(rc in p_secondary for rc in r_colors):
+                color_match_points = 15
+                
+        attribute_score += color_match_points
+        
+        # Distinctive Markings Matching (up to 10 points)
+        markings_match = False
+        p_distinctive = (pet.distinctive_markings or pet.color_markings or "").lower().strip()
+        r_desc = (report.description or "").lower().strip()
+        
+        if p_distinctive and r_desc:
+            # Check for common keywords of markings
+            keywords = ["spot", "patch", "socks", "stripe", "collar", "leash", "scar", "band", "tag"]
+            for kw in keywords:
+                if kw in p_distinctive and kw in r_desc:
+                    markings_match = True
+                    break
+            if markings_match:
+                attribute_score += 10
+
+        # 2. Call Gemini 2.5 Flash for Description-Based comparison
+        import google.generativeai as genai
+        import json
+        import os
+        
+        api_key = os.getenv("GEMINI_API_KEY")
+        gemini_confidence = 50  # Default fallback
+        gemini_explanation = f"AI matching system detected a potential match based on attributes."
+        gemini_success = False
+        
+        if api_key:
+            try:
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel("gemini-2.5-flash")
+                
+                prompt = f"""
+                You are the StraySafe Copilot, an AI assistant for a subdivision's stray animal safety system.
+                Your task is to compare two sets of animal attributes and determine if they describe the same individual animal.
+                
+                Stray Report Attributes (extracted from sighting):
+                - Species: {report.ai_animal_type}
+                - Breed: {report.ai_possible_breed or 'Unknown'}
+                - Dominant Colors: {report.ai_dominant_color or 'Unknown'}
+                - Description: "{report.description or ''}"
+                
+                Registered Pet Attributes:
+                - Pet Name: {pet.pet_name}
+                - Species: {pet.pet_type}
+                - Breed: {pet.breed or 'Unknown'}
+                - Primary Color: {pet.primary_color or 'Unknown'}
+                - Secondary Color: {pet.secondary_color or 'Unknown'}
+                - Distinctive Markings: {pet.distinctive_markings or pet.color_markings or 'None'}
+                
+                Evaluate the likelihood of a match based purely on these structured descriptions.
+                Respond ONLY with a valid JSON block containing:
+                - "confidence_score": An integer from 0 to 100 representing how confident you are that these descriptions refer to the same animal.
+                - "explanation": A warm, friendly, and conversational explanation (1-2 sentences) of why they match or mismatch (e.g. "Both the reported animal and {pet.pet_name} are white cats with black spots on their tails."). Do not mention JSON, confidence_score, or technical terms in the explanation.
+                
+                Respond ONLY with a valid JSON block.
+                """
+                
+                response = model.generate_content(
+                    prompt,
+                    generation_config={"response_mime_type": "application/json"}
+                )
+                
+                text_resp = response.text.strip()
+                if text_resp.startswith("```"):
+                    lines = text_resp.split("\n")
+                    if lines[0].startswith("```json"):
+                        text_resp = "\n".join(lines[1:-1])
+                    elif lines[0].startswith("```"):
+                        text_resp = "\n".join(lines[1:-1])
+                        
+                data = json.loads(text_resp)
+                gemini_confidence = int(data.get("confidence_score", 50))
+                gemini_explanation = data.get("explanation", gemini_explanation)
+                gemini_success = True
+            except Exception as ex:
+                print(f"Gemini description matching error: {ex}")
+
+        # 3. Combine base attribute score and Gemini confidence score (50/50 weighting)
+        if gemini_success:
+            final_score = int(0.5 * attribute_score + 0.5 * gemini_confidence)
+        else:
+            final_score = attribute_score
+            gemini_explanation = "Note: Gemini free-tier quota is currently exceeded, so this match is verified using local YOLOv8 attribute similarity."
+        
+        # 4. Check if final score meets the notification threshold (>= 60%)
+        if final_score >= 60:
+            # Check if a claim already exists for this pet and report
+            from app.models.pet_claim import PetClaim
+            existing = db.query(PetClaim).filter(
+                PetClaim.report_id == report.report_id,
+                PetClaim.pet_id == pet.pet_id
+            ).first()
+            
+            if not existing:
+                new_claim = PetClaim(
+                    report_id=report.report_id,
+                    pet_id=pet.pet_id,
+                    status="Potential Owner Match",
+                    remarks=f"AI detected a {final_score}% potential match. {gemini_explanation}"
+                )
+                db.add(new_claim)
+                
+                notif_msg = (
+                    f"AI matching system detected a {final_score}% potential match for your pet "
+                    f"'{pet.pet_name}' in landmark '{report.landmark or 'Selera Homes'}'. Please review it."
+                )
+                
+                from app.models.notification import Notification
+                new_notif = Notification(
+                    user_id=pet.owner_id,
+                    title="Potential Owner Match Sighting",
+                    message=notif_msg,
+                    type="potential_match",
+                    related_id=report.report_id
+                )
+                db.add(new_notif)
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Error in trigger_looks_matching: {e}")
+
 
 
 @router.post("/validate-images")
@@ -425,6 +602,10 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
         
         db.commit()
         db.refresh(db_report)
+        try:
+            trigger_looks_matching(db_report, db)
+        except Exception as match_err:
+            print(f"Failed to match pets on report creation: {match_err}")
 
         rep_data = ReportResponse.model_validate(db_report)
         rep_data.status_id = db_report.current_status_id  # type: ignore[assignment]
@@ -776,6 +957,10 @@ async def upload_report_media(
 
         db.commit()
         db.refresh(db_media)
+        try:
+            trigger_looks_matching(report, db)
+        except Exception as match_err:
+            print(f"Failed to match pets on media upload: {match_err}")
         return db_media
     except HTTPException:
         raise

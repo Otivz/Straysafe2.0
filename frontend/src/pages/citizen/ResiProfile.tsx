@@ -4,6 +4,44 @@ import axios from 'axios';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+
+const DefaultIcon = L.icon({
+    iconUrl: markerIcon,
+    iconRetinaUrl: markerIconRetina,
+    shadowUrl: markerShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
+
+const LocationPicker = ({ onLocationSelect, position }: { onLocationSelect: (lat: number, lng: number) => void, position: [number, number] }) => {
+    useMapEvents({
+        click(e) {
+            onLocationSelect(e.latlng.lat, e.latlng.lng);
+        },
+    });
+    return (position && position[0] && position[1]) ? <Marker position={position} /> : null;
+};
+
+const RecenterMap = ({ position }: { position: [number, number] }) => {
+    const map = useMap();
+    useEffect(() => {
+        if (position && position[0] && position[1]) {
+            map.setView(position, map.getZoom());
+        }
+    }, [position, map]);
+    return null;
+};
 
 const ResiProfile = () => {
     const navigate = useNavigate();
@@ -30,11 +68,17 @@ const ResiProfile = () => {
     }, []);
 
     const userStr = localStorage.getItem('resident_user');
-    const initialUser = userStr ? JSON.parse(userStr) : {
+    const initialUser = userStr ? {
+        latitude: null,
+        longitude: null,
+        ...JSON.parse(userStr)
+    } : {
         name: 'Guest User',
         email: 'guest@straysafe.org',
         phone: '',
         address: '',
+        latitude: null,
+        longitude: null,
         user_id: 4, // Defaulting to 4 as per your current test case, but ideally should come from login
         created_at: new Date().toISOString()
     };
@@ -231,6 +275,19 @@ const ResiProfile = () => {
                                     </div>
                                     <span className="font-bold text-gray-800 truncate max-w-[180px]">{userData.address || 'Not specified'}</span>
                                 </div>
+                                {userData.latitude && userData.longitude && (
+                                    <div className="flex justify-between items-center text-sm">
+                                        <div className="flex items-center gap-3 text-gray-500">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                            </svg>
+                                            <span>Pinpoint Location</span>
+                                        </div>
+                                        <span className="font-bold text-orange-500 text-xs truncate max-w-[180px]">
+                                            {parseFloat(userData.latitude).toFixed(5)}, {parseFloat(userData.longitude).toFixed(5)}
+                                        </span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between items-center text-sm">
                                     <div className="flex items-center gap-3 text-gray-500">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -514,6 +571,44 @@ const ResiProfile = () => {
                                     value={editData.address}
                                     onChange={(e) => setEditData({ ...editData, address: e.target.value })}
                                 />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Pinpoint Default Address Location</label>
+                                <div className="w-full h-48 rounded-2xl overflow-hidden border border-gray-150 relative z-10">
+                                    <MapContainer
+                                        key={isEditModalOpen ? 'open' : 'closed'}
+                                        center={[
+                                            editData.latitude ? parseFloat(editData.latitude) : 14.801313,
+                                            editData.longitude ? parseFloat(editData.longitude) : 121.003109
+                                        ]}
+                                        zoom={15}
+                                        className="h-full w-full"
+                                    >
+                                        <TileLayer
+                                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                        />
+                                        <LocationPicker
+                                            position={[
+                                                editData.latitude ? parseFloat(editData.latitude) : 14.801313,
+                                                editData.longitude ? parseFloat(editData.longitude) : 121.003109
+                                            ]}
+                                            onLocationSelect={(latVal, lngVal) => setEditData({ ...editData, latitude: latVal, longitude: lngVal })}
+                                        />
+                                        <RecenterMap
+                                            position={[
+                                                editData.latitude ? parseFloat(editData.latitude) : 14.801313,
+                                                editData.longitude ? parseFloat(editData.longitude) : 121.003109
+                                            ]}
+                                        />
+                                    </MapContainer>
+                                </div>
+                                <p className="text-[9px] font-bold text-gray-400 mt-1.5 uppercase text-center">Click Map to set your default coordinates</p>
+                                {editData.latitude && editData.longitude && (
+                                    <p className="text-[9px] font-bold text-orange-500 mt-1 uppercase text-center">
+                                        Selected: {parseFloat(editData.latitude).toFixed(5)}, {parseFloat(editData.longitude).toFixed(5)}
+                                    </p>
+                                )}
                             </div>
                         </div>
 

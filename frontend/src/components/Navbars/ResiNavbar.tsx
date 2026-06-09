@@ -82,6 +82,8 @@ const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, o
         setIsNotificationOpen(false);
         if (notif.title === "Pet Tag Scanned" && notif.related_id) {
             navigate(`/resident/pet/${notif.related_id}/scan-history`);
+        } else if ((notif.type === "potential_match" || notif.title?.toLowerCase().includes("match")) && notif.related_id) {
+            navigate(`/resident/reports/${notif.related_id}/match-review`);
         } else if ((notif.type === "status_update" || notif.type === "comment" || notif.type === "report" || notif.title?.toLowerCase().includes("report")) && notif.related_id) {
             navigate(`/resident/reports/${notif.related_id}`);
         }
