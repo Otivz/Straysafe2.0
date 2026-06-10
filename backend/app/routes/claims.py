@@ -65,6 +65,7 @@ def create_or_update_claim(claim_in: PetClaimCreate, db: Session = Depends(get_d
         # Update the existing match claim to a submitted state
         db_claim.status = "Pending Review"
         db_claim.remarks = claim_in.remarks
+        db_claim.distinctive_markings = claim_in.distinctive_markings
         db.commit()
         db.refresh(db_claim)
         return db_claim
@@ -74,6 +75,7 @@ def create_or_update_claim(claim_in: PetClaimCreate, db: Session = Depends(get_d
         report_id=claim_in.report_id,
         pet_id=claim_in.pet_id,
         remarks=claim_in.remarks,
+        distinctive_markings=claim_in.distinctive_markings,
         status="Pending Review"
     )
     db.add(new_claim)
@@ -85,6 +87,7 @@ def create_or_update_claim(claim_in: PetClaimCreate, db: Session = Depends(get_d
 async def upload_claim_evidence(
     claim_id: int,
     file: UploadFile = File(...),
+    document_type: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     claim = db.query(PetClaim).filter(PetClaim.claim_id == claim_id).first()
@@ -100,7 +103,17 @@ async def upload_claim_evidence(
         if not file_url:
             raise Exception("Upload to Cloudinary failed")
 
-        claim.evidence_url = file_url
+        if document_type == "vaccine_card":
+            claim.vaccine_card_url = file_url
+        elif document_type == "vet_record":
+            claim.vet_record_url = file_url
+        elif document_type == "registration_record":
+            claim.registration_record_url = file_url
+        elif document_type == "additional_photo":
+            claim.additional_photos_url = file_url
+        else:
+            claim.evidence_url = file_url
+
         claim.status = "Pending Review"
         db.commit()
         db.refresh(claim)

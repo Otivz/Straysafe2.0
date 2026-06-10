@@ -69,10 +69,10 @@ const PetQrCardPage = () => {
 
             // Fetch active QR code
             try {
-                const qrRes = await axios.post(`http://localhost:8000/pets/${petId}/generate-qr`);
+                const qrRes = await axios.get(`http://localhost:8000/pets/${petId}/qr`);
                 setQr(qrRes.data);
             } catch (err) {
-                console.error("Failed to generate QR automatically:", err);
+                console.error("Failed to fetch QR automatically:", err);
             }
         } catch (err) {
             console.error(err);

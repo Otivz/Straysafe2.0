@@ -21,6 +21,11 @@ class PetClaim(Base):
         nullable=False
     )
     evidence_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    vaccine_card_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    vet_record_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    registration_record_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    additional_photos_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    distinctive_markings: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

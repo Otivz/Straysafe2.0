@@ -148,6 +148,11 @@ const PetMatchReview = () => {
                 },
                 
                 evidence_url: (vaccineCardName || vetRecordName || petRegRecordName || prevPhotoName) ? "https://images.unsplash.com/photo-1584036561566-baf241f8022a?w=600&auto=format&fit=crop" : "",
+                vaccine_card_url: "",
+                vet_record_url: "",
+                registration_record_url: "",
+                additional_photos_url: "",
+                distinctive_markings: distinctiveMarkings || "",
                 previous_photos: prevPhotoName ? ["https://images.unsplash.com/photo-1530281700549-e82e7bf110d6?w=600&auto=format&fit=crop"] : [],
                 supporting_docs: [
                     vetRecordName ? `vet_records_${vetRecordName}` : "",
@@ -162,23 +167,54 @@ const PetMatchReview = () => {
                 const res = await axios.post('http://localhost:8000/claims/', {
                     report_id: parseInt(reportId || '0'),
                     pet_id: selectedPetId,
-                    remarks: remarks || "I confirm this is my pet."
+                    remarks: remarks || "I confirm this is my pet.",
+                    distinctive_markings: distinctiveMarkings
                 });
                 claimData = res.data;
 
-                // Upload whichever proof of ownership file is available to backend
-                const fileToUpload = vaccineCardFile || vetRecordFile || petRegRecordFile || additionalPhotosFile;
-                if (fileToUpload && claimData.claim_id) {
-                    const formData = new FormData();
-                    formData.append('file', fileToUpload);
-                    try {
-                        const uploadRes = await axios.post(`http://localhost:8000/claims/${claimData.claim_id}/evidence`, formData, {
+                // Upload whichever proof of ownership files are available to backend
+                const uploadPromises = [];
+                if (vaccineCardFile && claimData.claim_id) {
+                    const fd = new FormData();
+                    fd.append('file', vaccineCardFile);
+                    uploadPromises.push(
+                        axios.post(`http://localhost:8000/claims/${claimData.claim_id}/evidence?document_type=vaccine_card`, fd, {
                             headers: { 'Content-Type': 'multipart/form-data' }
-                        });
-                        claimData = uploadRes.data;
-                    } catch (uploadErr) {
-                        console.error("Failed to upload proof of ownership file to backend:", uploadErr);
-                    }
+                        })
+                    );
+                }
+                if (vetRecordFile && claimData.claim_id) {
+                    const fd = new FormData();
+                    fd.append('file', vetRecordFile);
+                    uploadPromises.push(
+                        axios.post(`http://localhost:8000/claims/${claimData.claim_id}/evidence?document_type=vet_record`, fd, {
+                            headers: { 'Content-Type': 'multipart/form-data' }
+                        })
+                    );
+                }
+                if (petRegRecordFile && claimData.claim_id) {
+                    const fd = new FormData();
+                    fd.append('file', petRegRecordFile);
+                    uploadPromises.push(
+                        axios.post(`http://localhost:8000/claims/${claimData.claim_id}/evidence?document_type=registration_record`, fd, {
+                            headers: { 'Content-Type': 'multipart/form-data' }
+                        })
+                    );
+                }
+                if (additionalPhotosFile && claimData.claim_id) {
+                    const fd = new FormData();
+                    fd.append('file', additionalPhotosFile);
+                    uploadPromises.push(
+                        axios.post(`http://localhost:8000/claims/${claimData.claim_id}/evidence?document_type=additional_photo`, fd, {
+                            headers: { 'Content-Type': 'multipart/form-data' }
+                        })
+                    );
+                }
+
+                if (uploadPromises.length > 0) {
+                    const results = await Promise.all(uploadPromises);
+                    // Use the last uploaded result to update the final state
+                    claimData = results[results.length - 1].data;
                 }
             } catch (err) {
                 console.warn("Could not post to backend. Continuing with local storage submission.", err);
@@ -191,6 +227,11 @@ const PetMatchReview = () => {
                 status: claimData.status || newClaim.status,
                 remarks: claimData.remarks || newClaim.remarks,
                 evidence_url: claimData.evidence_url || newClaim.evidence_url,
+                vaccine_card_url: claimData.vaccine_card_url || newClaim.vaccine_card_url,
+                vet_record_url: claimData.vet_record_url || newClaim.vet_record_url,
+                registration_record_url: claimData.registration_record_url || newClaim.registration_record_url,
+                additional_photos_url: claimData.additional_photos_url || newClaim.additional_photos_url,
+                distinctive_markings: claimData.distinctive_markings || newClaim.distinctive_markings,
                 pet: claimData.pet ? {
                     ...newClaim.pet,
                     ...claimData.pet,
