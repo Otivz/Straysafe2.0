@@ -109,13 +109,17 @@ const SubdPetClaims = () => {
                     phone: bc.pet?.owner?.phone || '',
                 },
             },
-            evidence_url: bc.evidence_url || '',
-            evidence_filename: bc.evidence_url ? bc.evidence_url.split('/').pop() : '',
+            evidence_url: bc.vaccine_card_url || bc.evidence_url || '',
+            evidence_filename: (bc.vaccine_card_url || bc.evidence_url) ? (bc.vaccine_card_url || bc.evidence_url).split('/').pop() : '',
             evidence_uploaded: bc.updated_at ? `Uploaded on ${new Date(bc.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : '',
-            previous_photos: bc.pet?.photo_url ? [bc.pet.photo_url] : [],
+            previous_photos: bc.additional_photos_url ? [bc.additional_photos_url] : (bc.pet?.photo_url ? [bc.pet.photo_url] : []),
             owner_pet_photos: [bc.pet?.photo_front_url, bc.pet?.photo_left_url, bc.pet?.photo_right_url].filter(Boolean),
-            supporting_docs: [],
+            supporting_docs: [
+                bc.vet_record_url && { name: bc.vet_record_url.split('/').pop(), url: bc.vet_record_url, color: 'blue' },
+                bc.registration_record_url && { name: bc.registration_record_url.split('/').pop(), url: bc.registration_record_url, color: 'green' }
+            ].filter(Boolean),
             owner_notes: bc.remarks || '',
+            distinctive_markings: bc.distinctive_markings || '',
             distance: (() => {
                 if (bc.pet?.registered_latitude && bc.pet?.registered_longitude && bc.report?.latitude && bc.report?.longitude) {
                     const lat1 = parseFloat(bc.pet.registered_latitude);
@@ -831,10 +835,19 @@ const SubdPetClaims = () => {
                                             </div>
                                             <div>
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Additional Notes from Owner</p>
-                                                <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 min-h-[80px]">
-                                                    <p className="text-[11px] font-medium text-gray-600 italic leading-relaxed">
-                                                        {selectedClaim.owner_notes || 'No additional notes provided.'}
-                                                    </p>
+                                                <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 min-h-[80px] space-y-3">
+                                                    {selectedClaim.distinctive_markings && (
+                                                        <div className="pb-2 border-b border-gray-250">
+                                                            <span className="text-[8px] font-black uppercase text-[#F97316] tracking-wider block mb-0.5">Distinctive Markings (Not visible in photos)</span>
+                                                            <p className="text-[11px] font-bold text-gray-700 leading-normal">{selectedClaim.distinctive_markings}</p>
+                                                        </div>
+                                                    )}
+                                                    <div>
+                                                        <span className="text-[8px] font-black uppercase text-gray-400 tracking-wider block mb-0.5">Remarks / Notes</span>
+                                                        <p className="text-[11px] font-medium text-gray-600 italic leading-relaxed">
+                                                            {selectedClaim.owner_notes || 'No additional notes provided.'}
+                                                        </p>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>

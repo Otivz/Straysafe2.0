@@ -76,6 +76,14 @@ def generate_pet_qr(pet_id: int, db: Session = Depends(get_db)):
     """Generate or recreate a unique secure QR code for a pet."""
     return generate_qr_for_pet_internal(pet_id, db)
 
+@router.get("/pets/{pet_id}/qr", response_model=PetQRCodeResponse)
+def get_pet_qr(pet_id: int, db: Session = Depends(get_db)):
+    """Get the active QR code for a pet, or generate it if it doesn't exist yet."""
+    db_qr = db.query(PetQRCode).filter(PetQRCode.pet_id == pet_id).first()
+    if not db_qr:
+        return generate_qr_for_pet_internal(pet_id, db)
+    return db_qr
+
 @router.put("/pets/{pet_id}/toggle-qr", response_model=PetQRCodeResponse)
 def toggle_pet_qr(pet_id: int, is_active: bool, db: Session = Depends(get_db)):
     """Deactivate or activate a pet's QR code."""
@@ -104,17 +112,17 @@ def get_public_scan_info(token: str, db: Session = Depends(get_db)):
         
     return PublicPetScanResponse(
         pet_id=int(pet.pet_id),  # type: ignore
-        pet_name=str(pet.pet_name),
-        pet_type=str(pet.pet_type),
-        breed=str(pet.breed) if pet.breed else None,
-        color_markings=str(pet.color_markings) if pet.color_markings else None,
-        temperament=str(pet.temperament) if pet.temperament else None,
-        photo_url=str(pet.photo_url) if pet.photo_url else None,
-        emergency_contact_name=str(pet.emergency_contact_name) if pet.emergency_contact_name else None,
-        emergency_contact_phone=str(pet.emergency_contact_phone) if pet.emergency_contact_phone else None,
-        notes=str(pet.notes) if pet.notes else None, # serves as owner instructions
+        pet_name=pet.pet_name,
+        pet_type=pet.pet_type,
+        breed=pet.breed if pet.breed else None,
+        color_markings=pet.color_markings if pet.color_markings else None,
+        temperament=pet.temperament if pet.temperament else None,
+        photo_url=pet.photo_url if pet.photo_url else None,
+        emergency_contact_name=pet.emergency_contact_name if pet.emergency_contact_name else None,
+        emergency_contact_phone=pet.emergency_contact_phone if pet.emergency_contact_phone else None,
+        notes=pet.notes if pet.notes else None, # serves as owner instructions
         is_active=bool(db_qr.is_active),  # type: ignore
-        qr_token=str(db_qr.qr_token)
+        qr_token=db_qr.qr_token
     )
 
 @router.post("/pet/scan/{token}/submit")
@@ -187,7 +195,7 @@ def get_pet_scan_history(pet_id: int, db: Session = Depends(get_db)):
         if s.scanned_by:
             user = db.query(User).filter(User.user_id == s.scanned_by).first()
             if user:
-                scanned_by_name = str(user.name)
+                scanned_by_name = user.name
                 
         response_list.append(
             PetQRScanResponse(
@@ -196,16 +204,16 @@ def get_pet_scan_history(pet_id: int, db: Session = Depends(get_db)):
                 pet_id=int(s.pet_id),  # type: ignore
                 scanned_by=int(s.scanned_by) if s.scanned_by else None,  # type: ignore
                 scanned_by_name=scanned_by_name,
-                finder_name=str(s.finder_name) if s.finder_name else None,
-                finder_contact=str(s.finder_contact) if s.finder_contact else None,
+                finder_name=s.finder_name if s.finder_name else None,
+                finder_contact=s.finder_contact if s.finder_contact else None,
                 scan_lat=s.scan_lat,  # type: ignore
                 scan_lng=s.scan_lng,  # type: ignore
-                street_address=str(s.street_address) if s.street_address else None,
-                barangay=str(s.barangay) if s.barangay else None,
-                city=str(s.city) if s.city else None,
-                landmark=str(s.landmark) if s.landmark else None,
-                location_type=str(s.location_type) if s.location_type else "Found Location",
-                notes=str(s.notes) if s.notes else None,
+                street_address=s.street_address if s.street_address else None,
+                barangay=s.barangay if s.barangay else None,
+                city=s.city if s.city else None,
+                landmark=s.landmark if s.landmark else None,
+                location_type=s.location_type if s.location_type else "Found Location",
+                notes=s.notes if s.notes else None,
                 scanned_at=s.scanned_at  # type: ignore
             )
         )

@@ -511,6 +511,11 @@ CREATE TABLE pet_claims(
         'Evidence Requested'
     ) DEFAULT 'Potential Owner Match' NOT NULL,
     evidence_url VARCHAR(255) NULL,
+    vaccine_card_url VARCHAR(255) NULL,
+    vet_record_url VARCHAR(255) NULL,
+    registration_record_url VARCHAR(255) NULL,
+    additional_photos_url VARCHAR(255) NULL,
+    distinctive_markings TEXT NULL,
     remarks TEXT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
