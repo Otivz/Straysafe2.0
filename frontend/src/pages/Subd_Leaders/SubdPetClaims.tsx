@@ -7,163 +7,7 @@ import MapComponent from '../../components/MapComponent';
 import Button from '../../components/Button';
 import Select from '../../components/Dropdown';
 
-// ─── Mock Data ───────────────────────────────────────────────────────────────
-const MOCK_CLAIMS = [
-    {
-        claim_id: 101,
-        report_id: 2004,
-        pet_id: 1,
-        status: 'Under Review',
-        remarks: '',
-        similarity_score: 90,
-        reported_date: 'June 6, 2026',
-        claim_date: 'June 6, 2026',
-        claim_time: '10:25 AM',
-        sighting_location: 'Selera Homes',
-        sighting_lat: 14.8018,
-        sighting_lng: 121.0035,
-        description: 'Nangangat yung aso na ito mag ingat.',
-        sighting_photo: 'https://images.unsplash.com/photo-1589941013453-ec89f33b5e95?w=600&auto=format&fit=crop',
-        pet: {
-            pet_name: 'Bruno',
-            pet_type: 'Dog',
-            breed: 'Aspin',
-            gender: 'Male',
-            primary_color: 'Brown',
-            secondary_color: 'Black',
-            distinctive_markings: 'Brown ears with black back markings.',
-            registered_address: 'Selera Homes',
-            registered_since: 'January 2025',
-            registered_latitude: 14.801496,
-            registered_longitude: 121.003280,
-            photo_url: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop',
-            owner: {
-                name: 'John Doe',
-                email: 'johndoe@gmail.com',
-                phone: '09283040403',
-            },
-        },
-        evidence_url: 'https://images.unsplash.com/photo-1584036561566-baf241f8022a?w=600&auto=format&fit=crop',
-        evidence_filename: 'bruno_vaccine_card.pdf',
-        evidence_uploaded: 'Uploaded on June 5, 2026',
-        previous_photos: [
-            'https://images.unsplash.com/photo-1530281700549-e82e7bf110d6?w=400&auto=format&fit=crop',
-            'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=400&auto=format&fit=crop',
-        ],
-        owner_pet_photos: [
-            'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&auto=format&fit=crop',
-            'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=400&auto=format&fit=crop',
-        ],
-        supporting_docs: [
-            { name: 'Affidavit of Ownership.pdf', color: 'blue' },
-            { name: 'Vet Record - Bruno.pdf', color: 'green' },
-            { name: 'Barangay Residency.pdf', color: 'orange' },
-        ],
-        owner_notes: 'Bruno escaped after fireworks during the fiesta and has been missing for 3 days.',
-        distance: '50m',
-        distance_meters: 50,
-        match_found_date: 'June 5, 2026',
-        claim_submitted_date: 'June 6, 2026',
-    },
-    {
-        claim_id: 102,
-        report_id: 2005,
-        pet_id: 2,
-        status: 'Evidence Requested',
-        remarks: 'Please provide additional owner-pet photos taken before the sighting date.',
-        similarity_score: 87,
-        reported_date: 'June 5, 2026',
-        claim_date: 'June 5, 2026',
-        claim_time: '02:40 PM',
-        sighting_location: 'Selera Homes',
-        sighting_lat: 14.8005,
-        sighting_lng: 121.0042,
-        description: 'Friendly stray looking for shelter near the subdivision gate.',
-        sighting_photo: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600&auto=format&fit=crop',
-        pet: {
-            pet_name: 'Max',
-            pet_type: 'Dog',
-            breed: 'Shih Tzu',
-            gender: 'Male',
-            primary_color: 'Black',
-            secondary_color: 'White',
-            distinctive_markings: 'White paws with white chest patch.',
-            registered_address: 'Selera Homes',
-            registered_since: 'March 2024',
-            registered_latitude: 14.7995,
-            registered_longitude: 121.0038,
-            photo_url: 'https://images.unsplash.com/photo-1530281700549-e82e7bf110d6?w=600&auto=format&fit=crop',
-            owner: {
-                name: 'Maria Cruz',
-                email: 'mariacruz@gmail.com',
-                phone: '09187654321',
-            },
-        },
-        evidence_url: '',
-        evidence_filename: '',
-        evidence_uploaded: '',
-        previous_photos: [],
-        owner_pet_photos: [],
-        supporting_docs: [],
-        owner_notes: '',
-        distance: '120m',
-        distance_meters: 120,
-        match_found_date: 'June 4, 2026',
-        claim_submitted_date: 'June 5, 2026',
-    },
-    {
-        claim_id: 103,
-        report_id: 2006,
-        pet_id: 3,
-        status: 'Approved',
-        remarks: 'Claim verified. Owner has matched photos and coordinates successfully.',
-        similarity_score: 95,
-        reported_date: 'June 4, 2026',
-        claim_date: 'June 4, 2026',
-        claim_time: '11:15 AM',
-        sighting_location: 'Phase 3, Selera Homes',
-        sighting_lat: 14.8022,
-        sighting_lng: 121.0028,
-        description: 'Fluffy dog stray resting near the subdivision garden.',
-        sighting_photo: 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=600&auto=format&fit=crop',
-        pet: {
-            pet_name: 'Brownie',
-            pet_type: 'Dog',
-            breed: 'Aspin',
-            gender: 'Male',
-            primary_color: 'Brown',
-            secondary_color: 'Tan',
-            distinctive_markings: 'Tan legs with dark brown ears.',
-            registered_address: 'Phase 3, Selera Homes',
-            registered_since: 'February 2023',
-            registered_latitude: 14.802461,
-            registered_longitude: 121.003280,
-            photo_url: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&auto=format&fit=crop',
-            owner: {
-                name: 'Juan Cruz',
-                email: 'juancruz@gmail.com',
-                phone: '09192233445',
-            },
-        },
-        evidence_url: 'https://images.unsplash.com/photo-1584036561566-baf241f8022a?w=600&auto=format&fit=crop',
-        evidence_filename: 'brownie_vaccine.pdf',
-        evidence_uploaded: 'Uploaded on June 3, 2026',
-        previous_photos: [
-            'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=400&auto=format&fit=crop',
-        ],
-        owner_pet_photos: [
-            'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=400&auto=format&fit=crop',
-        ],
-        supporting_docs: [
-            { name: 'pet_passport.pdf', color: 'blue' },
-        ],
-        owner_notes: 'She ran out when we were unloading groceries. Thank you for rescuing her!',
-        distance: '25m',
-        distance_meters: 25,
-        match_found_date: 'June 3, 2026',
-        claim_submitted_date: 'June 4, 2026',
-    },
-];
+
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const getStatusStyles = (status: string) => {
@@ -194,7 +38,7 @@ const docColors: Record<string, string> = {
 const SubdPetClaims = () => {
     const navigate = useNavigate();
 
-    const [claims, setClaims] = useState<any[]>(MOCK_CLAIMS);
+    const [claims, setClaims] = useState<any[]>([]);
     const [selectedClaim, setSelectedClaim] = useState<any>(null);
     const [remarks, setRemarks] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -202,16 +46,8 @@ const SubdPetClaims = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [viewMode, setViewMode] = useState<'list' | 'review'>('list');
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
-    const [isSimulateModalOpen, setIsSimulateModalOpen] = useState(false);
     const [openKebab, setOpenKebab] = useState<number | null>(null);
     const kebabRef = useRef<HTMLDivElement>(null);
-
-    const [simFormData, setSimFormData] = useState({
-        petName: 'Bruno',
-        notes: '',
-        hasVaccineCard: true,
-        docsList: 'pet_registration.jpg',
-    });
 
     const staffUserStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const staffUser = staffUserStr ? JSON.parse(staffUserStr) : null;
@@ -234,155 +70,146 @@ const SubdPetClaims = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    const transformClaim = (bc: any) => {
+        return {
+            report: bc.report,
+            claim_id: bc.claim_id,
+            report_id: bc.report_id,
+            pet_id: bc.pet_id,
+            status: bc.status,
+            remarks: bc.remarks || '',
+            similarity_score: (() => {
+                const match = bc.remarks?.match(/AI detected a (\d+)% potential match/i);
+                return match ? parseInt(match[1]) : 85;
+            })(),
+            reported_date: bc.report?.created_at ? new Date(bc.report.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'June 6, 2026',
+            claim_date: bc.created_at ? new Date(bc.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'June 6, 2026',
+            claim_time: bc.created_at ? new Date(bc.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '10:25 AM',
+            sighting_location: bc.report?.landmark || 'Selera Homes',
+            sighting_lat: bc.report?.latitude ? parseFloat(bc.report.latitude) : 14.8018,
+            sighting_lng: bc.report?.longitude ? parseFloat(bc.report.longitude) : 121.0035,
+            description: bc.report?.description || 'Roaming stray animal',
+            sighting_photo: bc.report?.media?.[0]?.file_url || '',
+            pet: {
+                pet_name: bc.pet?.pet_name || 'Unknown',
+                pet_type: bc.pet?.pet_type || 'Dog',
+                breed: bc.pet?.breed || 'Unknown',
+                gender: bc.pet?.gender || 'Unknown',
+                primary_color: bc.pet?.primary_color || 'Brown',
+                secondary_color: bc.pet?.secondary_color || '',
+                distinctive_markings: bc.pet?.distinctive_markings || bc.pet?.color_markings || '',
+                registered_address: bc.pet?.registered_address || 'Selera Homes',
+                registered_since: bc.pet?.created_at ? new Date(bc.pet.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'January 2025',
+                registered_latitude: bc.pet?.registered_latitude ? parseFloat(bc.pet.registered_latitude) : 14.801496,
+                registered_longitude: bc.pet?.registered_longitude ? parseFloat(bc.pet.registered_longitude) : 121.003280,
+                photo_url: bc.pet?.photo_url || '',
+                owner: {
+                    name: bc.pet?.owner?.name || 'Citizen',
+                    email: bc.pet?.owner?.email || '',
+                    phone: bc.pet?.owner?.phone || '',
+                },
+            },
+            evidence_url: bc.evidence_url || '',
+            evidence_filename: bc.evidence_url ? bc.evidence_url.split('/').pop() : '',
+            evidence_uploaded: bc.updated_at ? `Uploaded on ${new Date(bc.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : '',
+            previous_photos: bc.pet?.photo_url ? [bc.pet.photo_url] : [],
+            owner_pet_photos: [bc.pet?.photo_front_url, bc.pet?.photo_left_url, bc.pet?.photo_right_url].filter(Boolean),
+            supporting_docs: [],
+            owner_notes: bc.remarks || '',
+            distance: (() => {
+                if (bc.pet?.registered_latitude && bc.pet?.registered_longitude && bc.report?.latitude && bc.report?.longitude) {
+                    const lat1 = parseFloat(bc.pet.registered_latitude);
+                    const lon1 = parseFloat(bc.pet.registered_longitude);
+                    const lat2 = parseFloat(bc.report.latitude);
+                    const lon2 = parseFloat(bc.report.longitude);
+                    const R = 6371e3;
+                    const q1 = lat1 * Math.PI/180;
+                    const q2 = lat2 * Math.PI/180;
+                    const dq = (lat2-lat1) * Math.PI/180;
+                    const dl = (lon2-lon1) * Math.PI/180;
+                    const a = Math.sin(dq/2) * Math.sin(dq/2) +
+                              Math.cos(q1) * Math.cos(q2) *
+                              Math.sin(dl/2) * Math.sin(dl/2);
+                    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                    const meters = R * c;
+                    return meters < 1000 ? `${meters.toFixed(0)}m` : `${(meters/1000).toFixed(1)}km`;
+                }
+                return '50m';
+            })(),
+            distance_meters: (() => {
+                if (bc.pet?.registered_latitude && bc.pet?.registered_longitude && bc.report?.latitude && bc.report?.longitude) {
+                    const lat1 = parseFloat(bc.pet.registered_latitude);
+                    const lon1 = parseFloat(bc.pet.registered_longitude);
+                    const lat2 = parseFloat(bc.report.latitude);
+                    const lon2 = parseFloat(bc.report.longitude);
+                    const R = 6371e3;
+                    const q1 = lat1 * Math.PI/180;
+                    const q2 = lat2 * Math.PI/180;
+                    const dq = (lat2-lat1) * Math.PI/180;
+                    const dl = (lon2-lon1) * Math.PI/180;
+                    const a = Math.sin(dq/2) * Math.sin(dq/2) +
+                              Math.cos(q1) * Math.cos(q2) *
+                              Math.sin(dl/2) * Math.sin(dl/2);
+                    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                    return Math.round(R * c);
+                }
+                return 50;
+            })(),
+            match_found_date: bc.report?.created_at ? new Date(bc.report.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'June 5, 2026',
+            claim_submitted_date: bc.created_at ? new Date(bc.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'June 6, 2026',
+            evidence_requested_date: (bc.status === 'Evidence Requested' || bc.status === 'Approved' || bc.status === 'Rejected') && bc.updated_at ? new Date(bc.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null,
+            approved_date: bc.status === 'Approved' && bc.updated_at ? new Date(bc.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null,
+            rejected_date: bc.status === 'Rejected' && bc.updated_at ? new Date(bc.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null,
+        };
+    };
+
     const fetchBackendClaims = async () => {
         try {
             const url = staffUser?.subdivision_id
                 ? `http://localhost:8000/claims/?subdivision_id=${staffUser.subdivision_id}`
                 : 'http://localhost:8000/claims/';
             const res = await axios.get(url);
-            let merged = [...MOCK_CLAIMS];
             if (res.data?.length > 0) {
-                const transformed = res.data.map((bc: any) => {
-                    const mock = MOCK_CLAIMS.find(m => m.report_id === bc.report_id);
-                    return {
-                        claim_id: bc.claim_id,
-                        report_id: bc.report_id,
-                        pet_id: bc.pet_id,
-                        status: bc.status,
-                        remarks: bc.remarks || '',
-                        similarity_score: mock?.similarity_score || 90,
-                        reported_date: bc.report?.created_at ? new Date(bc.report.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'June 6, 2026',
-                        claim_date: mock?.claim_date || 'June 6, 2026',
-                        claim_time: mock?.claim_time || '10:25 AM',
-                        sighting_location: bc.report?.landmark || 'Selera Homes',
-                        sighting_lat: bc.report?.latitude ? parseFloat(bc.report.latitude) : 14.8018,
-                        sighting_lng: bc.report?.longitude ? parseFloat(bc.report.longitude) : 121.0035,
-                        description: bc.report?.description || 'Roaming stray animal',
-                        sighting_photo: bc.report?.media?.[0]?.file_url || mock?.sighting_photo || '',
-                        pet: {
-                            pet_name: bc.pet?.pet_name || 'Unknown',
-                            pet_type: bc.pet?.pet_type || 'Dog',
-                            breed: bc.pet?.breed || 'Unknown',
-                            gender: bc.pet?.gender || 'Unknown',
-                            primary_color: bc.pet?.primary_color || 'Brown',
-                            secondary_color: bc.pet?.secondary_color || '',
-                            distinctive_markings: bc.pet?.distinctive_markings || bc.pet?.color_markings || '',
-                            registered_address: bc.pet?.registered_address || 'Selera Homes',
-                            registered_since: mock?.pet.registered_since || 'January 2025',
-                            registered_latitude: bc.pet?.registered_latitude ? parseFloat(bc.pet.registered_latitude) : 14.801496,
-                            registered_longitude: bc.pet?.registered_longitude ? parseFloat(bc.pet.registered_longitude) : 121.003280,
-                            photo_url: bc.pet?.photo_url || mock?.pet.photo_url || '',
-                            owner: {
-                                name: bc.pet?.owner?.name || 'Citizen',
-                                email: bc.pet?.owner?.email || '',
-                                phone: bc.pet?.owner?.phone || '',
-                            },
-                        },
-                        evidence_url: bc.evidence_url || '',
-                        evidence_filename: mock?.evidence_filename || '',
-                        evidence_uploaded: mock?.evidence_uploaded || '',
-                        previous_photos: mock?.previous_photos || [],
-                        owner_pet_photos: mock?.owner_pet_photos || [],
-                        supporting_docs: mock?.supporting_docs || [],
-                        owner_notes: bc.remarks || '',
-                        distance: mock?.distance || '50m',
-                        distance_meters: mock?.distance_meters || 50,
-                        match_found_date: mock?.match_found_date || 'June 5, 2026',
-                        claim_submitted_date: mock?.claim_submitted_date || 'June 6, 2026',
-                    };
-                });
-                merged = [...transformed];
-                MOCK_CLAIMS.forEach(m => { if (!merged.some(t => t.report_id === m.report_id)) merged.push(m); });
+                const transformed = res.data.map((bc: any) => transformClaim(bc));
+                setClaims(transformed);
+                
+                // Keep selectedClaim in sync with fetched data if it was set
+                if (selectedClaim) {
+                    const fresh = transformed.find((c: any) => c.claim_id === selectedClaim.claim_id);
+                    if (fresh) {
+                        setSelectedClaim(fresh);
+                    }
+                }
+            } else {
+                setClaims([]);
             }
-            const localStr = localStorage.getItem('straysafe_claims_submitted');
-            if (localStr) {
-                const local = JSON.parse(localStr);
-                local.forEach((lc: any) => { merged = merged.filter(m => m.report_id !== lc.report_id); merged.unshift(lc); });
-            }
-            setClaims(merged);
-        } catch {
-            let merged = [...MOCK_CLAIMS];
-            const localStr = localStorage.getItem('straysafe_claims_submitted');
-            if (localStr) {
-                const local = JSON.parse(localStr);
-                local.forEach((lc: any) => { merged = merged.filter(m => m.report_id !== lc.report_id); merged.unshift(lc); });
-            }
-            setClaims(merged);
+        } catch (err) {
+            console.error("Failed to fetch claims", err);
+            setClaims([]);
         }
     };
 
-    const handleUpdateStatus = (status: 'Approved' | 'Rejected' | 'Evidence Requested') => {
+    const handleUpdateStatus = async (status: 'Approved' | 'Rejected' | 'Evidence Requested') => {
         if (!selectedClaim) return;
         setIsSubmitting(true);
-        setTimeout(() => {
-            const updated = claims.map(c => c.claim_id === selectedClaim.claim_id ? { ...c, status, remarks } : c);
-            setClaims(updated);
-            const fresh = updated.find(c => c.claim_id === selectedClaim.claim_id);
-            setSelectedClaim(fresh);
-            const localStr = localStorage.getItem('straysafe_claims_submitted');
-            if (localStr) {
-                const local = JSON.parse(localStr).map((c: any) =>
-                    c.claim_id === selectedClaim.claim_id || c.report_id === selectedClaim.report_id
-                        ? { ...c, status, remarks } : c
-                );
-                localStorage.setItem('straysafe_claims_submitted', JSON.stringify(local));
-            }
-            try { axios.patch(`http://localhost:8000/claims/${selectedClaim.claim_id}/status`, { status, remarks }); } catch { }
+        try {
+            const res = await axios.patch(`http://localhost:8000/claims/${selectedClaim.claim_id}/status`, {
+                status,
+                remarks
+            });
+            const transformed = transformClaim(res.data);
+            setClaims(prev => prev.map(c => c.claim_id === selectedClaim.claim_id ? transformed : c));
+            setSelectedClaim(transformed);
             setRemarks('');
+        } catch (err) {
+            console.error("Failed to update status", err);
+            alert("Failed to update claim status. Please try again.");
+        } finally {
             setIsSubmitting(false);
-        }, 600);
+        }
     };
 
-    const handleSimulateSubmission = () => {
-        setIsSubmitting(true);
-        setTimeout(() => {
-            const newClaim = {
-                claim_id: Date.now(),
-                report_id: 2000 + Math.floor(Math.random() * 100),
-                pet_id: 10,
-                status: 'Under Review',
-                remarks: '',
-                similarity_score: 90,
-                reported_date: 'June 6, 2026',
-                claim_date: 'June 6, 2026',
-                claim_time: '09:00 AM',
-                sighting_location: 'Selera Homes',
-                sighting_lat: 14.8018,
-                sighting_lng: 121.0035,
-                description: 'Nangangat yung aso na ito mag ingat.',
-                sighting_photo: 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=600&auto=format&fit=crop',
-                pet: {
-                    pet_name: simFormData.petName,
-                    pet_type: 'Dog',
-                    breed: 'Aspin',
-                    gender: 'Male',
-                    primary_color: 'Brown',
-                    secondary_color: 'Black',
-                    distinctive_markings: 'Brown ears with black back markings.',
-                    registered_address: 'Selera Homes',
-                    registered_since: 'January 2025',
-                    registered_latitude: 14.801496,
-                    registered_longitude: 121.003280,
-                    photo_url: 'https://images.unsplash.com/photo-1530281700549-e82e7bf110d6?w=600&auto=format&fit=crop',
-                    owner: { name: 'John Doe', email: 'johndoe@gmail.com', phone: '09171234567' },
-                },
-                evidence_url: simFormData.hasVaccineCard ? 'https://images.unsplash.com/photo-1584036561566-baf241f8022a?w=600&auto=format&fit=crop' : '',
-                evidence_filename: simFormData.hasVaccineCard ? 'vaccine_card_scan.jpg' : '',
-                evidence_uploaded: simFormData.hasVaccineCard ? 'Uploaded on June 6, 2026' : '',
-                previous_photos: ['https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=400&auto=format&fit=crop'],
-                owner_pet_photos: ['https://images.unsplash.com/photo-1530281700549-e82e7bf110d6?w=400&auto=format&fit=crop'],
-                supporting_docs: simFormData.docsList ? [{ name: simFormData.docsList, color: 'blue' }] : [],
-                owner_notes: simFormData.notes || 'Owner submitted simulated claim',
-                distance: '50m',
-                distance_meters: 50,
-                match_found_date: 'June 5, 2026',
-                claim_submitted_date: 'June 6, 2026',
-            };
-            setClaims(prev => [newClaim, ...prev]);
-            setIsSubmitting(false);
-            setIsSimulateModalOpen(false);
-        }, 800);
-    };
+
 
     const filteredClaims = claims.filter(c => {
         const q = searchQuery.toLowerCase();
@@ -542,7 +369,7 @@ const SubdPetClaims = () => {
                                             ↺ Reset
                                         </button>
                                         <Button
-                                            onClick={() => setIsSimulateModalOpen(true)}
+                                            onClick={() => window.print()}
                                             variant="primary"
                                             size="sm"
                                             className="h-9 gap-1.5"
@@ -776,12 +603,14 @@ const SubdPetClaims = () => {
                                                         <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Description</span>
                                                         <p className="text-[10px] font-medium text-gray-600 italic leading-relaxed">"{selectedClaim.description}"</p>
                                                     </div>
-                                                    <div className="flex items-start gap-2 px-1">
-                                                        <svg className="w-3 h-3 text-[#F97316] mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /></svg>
-                                                        <div className="min-w-0">
-                                                            <p className="text-[10px] font-bold text-gray-800 leading-none">{selectedClaim.sighting_location}</p>
-                                                            <p className="text-[8px] font-mono text-gray-400 mt-1">{selectedClaim.sighting_lat?.toFixed(6)}, {selectedClaim.sighting_lng?.toFixed(6)}</p>
-                                                        </div>
+                                                    <div className="bg-orange-50/30 rounded-xl p-3 border border-orange-100">
+                                                        <span className="text-[9px] font-black text-[#F97316] uppercase tracking-widest block mb-2">Sighting Details</span>
+                                                        <ul className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px]">
+                                                            <li><span className="text-gray-400 font-semibold">Breed: </span><span className="font-bold text-gray-800 truncate block">{selectedClaim.report?.animal_breed || selectedClaim.report?.ai_possible_breed || "Unknown"}</span></li>
+                                                            <li><span className="text-gray-400 font-semibold">Type: </span><span className="font-bold text-gray-800">{selectedClaim.report?.animal_type || selectedClaim.report?.ai_animal_type || "Unknown"}</span></li>
+                                                            <li className="col-span-2"><span className="text-gray-400 font-semibold">Colors: </span><span className="font-bold text-gray-800">{selectedClaim.report?.animal_color || selectedClaim.report?.ai_dominant_color || "Unknown"}</span></li>
+                                                            <li className="col-span-2"><span className="text-gray-400 font-semibold">Street: </span><span className="font-bold text-gray-800 truncate block">{selectedClaim.sighting_location}</span></li>
+                                                        </ul>
                                                     </div>
                                                 </div>
                                             </div>
@@ -831,53 +660,83 @@ const SubdPetClaims = () => {
                                     </div>
 
                                     {/* B: AI Comparison Results */}
-                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">B. AI Comparison Results</h4>
-                                        <table className="w-full text-xs border border-gray-100 rounded-xl overflow-hidden">
-                                            <thead>
-                                                <tr className="bg-gray-50 border-b border-gray-100">
-                                                    <th className="py-2.5 px-4 text-left text-[9px] font-black text-gray-400 uppercase tracking-widest">Category</th>
-                                                    <th className="py-2.5 px-4 text-right text-[9px] font-black text-gray-400 uppercase tracking-widest">Result</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-50">
-                                                <tr className="hover:bg-gray-50/50">
-                                                    <td className="py-2.5 px-4 text-gray-600 font-medium">Visual Similarity</td>
-                                                    <td className="py-2.5 px-4 text-right font-extrabold text-[#F97316]">{selectedClaim.similarity_score}%</td>
-                                                </tr>
-                                                <tr className="hover:bg-gray-50/50">
-                                                    <td className="py-2.5 px-4 text-gray-600 font-medium">Species Match</td>
-                                                    <td className="py-2.5 px-4 text-right font-extrabold text-green-600">Match</td>
-                                                </tr>
-                                                <tr className="hover:bg-gray-50/50">
-                                                    <td className="py-2.5 px-4 text-gray-600 font-medium">Breed Similarity</td>
-                                                    <td className="py-2.5 px-4 text-right font-extrabold text-green-600">92% Confidence</td>
-                                                </tr>
-                                                <tr className="hover:bg-gray-50/50">
-                                                    <td className="py-2.5 px-4 text-gray-600 font-medium">Color Match</td>
-                                                    <td className="py-2.5 px-4 text-right font-extrabold text-green-600">Confirmed</td>
-                                                </tr>
-                                                <tr className="hover:bg-gray-50/50">
-                                                    <td className="py-2.5 px-4 text-gray-600 font-medium">Markings Match</td>
-                                                    <td className="py-2.5 px-4 text-right font-extrabold text-green-600">Confirmed</td>
-                                                </tr>
-                                                <tr className="hover:bg-gray-50/50">
-                                                    <td className="py-2.5 px-4 text-gray-600 font-medium">Location Distance</td>
-                                                    <td className="py-2.5 px-4 text-right font-bold text-gray-700">{selectedClaim.distance_meters} meters</td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                        {/* Decision Badge */}
-                                        <div className={`mt-4 p-3 rounded-xl flex items-center gap-3 border ${selectedClaim.similarity_score >= 90 ? 'bg-green-50 border-green-200 text-green-700' : selectedClaim.similarity_score >= 80 ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-red-50 border-red-200 text-red-600'}`}>
-                                            <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                            <div>
-                                                <p className="text-xs font-black uppercase tracking-wider">
-                                                    {selectedClaim.similarity_score >= 90 ? 'HIGH PROBABILITY MATCH' : selectedClaim.similarity_score >= 80 ? 'MEDIUM PROBABILITY MATCH' : 'LOW PROBABILITY MATCH'}
-                                                </p>
-                                                <p className="text-[10px] font-medium opacity-80">Strong similarity detected by AI</p>
+                                    {(() => {
+                                        const pBreed = (selectedClaim.pet?.breed || "").toLowerCase().trim();
+                                        const rBreed = (selectedClaim.report?.ai_possible_breed || "").toLowerCase().trim();
+                                        const rReportedBreed = (selectedClaim.report?.animal_breed || "").toLowerCase().trim();
+                                        const breedMatches = pBreed && (
+                                            (rBreed && (pBreed === rBreed || pBreed.includes(rBreed) || rBreed.includes(pBreed))) ||
+                                            (rReportedBreed && (pBreed === rReportedBreed || pBreed.includes(rReportedBreed) || rReportedBreed.includes(pBreed)))
+                                        );
+
+                                        const rColors = (selectedClaim.report?.ai_dominant_color || "").toLowerCase().split(",").map((c: string) => c.trim());
+                                        const pPrimary = (selectedClaim.pet?.primary_color || "").toLowerCase().trim();
+                                        const pSecondary = (selectedClaim.pet?.secondary_color || "").toLowerCase().trim();
+                                        const colorMatches = (pPrimary && rColors.includes(pPrimary)) || (pSecondary && rColors.includes(pSecondary));
+
+                                        const speciesMatches = selectedClaim.pet?.pet_type?.toLowerCase() === (selectedClaim.report?.animal_type || selectedClaim.report?.ai_animal_type || 'dog').toLowerCase();
+                                        const markingsExist = !!(selectedClaim.pet?.distinctive_markings || selectedClaim.pet?.color_markings);
+
+                                        return (
+                                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">B. AI Comparison Results</h4>
+                                                <table className="w-full text-xs border border-gray-100 rounded-xl overflow-hidden">
+                                                    <thead>
+                                                        <tr className="bg-gray-50 border-b border-gray-100">
+                                                            <th className="py-2.5 px-4 text-left text-[9px] font-black text-gray-400 uppercase tracking-widest">Category</th>
+                                                            <th className="py-2.5 px-4 text-right text-[9px] font-black text-gray-400 uppercase tracking-widest">Result</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-50">
+                                                        <tr className="hover:bg-gray-50/50">
+                                                            <td className="py-2.5 px-4 text-gray-600 font-medium">Visual Similarity</td>
+                                                            <td className="py-2.5 px-4 text-right font-extrabold text-[#F97316]">{selectedClaim.similarity_score}%</td>
+                                                        </tr>
+                                                        <tr className="hover:bg-gray-50/50">
+                                                            <td className="py-2.5 px-4 text-gray-600 font-medium">Species Match</td>
+                                                            <td className={`py-2.5 px-4 text-right font-extrabold ${speciesMatches ? 'text-green-600' : 'text-red-500'}`}>
+                                                                {speciesMatches ? 'Match' : 'Mismatch'}
+                                                            </td>
+                                                        </tr>
+                                                        <tr className="hover:bg-gray-50/50">
+                                                            <td className="py-2.5 px-4 text-gray-600 font-medium">Breed Similarity</td>
+                                                            <td className={`py-2.5 px-4 text-right font-extrabold ${breedMatches ? 'text-green-600' : 'text-amber-500'}`}>
+                                                                {breedMatches ? 'Confirmed' : 'No Direct Match'}
+                                                            </td>
+                                                        </tr>
+                                                        <tr className="hover:bg-gray-50/50">
+                                                            <td className="py-2.5 px-4 text-gray-600 font-medium">Color Match</td>
+                                                            <td className={`py-2.5 px-4 text-right font-extrabold ${colorMatches ? 'text-green-600' : 'text-amber-500'}`}>
+                                                                {colorMatches ? 'Confirmed' : 'No Direct Match'}
+                                                            </td>
+                                                        </tr>
+                                                        <tr className="hover:bg-gray-50/50">
+                                                            <td className="py-2.5 px-4 text-gray-600 font-medium">Markings Match</td>
+                                                            <td className={`py-2.5 px-4 text-right font-extrabold ${markingsExist ? 'text-green-600' : 'text-gray-400'}`}>
+                                                                {markingsExist ? 'Confirmed' : 'Not Specified'}
+                                                            </td>
+                                                        </tr>
+                                                        <tr className="hover:bg-gray-50/50">
+                                                            <td className="py-2.5 px-4 text-gray-600 font-medium">Location Distance</td>
+                                                            <td className="py-2.5 px-4 text-right font-bold text-gray-700">{selectedClaim.distance_meters} meters</td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                                {/* Decision Badge */}
+                                                <div className={`mt-4 p-3 rounded-xl flex items-center gap-3 border ${selectedClaim.similarity_score >= 90 ? 'bg-green-50 border-green-200 text-green-700' : selectedClaim.similarity_score >= 80 ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-red-50 border-red-200 text-red-600'}`}>
+                                                    <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                    <div>
+                                                        <p className="text-xs font-black uppercase tracking-wider">
+                                                            {selectedClaim.similarity_score >= 90 ? 'HIGH PROBABILITY MATCH' : selectedClaim.similarity_score >= 80 ? 'MEDIUM PROBABILITY MATCH' : 'LOW PROBABILITY MATCH'}
+                                                        </p>
+                                                        <p className="text-[10px] font-medium opacity-80">
+                                                            {selectedClaim.similarity_score >= 90 ? 'Strong similarity detected by AI' : selectedClaim.similarity_score >= 80 ? 'Moderate similarity detected by AI' : 'Low similarity detected by AI'}
+                                                        </p>
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </div>
-                                    </div>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* ─── RIGHT COLUMN ─── */}
@@ -901,7 +760,7 @@ const SubdPetClaims = () => {
                                                             <button onClick={() => setLightboxImage(selectedClaim.evidence_url)} className="p-1.5 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors cursor-pointer">
                                                                 <svg className="w-3 h-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                                             </button>
-                                                            <button onClick={() => alert('[Download] Downloading...')} className="p-1.5 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors cursor-pointer">
+                                                            <button onClick={() => window.open(selectedClaim.evidence_url, '_blank')} className="p-1.5 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors cursor-pointer">
                                                                 <svg className="w-3 h-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                                                             </button>
                                                         </div>
@@ -992,8 +851,8 @@ const SubdPetClaims = () => {
                                                 showHeatmap={false}
                                                 showGeofence={true}
                                                 markers={[
-                                                    { id: 1, lat: selectedClaim.sighting_lat, lng: selectedClaim.sighting_lng, title: 'Sighting Location', category: 'Stray Sighting', color: 'orange' },
-                                                    { id: 2, lat: selectedClaim.pet?.registered_latitude || selectedClaim.sighting_lat - 0.0004, lng: selectedClaim.pet?.registered_longitude || selectedClaim.sighting_lng - 0.0003, title: 'Registered Owner Home', category: 'User Location' },
+                                                    { id: 1, lat: selectedClaim.sighting_lat, lng: selectedClaim.sighting_lng, title: selectedClaim.sighting_location || 'Sighting Location', category: 'Stray Sighting', color: 'orange' },
+                                                    { id: 2, lat: selectedClaim.pet?.registered_latitude || selectedClaim.sighting_lat - 0.0004, lng: selectedClaim.pet?.registered_longitude || selectedClaim.sighting_lng - 0.0003, title: selectedClaim.pet?.registered_address || 'Registered Owner Home', category: 'User Location' },
                                                 ]}
                                             />
                                         </div>
@@ -1001,12 +860,12 @@ const SubdPetClaims = () => {
                                             <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Sighting Location</p>
                                                 <p className="text-xs font-bold text-gray-800 mt-1">{selectedClaim.sighting_location}</p>
-                                                <p className="text-[9px] font-mono text-gray-400 mt-0.5">{selectedClaim.sighting_lat?.toFixed(6)}, {selectedClaim.sighting_lng?.toFixed(5)}</p>
+                                                <p className="text-[9px] font-bold text-gray-400 mt-0.5">{selectedClaim.sighting_location}</p>
                                             </div>
                                             <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Registered Address</p>
                                                 <p className="text-xs font-bold text-gray-800 mt-1">{selectedClaim.pet?.registered_address}</p>
-                                                <p className="text-[9px] font-mono text-gray-400 mt-0.5">{selectedClaim.pet?.registered_latitude?.toFixed(6)}, {selectedClaim.pet?.registered_longitude?.toFixed(6)}</p>
+                                                <p className="text-[9px] font-bold text-gray-400 mt-0.5">{selectedClaim.pet?.registered_address || 'Selera Homes'}</p>
                                             </div>
                                             <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Distance</p>
@@ -1023,37 +882,56 @@ const SubdPetClaims = () => {
                                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                                         <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">E. Claim Lifecycle Timeline</h4>
                                         {(() => {
+                                            const claimSubmitted = selectedClaim.status !== 'Potential Owner Match' && selectedClaim.status !== 'Possible Match Found';
                                             const steps = [
-                                                { label: 'Potential Match Found', date: selectedClaim.match_found_date, done: true, active: false },
-                                                { label: 'Claim Submitted', date: selectedClaim.claim_submitted_date, done: true, active: false },
-                                                { label: 'Under Review', date: selectedClaim.claim_date, done: selectedClaim.status !== 'Under Review' && selectedClaim.status !== 'Pending Review', active: selectedClaim.status === 'Under Review' || selectedClaim.status === 'Pending Review' },
-                                                { label: 'Evidence Requested', date: null, done: selectedClaim.status === 'Approved' || selectedClaim.status === 'Rejected', active: selectedClaim.status === 'Evidence Requested', skip: selectedClaim.status === 'Approved' || selectedClaim.status === 'Rejected' },
-                                                { label: 'Approved', date: null, done: selectedClaim.status === 'Approved', active: selectedClaim.status === 'Approved' },
-                                                { label: 'Rejected', date: null, done: selectedClaim.status === 'Rejected', active: selectedClaim.status === 'Rejected' },
+                                                { label: 'Potential Match Found', date: selectedClaim.match_found_date, done: true, active: false, waiting: false },
+                                                { label: 'Claim Submitted', date: claimSubmitted ? selectedClaim.claim_submitted_date : 'Waiting for owner...', done: claimSubmitted, active: false, waiting: !claimSubmitted },
+                                                { label: 'Under Review', date: claimSubmitted ? selectedClaim.claim_submitted_date : null, done: claimSubmitted && selectedClaim.status !== 'Under Review' && selectedClaim.status !== 'Pending Review', active: claimSubmitted && (selectedClaim.status === 'Under Review' || selectedClaim.status === 'Pending Review'), waiting: false },
+                                                { label: 'Evidence Requested', date: selectedClaim.evidence_requested_date, done: selectedClaim.status === 'Approved' || selectedClaim.status === 'Rejected', active: selectedClaim.status === 'Evidence Requested', skip: selectedClaim.status === 'Approved' || selectedClaim.status === 'Rejected', waiting: false },
+                                                { label: 'Approved', date: selectedClaim.approved_date, done: selectedClaim.status === 'Approved', active: selectedClaim.status === 'Approved', waiting: false },
+                                                { label: 'Rejected', date: selectedClaim.rejected_date, done: selectedClaim.status === 'Rejected', active: selectedClaim.status === 'Rejected', waiting: false },
                                             ];
                                             return (
                                                 <div className="flex items-start gap-0 overflow-x-auto pb-2">
-                                                    {steps.map((step, i) => (
-                                                        <div key={i} className="flex items-start shrink-0" style={{ minWidth: '90px' }}>
-                                                            <div className="flex flex-col items-center flex-1">
-                                                                {/* Circle */}
-                                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 shrink-0 z-10 text-xs font-black transition-all ${step.active ? 'bg-amber-400 border-amber-400 text-white shadow-md shadow-amber-200' : step.done ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-gray-200 text-gray-300'}`}>
-                                                                    {step.done ? '✓' : step.active ? '●' : '○'}
+                                                    {steps.map((step, i) => {
+                                                        if (step.label === 'Rejected' && selectedClaim.status !== 'Rejected') {
+                                                            return null;
+                                                        }
+                                                        if (step.label === 'Approved' && selectedClaim.status === 'Rejected') {
+                                                            return null;
+                                                        }
+                                                        return (
+                                                            <div key={i} className="flex items-start shrink-0" style={{ minWidth: '90px' }}>
+                                                                <div className="flex flex-col items-center flex-1">
+                                                                    {/* Circle */}
+                                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 shrink-0 z-10 text-xs font-black transition-all ${
+                                                                        step.active ? 'bg-amber-400 border-amber-400 text-white shadow-md shadow-amber-200'
+                                                                        : step.done ? 'bg-green-500 border-green-500 text-white'
+                                                                        : (step as any).waiting ? 'bg-gray-50 border-gray-300 border-dashed text-gray-300'
+                                                                        : 'bg-white border-gray-200 text-gray-300'
+                                                                    }`}>
+                                                                        {step.done ? '✓' : step.active ? '●' : (step as any).waiting ? '?' : '○'}
+                                                                    </div>
+                                                                    {/* Label */}
+                                                                    <p className={`text-center text-[8.5px] font-black mt-2 uppercase tracking-wide leading-tight px-1 ${
+                                                                        step.active ? 'text-amber-600'
+                                                                        : step.done ? 'text-green-600'
+                                                                        : (step as any).waiting ? 'text-gray-400'
+                                                                        : 'text-gray-300'
+                                                                    }`}>
+                                                                        {step.label}
+                                                                    </p>
+                                                                    {step.date && (
+                                                                        <p className={`text-[8px] text-center mt-0.5 font-medium ${(step as any).waiting ? 'text-amber-400 italic' : 'text-gray-400'}`}>{step.date}</p>
+                                                                    )}
                                                                 </div>
-                                                                {/* Label */}
-                                                                <p className={`text-center text-[8.5px] font-black mt-2 uppercase tracking-wide leading-tight px-1 ${step.active ? 'text-amber-600' : step.done ? 'text-green-600' : 'text-gray-300'}`}>
-                                                                    {step.label}
-                                                                </p>
-                                                                {step.date && (
-                                                                    <p className="text-[8px] text-gray-400 text-center mt-0.5 font-medium">{step.date}</p>
+                                                                {/* Connector Line */}
+                                                                {i < steps.length - 1 && (
+                                                                    <div className={`h-0.5 w-6 mt-4 shrink-0 ${step.done ? 'bg-green-400' : 'bg-gray-200'}`} />
                                                                 )}
                                                             </div>
-                                                            {/* Connector Line */}
-                                                            {i < steps.length - 1 && (
-                                                                <div className={`h-0.5 w-6 mt-4 shrink-0 ${step.done ? 'bg-green-400' : 'bg-gray-200'}`} />
-                                                            )}
-                                                        </div>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </div>
                                             );
                                         })()}
@@ -1072,60 +950,62 @@ const SubdPetClaims = () => {
                                     </div>
 
                                     {/* G: Review Decision */}
-                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">G. Review Decision</h4>
-                                        <div className="space-y-2.5">
-                                            <Button
-                                                fullWidth
-                                                disabled={isSubmitting || selectedClaim.status === 'Approved'}
-                                                onClick={() => handleUpdateStatus('Approved')}
-                                                className="h-12 justify-start gap-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm"
-                                                variant={'none' as any}
-                                                size="none"
-                                            >
-                                                <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                <div className="text-left">
-                                                    <p className="font-black">Approve Claim</p>
-                                                    <p className="text-[9px] font-medium opacity-80 normal-case tracking-normal">Mark as verified and notify Barangay</p>
-                                                </div>
-                                            </Button>
-                                            <Button
-                                                fullWidth
-                                                disabled={isSubmitting || selectedClaim.status === 'Evidence Requested'}
-                                                onClick={() => handleUpdateStatus('Evidence Requested')}
-                                                className="h-12 justify-start gap-3 bg-[#F97316] hover:bg-[#EA580C] disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm"
-                                                variant={'none' as any}
-                                                size="none"
-                                            >
-                                                <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
-                                                <div className="text-left">
-                                                    <p className="font-black">Request More Evidence</p>
-                                                    <p className="text-[9px] font-medium opacity-80 normal-case tracking-normal">Ask owner for additional documents</p>
-                                                </div>
-                                            </Button>
-                                            <Button
-                                                fullWidth
-                                                disabled={isSubmitting || selectedClaim.status === 'Rejected'}
-                                                onClick={() => handleUpdateStatus('Rejected')}
-                                                className="h-12 justify-start gap-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm"
-                                                variant={'none' as any}
-                                                size="none"
-                                            >
-                                                <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                <div className="text-left">
-                                                    <p className="font-black">Reject Claim</p>
-                                                    <p className="text-[9px] font-medium opacity-80 normal-case tracking-normal">Insufficient evidence to approve</p>
-                                                </div>
-                                            </Button>
-                                        </div>
+                                    {selectedClaim.status !== 'Potential Owner Match' && selectedClaim.status !== 'Possible Match Found' && (
+                                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">G. Review Decision</h4>
+                                            <div className="space-y-2.5">
+                                                <Button
+                                                    fullWidth
+                                                    disabled={isSubmitting || selectedClaim.status === 'Approved'}
+                                                    onClick={() => handleUpdateStatus('Approved')}
+                                                    className="h-12 justify-start gap-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm"
+                                                    variant={'none' as any}
+                                                    size="none"
+                                                >
+                                                    <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                    <div className="text-left">
+                                                        <p className="font-black">Approve Claim</p>
+                                                        <p className="text-[9px] font-medium opacity-80 normal-case tracking-normal">Mark as verified and notify Barangay</p>
+                                                    </div>
+                                                </Button>
+                                                <Button
+                                                    fullWidth
+                                                    disabled={isSubmitting || selectedClaim.status === 'Evidence Requested'}
+                                                    onClick={() => handleUpdateStatus('Evidence Requested')}
+                                                    className="h-12 justify-start gap-3 bg-[#F97316] hover:bg-[#EA580C] disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm"
+                                                    variant={'none' as any}
+                                                    size="none"
+                                                >
+                                                    <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                                                    <div className="text-left">
+                                                        <p className="font-black">Request More Evidence</p>
+                                                        <p className="text-[9px] font-medium opacity-80 normal-case tracking-normal">Ask owner for additional documents</p>
+                                                    </div>
+                                                </Button>
+                                                <Button
+                                                    fullWidth
+                                                    disabled={isSubmitting || selectedClaim.status === 'Rejected'}
+                                                    onClick={() => handleUpdateStatus('Rejected')}
+                                                    className="h-12 justify-start gap-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm"
+                                                    variant={'none' as any}
+                                                    size="none"
+                                                >
+                                                    <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                    <div className="text-left">
+                                                        <p className="font-black">Reject Claim</p>
+                                                        <p className="text-[9px] font-medium opacity-80 normal-case tracking-normal">Insufficient evidence to approve</p>
+                                                    </div>
+                                                </Button>
+                                            </div>
 
-                                        {/* Footer Reviewer Info */}
-                                        <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2 text-[9px] text-gray-400 font-medium">
-                                            <span>Reviewed By: <strong className="text-gray-600">{staffUser?.name || 'Juan Dela Cruz'}</strong> (Subdivision Leader)</span>
-                                            <span>Review Date: {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
-                                            <span>Last Updated: {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                                            {/* Footer Reviewer Info */}
+                                            <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2 text-[9px] text-gray-400 font-medium">
+                                                <span>Reviewed By: <strong className="text-gray-600">{staffUser?.name || 'Juan Dela Cruz'}</strong> (Subdivision Leader)</span>
+                                                <span>Review Date: {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                <span>Last Updated: {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -1134,49 +1014,7 @@ const SubdPetClaims = () => {
             </main>
 
             {/* ─── Citizen Simulator Modal ─── */}
-            {isSimulateModalOpen && (
-                <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                    <div className="relative w-full max-w-lg bg-white rounded-2xl p-7 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto custom-scrollbar">
-                        <div className="flex justify-between items-center pb-4 mb-5 border-b border-gray-100">
-                            <div>
-                                <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Claim Submission Simulator</h3>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Simulate owner response to AI stray matching</p>
-                            </div>
-                            <button onClick={() => setIsSimulateModalOpen(false)} className="p-1.5 hover:bg-gray-50 rounded-xl transition-all text-gray-400 hover:text-gray-700 focus:outline-none cursor-pointer">
-                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                        </div>
-                        <div className="space-y-4 text-xs">
-                            <div>
-                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1.5">Registered Pet Name</label>
-                                <input type="text" value={simFormData.petName} onChange={e => setSimFormData({ ...simFormData, petName: e.target.value })} className="w-full h-10 px-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/50 transition-all font-medium" />
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1.5">Vaccination Card</label>
-                                <div className="border border-dashed border-orange-200 bg-orange-50/20 rounded-xl p-3.5 flex justify-between items-center">
-                                    <div className="flex items-center gap-2"><span className="text-lg">📋</span><p className="text-[10.5px] font-bold text-gray-700">vaccine_card_scan.jpg</p></div>
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input type="checkbox" checked={simFormData.hasVaccineCard} onChange={e => setSimFormData({ ...simFormData, hasVaccineCard: e.target.checked })} className="w-4 h-4 accent-[#F97316]" />
-                                        <span className="text-[9.5px] font-black text-gray-500 uppercase">Attach</span>
-                                    </label>
-                                </div>
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1.5">Supporting Document</label>
-                                <input type="text" value={simFormData.docsList} placeholder="e.g. dog_license_2026.pdf" onChange={e => setSimFormData({ ...simFormData, docsList: e.target.value })} className="w-full h-10 px-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/50 transition-all font-medium" />
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1.5">Additional Notes</label>
-                                <textarea value={simFormData.notes} onChange={e => setSimFormData({ ...simFormData, notes: e.target.value })} placeholder="Enter details to prove ownership..." className="w-full h-20 bg-gray-50 border border-gray-200 rounded-xl p-3.5 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/50 transition-all resize-none font-medium" />
-                            </div>
-                        </div>
-                        <div className="mt-6 flex gap-3">
-                            <Button onClick={() => setIsSimulateModalOpen(false)} variant="light" size="none" className="flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest">Cancel</Button>
-                            <Button onClick={handleSimulateSubmission} variant="primary" size="none" className="flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest">File Simulated Claim</Button>
-                        </div>
-                    </div>
-                </div>
-            )}
+
 
             {/* ─── Lightbox ─── */}
             {lightboxImage && (

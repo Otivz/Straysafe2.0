@@ -191,12 +191,94 @@ def trigger_looks_matching(report: Report, db: Session):
     if not report.ai_animal_type or report.ai_animal_type == "Unknown":
         return
 
+    def parse_colors(color_str: str) -> list:
+        if not color_str:
+            return []
+        cleaned = color_str.lower()
+        for sep in [",", "/", "&", "and", ";", "-"]:
+            cleaned = cleaned.replace(sep, " ")
+        return [c.strip() for c in cleaned.split() if c.strip()]
+
     # Fetch registered pets of other owners that are active or lost
-    pets = db.query(Pet).filter(
+    all_pets = db.query(Pet).filter(
         Pet.owner_id != report.user_id,
-        Pet.status.in_(["Active", "Lost"]),
-        Pet.pet_type == report.ai_animal_type
+        Pet.status.in_(["Active", "Lost"])
     ).all()
+
+    # Pre-filter candidate pets according to system rules:
+    # 1. Same animal type (Dog/Cat)
+    # 2. Nearby registered location (within subdivision / close coordinates)
+    # 3. Similar color
+    # 4. Similar size (same or adjacent)
+    # 5. Similar breed
+    pets = []
+    for pet in all_pets:
+        # Same animal type
+        same_type = pet.pet_type.lower() == (report.animal_type or report.ai_animal_type or "").lower()
+        if not same_type:
+            continue
+            
+        # Nearby registered location
+        nearby = False
+        r_lat = getattr(report, "latitude", None)
+        r_lng = getattr(report, "longitude", None)
+        p_lat = getattr(pet, "registered_latitude", None)
+        p_lng = getattr(pet, "registered_longitude", None)
+        
+        if r_lat is not None and r_lng is not None and p_lat is not None and p_lng is not None:
+            lat_diff = float(r_lat) - float(p_lat)
+            lng_diff = float(r_lng) - float(p_lng)
+            dist = (lat_diff ** 2 + lng_diff ** 2) ** 0.5
+            if dist <= 0.015:
+                nearby = True
+        if not nearby and pet.owner and pet.owner.subdivision_id is not None and report.subdivision_id is not None:
+            if pet.owner.subdivision_id == report.subdivision_id:
+                nearby = True
+        if not nearby:
+            p_addr = (pet.registered_address or "").lower()
+            o_addr = (pet.owner.address or "").lower() if pet.owner else ""
+            r_land = (report.landmark or "").lower()
+            if "selera" in p_addr or "selera" in o_addr or "selera" in r_land:
+                nearby = True
+        if not nearby and (pet.registered_latitude is None or pet.registered_longitude is None):
+            nearby = True
+            
+        if not nearby:
+            continue
+            
+        # Similar color (at least one overlapping color term)
+        pet_colors = {c.strip().lower() for c in [pet.primary_color, pet.secondary_color, pet.color_markings] if c}
+        report_colors = set(parse_colors(f"{report.animal_color or ''} {report.ai_dominant_color or ''}"))
+        color_similar = True
+        if pet_colors and report_colors:
+            color_similar = len(pet_colors.intersection(report_colors)) > 0
+        if not color_similar:
+            continue
+            
+        # Similar size (same or adjacent category)
+        p_size = (pet.size_category or "Medium").lower()
+        r_size = (report.estimated_size or report.ai_estimated_size or "Medium").lower()
+        size_map = {"small": 1, "medium": 2, "large": 3}
+        size_similar = abs(size_map.get(p_size, 2) - size_map.get(r_size, 2)) <= 1
+        if not size_similar:
+            continue
+            
+        # Similar breed (substring match, mixed/aspin/puspin fallback, or either empty)
+        p_breed = (pet.breed or "").lower().strip()
+        r_breed = (report.animal_breed or report.ai_possible_breed or "").lower().strip()
+        breed_similar = True
+        if p_breed and r_breed:
+            breed_similar = (
+                p_breed in r_breed or r_breed in p_breed or
+                "aspin" in p_breed or "puspin" in p_breed or
+                "aspin" in r_breed or "puspin" in r_breed or
+                "unknown" in p_breed or "unknown" in r_breed or
+                "mixed" in p_breed or "mixed" in r_breed
+            )
+        if not breed_similar:
+            continue
+            
+        pets.append(pet)
 
     for pet in pets:
         # 1. Base attribute matching
@@ -205,7 +287,7 @@ def trigger_looks_matching(report: Report, db: Session):
         # Breed Matching (up to 30 points)
         breed_match = False
         p_breed = (pet.breed or "").lower().strip()
-        r_breed = (report.ai_possible_breed or "").lower().strip()
+        r_breed = (report.animal_breed or report.ai_possible_breed or "").lower().strip()
         
         if p_breed and r_breed:
             if p_breed == r_breed or p_breed in r_breed or r_breed in p_breed:
@@ -217,7 +299,7 @@ def trigger_looks_matching(report: Report, db: Session):
         
         # Color Matching (up to 40 points)
         color_match_points = 0
-        r_colors = [c.strip().lower() for c in (report.ai_dominant_color or "").split(",") if c.strip()]
+        r_colors = parse_colors(f"{report.animal_color or ''} {report.ai_dominant_color or ''}")
         
         p_primary = (pet.primary_color or "").lower().strip()
         p_secondary = (pet.secondary_color or "").lower().strip()
@@ -272,9 +354,9 @@ def trigger_looks_matching(report: Report, db: Session):
                 Your task is to compare two sets of animal attributes and determine if they describe the same individual animal.
                 
                 Stray Report Attributes (extracted from sighting):
-                - Species: {report.ai_animal_type}
-                - Breed: {report.ai_possible_breed or 'Unknown'}
-                - Dominant Colors: {report.ai_dominant_color or 'Unknown'}
+                - Species: {report.animal_type or report.ai_animal_type}
+                - Breed: {report.animal_breed or report.ai_possible_breed or 'Unknown'}
+                - Dominant Colors: {report.animal_color or report.ai_dominant_color or 'Unknown'}
                 - Description: "{report.description or ''}"
                 
                 Registered Pet Attributes:

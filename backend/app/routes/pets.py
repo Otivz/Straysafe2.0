@@ -61,7 +61,7 @@ def create_pet(pet: PetCreate, req: Request, db: Session = Depends(get_db)):
         target_id=db_pet.pet_id,
         description=f"Registered new pet: {db_pet.pet_name} ({db_pet.pet_type}), owner_id={db_pet.owner_id}",
         log_type="operation",
-        new_values={"pet_name": db_pet.pet_name, "pet_type": str(db_pet.pet_type), "owner_id": db_pet.owner_id},
+        new_values={"pet_name": db_pet.pet_name, "pet_type": db_pet.pet_type, "owner_id": db_pet.owner_id},
         request=req
     )
     return db_pet
@@ -72,7 +72,7 @@ def update_pet(pet_id: int, pet_update: PetUpdate, req: Request, db: Session = D
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
     
-    old_snapshot = {"pet_name": db_pet.pet_name, "pet_type": str(db_pet.pet_type), "status": str(db_pet.status)}
+    old_snapshot = {"pet_name": db_pet.pet_name, "pet_type": db_pet.pet_type, "status": db_pet.status}
     update_data = pet_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_pet, key, value)
@@ -88,7 +88,7 @@ def update_pet(pet_id: int, pet_update: PetUpdate, req: Request, db: Session = D
         description=f"Updated pet record: {db_pet.pet_name} (pet_id={pet_id})",
         log_type="operation",
         old_values=old_snapshot,
-        new_values={"pet_name": db_pet.pet_name, "pet_type": str(db_pet.pet_type), "status": str(db_pet.status)},
+        new_values={"pet_name": db_pet.pet_name, "pet_type": db_pet.pet_type, "status": db_pet.status},
         request=req
     )
     return db_pet
@@ -98,7 +98,7 @@ def delete_pet(pet_id: int, req: Request, db: Session = Depends(get_db)):
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
-    pet_snapshot = {"pet_name": db_pet.pet_name, "pet_type": str(db_pet.pet_type), "owner_id": db_pet.owner_id}
+    pet_snapshot = {"pet_name": db_pet.pet_name, "pet_type": db_pet.pet_type, "owner_id": db_pet.owner_id}
     db.delete(db_pet)
     db.commit()
     log_activity(
