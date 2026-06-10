@@ -145,6 +145,7 @@ const BrgyHoldingFacility = () => {
     // Add timeline entry
     const [timelineForm, setTimelineForm] = useState({ event_type: 'observation', title: '', notes: '' });
     const [isAddingTimeline, setIsAddingTimeline] = useState(false);
+    const [timelineFiles, setTimelineFiles] = useState<File[]>([]);
 
     // Lightbox / media preview state
     const [lightboxMedia, setLightboxMedia] = useState<{ mediaList: any[]; index: number } | null>(null);
@@ -273,6 +274,20 @@ const BrgyHoldingFacility = () => {
         if (!selected || !timelineForm.title.trim()) return;
         setIsAddingTimeline(true);
         try {
+            // 1. Upload any attached files first
+            if (timelineFiles.length > 0) {
+                for (const file of timelineFiles) {
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    fd.append('is_evidence', 'true');
+                    await axios.post(`http://localhost:8000/reports/${selected.report_id}/media`, fd, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                    });
+                }
+                setTimelineFiles([]);
+            }
+
+            // 2. Add the timeline entry
             await axios.post(`http://localhost:8000/holding/${selected.holding_id}/timeline`, {
                 ...timelineForm,
                 logged_by: currentUser?.user_id,
@@ -875,12 +890,58 @@ const BrgyHoldingFacility = () => {
                                                 value={timelineForm.notes}
                                                 onChange={e => setTimelineForm(f => ({ ...f, notes: e.target.value }))}
                                             />
+
+                                            {/* Upload Media for timeline */}
+                                            <div>
+                                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1.5">📎 Attach Media (optional)</label>
+                                                <div className="flex flex-col gap-2 bg-white border border-gray-200 rounded-xl p-3">
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*,video/*"
+                                                        multiple
+                                                        onChange={e => {
+                                                            if (e.target.files) {
+                                                                setTimelineFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                                                                e.target.value = '';
+                                                            }
+                                                        }}
+                                                        className="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-wider file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 cursor-pointer"
+                                                    />
+                                                    {timelineFiles.length > 0 && (
+                                                        <div className="space-y-1.5 border-t border-gray-100 pt-2">
+                                                            <div className="flex items-center justify-between text-[10px] font-black uppercase text-gray-400">
+                                                                <span>{timelineFiles.length} file{timelineFiles.length !== 1 ? 's' : ''} selected</span>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setTimelineFiles([])}
+                                                                    className="text-red-500 hover:text-red-600 font-bold"
+                                                                >Clear all</button>
+                                                            </div>
+                                                            <div className="flex flex-col gap-1 max-h-20 overflow-y-auto custom-scrollbar">
+                                                                {timelineFiles.map((file, idx) => (
+                                                                    <div key={idx} className="flex items-center justify-between bg-gray-50 px-2 py-1 rounded border border-gray-100 text-[10px] text-gray-600">
+                                                                        <span className="truncate flex-1 pr-1">📎 {file.name}</span>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setTimelineFiles(prev => prev.filter((_, i) => i !== idx))}
+                                                                            className="text-red-500 font-extrabold shrink-0 ml-1"
+                                                                        >✕</button>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
                                             <button
                                                 onClick={handleAddTimeline}
                                                 disabled={isAddingTimeline || !timelineForm.title.trim()}
-                                                className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-bold rounded-xl transition-colors"
+                                                className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
                                             >
-                                                {isAddingTimeline ? 'Adding...' : '+ Add Entry'}
+                                                {isAddingTimeline ? (
+                                                    <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Uploading & Saving...</>
+                                                ) : '+ Add Entry'}
                                             </button>
                                         </div>
                                     )}

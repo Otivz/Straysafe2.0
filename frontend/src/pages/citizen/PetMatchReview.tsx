@@ -3,44 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
-import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
 
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-
-const DefaultIcon = L.icon({
-    iconUrl: markerIcon,
-    iconRetinaUrl: markerIconRetina,
-    shadowUrl: markerShadow,
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
-});
-
-L.Marker.prototype.options.icon = DefaultIcon;
-
-const LocationPicker = ({ onLocationSelect, position }: { onLocationSelect: (lat: number, lng: number) => void, position: [number, number] }) => {
-    useMapEvents({
-        click(e) {
-            onLocationSelect(e.latlng.lat, e.latlng.lng);
-        },
-    });
-    return position ? <Marker position={position} /> : null;
-};
-
-const RecenterMap = ({ position }: { position: [number, number] }) => {
-    const map = useMap();
-    useEffect(() => {
-        if (position && position[0] && position[1]) {
-            map.setView(position, map.getZoom());
-        }
-    }, [position, map]);
-    return null;
-};
 
 const PetMatchReview = () => {
     const { reportId } = useParams();
@@ -52,6 +15,10 @@ const PetMatchReview = () => {
     const [loading, setLoading] = useState(true);
     const [existingClaim, setExistingClaim] = useState<any>(null);
     const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+    const [vaccineCardFile, setVaccineCardFile] = useState<File | null>(null);
+    const [vetRecordFile, setVetRecordFile] = useState<File | null>(null);
+    const [petRegRecordFile, setPetRegRecordFile] = useState<File | null>(null);
+    const [additionalPhotosFile, setAdditionalPhotosFile] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [petLat, setPetLat] = useState<number | null>(null);
     const [petLng, setPetLng] = useState<number | null>(null);
@@ -90,21 +57,21 @@ const PetMatchReview = () => {
                 setSelectedPetId(activePets[0].pet_id);
             }
 
-            // 3. Check for existing claim in local storage list first (so simulated files show up!)
-            const localClaimsStr = localStorage.getItem('straysafe_claims_submitted');
+            // 3. Check backend first for real claim data
             let matchingClaim = null;
-            if (localClaimsStr) {
-                const localClaims = JSON.parse(localClaimsStr);
-                matchingClaim = localClaims.find((c: any) => c.report_id === parseInt(reportId || '0') && c.pet.owner?.email === currentUser?.email);
+            try {
+                const claimsRes = await axios.get(`http://localhost:8000/claims/?owner_id=${currentUser.user_id}`);
+                matchingClaim = claimsRes.data.find((c: any) => c.report_id === parseInt(reportId || '0'));
+            } catch (e) {
+                console.warn("Could not load backend claims", e);
             }
 
-            // Fallback to backend check if no local storage claim found
+            // Fallback to local storage only if backend has no record of this claim
             if (!matchingClaim) {
-                try {
-                    const claimsRes = await axios.get(`http://localhost:8000/claims/?owner_id=${currentUser.user_id}`);
-                    matchingClaim = claimsRes.data.find((c: any) => c.report_id === parseInt(reportId || '0'));
-                } catch (e) {
-                    console.warn("Could not load backend claims", e);
+                const localClaimsStr = localStorage.getItem('straysafe_claims_submitted');
+                if (localClaimsStr) {
+                    const localClaims = JSON.parse(localClaimsStr);
+                    matchingClaim = localClaims.find((c: any) => c.report_id === parseInt(reportId || '0') && c.pet.owner?.email === currentUser?.email);
                 }
             }
 
@@ -129,20 +96,6 @@ const PetMatchReview = () => {
         }
     };
 
-    const handlePinpointPetLocation = async (lat: number, lng: number) => {
-        setPetLat(lat);
-        setPetLng(lng);
-        if (!selectedPetId) return;
-        try {
-            const res = await axios.put(`http://localhost:8000/pets/${selectedPetId}`, {
-                registered_latitude: lat,
-                registered_longitude: lng
-            });
-            setMyPets(prev => prev.map(p => p.pet_id === selectedPetId ? res.data : p));
-        } catch (e) {
-            console.error("Failed to update pet registered coordinates", e);
-        }
-    };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
@@ -194,7 +147,7 @@ const PetMatchReview = () => {
                     }
                 },
                 
-                evidence_url: vaccineCardName ? "https://images.unsplash.com/photo-1584036561566-baf241f8022a?w=600&auto=format&fit=crop" : "",
+                evidence_url: (vaccineCardName || vetRecordName || petRegRecordName || prevPhotoName) ? "https://images.unsplash.com/photo-1584036561566-baf241f8022a?w=600&auto=format&fit=crop" : "",
                 previous_photos: prevPhotoName ? ["https://images.unsplash.com/photo-1530281700549-e82e7bf110d6?w=600&auto=format&fit=crop"] : [],
                 supporting_docs: [
                     vetRecordName ? `vet_records_${vetRecordName}` : "",
@@ -212,18 +165,49 @@ const PetMatchReview = () => {
                     remarks: remarks || "I confirm this is my pet."
                 });
                 claimData = res.data;
+
+                // Upload whichever proof of ownership file is available to backend
+                const fileToUpload = vaccineCardFile || vetRecordFile || petRegRecordFile || additionalPhotosFile;
+                if (fileToUpload && claimData.claim_id) {
+                    const formData = new FormData();
+                    formData.append('file', fileToUpload);
+                    try {
+                        const uploadRes = await axios.post(`http://localhost:8000/claims/${claimData.claim_id}/evidence`, formData, {
+                            headers: { 'Content-Type': 'multipart/form-data' }
+                        });
+                        claimData = uploadRes.data;
+                    } catch (uploadErr) {
+                        console.error("Failed to upload proof of ownership file to backend:", uploadErr);
+                    }
+                }
             } catch (err) {
                 console.warn("Could not post to backend. Continuing with local storage submission.", err);
             }
 
             // Save to localStorage list for full frontend dashboard sync
+            const finalClaim = {
+                ...newClaim,
+                claim_id: claimData.claim_id || newClaim.claim_id,
+                status: claimData.status || newClaim.status,
+                remarks: claimData.remarks || newClaim.remarks,
+                evidence_url: claimData.evidence_url || newClaim.evidence_url,
+                pet: claimData.pet ? {
+                    ...newClaim.pet,
+                    ...claimData.pet,
+                    owner: claimData.pet.owner ? {
+                        ...newClaim.pet.owner,
+                        ...claimData.pet.owner
+                    } : newClaim.pet.owner
+                } : newClaim.pet
+            };
+
             const localClaimsStr = localStorage.getItem('straysafe_claims_submitted');
             const localClaims = localClaimsStr ? JSON.parse(localClaimsStr) : [];
             const filteredLocal = localClaims.filter((c: any) => c.report_id !== parseInt(reportId || '0'));
-            filteredLocal.push(claimData);
+            filteredLocal.push(finalClaim);
             localStorage.setItem('straysafe_claims_submitted', JSON.stringify(filteredLocal));
 
-            setExistingClaim(claimData);
+            setExistingClaim(finalClaim);
             alert("Claim filed successfully. Subdivision leaders and Barangay officials have been notified.");
         } catch (err: any) {
             console.error(err);
@@ -346,7 +330,11 @@ const PetMatchReview = () => {
         if (!matchedPet || !report) return { text: "NO", desc: "No data to compare" };
         const pBreed = (matchedPet.breed || "").toLowerCase().trim();
         const rBreed = (report.ai_possible_breed || "").toLowerCase().trim();
-        const breedMatches = pBreed && rBreed && (pBreed === rBreed || pBreed.includes(rBreed) || rBreed.includes(pBreed));
+        const rReportedBreed = (report.animal_breed || "").toLowerCase().trim();
+        const breedMatches = pBreed && (
+            (rBreed && (pBreed === rBreed || pBreed.includes(rBreed) || rBreed.includes(pBreed))) ||
+            (rReportedBreed && (pBreed === rReportedBreed || pBreed.includes(rReportedBreed) || rReportedBreed.includes(pBreed)))
+        );
 
         const rColors = (report.ai_dominant_color || "").toLowerCase().split(",").map((c: string) => c.trim());
         const pPrimary = (matchedPet.primary_color || "").toLowerCase().trim();
@@ -397,7 +385,7 @@ const PetMatchReview = () => {
                                     <div className="bg-gray-50 rounded-2xl p-4 space-y-2">
                                         <p className="text-xs font-black text-[#1a1208] uppercase">Sighting Details</p>
                                         <p className="text-xs text-gray-500 font-bold">Species: <span className="text-[#1a1208]">{report.animal_type || report.ai_animal_type || "Dog"}</span></p>
-                                        <p className="text-xs text-gray-500 font-bold">Breed: <span className="text-[#1a1208]">{report.ai_possible_breed || "Unknown"}</span></p>
+                                        <p className="text-xs text-gray-500 font-bold">Breed: <span className="text-[#1a1208]">{report.animal_breed || report.ai_possible_breed || "Unknown"}</span></p>
                                         <p className="text-xs text-gray-500 font-bold">Color: <span className="text-[#1a1208]">{report.ai_dominant_color || "Unknown"}</span></p>
                                     </div>
                                 </div>
@@ -423,29 +411,7 @@ const PetMatchReview = () => {
                                             <p className="text-xs text-gray-500 font-bold">Address: <span className="text-[#1a1208]">{currentLat && currentLng ? `${currentLat.toFixed(5)}, ${currentLng.toFixed(5)}` : "Not Pinpointed"}</span></p>
                                         )}
                                     </div>
-                                    {matchedPet && (
-                                        <div className="mt-4">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Pinpoint Where Pet Lives</label>
-                                            <div className="w-full h-48 rounded-2xl overflow-hidden border border-gray-150 relative z-10">
-                                                <MapContainer
-                                                    center={[currentLat || 14.801313, currentLng || 121.003109]}
-                                                    zoom={15}
-                                                    className="h-full w-full"
-                                                >
-                                                    <TileLayer
-                                                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                                                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                                                    />
-                                                    <LocationPicker
-                                                        position={[currentLat || 14.801313, currentLng || 121.003109]}
-                                                        onLocationSelect={(lat, lng) => handlePinpointPetLocation(lat, lng)}
-                                                    />
-                                                    <RecenterMap position={[currentLat || 14.801313, currentLng || 121.003109]} />
-                                                </MapContainer>
-                                            </div>
-                                            <p className="text-[9px] font-bold text-gray-400 mt-1.5 uppercase text-center">Click Map to set where your pet lives</p>
-                                        </div>
-                                    )}
+
                                 </div>
                             </div>
                         </div>
@@ -591,15 +557,22 @@ const PetMatchReview = () => {
                                                 &larr; Back
                                             </button>
                                         </div>
+                                        <p className="text-[10px] text-gray-400 font-bold leading-normal uppercase">
+                                            Please upload at least one proof of ownership (e.g., vaccine card, medical records, registration record, or photos) to enable claim submission.
+                                        </p>
 
                                         {/* Vaccination Card */}
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Vaccination Card <span className="text-red-500">*</span></label>
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Vaccination Card</label>
                                             <input 
                                                 type="file"
                                                 accept="image/*,application/pdf"
-                                                onChange={(e) => setVaccineCardName(e.target.files?.[0]?.name || '')}
-                                                className="w-full text-xs font-bold text-gray-450 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0] || null;
+                                                    setVaccineCardFile(file);
+                                                    setVaccineCardName(file?.name || '');
+                                                }}
+                                                className="w-full text-xs font-bold text-gray-455 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
                                             />
                                             {vaccineCardName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {vaccineCardName}</p>}
                                         </div>
@@ -610,7 +583,11 @@ const PetMatchReview = () => {
                                             <input 
                                                 type="file"
                                                 accept="image/*,application/pdf"
-                                                onChange={(e) => setVetRecordName(e.target.files?.[0]?.name || '')}
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0] || null;
+                                                    setVetRecordFile(file);
+                                                    setVetRecordName(file?.name || '');
+                                                }}
                                                 className="w-full text-xs font-bold text-gray-455 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
                                             />
                                             {vetRecordName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {vetRecordName}</p>}
@@ -622,7 +599,11 @@ const PetMatchReview = () => {
                                             <input 
                                                 type="file"
                                                 accept="image/*,application/pdf"
-                                                onChange={(e) => setPetRegRecordName(e.target.files?.[0]?.name || '')}
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0] || null;
+                                                    setPetRegRecordFile(file);
+                                                    setPetRegRecordName(file?.name || '');
+                                                }}
                                                 className="w-full text-xs font-bold text-gray-460 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
                                             />
                                             {petRegRecordName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {petRegRecordName}</p>}
@@ -635,7 +616,11 @@ const PetMatchReview = () => {
                                                 type="file"
                                                 multiple
                                                 accept="image/*"
-                                                onChange={(e) => setPrevPhotoName(e.target.files?.[0]?.name ? `${e.target.files?.[0]?.name} (+${e.target.files.length - 1} files)` : '')}
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0] || null;
+                                                    setAdditionalPhotosFile(file);
+                                                    setPrevPhotoName(file?.name ? `${file.name} (+${e.target.files.length - 1} files)` : '');
+                                                }}
                                                 className="w-full text-xs font-bold text-gray-465 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
                                             />
                                             {prevPhotoName && <p className="text-[9px] font-bold text-green-600 uppercase">Attached: {prevPhotoName}</p>}
@@ -665,7 +650,7 @@ const PetMatchReview = () => {
 
                                         <div className="pt-2">
                                             <Button
-                                                disabled={isSubmitting || !vaccineCardName}
+                                                disabled={isSubmitting || !(vaccineCardName || vetRecordName || petRegRecordName || prevPhotoName)}
                                                 className="w-full py-4 bg-[#F97316] text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-100 hover:scale-[1.02] transition-all cursor-pointer disabled:bg-gray-200 disabled:shadow-none"
                                                 onClick={handleSubmitClaim}
                                             >

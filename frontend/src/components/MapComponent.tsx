@@ -42,7 +42,7 @@ const BrgyIcon = L.divIcon({
     popupAnchor: [0, -60]
 });
 
-const MeIcon = L.divIcon({
+const createUserLocationIcon = (title: string) => L.divIcon({
     html: `
         <div style="display: flex; flex-direction: column; align-items: center;">
             <div style="
@@ -58,7 +58,7 @@ const MeIcon = L.divIcon({
                 box-shadow: 0 4px 10px rgba(0,0,0,0.2);
                 border: 1px solid #3B82F6;
                 white-space: nowrap;
-            ">You are here</div>
+            ">${title}</div>
             <div style="position: relative; width: 24px; height: 24px;">
                 <div style="
                     position: absolute;
@@ -88,8 +88,8 @@ const MeIcon = L.divIcon({
         </div>
     `,
     className: '',
-    iconSize: [80, 40],
-    iconAnchor: [40, 30]
+    iconSize: [120, 40],
+    iconAnchor: [60, 30]
 });
 
 const IncidentIcon = L.divIcon({
@@ -311,7 +311,7 @@ const MapComponent = ({
                     position={[marker.lat, marker.lng]}
                     icon={
                         (marker.category === 'Barangay Office' || marker.category === 'HQ') ? BrgyIcon :
-                            (marker.category === 'User Location' || marker.category === 'Operator') ? MeIcon :
+                            (marker.category === 'User Location' || marker.category === 'Operator') ? createUserLocationIcon(marker.title || 'You are here') :
                                 marker.color ? createColoredIncidentIcon(marker.color, marker.category) : IncidentIcon
                     }
                     eventHandlers={{

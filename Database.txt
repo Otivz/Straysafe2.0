@@ -503,6 +503,9 @@ CREATE TABLE pet_claims(
     pet_id INT NOT NULL,
     status ENUM(
         'Potential Owner Match',
+        'Possible Match Found',
+        'Pending Review',
+        'Under Review',
         'Approved',
         'Rejected',
         'Evidence Requested'

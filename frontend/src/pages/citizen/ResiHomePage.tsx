@@ -637,8 +637,14 @@ const ResiHomePage = () => {
         // Check if there is an inconsistency or missing info (excluding breed)
         const isTypeMismatched = userType !== 'Unknown' && userType !== suggestions.ai_animal_type;
         const isColorMissing = !userColor.trim();
+        const isColorMismatched = userColor.trim() !== '' && userColor.trim().toLowerCase() !== (suggestions.ai_dominant_color || '').trim().toLowerCase();
+        const isSizeMismatched = userSize !== suggestions.ai_estimated_size;
 
-        if (isTypeMismatched || isColorMissing) {
+        // Force modal to show if there is a mismatch, missing info, or if the user entered a color.
+        // This ensures the AI suggestions are always reviewable and they can choose to revert if needed.
+        const shouldShow = isTypeMismatched || isColorMissing || isColorMismatched || isSizeMismatched || userColor.trim() !== '';
+
+        if (shouldShow) {
             setAnimalTypeValidation({
                 show: true,
                 reportId,
