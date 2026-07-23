@@ -19,6 +19,7 @@ router = APIRouter(
 )
 
 
+
 @router.get("/", response_model=List[ReportResponse])
 def get_reports(subdivision_id: Optional[int] = None, db: Session = Depends(get_db)):
     query = db.query(Report)
@@ -199,6 +200,24 @@ def trigger_looks_matching(report: Report, db: Session):
             cleaned = cleaned.replace(sep, " ")
         return [c.strip() for c in cleaned.split() if c.strip()]
 
+    def load_image(url: str):
+        import requests
+        from PIL import Image
+        import io
+        if not url:
+            return None
+        try:
+            if url.startswith("http://") or url.startswith("https://"):
+                resp = requests.get(url, timeout=5)
+                if resp.status_code == 200:
+                    return Image.open(io.BytesIO(resp.content))
+        except Exception as e:
+            print(f"Failed to load image from {url}: {e}")
+        return None
+
+    r_img_url = report.media[0].file_url if (report.media and len(report.media) > 0) else None
+    stray_img = load_image(str(r_img_url)) if r_img_url else None
+
     # Fetch registered pets of other owners that are active or lost
     all_pets = db.query(Pet).filter(
         Pet.owner_id != report.user_id,
@@ -268,8 +287,10 @@ def trigger_looks_matching(report: Report, db: Session):
         r_breed = (report.animal_breed or report.ai_possible_breed or "").lower().strip()
         breed_similar = True
         if p_breed and r_breed:
+            p_breed_norm = p_breed.replace(" ", "").replace("-", "").replace("_", "")
+            r_breed_norm = r_breed.replace(" ", "").replace("-", "").replace("_", "")
             breed_similar = (
-                p_breed in r_breed or r_breed in p_breed or
+                p_breed_norm in r_breed_norm or r_breed_norm in p_breed_norm or
                 "aspin" in p_breed or "puspin" in p_breed or
                 "aspin" in r_breed or "puspin" in r_breed or
                 "unknown" in p_breed or "unknown" in r_breed or
@@ -289,12 +310,23 @@ def trigger_looks_matching(report: Report, db: Session):
         p_breed = (pet.breed or "").lower().strip()
         r_breed = (report.animal_breed or report.ai_possible_breed or "").lower().strip()
         
+        is_p_purebred = p_breed not in ["aspin", "puspin", "unknown", "mixed", ""]
+        is_r_purebred = r_breed not in ["aspin", "puspin", "unknown", "mixed", ""]
+
         if p_breed and r_breed:
-            if p_breed == r_breed or p_breed in r_breed or r_breed in p_breed:
+            p_breed_norm = p_breed.replace(" ", "").replace("-", "").replace("_", "")
+            r_breed_norm = r_breed.replace(" ", "").replace("-", "").replace("_", "")
+            if p_breed_norm == r_breed_norm or p_breed_norm in r_breed_norm or r_breed_norm in p_breed_norm:
                 breed_match = True
                 attribute_score += 30
-            elif "aspin" in p_breed or "puspin" in p_breed or "aspin" in r_breed or "puspin" in r_breed:
-                # One is mixed breed, partial match
+            elif is_p_purebred and is_r_purebred:
+                # Two completely different purebreds! Major penalty.
+                attribute_score -= 30
+            elif (is_p_purebred and r_breed in ["aspin", "puspin"]) or (is_r_purebred and p_breed in ["aspin", "puspin"]):
+                # One is purebred and the other is a local mix. Major penalty.
+                attribute_score -= 20
+            else:
+                # Both are local mixed breeds (e.g. Aspin vs Mixed)
                 attribute_score += 15
         
         # Color Matching (up to 40 points)
@@ -317,8 +349,27 @@ def trigger_looks_matching(report: Report, db: Session):
             if any(rc in p_markings for rc in r_colors) or any(rc in p_primary for rc in r_colors) or any(rc in p_secondary for rc in r_colors):
                 color_match_points = 15
                 
-        attribute_score += color_match_points
+        # If no colors match at all, apply a mismatch penalty
+        if color_match_points == 0 and (p_primary or p_secondary) and r_colors:
+            attribute_score -= 20
+        else:
+            attribute_score += color_match_points
         
+        # Size Matching (up to 15 points)
+        p_size = (pet.size_category or "Medium").lower().strip()
+        r_size = (report.estimated_size or report.ai_estimated_size or "Medium").lower().strip()
+        size_map = {"small": 1, "medium": 2, "large": 3}
+        
+        p_size_val = size_map.get(p_size, 2)
+        r_size_val = size_map.get(r_size, 2)
+        
+        if p_size == r_size:
+            attribute_score += 15
+        elif abs(p_size_val - r_size_val) == 1:
+            attribute_score -= 15
+        else:
+            attribute_score -= 30
+
         # Distinctive Markings Matching (up to 10 points)
         markings_match = False
         p_distinctive = (pet.distinctive_markings or pet.color_markings or "").lower().strip()
@@ -334,7 +385,7 @@ def trigger_looks_matching(report: Report, db: Session):
             if markings_match:
                 attribute_score += 10
 
-        # 2. Call Gemini 2.5 Flash for Description-Based comparison
+        # 2. Call Gemini 2.5 Flash for Multimodal Visual & Description-Based comparison
         import google.generativeai as genai
         import json
         import os
@@ -349,34 +400,81 @@ def trigger_looks_matching(report: Report, db: Session):
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel("gemini-2.5-flash")
                 
-                prompt = f"""
-                You are the StraySafe Copilot, an AI assistant for a subdivision's stray animal safety system.
-                Your task is to compare two sets of animal attributes and determine if they describe the same individual animal.
+                p_img_url = pet.photo_url
+                pet_img = load_image(str(p_img_url)) if p_img_url else None
                 
-                Stray Report Attributes (extracted from sighting):
-                - Species: {report.animal_type or report.ai_animal_type}
-                - Breed: {report.animal_breed or report.ai_possible_breed or 'Unknown'}
-                - Dominant Colors: {report.animal_color or report.ai_dominant_color or 'Unknown'}
-                - Description: "{report.description or ''}"
+                has_images = (stray_img is not None) and (pet_img is not None)
                 
-                Registered Pet Attributes:
-                - Pet Name: {pet.pet_name}
-                - Species: {pet.pet_type}
-                - Breed: {pet.breed or 'Unknown'}
-                - Primary Color: {pet.primary_color or 'Unknown'}
-                - Secondary Color: {pet.secondary_color or 'Unknown'}
-                - Distinctive Markings: {pet.distinctive_markings or pet.color_markings or 'None'}
-                
-                Evaluate the likelihood of a match based purely on these structured descriptions.
-                Respond ONLY with a valid JSON block containing:
-                - "confidence_score": An integer from 0 to 100 representing how confident you are that these descriptions refer to the same animal.
-                - "explanation": A warm, friendly, and conversational explanation (1-2 sentences) of why they match or mismatch (e.g. "Both the reported animal and {pet.pet_name} are white cats with black spots on their tails."). Do not mention JSON, confidence_score, or technical terms in the explanation.
-                
-                Respond ONLY with a valid JSON block.
-                """
+                if has_images:
+                    prompt = f"""
+                    You are the StraySafe Copilot, an AI assistant for a subdivision's stray animal safety system.
+                    Your task is to compare the visual appearance of a stray animal from a sighting against a registered pet to determine if they are the same individual animal (i.e. they are a close visual match).
+                    
+                    We are providing you with two images:
+                    - The first image attached is the stray animal sighted in the subdivision.
+                    - The second image attached is the registered pet named '{pet.pet_name}'.
+                    
+                    Also compare these attributes:
+                    Stray Report Attributes:
+                    - Species: {report.animal_type or report.ai_animal_type}
+                    - Breed: {report.animal_breed or report.ai_possible_breed or 'Unknown'}
+                    - Dominant Colors: {report.animal_color or report.ai_dominant_color or 'Unknown'}
+                    - Description: "{report.description or ''}"
+                    
+                    Registered Pet Attributes:
+                    - Pet Name: {pet.pet_name}
+                    - Species: {pet.pet_type}
+                    - Breed: {pet.breed or 'Unknown'}
+                    - Primary Color: {pet.primary_color or 'Unknown'}
+                    - Secondary Color: {pet.secondary_color or 'Unknown'}
+                    - Distinctive Markings: {pet.distinctive_markings or pet.color_markings or 'None'}
+                    
+                    Please inspect the physical characteristics and visual details in both images:
+                    - Fur color patterns, markings, spot locations, snout/facial features.
+                    - Ear shape and carriage (floppy vs erect).
+                    - Body shape and breed appearance.
+                    
+                    Rules:
+                    1. Evaluate the likelihood of a match. Be very accurate and realistic to prevent false positives.
+                    2. Respond ONLY with a valid JSON block containing:
+                       - "confidence_score": An integer from 0 to 100 representing how confident you are that these show the same individual animal.
+                         * If the animals are clearly different breeds or have completely mismatched markings/colors/shapes, return a low confidence score (< 30).
+                         * If they are a strong visual match, return a high confidence score (>= 75).
+                       - "explanation": A warm, friendly, and conversational explanation (1-2 sentences) of why they match or mismatch (e.g. "Both the reported animal and {pet.pet_name} have the same distinctive white patches on their chest and identical floppy ears."). Do not mention JSON, confidence_score, or technical terms in the explanation.
+                    
+                    Respond ONLY with a valid JSON block.
+                    """
+                    content_to_send = [prompt, stray_img, pet_img]
+                else:
+                    prompt = f"""
+                    You are the StraySafe Copilot, an AI assistant for a subdivision's stray animal safety system.
+                    Your task is to compare two sets of animal attributes and determine if they describe the same individual animal.
+                    
+                    Stray Report Attributes (extracted from sighting):
+                    - Species: {report.animal_type or report.ai_animal_type}
+                    - Breed: {report.animal_breed or report.ai_possible_breed or 'Unknown'}
+                    - Dominant Colors: {report.animal_color or report.ai_dominant_color or 'Unknown'}
+                    - Description: "{report.description or ''}"
+                    
+                    Registered Pet Attributes:
+                    - Pet Name: {pet.pet_name}
+                    - Species: {pet.pet_type}
+                    - Breed: {pet.breed or 'Unknown'}
+                    - Primary Color: {pet.primary_color or 'Unknown'}
+                    - Secondary Color: {pet.secondary_color or 'Unknown'}
+                    - Distinctive Markings: {pet.distinctive_markings or pet.color_markings or 'None'}
+                    
+                    Evaluate the likelihood of a match based purely on these structured descriptions.
+                    Respond ONLY with a valid JSON block containing:
+                    - "confidence_score": An integer from 0 to 100 representing how confident you are that these descriptions refer to the same animal.
+                    - "explanation": A warm, friendly, and conversational explanation (1-2 sentences) of why they match or mismatch (e.g. "Both the reported animal and {pet.pet_name} are white cats with black spots on their tails."). Do not mention JSON, confidence_score, or technical terms in the explanation.
+                    
+                    Respond ONLY with a valid JSON block.
+                    """
+                    content_to_send = prompt
                 
                 response = model.generate_content(
-                    prompt,
+                    content_to_send,
                     generation_config={"response_mime_type": "application/json"}
                 )
                 
@@ -393,13 +491,13 @@ def trigger_looks_matching(report: Report, db: Session):
                 gemini_explanation = data.get("explanation", gemini_explanation)
                 gemini_success = True
             except Exception as ex:
-                print(f"Gemini description matching error: {ex}")
+                print(f"Gemini matching error: {ex}")
 
         # 3. Combine base attribute score and Gemini confidence score (50/50 weighting)
         if gemini_success:
-            final_score = int(0.5 * attribute_score + 0.5 * gemini_confidence)
+            final_score = min(int(0.5 * attribute_score + 0.5 * gemini_confidence), 100)
         else:
-            final_score = attribute_score
+            final_score = min(attribute_score, 100)
             gemini_explanation = "Note: Gemini free-tier quota is currently exceeded, so this match is verified using local YOLOv8 attribute similarity."
         
         # 4. Check if final score meets the notification threshold (>= 60%)
