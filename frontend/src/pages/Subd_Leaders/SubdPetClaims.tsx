@@ -218,7 +218,9 @@ const SubdPetClaims = () => {
     const filteredClaims = claims.filter(c => {
         const q = searchQuery.toLowerCase();
         const matchesQ = c.pet?.pet_name?.toLowerCase().includes(q) || c.pet?.owner?.name?.toLowerCase().includes(q) || c.status?.toLowerCase().includes(q);
-        const matchesF = statusFilter === 'All Claims' || c.status?.toLowerCase() === statusFilter.toLowerCase();
+        const matchesF = statusFilter === 'All Claims' || 
+            (statusFilter === 'Under Review' && (c.status === 'Under Review' || c.status === 'Pending Review')) ||
+            c.status?.toLowerCase() === statusFilter.toLowerCase();
         return matchesQ && matchesF;
     });
 

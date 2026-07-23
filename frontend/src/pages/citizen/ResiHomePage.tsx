@@ -114,6 +114,10 @@ const ResiHomePage = () => {
     const [showFinalConfirmModal, setShowFinalConfirmModal] = useState(false);
     const [reports, setReports] = useState<any[]>([]);
     const [announcements, setAnnouncements] = useState<any[]>([]);
+    const [notifications, setNotifications] = useState<any[]>([]);
+    const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Set<number>>(new Set());
+    const [notificationsLimit, setNotificationsLimit] = useState(10);
+    const [announcementsLimit, setAnnouncementsLimit] = useState(10);
     const [annCommentInputs, setAnnCommentInputs] = useState<Record<number, string>>({});
     const [annReplyingTo, setAnnReplyingTo] = useState<Record<number, { commentId: number, userName: string } | null>>({});
     const [feedTab, setFeedTab] = useState<'reports' | 'announcements'>('reports');
@@ -204,7 +208,7 @@ const ResiHomePage = () => {
                     }
                     const city = addr.city || addr.town || addr.municipality || '';
                     if (city) parts.push(city);
-                    
+
                     const addressStr = parts.join(', ') || response.data.display_name;
                     setResolvedAddress(addressStr);
                 } else {
@@ -367,10 +371,10 @@ const ResiHomePage = () => {
                 try {
                     const isDog = formData.animalType === 'Dog';
                     const baseUrl = isDog ? 'https://api.thedogapi.com' : 'https://api.thecatapi.com';
-                    const apiKey = isDog 
+                    const apiKey = isDog
                         ? (import.meta.env.VITE_DOG_API_KEY || 'live_J9RdXZq7OGRCUigDyq3y8rGqcG3Brarp46ohljsIMO572q0KYcW1alD0z88OADKs')
                         : (import.meta.env.VITE_CAT_API_KEY || 'live_GqD4rtVuossncqXxRcSvcmptrS9rD7NFoigE6UP59wNG69yZ0YhLh35HRma3ZbEm');
-                    
+
                     const res = await fetch(`${baseUrl}/v1/images/search?breed_id=${matchedBreed.id}`, {
                         headers: apiKey ? { 'x-api-key': apiKey } : {}
                     });
@@ -539,7 +543,7 @@ const ResiHomePage = () => {
         const now = new Date();
         const diffMs = now.getTime() - dt.getTime();
         const diffSecs = Math.floor(diffMs / 1000);
-        
+
         if (diffSecs < 60) {
             const secs = Math.max(1, diffSecs);
             return `${secs}s`;
@@ -594,9 +598,43 @@ const ResiHomePage = () => {
 
     const API_URL = 'http://localhost:8000/reports';
 
+    const fetchNotifications = async () => {
+        if (!currentUserId) return;
+        try {
+            const response = await axios.get(`http://localhost:8000/notifications/user/${currentUserId}`);
+            setNotifications(response.data);
+        } catch (error) {
+            console.error('Failed to fetch notifications:', error);
+        }
+    };
+
+    const handleMarkAllNotificationsRead = async () => {
+        if (!currentUserId) return;
+        try {
+            await axios.post(`http://localhost:8000/notifications/mark-all-read/${currentUserId}`);
+            fetchNotifications();
+        } catch (error) {
+            console.error('Failed to mark all notifications as read:', error);
+        }
+    };
+
+    const handleMarkNotificationRead = async (id: number) => {
+        try {
+            await axios.patch(`http://localhost:8000/notifications/${id}`, { is_read: true });
+            fetchNotifications();
+        } catch (error) {
+            console.error('Failed to mark notification as read:', error);
+        }
+    };
+
+    const handleDismissNotification = (id: number) => {
+        setDismissedNotificationIds(prev => new Set(prev).add(id));
+    };
+
     useEffect(() => {
         fetchReports();
         fetchAnnouncements();
+        fetchNotifications();
     }, [currentUserId]);
 
     const handleAddComment = async (reportId: number) => {
@@ -1019,65 +1057,50 @@ const ResiHomePage = () => {
                 onCloseSearch={() => setIsMobileSearchOpen(false)}
                 feedTab={feedTab}
                 onFeedTabChange={setFeedTab}
+                notifications={notifications.filter(n => !dismissedNotificationIds.has(n.notification_id)).slice(0, notificationsLimit)}
+                onMarkNotificationRead={handleMarkNotificationRead}
+                onDeleteNotification={handleDismissNotification}
+                onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+                hasMoreNotifications={notifications.filter(n => !dismissedNotificationIds.has(n.notification_id)).length > notificationsLimit}
+                onLoadMoreNotifications={() => setNotificationsLimit(prev => prev + 10)}
             />
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-32 pb-24 md:pb-8">
 
                 {/* Top Actions - Hidden on mobile, shown on desktop */}
-                <div className="hidden md:flex items-center justify-between relative mb-6">
-                    {/* Left spacer to perfectly center the search bar relative to the page width */}
-                    <div className="flex-1"></div>
-
-                    {/* Centered Localized Page Search Input */}
-                    <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                            <svg className="h-4.5 w-4.5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
-                        </div>
-                        <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder={feedTab === 'reports' ? "Search reports..." : "Search announcements..."}
-                            className="block w-96 pl-11 pr-4 py-3.5 border border-gray-200 rounded-2xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316] transition-all text-xs font-bold text-[#1a1208] shadow-sm"
-                        />
-                    </div>
-
+                <div className="hidden md:flex justify-end relative mb-6">
                     {/* Add Report Button (Only visible on reports feed, right aligned) */}
-                    <div className="flex-1 flex justify-end">
-                        {feedTab === 'reports' && (
-                            <Button
-                                variant="primary"
-                                onClick={() => {
-                                    setEditingReportId(null);
-                                    setFormData({
-                                        ...formData,
-                                        category: undefined,
-                                        category_id: undefined,
-                                        animalCount: 1,
-                                        landmark: '',
-                                        visibility: 'Public',
-                                        priorityLevel: 'Medium',
-                                        isPossibleOwned: false,
-                                        description: '',
-                                        latitude: 14.801313,
-                                        longitude: 121.003109,
-                                        mediaFiles: [],
-                                        existingMedia: [],
-                                        mediaIdsToDelete: []
-                                    });
-                                    setIsAddReportModalOpen(true);
-                                }}
-                                className="bg-[#F97316] text-white px-8 py-3.5 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-200 hover:scale-105 transition-all flex items-center gap-3 border border-orange-500/20"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
-                                </svg>
-                                Add Report
-                            </Button>
-                        )}
-                    </div>
+                    {feedTab === 'reports' && (
+                        <Button
+                            variant="primary"
+                            onClick={() => {
+                                setEditingReportId(null);
+                                setFormData({
+                                    ...formData,
+                                    category: undefined,
+                                    category_id: undefined,
+                                    animalCount: 1,
+                                    landmark: '',
+                                    visibility: 'Public',
+                                    priorityLevel: 'Medium',
+                                    isPossibleOwned: false,
+                                    description: '',
+                                    latitude: 14.801313,
+                                    longitude: 121.003109,
+                                    mediaFiles: [],
+                                    existingMedia: [],
+                                    mediaIdsToDelete: []
+                                });
+                                setIsAddReportModalOpen(true);
+                            }}
+                            className="bg-[#F97316] text-white px-8 py-3.5 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-200 hover:scale-105 transition-all flex items-center gap-3 border border-orange-500/20"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
+                            </svg>
+                            Add Report
+                        </Button>
+                    )}
                 </div>
 
                 {/* Add Report Modal */}
@@ -1178,52 +1201,52 @@ const ResiHomePage = () => {
                                             <option value="Other" />
                                         </datalist>
 
-                                         {/* Dynamic Breed Thumbnail Preview */}
-                                         {(() => {
-                                             const query = formData.animalBreed.trim().toLowerCase();
-                                             if (!query) return null;
+                                        {/* Dynamic Breed Thumbnail Preview */}
+                                        {(() => {
+                                            const query = formData.animalBreed.trim().toLowerCase();
+                                            if (!query) return null;
 
-                                             // Standardize common phonetic typos and shortcuts
-                                             const normalizedQuery = query
-                                                 .replace('dalmation', 'dalmatian')
-                                                 .replace('shihtzu', 'shih tzu')
-                                                 .replace('shepard', 'shepherd')
-                                                 .replace('coly', 'collie');
+                                            // Standardize common phonetic typos and shortcuts
+                                            const normalizedQuery = query
+                                                .replace('dalmation', 'dalmatian')
+                                                .replace('shihtzu', 'shih tzu')
+                                                .replace('shepard', 'shepherd')
+                                                .replace('coly', 'collie');
 
-                                             const matchedBreed = breedsData.find((b) => {
-                                                 const breedName = b.name.toLowerCase();
-                                                 if (breedName === normalizedQuery) return true;
-                                                 
-                                                 // Handle smart partial matching when typing is at least 3 characters
-                                                 if (normalizedQuery.length >= 3) {
-                                                     return breedName.includes(normalizedQuery) || normalizedQuery.includes(breedName);
-                                                 }
-                                                 return false;
-                                             });
+                                            const matchedBreed = breedsData.find((b) => {
+                                                const breedName = b.name.toLowerCase();
+                                                if (breedName === normalizedQuery) return true;
 
-                                             if (matchedBreed && (breedImageUrl || isFetchingBreedImage)) {
-                                                 return (
-                                                     <div className="mt-3 flex items-center gap-3.5 bg-orange-50/40 border border-orange-100 rounded-2xl p-3.5 animate-in slide-in-from-top-2 duration-300">
-                                                         {isFetchingBreedImage ? (
-                                                             <div className="w-12 h-12 rounded-xl border border-white bg-white/50 flex items-center justify-center shrink-0 shadow-sm">
-                                                                 <div className="w-4 h-4 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin" />
-                                                             </div>
-                                                         ) : breedImageUrl ? (
-                                                             <img 
-                                                                 src={breedImageUrl} 
-                                                                 alt="Breed Preview" 
-                                                                 className="w-12 h-12 object-cover rounded-xl shadow-sm border border-white shrink-0"
-                                                             />
-                                                         ) : null}
-                                                         <div>
-                                                             <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest leading-none">StraySafe Reference Photo</p>
-                                                             <p className="text-[11px] font-black text-[#1a1208] mt-1">{matchedBreed.name} Standard Profile</p>
-                                                         </div>
-                                                     </div>
-                                                 );
-                                             }
-                                             return null;
-                                         })()}
+                                                // Handle smart partial matching when typing is at least 3 characters
+                                                if (normalizedQuery.length >= 3) {
+                                                    return breedName.includes(normalizedQuery) || normalizedQuery.includes(breedName);
+                                                }
+                                                return false;
+                                            });
+
+                                            if (matchedBreed && (breedImageUrl || isFetchingBreedImage)) {
+                                                return (
+                                                    <div className="mt-3 flex items-center gap-3.5 bg-orange-50/40 border border-orange-100 rounded-2xl p-3.5 animate-in slide-in-from-top-2 duration-300">
+                                                        {isFetchingBreedImage ? (
+                                                            <div className="w-12 h-12 rounded-xl border border-white bg-white/50 flex items-center justify-center shrink-0 shadow-sm">
+                                                                <div className="w-4 h-4 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin" />
+                                                            </div>
+                                                        ) : breedImageUrl ? (
+                                                            <img
+                                                                src={breedImageUrl}
+                                                                alt="Breed Preview"
+                                                                className="w-12 h-12 object-cover rounded-xl shadow-sm border border-white shrink-0"
+                                                            />
+                                                        ) : null}
+                                                        <div>
+                                                            <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest leading-none">StraySafe Reference Photo</p>
+                                                            <p className="text-[11px] font-black text-[#1a1208] mt-1">{matchedBreed.name} Standard Profile</p>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
                                     </div>
 
                                     <div className="flex flex-col">
@@ -1234,7 +1257,7 @@ const ResiHomePage = () => {
                                             className="w-full h-12 bg-[#FAFAF9] border border-gray-50 rounded-2xl px-6 text-xs font-bold"
                                             value={formData.animalColor}
                                             onChange={(e) => setFormData({ ...formData, animalColor: e.target.value })}
-                                                                                    />
+                                        />
                                     </div>
 
                                     <div className="flex flex-col">
@@ -1243,7 +1266,7 @@ const ResiHomePage = () => {
                                             className="w-full h-12 bg-[#FAFAF9] border border-gray-50 rounded-2xl px-6 text-xs font-bold focus:outline-none"
                                             value={formData.estimatedSize}
                                             onChange={(e) => setFormData({ ...formData, estimatedSize: e.target.value })}
-                                                                                    >
+                                        >
                                             <option value="Small">Small (Puppy/Kitten size)</option>
                                             <option value="Medium">Medium (Regular size)</option>
                                             <option value="Large">Large (Giant breed size)</option>
@@ -1412,7 +1435,7 @@ const ResiHomePage = () => {
                                             <LocationPicker
                                                 position={[formData.latitude, formData.longitude]}
                                                 onLocationSelect={(lat, lng) => setFormData({ ...formData, latitude: lat, longitude: lng })}
-                                                                                            />
+                                            />
                                             <Polygon
                                                 positions={SELERA_POLYGON.map(p => [p.lat, p.lng] as [number, number])}
                                                 pathOptions={{
@@ -1461,7 +1484,7 @@ const ResiHomePage = () => {
                                         className="w-full bg-[#FAFAF9] border border-gray-50 rounded-[1.5rem] px-6 py-4 text-xs font-medium text-[#1a1208] focus:outline-none focus:border-orange-200 transition-all placeholder:text-gray-300 shadow-sm"
                                         value={formData.landmark}
                                         onChange={(e) => setFormData({ ...formData, landmark: e.target.value })}
-                                                                            />
+                                    />
                                 </div>
 
                                 {/* Visibility Settings */}
@@ -1486,7 +1509,7 @@ const ResiHomePage = () => {
                                         className="w-full bg-[#FAFAF9] border border-gray-50 rounded-[2rem] p-6 text-sm font-medium focus:outline-none focus:border-orange-200 transition-all placeholder:text-gray-300 shadow-sm"
                                         value={formData.description}
                                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                                                            />
+                                    />
                                 </div>
                             </div>
 
@@ -1748,125 +1771,507 @@ const ResiHomePage = () => {
                     </div>
                 )}
 
-                {feedTab === 'announcements' && (
-                    <>
-                        {filteredAnnouncements.length === 0 ? (
-                            <div className="max-w-md mx-auto text-center py-20 px-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                    {/* Left Column: Feed List (Reports or Announcements depending on feedTab) */}
+                    <div className="lg:col-span-8 space-y-6">
+                        {feedTab === 'announcements' && (
+                            <>
+                                {filteredAnnouncements.length === 0 ? (
+                                    <div className="max-w-md mx-auto text-center py-20 px-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm">
+                                        <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-2">
+                                            No Announcements
+                                        </h3>
+                                        <p className="text-xs text-gray-400 leading-relaxed max-w-xs mx-auto">
+                                            There are no community announcements for you right now.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="max-w-3xl mx-auto">
+                                        {filteredAnnouncements.slice(0, announcementsLimit).map((ann) => {
+                                            return (
+                                                <div
+                                                    key={ann.announcement_id}
+                                                    id={`ann-${ann.announcement_id}`}
+                                                    className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden mb-12 hover:shadow-2xl transition-all duration-300"
+                                                >
+                                                    <div className="p-6 sm:p-8">
+                                                        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                                                            <span className="text-[10px] font-black uppercase px-3 py-1 rounded-full bg-gray-100 text-gray-700">
+                                                                {ann.category}
+                                                            </span>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                                                {formatAnnouncementDate(ann.posted_on)}
+                                                            </span>
+                                                        </div>
+                                                        <h3 className="text-xl font-black mb-2 text-gray-900">
+                                                            {ann.title}
+                                                        </h3>
+                                                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line mb-6 font-medium">
+                                                            {ann.content}
+                                                        </p>
+                                                        {ann.location && (
+                                                            <p className="text-sm font-bold text-gray-800 mb-4">
+                                                                📍 {ann.location}
+                                                            </p>
+                                                        )}
+                                                        {/* Main Media (first item) */}
+                                                        {ann.media?.[0] && (
+                                                            ann.media[0].media_type === 'Image' ? (
+                                                                <img src={ann.media[0].file_url} alt={ann.title} className="w-full h-64 sm:h-96 object-cover rounded-2xl border border-gray-100 mb-4" />
+                                                            ) : ann.media[0].media_type === 'Video' ? (
+                                                                <video src={ann.media[0].file_url} controls className="w-full h-64 sm:h-96 object-cover rounded-2xl border border-gray-100 mb-4" />
+                                                            ) : null
+                                                        )}
+
+                                                        {(ann.media || []).length > 1 && (
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+                                                                {ann.media.map((media: any, idx: number) => {
+                                                                    if (idx === 0) return null; // already rendered as main media
+                                                                    return (
+                                                                        <div key={idx} className="border border-gray-100 rounded-xl p-2 bg-gray-50/50 shadow-sm">
+                                                                            {media.media_type === 'Image' ? (
+                                                                                <img src={media.file_url} alt="Attachment" className="w-full h-40 object-cover rounded-lg" />
+                                                                            ) : media.media_type === 'Video' ? (
+                                                                                <video src={media.file_url} controls className="w-full h-40 rounded-lg" />
+                                                                            ) : (
+                                                                                <a href={media.file_url} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-gray-800 hover:underline">
+                                                                                    Open PDF / Document
+                                                                                </a>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+
+                                                        <div className="flex items-center justify-between gap-4 mb-4">
+                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                                                Posted by {ann.posted_by} • {ann.visibility}
+                                                            </p>
+                                                        </div>
+
+                                                        {/* Reactions and Likes section */}
+                                                        <div className="flex items-center gap-4 mt-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleLikeAnnouncement(ann.announcement_id)}
+                                                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-sm ${ann.reactions?.some((r: any) => r.user_id === currentUserId)
+                                                                    ? 'bg-[#F97316] text-white shadow-orange-100'
+                                                                    : 'bg-[#FAFAF9] border border-gray-100 text-gray-500 hover:bg-orange-50 hover:text-[#F97316] hover:border-orange-200'
+                                                                    }`}
+                                                            >
+                                                                <svg className="w-3.5 h-3.5" fill={ann.reactions?.some((r: any) => r.user_id === currentUserId) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"></path>
+                                                                </svg>
+                                                                <span>{ann.reactions ? ann.reactions.length : 0} Likes</span>
+                                                            </button>
+                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                                                💬 {ann.comments ? ann.comments.length : 0} Comments
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Comments Section */}
+                                                    <div className="bg-white border-t border-gray-100 p-4 sm:p-8 pt-6">
+                                                        {ann.comments && ann.comments.length > 0 && (
+                                                            <button
+                                                                onClick={() => setExpandedComments(prev => ({ ...prev, [ann.announcement_id + 100000]: !prev[ann.announcement_id + 100000] }))}
+                                                                className="text-[9px] sm:text-[10px] font-black text-gray-400 hover:text-[#F97316] uppercase tracking-widest transition-colors flex items-center gap-2 mb-6"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform duration-300 ${expandedComments[ann.announcement_id + 100000] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                                                </svg>
+                                                                {expandedComments[ann.announcement_id + 100000] ? 'Hide Comments' : `View all ${ann.comments.length} comments`}
+                                                            </button>
+                                                        )}
+
+                                                        {(expandedComments[ann.announcement_id + 100000] || !ann.comments || ann.comments.length === 0) && (
+                                                            <div className="space-y-2 mb-6 max-h-72 overflow-y-auto custom-scrollbar pr-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                                                {ann.comments && ann.comments.length > 0 ? (
+                                                                    ann.comments
+                                                                        .filter((c: any) => !c.parent_comment_id)
+                                                                        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                                                                        .map((c: any) => {
+                                                                            const replies = ann.comments
+                                                                                .filter((reply: any) => reply.parent_comment_id === c.comment_id)
+                                                                                .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+                                                                            return (
+                                                                                <div key={c.comment_id} className="mb-4 last:mb-0">
+                                                                                    <div className="flex gap-3 relative">
+                                                                                        {/* Parent Avatar & Vertical Line */}
+                                                                                        <div className="relative flex flex-col items-center shrink-0">
+                                                                                            {c.user_photo ? (
+                                                                                                <img src={c.user_photo} className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm" alt={c.user_name} />
+                                                                                            ) : (
+                                                                                                <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center text-[#F97316] font-black text-xs z-10 ring-4 ring-white border border-orange-100">
+                                                                                                    {c.user_name ? c.user_name.charAt(0).toUpperCase() : 'U'}
+                                                                                                </div>
+                                                                                            )}
+                                                                                            {(replies.length > 0 || annReplyingTo[ann.announcement_id]?.commentId === c.comment_id) && (
+                                                                                                <div className="absolute top-8 bottom-[-16px] left-1/2 -translate-x-1/2 w-[2px] bg-gray-100 z-0"></div>
+                                                                                            )}
+                                                                                        </div>
+
+                                                                                        <div className="flex-1 pb-1">
+                                                                                            {/* Meta Info */}
+                                                                                            <div className="bg-[#FAFAF9] rounded-[1.5rem] p-3.5 px-4 border border-gray-50 shadow-sm inline-block">
+                                                                                                <span className="block text-[11px] font-black text-[#1a1208] mb-0.5">{c.user_name}</span>
+                                                                                                <p className="text-xs font-semibold text-gray-700 leading-relaxed pr-6">{c.comment}</p>
+                                                                                            </div>
+                                                                                            {/* Parent Actions */}
+                                                                                            <div className="flex items-center gap-4 mt-1.5 ml-3">
+                                                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{new Date(c.created_at).toLocaleDateString()}</span>
+                                                                                                <button
+                                                                                                    onClick={() => setAnnReplyingTo(prev => ({ ...prev, [ann.announcement_id]: { commentId: c.comment_id, userName: c.user_name } }))}
+                                                                                                    className="text-[10px] font-bold text-gray-500 hover:text-[#F97316] transition-colors"
+                                                                                                >
+                                                                                                    Reply
+                                                                                                </button>
+                                                                                            </div>
+
+                                                                                            {/* Replies Container */}
+                                                                                            {replies.length > 0 && (
+                                                                                                <div className="mt-4 space-y-4">
+                                                                                                    {replies.map((reply: any, index: number) => (
+                                                                                                        <div key={reply.comment_id} className="flex gap-3 relative">
+                                                                                                            {/* Horizontal connector curve */}
+                                                                                                            <div className="absolute top-[-10px] left-[-28px] w-[28px] h-[26px] border-b-[2px] border-l-[2px] border-gray-100 rounded-bl-[12px] z-0 pointer-events-none"></div>
+
+                                                                                                            {/* Mask to hide vertical line below the last reply */}
+                                                                                                            {index === replies.length - 1 && annReplyingTo[ann.announcement_id]?.commentId !== c.comment_id && (
+                                                                                                                <div className="absolute top-[16px] bottom-[-100px] left-[-30px] w-[6px] bg-white z-0 pointer-events-none"></div>
+                                                                                                            )}
+
+                                                                                                            {/* Child Avatar */}
+                                                                                                            {reply.user_photo ? (
+                                                                                                                <img src={reply.user_photo} className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0" alt={reply.user_name} />
+                                                                                                            ) : (
+                                                                                                                <div className="w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 font-bold text-[10px] z-10 mt-1 ring-4 ring-white border border-gray-100 shrink-0">
+                                                                                                                    {reply.user_name ? reply.user_name.charAt(0).toUpperCase() : 'U'}
+                                                                                                                </div>
+                                                                                                            )}
+
+                                                                                                            <div className="flex-1">
+                                                                                                                {/* Child Bubble */}
+                                                                                                                <div className="bg-[#FAFAF9] rounded-[1.2rem] p-3 px-4 border border-gray-50 shadow-sm inline-block">
+                                                                                                                    <span className="block text-[10px] font-black text-gray-800 mb-0.5">{reply.user_name}</span>
+                                                                                                                    <p className="text-[11px] font-semibold text-gray-600 leading-relaxed pr-4">{reply.comment}</p>
+                                                                                                                </div>
+                                                                                                                {/* Child Actions */}
+                                                                                                                <div className="flex items-center gap-4 mt-1.5 ml-3">
+                                                                                                                    <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">{new Date(reply.created_at).toLocaleDateString()}</span>
+                                                                                                                    <button
+                                                                                                                        onClick={() => setAnnReplyingTo(prev => ({ ...prev, [ann.announcement_id]: { commentId: c.comment_id, userName: reply.user_name } }))}
+                                                                                                                        className="text-[9px] font-bold text-gray-500 hover:text-[#F97316] transition-colors"
+                                                                                                                    >
+                                                                                                                        Reply
+                                                                                                                    </button>
+                                                                                                                </div>
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    ))}
+                                                                                                </div>
+                                                                                            )}
+
+                                                                                            {/* Inline Reply Input */}
+                                                                                            {annReplyingTo[ann.announcement_id]?.commentId === c.comment_id && (
+                                                                                                <div className="mt-4 flex items-center gap-3 relative z-10 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                                                                    {/* Thread curve for the reply input itself */}
+                                                                                                    <div className="absolute top-[-10px] left-[-28px] w-[28px] h-[24px] border-b-[2px] border-l-[2px] border-gray-100 rounded-bl-[12px] z-0 pointer-events-none"></div>
+                                                                                                    {/* Mask to hide vertical line below the inline reply input */}
+                                                                                                    <div className="absolute top-[14px] bottom-[-100px] left-[-30px] w-[6px] bg-white z-0 pointer-events-none"></div>
+
+                                                                                                    <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center text-[#F97316] font-black text-[10px] shrink-0 border border-orange-200 z-10 bg-white ring-4 ring-white">
+                                                                                                        {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+                                                                                                    </div>
+                                                                                                    <div className="flex-1 relative flex items-center">
+                                                                                                        <input
+                                                                                                            type="text"
+                                                                                                            autoFocus
+                                                                                                            placeholder={`Replying to ${annReplyingTo[ann.announcement_id]?.userName}...`}
+                                                                                                            className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[1.2rem] pl-4 pr-10 py-2 text-[11px] font-semibold text-[#1a1208] focus:outline-none focus:border-orange-200 focus:bg-white transition-all placeholder:text-gray-400 shadow-inner"
+                                                                                                            value={annCommentInputs[ann.announcement_id] || ''}
+                                                                                                            onChange={(e) => setAnnCommentInputs(prev => ({ ...prev, [ann.announcement_id]: e.target.value }))}
+                                                                                                            onKeyPress={(e) => e.key === 'Enter' && handleAddAnnouncementComment(ann.announcement_id, c.comment_id)}
+                                                                                                        />
+                                                                                                        <button
+                                                                                                            onClick={() => {
+                                                                                                                setAnnReplyingTo(prev => ({ ...prev, [ann.announcement_id]: null }));
+                                                                                                                setAnnCommentInputs(prev => ({ ...prev, [ann.announcement_id]: '' }));
+                                                                                                            }}
+                                                                                                            className="absolute right-3 text-gray-400 hover:text-red-500 transition-colors"
+                                                                                                        >
+                                                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                                                                                            </svg>
+                                                                                                        </button>
+                                                                                                    </div>
+                                                                                                    <button
+                                                                                                        onClick={() => handleAddAnnouncementComment(ann.announcement_id, c.comment_id)}
+                                                                                                        className="bg-[#F97316] text-white rounded-full w-8 h-8 flex items-center justify-center shadow-md shadow-orange-100 hover:scale-105 active:scale-[0.95] transition-all shrink-0"
+                                                                                                    >
+                                                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 relative left-[1px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                                                                                        </svg>
+                                                                                                    </button>
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })
+                                                                ) : (
+                                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic text-center py-4">No comments yet. Be the first to comment!</p>
+                                                                )}
+                                                            </div>
+                                                        )}
+
+                                                        {!annReplyingTo[ann.announcement_id] && (
+                                                            <div className="flex items-center gap-3 animate-in fade-in duration-200">
+                                                                <div className="flex-1 relative">
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder="Write a comment..."
+                                                                        className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[1.5rem] pl-5 pr-12 py-3 text-xs font-semibold text-[#1a1208] focus:outline-none focus:border-orange-200 focus:bg-white transition-all placeholder:text-gray-300 shadow-inner"
+                                                                        value={annCommentInputs[ann.announcement_id] || ''}
+                                                                        onChange={(e) => setAnnCommentInputs(prev => ({ ...prev, [ann.announcement_id]: e.target.value }))}
+                                                                        onKeyPress={(e) => e.key === 'Enter' && handleAddAnnouncementComment(ann.announcement_id)}
+                                                                    />
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => handleAddAnnouncementComment(ann.announcement_id)}
+                                                                    className="bg-[#F97316] text-white rounded-[1.2rem] p-3 shadow-md shadow-orange-100 hover:scale-105 active:scale-[0.95] transition-all flex-shrink-0"
+                                                                >
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                                                    </svg>
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                        {filteredAnnouncements.length > announcementsLimit && (
+                                            <button
+                                                onClick={() => setAnnouncementsLimit(prev => prev + 10)}
+                                                className="w-full py-3.5 bg-orange-50/50 hover:bg-orange-50 text-[#F97316] border border-orange-100 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98] mt-2 mb-8 shadow-sm flex items-center justify-center gap-2"
+                                            >
+                                                Load More
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        {/* Real Report Posts */}
+                        {feedTab === 'reports' && (currentTabReports.length === 0 ? (
+                            <div className="max-w-md mx-auto text-center py-20 px-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm animate-in fade-in slide-in-from-bottom-5 duration-500">
+                                <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 mx-auto mb-6 border border-gray-100/50">
+                                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0a2 2 0 01-2 2H6a2 2 0 01-2-2m16 0V9a2 2 0 00-2-2H6a2 2 0 00-2 2v2.5" />
+                                    </svg>
+                                </div>
                                 <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-2">
-                                    No Announcements
+                                    No Community Reports
                                 </h3>
                                 <p className="text-xs text-gray-400 leading-relaxed max-w-xs mx-auto">
-                                    There are no community announcements for you right now.
+                                    No public stray sighting reports found in your subdivision. Be the first to report!
                                 </p>
                             </div>
                         ) : (
-                            <div className="max-w-3xl mx-auto">
-                                {filteredAnnouncements.map((ann) => {
-                                    return (
-                                        <div
-                                            key={ann.announcement_id}
-                                            className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden mb-12 hover:shadow-2xl transition-all duration-300"
-                                        >
-                                            <div className="p-6 sm:p-8">
-                                                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                                                    <span className="text-[10px] font-black uppercase px-3 py-1 rounded-full bg-gray-100 text-gray-700">
-                                                        {ann.category}
-                                                    </span>
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                                        {formatAnnouncementDate(ann.posted_on)}
-                                                    </span>
-                                                </div>
-                                                <h3 className="text-xl font-black mb-2 text-gray-900">
-                                                    {ann.title}
-                                                </h3>
-                                                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line mb-6 font-medium">
-                                                    {ann.content}
+                            currentTabReports.map((report) => {
+                                const date = formatTimestamp(report.created_at);
+
+                                return (
+                                    <div key={report.report_id} className="max-w-3xl mx-auto">
+                                        <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden mb-12 hover:shadow-2xl transition-all duration-300">
+                                            {/* Top Thin Bar: ID (Left) + Menu (Right) */}
+                                            <div className="px-4 sm:px-8 py-2.5 border-b border-gray-50 flex items-center justify-between bg-gray-50/20">
+                                                <p className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                                    Report #STR-{(report.report_id || 0).toString().padStart(4, '0')}
                                                 </p>
-                                                {ann.location && (
-                                                    <p className="text-sm font-bold text-gray-800 mb-4">
-                                                        📍 {ann.location}
-                                                    </p>
-                                                )}
-                                                {/* Main Media (first item) */}
-                                                {ann.media?.[0] && (
-                                                    ann.media[0].media_type === 'Image' ? (
-                                                        <img src={ann.media[0].file_url} alt={ann.title} className="w-full h-64 sm:h-96 object-cover rounded-2xl border border-gray-100 mb-4" />
-                                                    ) : ann.media[0].media_type === 'Video' ? (
-                                                        <video src={ann.media[0].file_url} controls className="w-full h-64 sm:h-96 object-cover rounded-2xl border border-gray-100 mb-4" />
-                                                    ) : null
-                                                )}
-                                                
-                                                {(ann.media || []).length > 1 && (
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-                                                        {ann.media.map((media: any, idx: number) => {
-                                                            if (idx === 0) return null; // already rendered as main media
-                                                            return (
-                                                                <div key={idx} className="border border-gray-100 rounded-xl p-2 bg-gray-50/50 shadow-sm">
-                                                                    {media.media_type === 'Image' ? (
-                                                                        <img src={media.file_url} alt="Attachment" className="w-full h-40 object-cover rounded-lg" />
-                                                                    ) : media.media_type === 'Video' ? (
-                                                                        <video src={media.file_url} controls className="w-full h-40 rounded-lg" />
-                                                                    ) : (
-                                                                        <a href={media.file_url} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-gray-800 hover:underline">
-                                                                            Open PDF / Document
-                                                                        </a>
-                                                                    )}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                )}
+                                                <div className="flex items-center gap-4">
+                                                    <div className="relative" ref={openMenuId === report.report_id ? menuRef : null}>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setOpenMenuId(openMenuId === report.report_id ? null : report.report_id);
+                                                            }}
+                                                            className="p-1.5 text-gray-400 hover:text-[#1a1208] rounded-full hover:bg-white hover:shadow-sm transition-all border border-transparent hover:border-gray-100"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                                <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
+                                                            </svg>
+                                                        </button>
+                                                        {openMenuId === report.report_id && (
+                                                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-gray-100 py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); openReportDetail(report.report_id, report); }}
+                                                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-blue-600 hover:bg-blue-50 transition-colors"
+                                                                >
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                    </svg>
+                                                                    View Report
+                                                                </button>
 
-                                                <div className="flex items-center justify-between gap-4 mb-4">
-                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                                        Posted by {ann.posted_by} • {ann.visibility}
-                                                    </p>
-                                                </div>
-
-                                                {/* Reactions and Likes section */}
-                                                <div className="flex items-center gap-4 mt-2">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleLikeAnnouncement(ann.announcement_id)}
-                                                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-sm ${
-                                                            ann.reactions?.some((r: any) => r.user_id === currentUserId)
-                                                                ? 'bg-[#F97316] text-white shadow-orange-100'
-                                                                : 'bg-[#FAFAF9] border border-gray-100 text-gray-500 hover:bg-orange-50 hover:text-[#F97316] hover:border-orange-200'
-                                                        }`}
-                                                    >
-                                                        <svg className="w-3.5 h-3.5" fill={ann.reactions?.some((r: any) => r.user_id === currentUserId) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"></path>
-                                                        </svg>
-                                                        <span>{ann.reactions ? ann.reactions.length : 0} Likes</span>
-                                                    </button>
-                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                                        💬 {ann.comments ? ann.comments.length : 0} Comments
+                                                                {report.user_id === currentUserId && report.status_id === 1 && (
+                                                                    <>
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); handleEditClick(report); }}
+                                                                            className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-[#F97316] hover:bg-orange-50 transition-colors border-t border-gray-50"
+                                                                        >
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                                            </svg>
+                                                                            Edit Details
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); handleDeleteReport(report.report_id); setOpenMenuId(null); }}
+                                                                            className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-colors border-t border-gray-50"
+                                                                        >
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                            </svg>
+                                                                            Delete Report
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
 
+                                            {/* Content Section */}
+                                            <div className="px-4 sm:px-8 pt-6 pb-6">
+                                                {/* Profile & Visibility Row */}
+                                                <div className="mb-6 flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        {report.reporter_photo ? (
+                                                            <img
+                                                                src={report.reporter_photo}
+                                                                className="w-11 h-11 rounded-full object-cover border-2 border-orange-50 shadow-sm"
+                                                                alt={report.reporter_name}
+                                                            />
+                                                        ) : (
+                                                            <div className="w-11 h-11 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-black text-sm border-2 border-white shadow-sm">
+                                                                {report.reporter_name?.charAt(0).toUpperCase() || 'U'}
+                                                            </div>
+                                                        )}
+                                                        <div>
+                                                            <p className="text-[13px] font-black text-[#1a1208] uppercase tracking-tight leading-none mb-1.5">{report.reporter_name}</p>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none">{date}</span>
+                                                                <span className="text-gray-300 font-bold text-[9px] leading-none">•</span>
+                                                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[#FAFAF9] border border-gray-100 rounded-md w-fit">
+                                                                    {report.visibility === 'Private' ? (
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                                                        </svg>
+                                                                    ) : (
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                        </svg>
+                                                                    )}
+                                                                    <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest leading-none">{report.visibility}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Description */}
+                                                <div className="mb-4">
+                                                    <p className="text-[13px] sm:text-[15px] font-medium text-[#4a3b28] leading-relaxed">
+                                                        {report.description || 'No detailed description provided.'}
+                                                    </p>
+                                                </div>
+
+                                                {/* Media Grid: The Focus */}
+                                                {(() => {
+                                                    const originalMedia = report.media?.filter((m: any) => {
+                                                        if (m.is_evidence) return false;
+                                                        const url = m.file_url.toLowerCase();
+                                                        return m.media_type !== 'Document' &&
+                                                            !url.endsWith('.pdf') &&
+                                                            !url.endsWith('.doc') &&
+                                                            !url.endsWith('.docx') &&
+                                                            !url.endsWith('.txt');
+                                                    }) || [];
+                                                    if (originalMedia.length === 0) return null;
+
+                                                    return (
+                                                        <div className="mb-6">
+                                                            <div className={`grid gap-2 rounded-2xl sm:rounded-[2.5rem] overflow-hidden border-2 border-gray-50 shadow-inner bg-gray-50/30 ${originalMedia.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
+                                                                }`}>
+                                                                {originalMedia.slice(0, 4).map((m: any, idx: number) => (
+                                                                    <div
+                                                                        key={m.media_id}
+                                                                        className={`relative overflow-hidden cursor-pointer group/media ${originalMedia.length === 1 ? 'h-64 sm:h-96' :
+                                                                            originalMedia.length === 2 ? 'h-48 sm:h-72' :
+                                                                                originalMedia.length === 3 && idx === 0 ? 'row-span-2 h-[24rem] sm:h-[36rem]' : 'h-48 sm:h-72'
+                                                                            }`}
+                                                                        onClick={() => setActiveGallery({ media: originalMedia, index: idx })}
+                                                                    >
+                                                                        {m.media_type === 'Video' ? (
+                                                                            <div className="w-full h-full relative">
+                                                                                <video src={m.file_url} className="w-full h-full object-cover" />
+                                                                                <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/media:bg-black/30 transition-all">
+                                                                                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white border border-white/30">
+                                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 sm:h-6 sm:w-6 ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                                                                            <path d="M8 5v14l11-7z" />
+                                                                                        </svg>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <img
+                                                                                src={m.file_url}
+                                                                                alt="Media"
+                                                                                className="w-full h-full object-cover hover:scale-105 transition-all duration-1000 ease-out"
+                                                                            />
+                                                                        )}
+                                                                        {idx === 3 && originalMedia.length > 4 && (
+                                                                            <div className="absolute inset-0 bg-black/70 backdrop-blur-[4px] flex items-center justify-center text-white">
+                                                                                <span className="text-xl sm:text-3xl font-black tracking-tighter leading-none">+{originalMedia.length - 4}</span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
+
                                             {/* Comments Section */}
                                             <div className="bg-white border-t border-gray-100 p-4 sm:p-8 pt-6">
-                                                {ann.comments && ann.comments.length > 0 && (
+                                                {report.comments && report.comments.length > 0 && (
                                                     <button
-                                                        onClick={() => setExpandedComments(prev => ({ ...prev, [ann.announcement_id + 100000]: !prev[ann.announcement_id + 100000] }))}
+                                                        onClick={() => setExpandedComments(prev => ({ ...prev, [report.report_id]: !prev[report.report_id] }))}
                                                         className="text-[9px] sm:text-[10px] font-black text-gray-400 hover:text-[#F97316] uppercase tracking-widest transition-colors flex items-center gap-2 mb-6"
                                                     >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform duration-300 ${expandedComments[ann.announcement_id + 100000] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform duration-300 ${expandedComments[report.report_id] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
                                                         </svg>
-                                                        {expandedComments[ann.announcement_id + 100000] ? 'Hide Comments' : `View all ${ann.comments.length} comments`}
+                                                        {expandedComments[report.report_id] ? 'Hide Comments' : `View all ${report.comments.length} comments`}
                                                     </button>
                                                 )}
 
-                                                {(expandedComments[ann.announcement_id + 100000] || !ann.comments || ann.comments.length === 0) && (
+                                                {(expandedComments[report.report_id] || !report.comments || report.comments.length === 0) && (
                                                     <div className="space-y-2 mb-6 max-h-72 overflow-y-auto custom-scrollbar pr-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                                                        {ann.comments && ann.comments.length > 0 ? (
-                                                            ann.comments
+                                                        {report.comments && report.comments.length > 0 ? (
+                                                            report.comments
                                                                 .filter((c: any) => !c.parent_comment_id)
                                                                 .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
                                                                 .map((c: any) => {
-                                                                    const replies = ann.comments
+                                                                    const replies = report.comments
                                                                         .filter((reply: any) => reply.parent_comment_id === c.comment_id)
                                                                         .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
                                                                     return (
@@ -1878,10 +2283,10 @@ const ResiHomePage = () => {
                                                                                         <img src={c.user_photo} className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm" alt={c.user_name} />
                                                                                     ) : (
                                                                                         <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center text-[#F97316] font-black text-xs z-10 ring-4 ring-white border border-orange-100">
-                                                                                            {c.user_name ? c.user_name.charAt(0).toUpperCase() : 'U'}
+                                                                                            {c.user_name.charAt(0).toUpperCase()}
                                                                                         </div>
                                                                                     )}
-                                                                                    {(replies.length > 0 || annReplyingTo[ann.announcement_id]?.commentId === c.comment_id) && (
+                                                                                    {(replies.length > 0 || replyingTo[report.report_id]?.commentId === c.comment_id) && (
                                                                                         <div className="absolute top-8 bottom-[-16px] left-1/2 -translate-x-1/2 w-[2px] bg-gray-100 z-0"></div>
                                                                                     )}
                                                                                 </div>
@@ -1896,7 +2301,7 @@ const ResiHomePage = () => {
                                                                                     <div className="flex items-center gap-4 mt-1.5 ml-3">
                                                                                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{new Date(c.created_at).toLocaleDateString()}</span>
                                                                                         <button
-                                                                                            onClick={() => setAnnReplyingTo(prev => ({ ...prev, [ann.announcement_id]: { commentId: c.comment_id, userName: c.user_name } }))}
+                                                                                            onClick={() => setReplyingTo(prev => ({ ...prev, [report.report_id]: { commentId: c.comment_id, userName: c.user_name } }))}
                                                                                             className="text-[10px] font-bold text-gray-500 hover:text-[#F97316] transition-colors"
                                                                                         >
                                                                                             Reply
@@ -1912,7 +2317,7 @@ const ResiHomePage = () => {
                                                                                                     <div className="absolute top-[-10px] left-[-28px] w-[28px] h-[26px] border-b-[2px] border-l-[2px] border-gray-100 rounded-bl-[12px] z-0 pointer-events-none"></div>
 
                                                                                                     {/* Mask to hide vertical line below the last reply */}
-                                                                                                    {index === replies.length - 1 && annReplyingTo[ann.announcement_id]?.commentId !== c.comment_id && (
+                                                                                                    {index === replies.length - 1 && replyingTo[report.report_id]?.commentId !== c.comment_id && (
                                                                                                         <div className="absolute top-[16px] bottom-[-100px] left-[-30px] w-[6px] bg-white z-0 pointer-events-none"></div>
                                                                                                     )}
 
@@ -1921,7 +2326,7 @@ const ResiHomePage = () => {
                                                                                                         <img src={reply.user_photo} className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0" alt={reply.user_name} />
                                                                                                     ) : (
                                                                                                         <div className="w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 font-bold text-[10px] z-10 mt-1 ring-4 ring-white border border-gray-100 shrink-0">
-                                                                                                            {reply.user_name ? reply.user_name.charAt(0).toUpperCase() : 'U'}
+                                                                                                            {reply.user_name.charAt(0).toUpperCase()}
                                                                                                         </div>
                                                                                                     )}
 
@@ -1935,7 +2340,7 @@ const ResiHomePage = () => {
                                                                                                         <div className="flex items-center gap-4 mt-1.5 ml-3">
                                                                                                             <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">{new Date(reply.created_at).toLocaleDateString()}</span>
                                                                                                             <button
-                                                                                                                onClick={() => setAnnReplyingTo(prev => ({ ...prev, [ann.announcement_id]: { commentId: c.comment_id, userName: reply.user_name } }))}
+                                                                                                                onClick={() => setReplyingTo(prev => ({ ...prev, [report.report_id]: { commentId: c.comment_id, userName: reply.user_name } }))}
                                                                                                                 className="text-[9px] font-bold text-gray-500 hover:text-[#F97316] transition-colors"
                                                                                                             >
                                                                                                                 Reply
@@ -1948,7 +2353,7 @@ const ResiHomePage = () => {
                                                                                     )}
 
                                                                                     {/* Inline Reply Input */}
-                                                                                    {annReplyingTo[ann.announcement_id]?.commentId === c.comment_id && (
+                                                                                    {replyingTo[report.report_id]?.commentId === c.comment_id && (
                                                                                         <div className="mt-4 flex items-center gap-3 relative z-10 animate-in fade-in slide-in-from-top-2 duration-200">
                                                                                             {/* Thread curve for the reply input itself */}
                                                                                             <div className="absolute top-[-10px] left-[-28px] w-[28px] h-[24px] border-b-[2px] border-l-[2px] border-gray-100 rounded-bl-[12px] z-0 pointer-events-none"></div>
@@ -1962,16 +2367,16 @@ const ResiHomePage = () => {
                                                                                                 <input
                                                                                                     type="text"
                                                                                                     autoFocus
-                                                                                                    placeholder={`Replying to ${annReplyingTo[ann.announcement_id]?.userName}...`}
+                                                                                                    placeholder={`Replying to ${replyingTo[report.report_id]?.userName}...`}
                                                                                                     className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[1.2rem] pl-4 pr-10 py-2 text-[11px] font-semibold text-[#1a1208] focus:outline-none focus:border-orange-200 focus:bg-white transition-all placeholder:text-gray-400 shadow-inner"
-                                                                                                    value={annCommentInputs[ann.announcement_id] || ''}
-                                                                                                    onChange={(e) => setAnnCommentInputs(prev => ({ ...prev, [ann.announcement_id]: e.target.value }))}
-                                                                                                    onKeyPress={(e) => e.key === 'Enter' && handleAddAnnouncementComment(ann.announcement_id, c.comment_id)}
+                                                                                                    value={commentInputs[report.report_id] || ''}
+                                                                                                    onChange={(e) => setCommentInputs(prev => ({ ...prev, [report.report_id]: e.target.value }))}
+                                                                                                    onKeyPress={(e) => e.key === 'Enter' && handleAddComment(report.report_id)}
                                                                                                 />
                                                                                                 <button
                                                                                                     onClick={() => {
-                                                                                                        setAnnReplyingTo(prev => ({ ...prev, [ann.announcement_id]: null }));
-                                                                                                        setAnnCommentInputs(prev => ({ ...prev, [ann.announcement_id]: '' }));
+                                                                                                        setReplyingTo(prev => ({ ...prev, [report.report_id]: null }));
+                                                                                                        setCommentInputs(prev => ({ ...prev, [report.report_id]: '' }));
                                                                                                     }}
                                                                                                     className="absolute right-3 text-gray-400 hover:text-red-500 transition-colors"
                                                                                                 >
@@ -1981,8 +2386,8 @@ const ResiHomePage = () => {
                                                                                                 </button>
                                                                                             </div>
                                                                                             <button
-                                                                                                onClick={() => handleAddAnnouncementComment(ann.announcement_id, c.comment_id)}
-                                                                                                className="bg-[#F97316] text-white rounded-full w-8 h-8 flex items-center justify-center shadow-md shadow-orange-100 hover:scale-105 active:scale-[0.95] transition-all shrink-0"
+                                                                                                onClick={() => handleAddComment(report.report_id)}
+                                                                                                className="bg-[#F97316] text-white rounded-full w-8 h-8 flex items-center justify-center shadow-md shadow-orange-100 hover:scale-105 active:scale-95 transition-all shrink-0"
                                                                                             >
                                                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 relative left-[1px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -2001,21 +2406,22 @@ const ResiHomePage = () => {
                                                     </div>
                                                 )}
 
-                                                {!annReplyingTo[ann.announcement_id] && (
+
+                                                {!replyingTo[report.report_id] && (
                                                     <div className="flex items-center gap-3 animate-in fade-in duration-200">
                                                         <div className="flex-1 relative">
                                                             <input
                                                                 type="text"
                                                                 placeholder="Write a comment..."
                                                                 className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[1.5rem] pl-5 pr-12 py-3 text-xs font-semibold text-[#1a1208] focus:outline-none focus:border-orange-200 focus:bg-white transition-all placeholder:text-gray-300 shadow-inner"
-                                                                value={annCommentInputs[ann.announcement_id] || ''}
-                                                                onChange={(e) => setAnnCommentInputs(prev => ({ ...prev, [ann.announcement_id]: e.target.value }))}
-                                                                onKeyPress={(e) => e.key === 'Enter' && handleAddAnnouncementComment(ann.announcement_id)}
+                                                                value={commentInputs[report.report_id] || ''}
+                                                                onChange={(e) => setCommentInputs(prev => ({ ...prev, [report.report_id]: e.target.value }))}
+                                                                onKeyPress={(e) => e.key === 'Enter' && handleAddComment(report.report_id)}
                                                             />
                                                         </div>
                                                         <button
-                                                            onClick={() => handleAddAnnouncementComment(ann.announcement_id)}
-                                                            className="bg-[#F97316] text-white rounded-[1.2rem] p-3 shadow-md shadow-orange-100 hover:scale-105 active:scale-[0.95] transition-all flex-shrink-0"
+                                                            onClick={() => handleAddComment(report.report_id)}
+                                                            className="bg-[#F97316] text-white rounded-[1.2rem] p-3 shadow-md shadow-orange-100 hover:scale-105 active:scale-95 transition-all flex-shrink-0"
                                                         >
                                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -2025,382 +2431,186 @@ const ResiHomePage = () => {
                                                 )}
                                             </div>
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </>
-                )}
-
-                {/* Real Report Posts */}
-                {feedTab === 'reports' && (currentTabReports.length === 0 ? (
-                    <div className="max-w-md mx-auto text-center py-20 px-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm animate-in fade-in slide-in-from-bottom-5 duration-500">
-                        <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 mx-auto mb-6 border border-gray-100/50">
-                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0a2 2 0 01-2 2H6a2 2 0 01-2-2m16 0V9a2 2 0 00-2-2H6a2 2 0 00-2 2v2.5" />
-                            </svg>
-                        </div>
-                        <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-2">
-                            No Community Reports
-                        </h3>
-                        <p className="text-xs text-gray-400 leading-relaxed max-w-xs mx-auto">
-                            No public stray sighting reports found in your subdivision. Be the first to report!
-                        </p>
+                                    </div>
+                                );
+                            })
+                        ))}
                     </div>
-                ) : (
-                    currentTabReports.map((report) => {
-                        const date = formatTimestamp(report.created_at);
 
-                        return (
-                            <div key={report.report_id} className="max-w-3xl mx-auto">
-                                <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden mb-12 hover:shadow-2xl transition-all duration-300">
-                                    {/* Top Thin Bar: ID (Left) + Menu (Right) */}
-                                    <div className="px-4 sm:px-8 py-2.5 border-b border-gray-50 flex items-center justify-between bg-gray-50/20">
-                                        <p className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                                            Report #STR-{(report.report_id || 0).toString().padStart(4, '0')}
+                    {/* Right Column: Sidebar (Notifications & Announcements Summary) */}
+                    <div className="lg:col-span-4 space-y-6 hidden lg:block">
+                        {/* Notifications Card */}
+                        <div className="bg-white rounded-[2rem] border border-gray-100 shadow-xl overflow-hidden p-6 sm:p-8 animate-in fade-in slide-in-from-bottom-5 duration-500 h-[450px] flex flex-col">
+                            <div className="flex items-center justify-between border-b border-gray-50 pb-4 mb-4">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center text-[#F97316]">
+                                        <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-sm font-black uppercase tracking-widest text-[#1a1208]">
+                                            Notifications
+                                        </h3>
+                                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                                            {notifications.filter(n => !n.is_read).length} unread
                                         </p>
-                                        <div className="flex items-center gap-4">
-                                            <div className="relative" ref={openMenuId === report.report_id ? menuRef : null}>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setOpenMenuId(openMenuId === report.report_id ? null : report.report_id);
-                                                    }}
-                                                    className="p-1.5 text-gray-400 hover:text-[#1a1208] rounded-full hover:bg-white hover:shadow-sm transition-all border border-transparent hover:border-gray-100"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                        <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
-                                                    </svg>
-                                                </button>
-                                                {openMenuId === report.report_id && (
-                                                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-gray-100 py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); openReportDetail(report.report_id, report); }}
-                                                            className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-blue-600 hover:bg-blue-50 transition-colors"
-                                                        >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                            </svg>
-                                                            View Report
-                                                        </button>
-
-                                                        {report.user_id === currentUserId && report.status_id === 1 && (
-                                                            <>
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); handleEditClick(report); }}
-                                                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-[#F97316] hover:bg-orange-50 transition-colors border-t border-gray-50"
-                                                                >
-                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                                    </svg>
-                                                                    Edit Details
-                                                                </button>
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteReport(report.report_id); setOpenMenuId(null); }}
-                                                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-colors border-t border-gray-50"
-                                                                >
-                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                                    </svg>
-                                                                    Delete Report
-                                                                </button>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Content Section */}
-                                    <div className="px-4 sm:px-8 pt-6 pb-6">
-                                        {/* Profile & Visibility Row */}
-                                        <div className="mb-6 flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                {report.reporter_photo ? (
-                                                    <img
-                                                        src={report.reporter_photo}
-                                                        className="w-11 h-11 rounded-full object-cover border-2 border-orange-50 shadow-sm"
-                                                        alt={report.reporter_name}
-                                                    />
-                                                ) : (
-                                                    <div className="w-11 h-11 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-black text-sm border-2 border-white shadow-sm">
-                                                        {report.reporter_name?.charAt(0).toUpperCase() || 'U'}
-                                                    </div>
-                                                )}
-                                                <div>
-                                                    <p className="text-[13px] font-black text-[#1a1208] uppercase tracking-tight leading-none mb-1.5">{report.reporter_name}</p>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none">{date}</span>
-                                                        <span className="text-gray-300 font-bold text-[9px] leading-none">•</span>
-                                                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[#FAFAF9] border border-gray-100 rounded-md w-fit">
-                                                            {report.visibility === 'Private' ? (
-                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                                                </svg>
-                                                            ) : (
-                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                                </svg>
-                                                            )}
-                                                            <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest leading-none">{report.visibility}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Description */}
-                                        <div className="mb-4">
-                                            <p className="text-[13px] sm:text-[15px] font-medium text-[#4a3b28] leading-relaxed">
-                                                {report.description || 'No detailed description provided.'}
-                                            </p>
-                                        </div>
-
-                                        {/* Media Grid: The Focus */}
-                                        {(() => {
-                                            const originalMedia = report.media?.filter((m: any) => {
-                                                if (m.is_evidence) return false;
-                                                const url = m.file_url.toLowerCase();
-                                                return m.media_type !== 'Document' &&
-                                                    !url.endsWith('.pdf') &&
-                                                    !url.endsWith('.doc') &&
-                                                    !url.endsWith('.docx') &&
-                                                    !url.endsWith('.txt');
-                                            }) || [];
-                                            if (originalMedia.length === 0) return null;
-
-                                            return (
-                                                <div className="mb-6">
-                                                    <div className={`grid gap-2 rounded-2xl sm:rounded-[2.5rem] overflow-hidden border-2 border-gray-50 shadow-inner bg-gray-50/30 ${originalMedia.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
-                                                        }`}>
-                                                        {originalMedia.slice(0, 4).map((m: any, idx: number) => (
-                                                            <div
-                                                                key={m.media_id}
-                                                                className={`relative overflow-hidden cursor-pointer group/media ${originalMedia.length === 1 ? 'h-64 sm:h-96' :
-                                                                    originalMedia.length === 2 ? 'h-48 sm:h-72' :
-                                                                        originalMedia.length === 3 && idx === 0 ? 'row-span-2 h-[24rem] sm:h-[36rem]' : 'h-48 sm:h-72'
-                                                                    }`}
-                                                                onClick={() => setActiveGallery({ media: originalMedia, index: idx })}
-                                                            >
-                                                                {m.media_type === 'Video' ? (
-                                                                    <div className="w-full h-full relative">
-                                                                        <video src={m.file_url} className="w-full h-full object-cover" />
-                                                                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/media:bg-black/30 transition-all">
-                                                                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white border border-white/30">
-                                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 sm:h-6 sm:w-6 ml-1" fill="currentColor" viewBox="0 0 24 24">
-                                                                                    <path d="M8 5v14l11-7z" />
-                                                                                </svg>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                ) : (
-                                                                    <img
-                                                                        src={m.file_url}
-                                                                        alt="Media"
-                                                                        className="w-full h-full object-cover hover:scale-105 transition-all duration-1000 ease-out"
-                                                                    />
-                                                                )}
-                                                                {idx === 3 && originalMedia.length > 4 && (
-                                                                    <div className="absolute inset-0 bg-black/70 backdrop-blur-[4px] flex items-center justify-center text-white">
-                                                                        <span className="text-xl sm:text-3xl font-black tracking-tighter leading-none">+{originalMedia.length - 4}</span>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })()}
-                                    </div>
-
-                                    {/* Comments Section */}
-                                    <div className="bg-white border-t border-gray-100 p-4 sm:p-8 pt-6">
-                                        {report.comments && report.comments.length > 0 && (
-                                            <button
-                                                onClick={() => setExpandedComments(prev => ({ ...prev, [report.report_id]: !prev[report.report_id] }))}
-                                                className="text-[9px] sm:text-[10px] font-black text-gray-400 hover:text-[#F97316] uppercase tracking-widest transition-colors flex items-center gap-2 mb-6"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform duration-300 ${expandedComments[report.report_id] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                                                </svg>
-                                                {expandedComments[report.report_id] ? 'Hide Comments' : `View all ${report.comments.length} comments`}
-                                            </button>
-                                        )}
-
-                                        {(expandedComments[report.report_id] || !report.comments || report.comments.length === 0) && (
-                                            <div className="space-y-2 mb-6 max-h-72 overflow-y-auto custom-scrollbar pr-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                                                {report.comments && report.comments.length > 0 ? (
-                                                    report.comments
-                                                        .filter((c: any) => !c.parent_comment_id)
-                                                        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                                                        .map((c: any) => {
-                                                            const replies = report.comments
-                                                                .filter((reply: any) => reply.parent_comment_id === c.comment_id)
-                                                                .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-                                                            return (
-                                                                <div key={c.comment_id} className="mb-4 last:mb-0">
-                                                                    <div className="flex gap-3 relative">
-                                                                        {/* Parent Avatar & Vertical Line */}
-                                                                        <div className="relative flex flex-col items-center shrink-0">
-                                                                            {c.user_photo ? (
-                                                                                <img src={c.user_photo} className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm" alt={c.user_name} />
-                                                                            ) : (
-                                                                                <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center text-[#F97316] font-black text-xs z-10 ring-4 ring-white border border-orange-100">
-                                                                                    {c.user_name.charAt(0).toUpperCase()}
-                                                                                </div>
-                                                                            )}
-                                                                            {(replies.length > 0 || replyingTo[report.report_id]?.commentId === c.comment_id) && (
-                                                                                <div className="absolute top-8 bottom-[-16px] left-1/2 -translate-x-1/2 w-[2px] bg-gray-100 z-0"></div>
-                                                                            )}
-                                                                        </div>
-
-                                                                        <div className="flex-1 pb-1">
-                                                                            {/* Meta Info */}
-                                                                            <div className="bg-[#FAFAF9] rounded-[1.5rem] p-3.5 px-4 border border-gray-50 shadow-sm inline-block">
-                                                                                <span className="block text-[11px] font-black text-[#1a1208] mb-0.5">{c.user_name}</span>
-                                                                                <p className="text-xs font-semibold text-gray-700 leading-relaxed pr-6">{c.comment}</p>
-                                                                            </div>
-                                                                            {/* Parent Actions */}
-                                                                            <div className="flex items-center gap-4 mt-1.5 ml-3">
-                                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{new Date(c.created_at).toLocaleDateString()}</span>
-                                                                                <button
-                                                                                    onClick={() => setReplyingTo(prev => ({ ...prev, [report.report_id]: { commentId: c.comment_id, userName: c.user_name } }))}
-                                                                                    className="text-[10px] font-bold text-gray-500 hover:text-[#F97316] transition-colors"
-                                                                                >
-                                                                                    Reply
-                                                                                </button>
-                                                                            </div>
-
-                                                                            {/* Replies Container */}
-                                                                            {replies.length > 0 && (
-                                                                                <div className="mt-4 space-y-4">
-                                                                                    {replies.map((reply: any, index: number) => (
-                                                                                        <div key={reply.comment_id} className="flex gap-3 relative">
-                                                                                            {/* Horizontal connector curve */}
-                                                                                            <div className="absolute top-[-10px] left-[-28px] w-[28px] h-[26px] border-b-[2px] border-l-[2px] border-gray-100 rounded-bl-[12px] z-0 pointer-events-none"></div>
-
-                                                                                            {/* Mask to hide vertical line below the last reply */}
-                                                                                            {index === replies.length - 1 && replyingTo[report.report_id]?.commentId !== c.comment_id && (
-                                                                                                <div className="absolute top-[16px] bottom-[-100px] left-[-30px] w-[6px] bg-white z-0 pointer-events-none"></div>
-                                                                                            )}
-
-                                                                                            {/* Child Avatar */}
-                                                                                            {reply.user_photo ? (
-                                                                                                <img src={reply.user_photo} className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0" alt={reply.user_name} />
-                                                                                            ) : (
-                                                                                                <div className="w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 font-bold text-[10px] z-10 mt-1 ring-4 ring-white border border-gray-100 shrink-0">
-                                                                                                    {reply.user_name.charAt(0).toUpperCase()}
-                                                                                                </div>
-                                                                                            )}
-
-                                                                                            <div className="flex-1">
-                                                                                                {/* Child Bubble */}
-                                                                                                <div className="bg-[#FAFAF9] rounded-[1.2rem] p-3 px-4 border border-gray-50 shadow-sm inline-block">
-                                                                                                    <span className="block text-[10px] font-black text-gray-800 mb-0.5">{reply.user_name}</span>
-                                                                                                    <p className="text-[11px] font-semibold text-gray-600 leading-relaxed pr-4">{reply.comment}</p>
-                                                                                                </div>
-                                                                                                {/* Child Actions */}
-                                                                                                <div className="flex items-center gap-4 mt-1.5 ml-3">
-                                                                                                    <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">{new Date(reply.created_at).toLocaleDateString()}</span>
-                                                                                                    <button
-                                                                                                        onClick={() => setReplyingTo(prev => ({ ...prev, [report.report_id]: { commentId: c.comment_id, userName: reply.user_name } }))}
-                                                                                                        className="text-[9px] font-bold text-gray-500 hover:text-[#F97316] transition-colors"
-                                                                                                    >
-                                                                                                        Reply
-                                                                                                    </button>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    ))}
-                                                                                </div>
-                                                                            )}
-
-                                                                            {/* Inline Reply Input */}
-                                                                            {replyingTo[report.report_id]?.commentId === c.comment_id && (
-                                                                                <div className="mt-4 flex items-center gap-3 relative z-10 animate-in fade-in slide-in-from-top-2 duration-200">
-                                                                                    {/* Thread curve for the reply input itself */}
-                                                                                    <div className="absolute top-[-10px] left-[-28px] w-[28px] h-[24px] border-b-[2px] border-l-[2px] border-gray-100 rounded-bl-[12px] z-0 pointer-events-none"></div>
-                                                                                    {/* Mask to hide vertical line below the inline reply input */}
-                                                                                    <div className="absolute top-[14px] bottom-[-100px] left-[-30px] w-[6px] bg-white z-0 pointer-events-none"></div>
-
-                                                                                    <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center text-[#F97316] font-black text-[10px] shrink-0 border border-orange-200 z-10 bg-white ring-4 ring-white">
-                                                                                        {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
-                                                                                    </div>
-                                                                                    <div className="flex-1 relative flex items-center">
-                                                                                        <input
-                                                                                            type="text"
-                                                                                            autoFocus
-                                                                                            placeholder={`Replying to ${replyingTo[report.report_id]?.userName}...`}
-                                                                                            className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[1.2rem] pl-4 pr-10 py-2 text-[11px] font-semibold text-[#1a1208] focus:outline-none focus:border-orange-200 focus:bg-white transition-all placeholder:text-gray-400 shadow-inner"
-                                                                                            value={commentInputs[report.report_id] || ''}
-                                                                                            onChange={(e) => setCommentInputs(prev => ({ ...prev, [report.report_id]: e.target.value }))}
-                                                                                            onKeyPress={(e) => e.key === 'Enter' && handleAddComment(report.report_id)}
-                                                                                        />
-                                                                                        <button
-                                                                                            onClick={() => {
-                                                                                                setReplyingTo(prev => ({ ...prev, [report.report_id]: null }));
-                                                                                                setCommentInputs(prev => ({ ...prev, [report.report_id]: '' }));
-                                                                                            }}
-                                                                                            className="absolute right-3 text-gray-400 hover:text-red-500 transition-colors"
-                                                                                        >
-                                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                                                                                            </svg>
-                                                                                        </button>
-                                                                                    </div>
-                                                                                    <button
-                                                                                        onClick={() => handleAddComment(report.report_id)}
-                                                                                        className="bg-[#F97316] text-white rounded-full w-8 h-8 flex items-center justify-center shadow-md shadow-orange-100 hover:scale-105 active:scale-95 transition-all shrink-0"
-                                                                                    >
-                                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 relative left-[1px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                                                                                        </svg>
-                                                                                    </button>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })
-                                                ) : (
-                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic text-center py-4">No comments yet. Be the first to comment!</p>
-                                                )}
-                                            </div>
-                                        )}
-
-
-                                        {!replyingTo[report.report_id] && (
-                                            <div className="flex items-center gap-3 animate-in fade-in duration-200">
-                                                <div className="flex-1 relative">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Write a comment..."
-                                                        className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[1.5rem] pl-5 pr-12 py-3 text-xs font-semibold text-[#1a1208] focus:outline-none focus:border-orange-200 focus:bg-white transition-all placeholder:text-gray-300 shadow-inner"
-                                                        value={commentInputs[report.report_id] || ''}
-                                                        onChange={(e) => setCommentInputs(prev => ({ ...prev, [report.report_id]: e.target.value }))}
-                                                        onKeyPress={(e) => e.key === 'Enter' && handleAddComment(report.report_id)}
-                                                    />
-                                                </div>
-                                                <button
-                                                    onClick={() => handleAddComment(report.report_id)}
-                                                    className="bg-[#F97316] text-white rounded-[1.2rem] p-3 shadow-md shadow-orange-100 hover:scale-105 active:scale-95 transition-all flex-shrink-0"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
+                                {notifications.some(n => !n.is_read) && (
+                                    <button
+                                        onClick={handleMarkAllNotificationsRead}
+                                        className="text-[9px] font-black uppercase tracking-widest text-[#F97316] hover:text-orange-600 transition-colors"
+                                    >
+                                        Mark all read
+                                    </button>
+                                )}
                             </div>
-                        );
-                    })
-                ))}
+
+                            <div className="space-y-3 overflow-y-auto custom-scrollbar pr-1 flex-1">
+                                {notifications.length === 0 ? (
+                                    <div className="text-center py-8">
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic">
+                                            No notifications yet
+                                        </p>
+                                    </div>
+                                ) : (
+                                    notifications.filter(n => !dismissedNotificationIds.has(n.notification_id)).slice(0, notificationsLimit).map((notif) => (
+                                        <div
+                                            key={notif.notification_id}
+                                            className={`relative p-4 rounded-2xl border transition-all duration-300 ${notif.is_read
+                                                ? 'bg-[#FAFAF9]/50 border-gray-50'
+                                                : 'bg-orange-50/20 border-orange-100/50 shadow-sm'
+                                                }`}
+                                        >
+                                            {/* Unread indicator */}
+                                            {!notif.is_read && (
+                                                <span className="absolute top-4 left-4 w-2 h-2 bg-[#F97316] rounded-full" />
+                                            )}
+
+                                            <div className={!notif.is_read ? 'pl-4' : ''}>
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="flex-1">
+                                                        <h4 className="text-xs font-black text-[#1a1208]">
+                                                            {notif.title}
+                                                        </h4>
+                                                        <p className="text-[11px] font-semibold text-gray-650 mt-1 leading-relaxed">
+                                                            {notif.message}
+                                                        </p>
+                                                        <span className="text-[9px] font-bold text-gray-400 mt-2 block uppercase tracking-widest">
+                                                            {formatTimestamp(notif.created_at)}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                        {!notif.is_read && (
+                                                            <button
+                                                                onClick={() => handleMarkNotificationRead(notif.notification_id)}
+                                                                className="p-1 hover:bg-orange-50 rounded text-[#F97316]"
+                                                                title="Mark as read"
+                                                            >
+                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                                                </svg>
+                                                            </button>
+                                                        )}
+                                                        <button
+                                                            onClick={() => handleDismissNotification(notif.notification_id)}
+                                                            className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                                                            title="Dismiss"
+                                                        >
+                                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                                {notifications.filter(n => !dismissedNotificationIds.has(n.notification_id)).length > notificationsLimit && (
+                                    <button
+                                        onClick={() => setNotificationsLimit(prev => prev + 10)}
+                                        className="w-full py-2.5 bg-orange-50/50 hover:bg-orange-50 text-[#F97316] border border-orange-100 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-[0.98] mt-2 shadow-sm"
+                                    >
+                                        Load More
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Announcements Card */}
+                        <div className="bg-white rounded-[2rem] border border-gray-100 shadow-xl overflow-hidden p-6 sm:p-8 animate-in fade-in slide-in-from-bottom-5 duration-500 delay-75 h-[450px] flex flex-col">
+                            <div className="flex items-center justify-between border-b border-gray-50 pb-4 mb-4">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center text-[#F97316]">
+                                        <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-sm font-black uppercase tracking-widest text-[#1a1208]">
+                                            Announcements
+                                        </h3>
+                                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                                            Latest bulletins
+                                        </p>
+                                    </div>
+                                </div>
+                                {feedTab !== 'announcements' && (
+                                    <button
+                                        onClick={() => setFeedTab('announcements')}
+                                        className="text-[9px] font-black uppercase tracking-widest text-[#F97316] hover:text-orange-600 transition-colors"
+                                    >
+                                        View All
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="space-y-4 overflow-y-auto custom-scrollbar pr-1 flex-1">
+                                {announcements.length === 0 ? (
+                                    <div className="text-center py-8">
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic">
+                                            No announcements yet
+                                        </p>
+                                    </div>
+                                ) : (
+                                    announcements.slice(0, 5).map((ann) => (
+                                        <div
+                                            key={ann.announcement_id}
+                                            onClick={() => {
+                                                setFeedTab('announcements');
+                                                setTimeout(() => {
+                                                    const elem = document.getElementById(`ann-${ann.announcement_id}`);
+                                                    if (elem) {
+                                                        elem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                    }
+                                                }, 100);
+                                            }}
+                                            className="p-4 bg-[#FAFAF9]/40 hover:bg-orange-50/10 border border-gray-50 hover:border-orange-100 rounded-2xl cursor-pointer transition-all duration-300 shadow-sm hover:shadow-md"
+                                        >
+                                            <div className="flex items-center justify-between mb-1.5">
+                                                <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                                                    {ann.category}
+                                                </span>
+                                                <span className="text-[8px] font-bold text-gray-450 uppercase tracking-widest">
+                                                    {formatAnnouncementDate(ann.posted_on).split(' at ')[0]}
+                                                </span>
+                                            </div>
+                                            <h4 className="text-xs font-black text-[#1a1208] mb-1 hover:text-[#F97316] transition-colors">
+                                                {ann.title}
+                                            </h4>
+                                            <p className="text-[10px] font-semibold text-gray-500 line-clamp-2 leading-relaxed">
+                                                {ann.content}
+                                            </p>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 {/* Dashboard content cleared as requested */}
             </main>

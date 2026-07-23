@@ -524,7 +524,7 @@ CREATE TABLE pet_claims(
     ON DELETE CASCADE,
     FOREIGN KEY(pet_id)
     REFERENCES pets(pet_id)
-    ON DELETE CASCADE
+    ON DELETE CASCADE   
 );
 
 -- =========================================

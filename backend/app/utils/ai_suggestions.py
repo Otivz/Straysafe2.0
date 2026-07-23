@@ -92,8 +92,8 @@ def generate_ai_suggestions(
         animal_type = media_animal_type
     else:
         # Scan text for indicators
-        dog_keywords = ["dog", "puppy", "pup", "canine", "bark", "mutt", "chihuahua", "retriever", "terrier", "bulldog"]
-        cat_keywords = ["cat", "kitten", "kitty", "feline", "meow", "purr", "stray cat", "calico", "siamese"]
+        dog_keywords = ["dog", "puppy", "pup", "canine", "bark", "mutt", "chihuahua", "retriever", "terrier", "bulldog", "aso", "tuta", "tahol", "kahol"]
+        cat_keywords = ["cat", "kitten", "kitty", "feline", "meow", "purr", "stray cat", "calico", "siamese", "pusa", "kuting"]
         
         dog_hits = sum(1 for kw in dog_keywords if kw in text)
         cat_hits = sum(1 for kw in cat_keywords if kw in text)
@@ -150,8 +150,8 @@ def generate_ai_suggestions(
         estimated_size = media_estimated_size
     else:
         # Scan text for size indicators
-        small_keywords = ["small", "little", "tiny", "puppy", "pup", "kitten", "kitty", "chihuahua", "toy", "young", "baby"]
-        large_keywords = ["large", "huge", "big", "giant", "tall", "heavy", "mastiff", "shepherd", "rottweiler", "husky"]
+        small_keywords = ["small", "little", "tiny", "puppy", "pup", "kitten", "kitty", "chihuahua", "toy", "young", "baby", "maliit"]
+        large_keywords = ["large", "huge", "big", "giant", "tall", "heavy", "mastiff", "shepherd", "rottweiler", "husky", "malaki", "mataba"]
         
         small_hits = sum(1 for kw in small_keywords if kw in text)
         large_hits = sum(1 for kw in large_keywords if kw in text)
@@ -166,13 +166,18 @@ def generate_ai_suggestions(
     high_risk_keywords = [
         "aggressive", "bite", "biting", "attack", "attacking", "growling", "rabies", "rabid", 
         "bleeding", "injured", "hit by car", "broken leg", "hurt", "danger", "furious", 
-        "snarling", "snarl", "foaming", "snapping", "blood", "wound", "hostile", "sick"
+        "snarling", "snarl", "foaming", "snapping", "blood", "wound", "hostile", "sick",
+        "kagat", "nangangagat", "nakagat", "atake", "nang-aatake", "nanunugod", "galit", 
+        "mabangis", "umuungol", "sugat", "sugatan", "dugo", "madugo", "pilay", "nabangga", 
+        "may sakit", "sakitin"
     ]
     
     medium_risk_keywords = [
         "chasing", "barking", "running", "scared", "fearful", "skinny", "mangy", "hungry", 
         "limping", "trash", "scavenge", "howling", "growl", "stray", "blocking", "traffic",
-        "nuisance", "distress", "crying"
+        "nuisance", "distress", "crying",
+        "habol", "nanghahabol", "hinahabol", "tahol", "tumatahol", "takot", "natatakot", 
+        "payat", "galisin", "gutom", "alulong", "iyak"
     ]
     
     high_hits = sum(1 for kw in high_risk_keywords if kw in text)
@@ -249,14 +254,14 @@ def generate_ai_suggestions(
     # 7. Fallback Priority Reason Generation
     reason = "Priority suggested based on report categories and description details."
     if priority == "High Priority":
-        if any(kw in text for kw in ["injured", "bleeding", "wound", "hurt", "broken", "blood", "accident"]):
+        if any(kw in text for kw in ["injured", "bleeding", "wound", "hurt", "broken", "blood", "accident", "sugat", "sugatan", "dugo", "pilay", "nabangga"]):
             reason = "High Priority suggested because the animal is reported as injured or bleeding, requiring urgent medical care."
-        elif any(kw in text for kw in ["aggressive", "bite", "biting", "attack", "attacking", "growl", "growling", "snarl", "snarling", "snap", "snapping", "hostile"]):
+        elif any(kw in text for kw in ["aggressive", "bite", "biting", "attack", "attacking", "growl", "growling", "snarl", "snarling", "snap", "snapping", "hostile", "kagat", "nangangagat", "nakagat", "atake", "nang-aatake", "nanunugod", "galit", "mabangis"]):
             reason = "High Priority suggested because of reports of aggressive behavior (like biting or growling), posing a safety risk to the area."
         else:
             reason = "High Priority suggested because the description indicates a critical situation requiring immediate response."
     elif priority == "Medium Priority":
-        if any(kw in text for kw in ["sick", "weak", "skinny", "mangy", "hungry", "limp"]):
+        if any(kw in text for kw in ["sick", "weak", "skinny", "mangy", "hungry", "limp", "sakitin", "payat", "gutom"]):
             reason = "Medium Priority suggested because the animal appears sick, weak, or undernourished. Needs attention, but doesn't pose an immediate threat."
         elif any(kw in text for kw in ["roaming", "pack", "group", "multiple", "horde"]):
             reason = "Medium Priority suggested because roaming behavior is causing a public nuisance."

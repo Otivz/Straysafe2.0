@@ -162,6 +162,9 @@ const PetMatchReview = () => {
             };
 
             let claimData = newClaim;
+            let backendSucceeded = false;
+            let uploadErrors = [];
+
             // Attempt posting to backend endpoint (backward compatible)
             try {
                 const res = await axios.post('http://localhost:8000/claims/', {
@@ -171,12 +174,21 @@ const PetMatchReview = () => {
                     distinctive_markings: distinctiveMarkings
                 });
                 claimData = res.data;
+                backendSucceeded = true;
+            } catch (err: any) {
+                console.error("Could not post claim to backend:", err);
+                alert("Could not submit the claim to the server. Your claim details might not be visible to the administrators. Technical error: " + (err.response?.data?.detail || err.message));
+            }
 
-                // Upload whichever proof of ownership files are available to backend
+            // Upload files if backend succeeded
+            if (backendSucceeded) {
                 const uploadPromises = [];
+                const docTypes: string[] = [];
+
                 if (vaccineCardFile && claimData.claim_id) {
                     const fd = new FormData();
                     fd.append('file', vaccineCardFile);
+                    docTypes.push("Vaccination Card");
                     uploadPromises.push(
                         axios.post(`http://localhost:8000/claims/${claimData.claim_id}/evidence?document_type=vaccine_card`, fd, {
                             headers: { 'Content-Type': 'multipart/form-data' }
@@ -186,6 +198,7 @@ const PetMatchReview = () => {
                 if (vetRecordFile && claimData.claim_id) {
                     const fd = new FormData();
                     fd.append('file', vetRecordFile);
+                    docTypes.push("Veterinary Records");
                     uploadPromises.push(
                         axios.post(`http://localhost:8000/claims/${claimData.claim_id}/evidence?document_type=vet_record`, fd, {
                             headers: { 'Content-Type': 'multipart/form-data' }
@@ -195,6 +208,7 @@ const PetMatchReview = () => {
                 if (petRegRecordFile && claimData.claim_id) {
                     const fd = new FormData();
                     fd.append('file', petRegRecordFile);
+                    docTypes.push("Registration Certificate");
                     uploadPromises.push(
                         axios.post(`http://localhost:8000/claims/${claimData.claim_id}/evidence?document_type=registration_record`, fd, {
                             headers: { 'Content-Type': 'multipart/form-data' }
@@ -204,6 +218,7 @@ const PetMatchReview = () => {
                 if (additionalPhotosFile && claimData.claim_id) {
                     const fd = new FormData();
                     fd.append('file', additionalPhotosFile);
+                    docTypes.push("Additional Photos");
                     uploadPromises.push(
                         axios.post(`http://localhost:8000/claims/${claimData.claim_id}/evidence?document_type=additional_photo`, fd, {
                             headers: { 'Content-Type': 'multipart/form-data' }
@@ -211,13 +226,19 @@ const PetMatchReview = () => {
                     );
                 }
 
-                if (uploadPromises.length > 0) {
-                    const results = await Promise.all(uploadPromises);
-                    // Use the last uploaded result to update the final state
-                    claimData = results[results.length - 1].data;
+                for (let i = 0; i < uploadPromises.length; i++) {
+                    try {
+                        const uploadRes = await uploadPromises[i];
+                        claimData = uploadRes.data;
+                    } catch (uploadErr: any) {
+                        console.error(`Failed to upload ${docTypes[i]}:`, uploadErr);
+                        uploadErrors.push(`${docTypes[i]}: ${uploadErr.response?.data?.detail || uploadErr.message}`);
+                    }
                 }
-            } catch (err) {
-                console.warn("Could not post to backend. Continuing with local storage submission.", err);
+
+                if (uploadErrors.length > 0) {
+                    alert("Claim details saved, but the following ownership proofs failed to upload:\n- " + uploadErrors.join("\n- ") + "\n\nPlease try uploading these files again from your Claims Dashboard.");
+                }
             }
 
             // Save to localStorage list for full frontend dashboard sync
@@ -272,7 +293,7 @@ const PetMatchReview = () => {
             alert("Evidence uploaded successfully. Administrators have been notified.");
         } catch (err: any) {
             console.error(err);
-            alert("Failed to upload evidence.");
+            alert("Failed to upload evidence: " + (err.response?.data?.detail || err.message));
         } finally {
             setIsSubmitting(false);
         }

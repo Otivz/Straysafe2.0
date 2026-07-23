@@ -11,16 +11,34 @@ interface ResiNavbarProps {
     onCloseSearch?: () => void;
     feedTab?: 'reports' | 'announcements';
     onFeedTabChange?: (tab: 'reports' | 'announcements') => void;
+    notifications?: any[];
+    onMarkNotificationRead?: (id: number) => void;
+    onDeleteNotification?: (id: number) => void;
+    onMarkAllNotificationsRead?: () => void;
+    hasMoreNotifications?: boolean;
+    onLoadMoreNotifications?: () => void;
 }
 
-const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, onCloseSearch, feedTab, onFeedTabChange }: ResiNavbarProps) => {
+const ResiNavbar = ({ 
+    onMenuToggle, 
+    onSearch, 
+    searchValue, 
+    isMobileSearchOpen, 
+    onCloseSearch, 
+    feedTab: _feedTab, 
+    onFeedTabChange: _onFeedTabChange,
+    notifications = [],
+    onMarkNotificationRead,
+    onDeleteNotification,
+    onMarkAllNotificationsRead,
+    hasMoreNotifications = false,
+    onLoadMoreNotifications
+}: ResiNavbarProps) => {
     const navigate = useNavigate();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-    const [isNotificationOpen, setIsNotificationOpen] = useState(false);
     const [isMobileHamburgerOpen, setIsMobileHamburgerOpen] = useState(false);
-    const [notifications, setNotifications] = useState<any[]>([]);
-    const [unreadCount, setUnreadCount] = useState(0);
+    const [isMobileNotificationsOpen, setIsMobileNotificationsOpen] = useState(false);
 
     const userStr = localStorage.getItem('resident_user');
     const initialUser = userStr ? JSON.parse(userStr) : null;
@@ -40,56 +58,10 @@ const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, o
         fetchLatestProfile();
     }, [initialUser?.user_id]);
 
-    const fetchNotifications = async () => {
-        if (!initialUser?.user_id) return;
-        try {
-            const res = await axios.get(`http://localhost:8000/notifications/user/${initialUser.user_id}`);
-            setNotifications(res.data);
-            setUnreadCount(res.data.filter((n: any) => !n.is_read).length);
-        } catch (err) {
-            console.error("Failed to fetch notifications", err);
-        }
-    };
 
-    useEffect(() => {
-        fetchNotifications();
-        // Poll for notifications every 30 seconds
-        const interval = setInterval(fetchNotifications, 30000);
-        return () => clearInterval(interval);
-    }, [initialUser?.user_id]);
-
-    const markAllAsRead = async () => {
-        if (!initialUser?.user_id) return;
-        try {
-            await axios.post(`http://localhost:8000/notifications/mark-all-read/${initialUser.user_id}`);
-            fetchNotifications();
-        } catch (err) {
-            console.error("Failed to mark all as read", err);
-        }
-    };
-
-    const markAsRead = async (id: number) => {
-        try {
-            await axios.patch(`http://localhost:8000/notifications/${id}`, { is_read: true });
-            fetchNotifications();
-        } catch (err) {
-            console.error("Failed to mark notification as read", err);
-        }
-    };
-
-    const handleNotificationClick = async (notif: any) => {
-        await markAsRead(notif.notification_id);
-        setIsNotificationOpen(false);
-        if (notif.title === "Pet Tag Scanned" && notif.related_id) {
-            navigate(`/resident/pet/${notif.related_id}/scan-history`);
-        } else if ((notif.type === "potential_match" || notif.title?.toLowerCase().includes("match")) && notif.related_id) {
-            navigate(`/resident/reports/${notif.related_id}/match-review`);
-        } else if ((notif.type === "status_update" || notif.type === "comment" || notif.type === "report" || notif.title?.toLowerCase().includes("report")) && notif.related_id) {
-            navigate(`/resident/reports/${notif.related_id}`);
-        }
-    };
 
     const profilePic = user?.profile_picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name || 'User'}`;
+    const unreadCount = (notifications || []).filter((n: any) => !n.is_read).length;
 
     const handleLogout = () => {
         localStorage.removeItem('resident_user');
@@ -122,106 +94,21 @@ const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, o
 
                         {/* DESKTOP NAV REMOVED */}
                         <div className="hidden md:flex items-center gap-6">
-                            {feedTab && onFeedTabChange && (
-                                <div className="flex items-center gap-2 mr-1">
-                                    {/* Reports Feed Toggle */}
-                                    <button
-                                        onClick={() => onFeedTabChange('reports')}
-                                        title="Incident Reports"
-                                        className={`p-2 rounded-xl border transition-all duration-200 active:scale-95 cursor-pointer ${
-                                            feedTab === 'reports'
-                                                ? 'bg-orange-50 border-orange-100 text-[#F97316] shadow-sm'
-                                                : 'bg-white border-gray-100 text-gray-400 hover:text-gray-600 hover:bg-gray-50'
-                                        }`}
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
-                                    </button>
 
-                                    {/* Announcements Feed Toggle */}
-                                    <button
-                                        onClick={() => onFeedTabChange('announcements')}
-                                        title="Announcements Feed"
-                                        className={`p-2 rounded-xl border transition-all duration-200 active:scale-95 cursor-pointer ${
-                                            feedTab === 'announcements'
-                                                ? 'bg-orange-50 border-orange-100 text-[#F97316] shadow-sm'
-                                                : 'bg-white border-gray-100 text-gray-400 hover:text-gray-600 hover:bg-gray-50'
-                                        }`}
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
-                                        </svg>
-                                    </button>
-                                </div>
-                            )}
-
-                            {/* Notification Bell */}
-                            <div className="relative">
-                                <button 
-                                    onClick={() => {
-                                        const nextState = !isNotificationOpen;
-                                        setIsNotificationOpen(nextState);
-                                        if (nextState && unreadCount > 0) {
-                                            markAllAsRead();
-                                        }
-                                    }}
-                                    className="relative p-2 text-[#4a3b28] hover:bg-gray-50 rounded-xl transition-all group"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                            {/* SEARCH BAR */}
+                            <div className="relative mr-2">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <svg className="h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
                                     </svg>
-                                    {unreadCount > 0 && (
-                                        <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 bg-[#EF4444] border-2 border-white rounded-full flex items-center justify-center text-[9px] font-black text-white shadow-sm">
-                                            {unreadCount > 9 ? '9+' : unreadCount}
-                                        </span>
-                                    )}
-                                </button>
-
-                                {/* Notification Dropdown */}
-                                {isNotificationOpen && (
-                                    <>
-                                        <div className="fixed inset-0 z-10" onClick={() => setIsNotificationOpen(false)} />
-                                        <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 py-4 z-20 animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
-                                            <div className="px-5 mb-3 flex justify-between items-center">
-                                                <h3 className="text-xs font-black uppercase tracking-widest text-gray-400">Notifications</h3>
-                                                {unreadCount > 0 && (
-                                                    <button 
-                                                        onClick={markAllAsRead}
-                                                        className="text-[10px] font-bold text-[#F97316] hover:underline"
-                                                    >
-                                                        Mark all as read
-                                                    </button>
-                                                )}
-                                            </div>
-
-                                            <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
-                                                {notifications.length === 0 ? (
-                                                    <div className="px-5 py-8 text-center">
-                                                        <p className="text-sm font-bold text-gray-300">No notifications yet</p>
-                                                    </div>
-                                                ) : (
-                                                    notifications.map((notif) => (
-                                                        <div 
-                                                            key={notif.notification_id}
-                                                            onClick={() => handleNotificationClick(notif)}
-                                                            className={`px-5 py-4 border-b border-gray-50 last:border-0 hover:bg-[#FAFAF9] transition-all cursor-pointer relative ${!notif.is_read ? 'bg-orange-50/30' : ''}`}
-                                                        >
-                                                            {!notif.is_read && (
-                                                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#F97316]"></div>
-                                                            )}
-                                                            <p className="text-[11px] font-black text-[#1a1208] mb-1">{notif.title}</p>
-                                                            <p className="text-[11px] text-[#4a3b28] leading-relaxed mb-2">{notif.message}</p>
-                                                            <span className="text-[9px] font-bold text-gray-400">
-                                                                {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(notif.created_at).toLocaleDateString()}
-                                                            </span>
-                                                        </div>
-                                                    ))
-                                                )}
-                                            </div>
-                                        </div>
-                                    </>
-                                )}
+                                </div>
+                                <input
+                                    type="text"
+                                    value={searchValue || ''}
+                                    onChange={(e) => onSearch && onSearch(e.target.value)}
+                                    placeholder="Search reports..."
+                                    className="w-64 pl-10 pr-4 py-2.5 bg-[#FAFAF9] border border-gray-100 rounded-full text-[#1a1208] text-sm focus:outline-none focus:ring-2 focus:ring-[#F97316]/50 focus:bg-white transition-all shadow-sm"
+                                />
                             </div>
 
                             {/* Only Profile Dropdown remains on desktop */}
@@ -279,22 +166,19 @@ const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, o
 
                         {/* MOBILE ACTIONS */}
                         <div className="md:hidden flex items-center gap-2">
-                            {/* Notification Bell */}
-                            <button 
-                                onClick={() => {
-                                    setIsNotificationOpen(true);
-                                    if (unreadCount > 0) {
-                                        markAllAsRead();
-                                    }
-                                }}
-                                className="p-2.5 text-[#4a3b28] hover:text-[#F97316] transition-all relative flex items-center justify-center active:scale-95"
+
+                            {/* Notification Bell Button */}
+                            <button
+                                onClick={() => setIsMobileNotificationsOpen(!isMobileNotificationsOpen)}
+                                className="p-2.5 text-[#4a3b28] hover:text-[#F97316] transition-all flex items-center justify-center active:scale-95 relative"
+                                aria-label="Open notifications"
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                                <svg className="w-6.5 h-6.5" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
                                 </svg>
                                 {unreadCount > 0 && (
-                                    <span className="absolute top-2 right-2 min-w-[18px] h-[18px] px-1 bg-[#EF4444] border-2 border-white rounded-full flex items-center justify-center text-[9px] font-black text-white shadow-sm">
-                                        {unreadCount > 9 ? '9+' : unreadCount}
+                                    <span className="absolute top-1.5 right-1.5 w-5 h-5 bg-[#EF4444] text-white text-[9px] font-black rounded-full flex items-center justify-center ring-2 ring-white">
+                                        {unreadCount}
                                     </span>
                                 )}
                             </button>
@@ -322,7 +206,7 @@ const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, o
                 />
             )}
             <div 
-                className={`md:hidden fixed top-0 right-0 h-full w-72 z-[260] bg-gradient-to-b from-white via-[#FCFCFB] to-[#FAF9F6] rounded-l-[2.5rem] shadow-[-15px_0_45px_rgba(0,0,0,0.12)] border-l border-white/60 flex flex-col`}
+                className={`md:hidden fixed top-0 right-0 h-full w-full z-[260] bg-gradient-to-b from-white via-[#FCFCFB] to-[#FAF9F6] shadow-[-15px_0_45px_rgba(0,0,0,0.12)] border-l border-white/60 flex flex-col`}
                 style={{
                     transition: 'transform 450ms cubic-bezier(0.16, 1, 0.3, 1)',
                     transform: isMobileHamburgerOpen ? 'translateX(0)' : 'translateX(100%)'
@@ -561,7 +445,124 @@ const ResiNavbar = ({ onMenuToggle, onSearch, searchValue, isMobileSearchOpen, o
                                     </div>
                                 </button>
                             ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+            {/* MOBILE NOTIFICATIONS DRAWER */}
+            {isMobileNotificationsOpen && (
+                <div 
+                    className="fixed inset-0 z-[250] bg-[#1a1208]/40 backdrop-blur-md animate-in fade-in duration-300" 
+                    onClick={() => setIsMobileNotificationsOpen(false)} 
+                />
+            )}
+            <div 
+                className={`md:hidden fixed top-0 right-0 h-full w-full z-[260] bg-gradient-to-b from-white via-[#FCFCFB] to-[#FAF9F6] shadow-[-15px_0_45px_rgba(0,0,0,0.12)] border-l border-white/60 flex flex-col`}
+                style={{
+                    transition: 'transform 450ms cubic-bezier(0.16, 1, 0.3, 1)',
+                    transform: isMobileNotificationsOpen ? 'translateX(0)' : 'translateX(100%)'
+                }}
+            >
+                <div className="flex flex-col h-full">
+                    {/* Header */}
+                    <div className="px-6 pt-8 pb-6 flex justify-between items-center border-b border-gray-100/60">
+                        <div>
+                            <h3 className="text-[17px] font-black text-[#1a1208] uppercase tracking-tight">Notifications</h3>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">{unreadCount} unread</p>
                         </div>
+                        <div className="flex items-center gap-3">
+                            {unreadCount > 0 && onMarkAllNotificationsRead && (
+                                <button
+                                    onClick={onMarkAllNotificationsRead}
+                                    className="text-[10px] font-black uppercase tracking-wider text-[#F97316] mr-2"
+                                >
+                                    Mark all read
+                                </button>
+                            )}
+                            <button
+                                onClick={() => setIsMobileNotificationsOpen(false)}
+                                className="p-2 text-gray-400 hover:text-[#EF4444] rounded-full hover:bg-red-50/50 transition-all active:scale-90"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4 custom-scrollbar">
+                        {(!notifications || notifications.length === 0) ? (
+                            <div className="text-center py-20">
+                                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest italic">
+                                    No notifications yet
+                                </p>
+                            </div>
+                        ) : (
+                            notifications.map((notif) => (
+                                <div
+                                    key={notif.notification_id}
+                                    className={`relative p-5 rounded-3xl border transition-all duration-300 ${
+                                        notif.is_read
+                                            ? 'bg-[#FAFAF9]/50 border-gray-50'
+                                            : 'bg-orange-50/25 border-orange-100/50 shadow-sm'
+                                    }`}
+                                >
+                                    {!notif.is_read && (
+                                        <span className="absolute top-5 left-5 w-2 h-2 bg-[#F97316] rounded-full" />
+                                    )}
+                                    <div className={!notif.is_read ? 'pl-4' : ''}>
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div className="flex-1">
+                                                <h4 className="text-[13px] font-black text-[#1a1208]">
+                                                    {notif.title}
+                                                </h4>
+                                                <p className="text-xs font-semibold text-[#4a3b28]/85 mt-1 leading-relaxed">
+                                                    {notif.message}
+                                                </p>
+                                                <span className="text-[9px] font-bold text-gray-450 mt-2.5 block uppercase tracking-widest">
+                                                    {new Date(notif.created_at).toLocaleDateString()}
+                                                </span>
+                                            </div>
+
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                {!notif.is_read && onMarkNotificationRead && (
+                                                    <button
+                                                        onClick={() => onMarkNotificationRead(notif.notification_id)}
+                                                        className="p-1.5 bg-orange-50 rounded-xl text-[#F97316] active:scale-90 transition-transform"
+                                                        title="Mark as read"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                                        </svg>
+                                                    </button>
+                                                )}
+                                                {onDeleteNotification && (
+                                                    <button
+                                                        onClick={() => onDeleteNotification(notif.notification_id)}
+                                                        className="p-1.5 bg-gray-100 rounded-xl text-gray-500 active:scale-90 transition-transform hover:bg-gray-200"
+                                                        title="Dismiss"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                                        </svg>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                        {hasMoreNotifications && onLoadMoreNotifications && (
+                            <button
+                                onClick={onLoadMoreNotifications}
+                                className="w-full py-3.5 bg-orange-50/50 hover:bg-orange-50 text-[#F97316] border border-orange-100 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98] mt-2 shadow-sm"
+                            >
+                                Load More
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>

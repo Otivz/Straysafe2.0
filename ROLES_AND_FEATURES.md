@@ -83,3 +83,9 @@ The governance layer. Admins ensure the system is secure, functional, and data-d
 | **Navigation** | ❌ | ❌ | ✅ Active | ❌ |
 | **User Management** | ❌ | ❌ | ❌ | ✅ Full |
 | **Report History** | ✅ Personal | ✅ Subd | ✅ Full | ✅ Full |
+
+
+- Residents dashboard ilagay daw ung mga important updates and data
+- ung description para malaman kung dapat ba hulihin or hindi ung aso 
+- adoption ng strays 
+- accuracy ng ai, pano raw kung madilim
