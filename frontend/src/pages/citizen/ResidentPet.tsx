@@ -112,6 +112,34 @@ const analyzeImageColors = (file: File): Promise<string> => {
     });
 };
 
+interface PetFormData {
+    name: string;
+    species: string;
+    breed: string;
+    gender: string;
+    primaryColor: string;
+    customPrimaryColor: string;
+    secondaryColor: string;
+    customSecondaryColor: string;
+    color: string;
+    age: string;
+    status: string;
+    weight: string;
+    mediaFiles: File[];
+    photoFrontFiles: File[];
+    photoLeftFiles: File[];
+    photoRightFiles: File[];
+    isVaccinated: boolean;
+    vaccinationDate: string;
+    isNeutered: boolean;
+    healthNotes: string;
+    vaccineCardFiles: File[];
+    temperament: string;
+    hasBiteHistory: boolean | null;
+    chaseBehavior: boolean | null;
+    existingVaccineCardUrl: string | null;
+}
+
 const ResidentPet = () => {
     const navigate = useNavigate();
     const [isAddPetModalOpen, setIsAddPetModalOpen] = useState(false);
@@ -136,7 +164,9 @@ const ResidentPet = () => {
             status: pet.status || 'Active',
             avatar: pet.photo_url || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?q=80&w=400&auto=format&fit=crop',
             weight: pet.weight ? `${pet.weight}kg` : 'Unknown',
-            colorMarkings: pet.color_markings || 'Unknown',
+            primaryColor: pet.primary_color || 'Brown',
+            secondaryColor: pet.secondary_color || '',
+            colorMarkings: pet.color_markings || pet.distinctive_markings || 'None',
             sizeCategory: pet.size_category || 'Medium',
             isVaccinated: pet.is_vaccinated || false,
             vaccinationDate: pet.vaccination_date || null,
@@ -151,28 +181,32 @@ const ResidentPet = () => {
         };
     };
 
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<PetFormData>({
         name: '',
         species: 'Dog',
         breed: '',
         gender: 'Male',
+        primaryColor: 'Brown',
+        customPrimaryColor: '',
+        secondaryColor: '',
+        customSecondaryColor: '',
         color: '',
         age: '',
         status: 'Active',
         weight: '',
-        mediaFiles: [] as File[],
-        photoFrontFiles: [] as File[],
-        photoLeftFiles: [] as File[],
-        photoRightFiles: [] as File[],
+        mediaFiles: [],
+        photoFrontFiles: [],
+        photoLeftFiles: [],
+        photoRightFiles: [],
         isVaccinated: true,
         vaccinationDate: '2026-05-10',
         isNeutered: true,
         healthNotes: '',
-        vaccineCardFiles: [] as File[],
+        vaccineCardFiles: [],
         temperament: 'Friendly',
-        hasBiteHistory: null as boolean | null,
-        chaseBehavior: null as boolean | null,
-        existingVaccineCardUrl: null as string | null
+        hasBiteHistory: null,
+        chaseBehavior: null,
+        existingVaccineCardUrl: null
     });
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -400,12 +434,23 @@ const ResidentPet = () => {
 
         setIsSubmitting(true);
         try {
+            const effectivePrimary = formData.primaryColor === 'Other'
+                ? (formData.customPrimaryColor.trim() || 'Other')
+                : formData.primaryColor;
+
+            const effectiveSecondary = formData.secondaryColor === 'Other'
+                ? (formData.customSecondaryColor.trim() || 'Other')
+                : formData.secondaryColor;
+
             const petData = {
                 pet_name: formData.name,
                 pet_type: formData.species,
                 breed: formData.breed,
                 gender: formData.gender,
+                primary_color: effectivePrimary,
+                secondary_color: effectiveSecondary || null,
                 color_markings: formData.color.trim() || null,
+                distinctive_markings: formData.color.trim() || null,
                 estimated_age: formData.age,
                 status: formData.status,
                 health_condition: formData.healthNotes.trim() || 'Healthy and active',
@@ -480,6 +525,10 @@ const ResidentPet = () => {
                 species: 'Dog',
                 breed: '',
                 gender: 'Male',
+                primaryColor: 'Brown',
+                customPrimaryColor: '',
+                secondaryColor: '',
+                customSecondaryColor: '',
                 color: '',
                 age: '',
                 status: 'Active',
@@ -515,6 +564,14 @@ const ResidentPet = () => {
         if (!petObj) return;
         
         setSelectedPet(null); // Close the detail panel
+
+        const presetPrimary = ['Brown', 'Black', 'White', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream', 'Red'];
+        const rawPrimary = petObj.primary_color || 'Brown';
+        const isPrimaryPreset = presetPrimary.includes(rawPrimary);
+
+        const presetSecondary = ['White', 'Black', 'Brown', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream'];
+        const rawSecondary = petObj.secondary_color || '';
+        const isSecondaryPreset = !rawSecondary || presetSecondary.includes(rawSecondary);
         
         setEditingPetId(petObj.pet_id);
         setFormData({
@@ -522,7 +579,11 @@ const ResidentPet = () => {
             species: petObj.pet_type || 'Dog',
             breed: petObj.breed || '',
             gender: petObj.gender || 'Male',
-            color: petObj.color_markings || '',
+            primaryColor: isPrimaryPreset ? rawPrimary : 'Other',
+            customPrimaryColor: isPrimaryPreset ? '' : rawPrimary,
+            secondaryColor: isSecondaryPreset ? rawSecondary : (rawSecondary ? 'Other' : ''),
+            customSecondaryColor: isSecondaryPreset ? '' : rawSecondary,
+            color: petObj.color_markings || petObj.distinctive_markings || '',
             age: petObj.estimated_age || '',
             status: petObj.status || 'Active',
             weight: petObj.weight ? petObj.weight.toString() : '',
@@ -593,6 +654,10 @@ const ResidentPet = () => {
                                 species: 'Dog',
                                 breed: '',
                                 gender: 'Male',
+                                primaryColor: 'Brown',
+                                customPrimaryColor: '',
+                                secondaryColor: '',
+                                customSecondaryColor: '',
                                 color: '',
                                 age: '',
                                 status: 'Active',
@@ -993,11 +1058,54 @@ const ResidentPet = () => {
                                     </select>
                                 </div>
                                 <div className="space-y-4">
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Color Markings <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
+                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Primary Color <span className="text-red-500">*</span></label>
+                                    <select
+                                        className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
+                                        value={formData.primaryColor}
+                                        onChange={(e) => setFormData({...formData, primaryColor: e.target.value})}
+                                    >
+                                        {['Brown', 'Black', 'White', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream', 'Red', 'Other'].map(c => (
+                                            <option key={c} value={c}>{c}</option>
+                                        ))}
+                                    </select>
+                                    {formData.primaryColor === 'Other' && (
+                                        <input
+                                            type="text"
+                                            className="w-full h-14 bg-[#FAFAF9] border border-orange-200 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-400 animate-in fade-in slide-in-from-top-1 duration-200"
+                                            placeholder="Type custom primary color (e.g. Brindle, Merle, Calico)"
+                                            value={formData.customPrimaryColor}
+                                            onChange={(e) => setFormData({...formData, customPrimaryColor: e.target.value})}
+                                        />
+                                    )}
+                                </div>
+                                <div className="space-y-4">
+                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Secondary Color <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
+                                    <select
+                                        className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
+                                        value={formData.secondaryColor}
+                                        onChange={(e) => setFormData({...formData, secondaryColor: e.target.value})}
+                                    >
+                                        <option value="">None</option>
+                                        {['White', 'Black', 'Brown', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream', 'Other'].map(c => (
+                                            <option key={c} value={c}>{c}</option>
+                                        ))}
+                                    </select>
+                                    {formData.secondaryColor === 'Other' && (
+                                        <input
+                                            type="text"
+                                            className="w-full h-14 bg-[#FAFAF9] border border-orange-200 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-400 animate-in fade-in slide-in-from-top-1 duration-200"
+                                            placeholder="Type custom secondary color (e.g. Sable, Chocolate)"
+                                            value={formData.customSecondaryColor}
+                                            onChange={(e) => setFormData({...formData, customSecondaryColor: e.target.value})}
+                                        />
+                                    )}
+                                </div>
+                                <div className="space-y-4">
+                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Color Markings / Patterns <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
                                     <input 
                                         type="text" 
                                         className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
-                                        placeholder="e.g. Black with white patches"
+                                        placeholder="e.g. Black with white patches on chest"
                                         value={formData.color}
                                         onChange={(e) => setFormData({...formData, color: e.target.value})}
                                     />
@@ -1005,12 +1113,28 @@ const ResidentPet = () => {
                                         <div className="mt-2.5 flex items-center justify-between bg-orange-50/50 border border-orange-100 rounded-2xl p-3.5 animate-in slide-in-from-top-2 duration-300">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-[10px] font-black text-[#F97316] uppercase tracking-widest bg-white px-2 py-0.5 rounded-md border border-orange-100 shadow-sm leading-none">AI Suggestion</span>
-                                                <span className="text-xs font-semibold text-gray-700">Markings: <span className="font-extrabold text-[#1a1208]">{aiSuggestedColor}</span></span>
+                                                <span className="text-xs font-semibold text-gray-700">Detected: <span className="font-extrabold text-[#1a1208]">{aiSuggestedColor}</span></span>
                                             </div>
                                             <button
                                                 type="button"
                                                 onClick={() => {
-                                                    setFormData({ ...formData, color: aiSuggestedColor });
+                                                    const parts = aiSuggestedColor.split(',').map(s => s.trim());
+                                                    const presetPrimary = ['Brown', 'Black', 'White', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream', 'Red'];
+                                                    const p1 = parts[0] || 'Brown';
+                                                    const isP1Preset = presetPrimary.includes(p1);
+
+                                                    const presetSecondary = ['White', 'Black', 'Brown', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream'];
+                                                    const p2 = parts[1] || '';
+                                                    const isP2Preset = !p2 || presetSecondary.includes(p2);
+
+                                                    setFormData({ 
+                                                        ...formData, 
+                                                        primaryColor: isP1Preset ? p1 : 'Other',
+                                                        customPrimaryColor: isP1Preset ? '' : p1,
+                                                        secondaryColor: isP2Preset ? p2 : (p2 ? 'Other' : ''),
+                                                        customSecondaryColor: isP2Preset ? '' : p2,
+                                                        color: formData.color || aiSuggestedColor
+                                                    });
                                                     setAiSuggestedColor(null);
                                                 }}
                                                 className="px-3.5 py-2 bg-[#F97316] text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:scale-105 transition-all shadow-md shadow-orange-100 cursor-pointer"

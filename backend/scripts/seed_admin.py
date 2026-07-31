@@ -94,24 +94,54 @@ def seed_db():
         users_to_seed = [
             {
                 "name": "Emmanuel Vito Cruz",
-                "email": os.getenv("CITIZEN_EMAIL"),
+                "email": os.getenv("CITIZEN_EMAIL") or "emmanuelvitocruz@gmail.com",
+                "phone": "09171234567",
                 "role_id": 1, # Citizen
+                "subdivision_id": 1,
+                "address": "Block 5 Lot 12, Selera Homes, San Vicente, Santa Maria, Bulacan",
+                "latitude": 14.80131300,
+                "longitude": 121.00310900,
+                "profile_picture": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop",
+                "status": "Active",
+                "is_verified": True
+            },
+            {
+                "name": "Maria Clara Santos",
+                "email": "resident2@straysafe.com",
+                "phone": "09189876543",
+                "role_id": 1, # Citizen
+                "subdivision_id": 1,
+                "address": "Block 8 Lot 24, Selera Homes, San Vicente, Santa Maria, Bulacan",
+                "latitude": 14.80095000,
+                "longitude": 121.00355000,
+                "profile_picture": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&auto=format&fit=crop",
                 "status": "Active",
                 "is_verified": True
             },
             {
                 "name": "Kyla Joy Arriola",
-                "email": os.getenv("SUBD_LEADER_EMAIL"),
+                "email": os.getenv("SUBD_LEADER_EMAIL") or "kylajoyarriola@gmail.com",
+                "phone": "09192223344",
                 "role_id": 2, # Subdivision Leader
                 "subdivision_id": 1,
+                "position_id": db.query(Position).filter(Position.position_name == "President").first().position_id if db.query(Position).filter(Position.position_name == "President").first() else 1,
+                "address": "Block 1 Lot 2, Selera Homes, San Vicente, Santa Maria, Bulacan",
+                "latitude": 14.80180000,
+                "longitude": 121.00280000,
+                "profile_picture": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&auto=format&fit=crop",
                 "status": "Active",
                 "is_verified": True
             },
             {
                 "name": "Kyla Bianca Frias",
-                "email": os.getenv("BRGY_STAFF_EMAIL"),
+                "email": os.getenv("BRGY_STAFF_EMAIL") or "kylabiancafrias@gmail.com",
+                "phone": "09205556677",
                 "role_id": 3, # Barangay Staff
-                "position_id": db.query(Position).filter(Position.position_name == "Barangay Captain").first().position_id,
+                "position_id": db.query(Position).filter(Position.position_name == "Barangay Captain").first().position_id if db.query(Position).filter(Position.position_name == "Barangay Captain").first() else 6,
+                "address": "Barangay Hall, San Vicente, Santa Maria, Bulacan",
+                "latitude": 14.80690600,
+                "longitude": 121.00392970,
+                "profile_picture": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop",
                 "status": "Active",
                 "is_verified": True
             }
@@ -129,16 +159,27 @@ def seed_db():
                     name=user_data["name"],
                     email=user_data["email"],
                     password=default_password_hash,
+                    phone=user_data.get("phone"),
                     role_id=user_data["role_id"],
                     subdivision_id=user_data.get("subdivision_id"),
                     position_id=user_data.get("position_id"),
+                    address=user_data.get("address"),
+                    latitude=user_data.get("latitude"),
+                    longitude=user_data.get("longitude"),
+                    profile_picture=user_data.get("profile_picture"),
                     status=user_data["status"],
                     is_verified=user_data["is_verified"]
                 )
                 db.add(new_user)
             else:
-                print(f"User {user_data['email']} exists. Updating role and status...")
+                print(f"User {user_data['email']} exists. Updating complete details...")
+                user.name = user_data["name"]
                 user.role_id = user_data["role_id"]
+                user.phone = user_data.get("phone")
+                user.address = user_data.get("address")
+                user.latitude = user_data.get("latitude")
+                user.longitude = user_data.get("longitude")
+                user.profile_picture = user_data.get("profile_picture")
                 user.status = user_data["status"]
                 user.is_verified = user_data["is_verified"]
                 if "subdivision_id" in user_data:
@@ -147,8 +188,8 @@ def seed_db():
                     user.position_id = user_data["position_id"]
 
         # 6. Seed Admin User
-        admin_email = os.getenv("ADMIN_EMAIL")
-        admin_password = os.getenv("ADMIN_PASSWORD")
+        admin_email = os.getenv("ADMIN_EMAIL", "admin@straysafe.com")
+        admin_password = os.getenv("ADMIN_PASSWORD", "password123")
         
         admin = db.query(User).filter(User.email == admin_email).first()
         hashed_admin_password = get_password_hash(admin_password)
@@ -159,15 +200,25 @@ def seed_db():
                 name="System Admin",
                 email=admin_email,
                 password=hashed_admin_password,
+                phone="09110001111",
                 role_id=4,
+                address="StraySafe HQ, Santa Maria, Bulacan",
+                latitude=14.80690600,
+                longitude=121.00392970,
+                profile_picture="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop",
                 status="Active",
                 is_verified=True
             )
             db.add(new_admin)
         else:
-            print(f"Admin user {admin_email} exists. Updating password...")
+            print(f"Admin user {admin_email} exists. Updating details...")
             admin.password = hashed_admin_password
             admin.role_id = 4
+            admin.phone = "09110001111"
+            admin.address = "StraySafe HQ, Santa Maria, Bulacan"
+            admin.latitude = 14.80690600
+            admin.longitude = 121.00392970
+            admin.profile_picture = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop"
             admin.status = "Active"
             admin.is_verified = True
             

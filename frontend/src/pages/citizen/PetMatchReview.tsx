@@ -47,7 +47,23 @@ const PetMatchReview = () => {
         try {
             // 1. Fetch Report details
             const reportRes = await axios.get(`http://localhost:8000/reports/${reportId}`);
-            setReport(reportRes.data);
+            const repData = reportRes.data;
+
+            if (repData.latitude && repData.longitude) {
+                try {
+                    const geoRes = await fetch(
+                        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${repData.latitude}&lon=${repData.longitude}`
+                    );
+                    const geoData = await geoRes.json();
+                    if (geoData && geoData.display_name) {
+                        repData.street_address = geoData.display_name;
+                    }
+                } catch (e) {
+                    console.warn("Reverse geocode failed", e);
+                }
+            }
+
+            setReport(repData);
 
             // 2. Fetch Owner's pets
             const petsRes = await axios.get(`http://localhost:8000/pets/owner/${currentUser.user_id}`);
@@ -136,7 +152,7 @@ const PetMatchReview = () => {
                     primary_color: matchedPet?.primary_color || "Brown",
                     secondary_color: matchedPet?.secondary_color || "",
                     distinctive_markings: distinctiveMarkings || matchedPet?.distinctive_markings || "White chest markings",
-                    registered_address: matchedPet?.registered_address || "Selera Homes",
+                    registered_address: matchedPet?.registered_address || matchedPet?.owner?.address || "Registered Owner Address",
                     registered_latitude: matchedPet?.registered_latitude || 14.801496,
                     registered_longitude: matchedPet?.registered_longitude || 121.003280,
                     photo_url: matchedPet?.photo_url || "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop",
@@ -399,11 +415,13 @@ const PetMatchReview = () => {
         );
 
         const rColors = (report.ai_dominant_color || "").toLowerCase().split(",").map((c: string) => c.trim());
+        const pMarkings = (matchedPet.color_markings || "").toLowerCase();
         const pPrimary = (matchedPet.primary_color || "").toLowerCase().trim();
         const pSecondary = (matchedPet.secondary_color || "").toLowerCase().trim();
         const primaryMatches = pPrimary && rColors.includes(pPrimary);
         const secondaryMatches = pSecondary && rColors.includes(pSecondary);
-        const colorMatches = primaryMatches || secondaryMatches;
+        const markingsMatches = rColors.some((c: string) => c && pMarkings.includes(c));
+        const colorMatches = primaryMatches || secondaryMatches || markingsMatches;
 
         if (breedMatches && colorMatches) {
             return { text: "YES", desc: "Breed & color match" };
@@ -448,7 +466,8 @@ const PetMatchReview = () => {
                                         <p className="text-xs font-black text-[#1a1208] uppercase">Sighting Details</p>
                                         <p className="text-xs text-gray-500 font-bold">Species: <span className="text-[#1a1208]">{report.animal_type || report.ai_animal_type || "Dog"}</span></p>
                                         <p className="text-xs text-gray-500 font-bold">Breed: <span className="text-[#1a1208]">{report.animal_breed || report.ai_possible_breed || "Unknown"}</span></p>
-                                        <p className="text-xs text-gray-500 font-bold">Color: <span className="text-[#1a1208]">{report.ai_dominant_color || "Unknown"}</span></p>
+                                        <p className="text-xs text-gray-500 font-bold">Color: <span className="text-[#1a1208]">{report.ai_dominant_color || report.animal_color || "Unknown"}</span></p>
+                                        <p className="text-xs text-gray-500 font-bold">Location: <span className="text-[#1a1208]">{report.street_address || report.address || (report.landmark ? `${report.landmark}, Selera Homes` : "Selera Homes")}</span></p>
                                     </div>
                                 </div>
 
@@ -468,9 +487,9 @@ const PetMatchReview = () => {
                                         <p className="text-xs font-black text-[#1a1208] uppercase">{matchedPet ? matchedPet.pet_name : "Pet Details"}</p>
                                         <p className="text-xs text-gray-500 font-bold">Species: <span className="text-[#1a1208]">{matchedPet?.pet_type || "Select a pet"}</span></p>
                                         <p className="text-xs text-gray-500 font-bold">Breed: <span className="text-[#1a1208]">{matchedPet?.breed || "Select a pet"}</span></p>
-                                        <p className="text-xs text-gray-500 font-bold">Color: <span className="text-[#1a1208]">{matchedPet?.primary_color || "Select a pet"}</span></p>
+                                        <p className="text-xs text-gray-500 font-bold">Color: <span className="text-[#1a1208]">{matchedPet ? (matchedPet.color_markings || [matchedPet.primary_color, matchedPet.secondary_color].filter(Boolean).join(", ") || "Unknown") : "Select a pet"}</span></p>
                                         {matchedPet && (
-                                            <p className="text-xs text-gray-500 font-bold">Address: <span className="text-[#1a1208]">{currentLat && currentLng ? `${currentLat.toFixed(5)}, ${currentLng.toFixed(5)}` : "Not Pinpointed"}</span></p>
+                                            <p className="text-xs text-gray-500 font-bold">Address: <span className="text-[#1a1208]">{matchedPet.registered_address || matchedPet.owner?.address || currentUser?.address || "Not Specified"}</span></p>
                                         )}
                                     </div>
 

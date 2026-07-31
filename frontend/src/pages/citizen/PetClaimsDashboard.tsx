@@ -271,7 +271,7 @@ const PetClaimsDashboard = () => {
                             primary_color: c.pet?.primary_color || "Brown",
                             secondary_color: c.pet?.secondary_color || "",
                             distinctive_markings: c.pet?.distinctive_markings || "",
-                            registered_address: c.pet?.registered_address || "Selera Homes",
+                            registered_address: c.pet?.registered_address || c.pet?.owner?.address || "Registered Owner Address",
                             registered_latitude: c.pet?.registered_latitude ? parseFloat(c.pet.registered_latitude) : 14.801496,
                             registered_longitude: c.pet?.registered_longitude ? parseFloat(c.pet.registered_longitude) : 121.003280,
                             photo_url: c.pet?.photo_url || "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop"

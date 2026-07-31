@@ -17,6 +17,7 @@ interface ResiNavbarProps {
     onMarkAllNotificationsRead?: () => void;
     hasMoreNotifications?: boolean;
     onLoadMoreNotifications?: () => void;
+    onNotificationClick?: (notif: any) => void;
 }
 
 const ResiNavbar = ({ 
@@ -32,7 +33,8 @@ const ResiNavbar = ({
     onDeleteNotification,
     onMarkAllNotificationsRead,
     hasMoreNotifications = false,
-    onLoadMoreNotifications
+    onLoadMoreNotifications,
+    onNotificationClick
 }: ResiNavbarProps) => {
     const navigate = useNavigate();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -57,6 +59,46 @@ const ResiNavbar = ({
         };
         fetchLatestProfile();
     }, [initialUser?.user_id]);
+
+    const handleNotificationClick = (notif: any) => {
+        if (!notif.is_read) {
+            if (onMarkNotificationRead) {
+                onMarkNotificationRead(notif.notification_id);
+            } else {
+                axios.patch(`http://localhost:8000/notifications/${notif.notification_id}`, { is_read: true })
+                    .catch(err => console.error("Failed to mark notification read", err));
+            }
+        }
+
+        setIsMobileNotificationsOpen(false);
+
+        if (onNotificationClick) {
+            onNotificationClick(notif);
+            return;
+        }
+
+        const typeStr = (notif.type || '').toLowerCase();
+        const titleStr = (notif.title || '').toLowerCase();
+        const msgStr = (notif.message || '').toLowerCase();
+
+        const isMatch = typeStr === 'potential_match' || 
+                        typeStr === 'match_review' ||
+                        titleStr.includes('match') ||
+                        titleStr.includes('sighting') ||
+                        msgStr.includes('match') ||
+                        msgStr.includes('potential match') ||
+                        msgStr.includes('matches of your dog');
+
+        if (isMatch && notif.related_id) {
+            navigate(`/resident/reports/${notif.related_id}/match-review`);
+        } else if (notif.related_id) {
+            if (typeStr === 'alert' || titleStr.includes('scan')) {
+                navigate(`/resident/pet/${notif.related_id}/scan-history`);
+            } else {
+                navigate(`/resident/reports/${notif.related_id}`);
+            }
+        }
+    };
 
 
 
@@ -500,60 +542,80 @@ const ResiNavbar = ({
                                 </p>
                             </div>
                         ) : (
-                            notifications.map((notif) => (
-                                <div
-                                    key={notif.notification_id}
-                                    className={`relative p-5 rounded-3xl border transition-all duration-300 ${
-                                        notif.is_read
-                                            ? 'bg-[#FAFAF9]/50 border-gray-50'
-                                            : 'bg-orange-50/25 border-orange-100/50 shadow-sm'
-                                    }`}
-                                >
-                                    {!notif.is_read && (
-                                        <span className="absolute top-5 left-5 w-2 h-2 bg-[#F97316] rounded-full" />
-                                    )}
-                                    <div className={!notif.is_read ? 'pl-4' : ''}>
-                                        <div className="flex items-start justify-between gap-4">
-                                            <div className="flex-1">
-                                                <h4 className="text-[13px] font-black text-[#1a1208]">
-                                                    {notif.title}
-                                                </h4>
-                                                <p className="text-xs font-semibold text-[#4a3b28]/85 mt-1 leading-relaxed">
-                                                    {notif.message}
-                                                </p>
-                                                <span className="text-[9px] font-bold text-gray-450 mt-2.5 block uppercase tracking-widest">
-                                                    {new Date(notif.created_at).toLocaleDateString()}
-                                                </span>
-                                            </div>
+                            notifications.map((notif) => {
+                                const typeStr = (notif.type || '').toLowerCase();
+                                const titleStr = (notif.title || '').toLowerCase();
+                                const msgStr = (notif.message || '').toLowerCase();
+                                const isMatch = typeStr === 'potential_match' || 
+                                                typeStr === 'match_review' ||
+                                                titleStr.includes('match') ||
+                                                titleStr.includes('sighting') ||
+                                                msgStr.includes('match') ||
+                                                msgStr.includes('potential match') ||
+                                                msgStr.includes('matches of your dog');
+                                return (
+                                    <div
+                                        key={notif.notification_id}
+                                        onClick={() => handleNotificationClick(notif)}
+                                        className={`relative p-5 rounded-3xl border transition-all duration-300 cursor-pointer hover:border-orange-300 active:scale-[0.98] ${
+                                            notif.is_read
+                                                ? 'bg-[#FAFAF9]/50 border-gray-50'
+                                                : 'bg-orange-50/25 border-orange-100/50 shadow-sm'
+                                        }`}
+                                    >
+                                        {!notif.is_read && (
+                                            <span className="absolute top-5 left-5 w-2 h-2 bg-[#F97316] rounded-full" />
+                                        )}
+                                        <div className={!notif.is_read ? 'pl-4' : ''}>
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div className="flex-1">
+                                                    <h4 className="text-[13px] font-black text-[#1a1208]">
+                                                        {notif.title}
+                                                    </h4>
+                                                    <p className="text-xs font-semibold text-[#4a3b28]/85 mt-1 leading-relaxed">
+                                                        {notif.message}
+                                                    </p>
+                                                    <div className="flex items-center gap-2 mt-2.5">
+                                                        <span className="text-[9px] font-bold text-gray-450 block uppercase tracking-widest">
+                                                            {new Date(notif.created_at).toLocaleDateString()}
+                                                        </span>
+                                                        {isMatch && (
+                                                            <span className="text-[8px] font-black text-[#F97316] bg-orange-100/80 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                                                Review Match →
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
 
-                                            <div className="flex items-center gap-2 shrink-0">
-                                                {!notif.is_read && onMarkNotificationRead && (
-                                                    <button
-                                                        onClick={() => onMarkNotificationRead(notif.notification_id)}
-                                                        className="p-1.5 bg-orange-50 rounded-xl text-[#F97316] active:scale-90 transition-transform"
-                                                        title="Mark as read"
-                                                    >
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                                        </svg>
-                                                    </button>
-                                                )}
-                                                {onDeleteNotification && (
-                                                    <button
-                                                        onClick={() => onDeleteNotification(notif.notification_id)}
-                                                        className="p-1.5 bg-gray-100 rounded-xl text-gray-500 active:scale-90 transition-transform hover:bg-gray-200"
-                                                        title="Dismiss"
-                                                    >
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                                        </svg>
-                                                    </button>
-                                                )}
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    {!notif.is_read && onMarkNotificationRead && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); onMarkNotificationRead(notif.notification_id); }}
+                                                            className="p-1.5 bg-orange-50 rounded-xl text-[#F97316] active:scale-90 transition-transform"
+                                                            title="Mark as read"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                                            </svg>
+                                                        </button>
+                                                    )}
+                                                    {onDeleteNotification && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); onDeleteNotification(notif.notification_id); }}
+                                                            className="p-1.5 bg-gray-100 rounded-xl text-gray-500 active:scale-90 transition-transform hover:bg-gray-200"
+                                                            title="Dismiss"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                                            </svg>
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                         {hasMoreNotifications && onLoadMoreNotifications && (
                             <button

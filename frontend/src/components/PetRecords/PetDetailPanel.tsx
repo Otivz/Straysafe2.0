@@ -249,8 +249,18 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                             <span className="text-xs font-black text-[#1a1208] uppercase">{pet.weight || 'Unknown'}</span>
                                         </div>
                                         <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                            <span className="text-xs font-bold text-gray-500">Primary Color</span>
+                                            <span className="text-xs font-black text-[#1a1208] uppercase">{pet.primaryColor || 'Brown'}</span>
+                                        </div>
+                                        {pet.secondaryColor && pet.secondaryColor !== 'None' && (
+                                            <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                                <span className="text-xs font-bold text-gray-500">Secondary Color</span>
+                                                <span className="text-xs font-black text-[#1a1208] uppercase">{pet.secondaryColor}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
                                             <span className="text-xs font-bold text-gray-500">Color Markings</span>
-                                            <span className="text-xs font-black text-[#1a1208] uppercase truncate max-w-[200px]">{pet.colorMarkings || 'Unknown'}</span>
+                                            <span className="text-xs font-black text-[#1a1208] uppercase truncate max-w-[200px]">{pet.colorMarkings || 'None'}</span>
                                         </div>
                                     </div>
                                 </div>
