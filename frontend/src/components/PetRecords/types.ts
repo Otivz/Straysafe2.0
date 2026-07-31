@@ -16,6 +16,8 @@ export interface PetRecord {
     insuranceProvider?: string;
     
     // Expanded fields
+    primaryColor?: string;
+    secondaryColor?: string;
     colorMarkings?: string;
     sizeCategory?: string;
     isVaccinated?: boolean;

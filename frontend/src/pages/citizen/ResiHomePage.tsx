@@ -5,7 +5,7 @@ import Button from '../../components/Button';
 import CustomRadio from '../../components/CustomRadio';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
-import { MapContainer, TileLayer, Marker, useMapEvents, Polygon } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, useMapEvents, Polygon, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -98,6 +98,16 @@ const LocationPicker = ({ onLocationSelect, position, disabled }: { onLocationSe
     return position ? <Marker position={position} /> : null;
 };
 
+const RecenterMap = ({ center }: { center: [number, number] }) => {
+    const map = useMap();
+    useEffect(() => {
+        map.setView(center, map.getZoom());
+    }, [center, map]);
+    return null;
+};
+
+
+
 const ResiHomePage = () => {
     const location = useLocation();
     const navigate = useNavigate();
@@ -176,9 +186,11 @@ const ResiHomePage = () => {
 
     const [resolvedAddress, setResolvedAddress] = useState('');
     const [isGeocoding, setIsGeocoding] = useState(false);
+    const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
+    const [tempLandmark, setTempLandmark] = useState('');
 
     useEffect(() => {
-        if (!isAddReportModalOpen) {
+        if (!isAddReportModalOpen && !isMapPickerOpen) {
             setResolvedAddress('');
             return;
         }
@@ -191,7 +203,9 @@ const ResiHomePage = () => {
                         format: 'jsonv2',
                         lat: formData.latitude,
                         lon: formData.longitude,
-                        addressdetails: 1
+                        addressdetails: 1,
+                        extratags: 1,
+                        namedetails: 1
                     },
                     headers: {
                         'Accept-Language': 'en'
@@ -211,6 +225,16 @@ const ResiHomePage = () => {
 
                     const addressStr = parts.join(', ') || response.data.display_name;
                     setResolvedAddress(addressStr);
+
+                    // Extract place / landmark name from API response
+                    const detectedLandmark = response.data.name ||
+                        addr.amenity || addr.shop || addr.building || addr.office ||
+                        addr.tourism || addr.historic || addr.leisure || addr.house_name ||
+                        addr.place || (road ? (neighbourhood ? `${road}, ${neighbourhood}` : road) : '');
+
+                    if (detectedLandmark) {
+                        setTempLandmark(detectedLandmark);
+                    }
                 } else {
                     setResolvedAddress(`${formData.latitude.toFixed(6)}, ${formData.longitude.toFixed(6)}`);
                 }
@@ -227,7 +251,7 @@ const ResiHomePage = () => {
         }, 400);
 
         return () => clearTimeout(timer);
-    }, [formData.latitude, formData.longitude, isAddReportModalOpen]);
+    }, [formData.latitude, formData.longitude, isAddReportModalOpen, isMapPickerOpen]);
 
     const userStr = localStorage.getItem('resident_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -269,6 +293,7 @@ const ResiHomePage = () => {
 
     const handleCloseModal = () => {
         setIsAddReportModalOpen(false);
+        setIsMapPickerOpen(false);
         if (returnUrl) {
             navigate(returnUrl);
             setReturnUrl(null);
@@ -629,6 +654,34 @@ const ResiHomePage = () => {
 
     const handleDismissNotification = (id: number) => {
         setDismissedNotificationIds(prev => new Set(prev).add(id));
+    };
+
+    const handleNotificationClick = (notif: any) => {
+        if (!notif.is_read) {
+            handleMarkNotificationRead(notif.notification_id);
+        }
+
+        const typeStr = (notif.type || '').toLowerCase();
+        const titleStr = (notif.title || '').toLowerCase();
+        const msgStr = (notif.message || '').toLowerCase();
+
+        const isMatch = typeStr === 'potential_match' ||
+            typeStr === 'match_review' ||
+            titleStr.includes('match') ||
+            titleStr.includes('sighting') ||
+            msgStr.includes('match') ||
+            msgStr.includes('potential match') ||
+            msgStr.includes('matches of your dog');
+
+        if (isMatch && notif.related_id) {
+            navigate(`/resident/reports/${notif.related_id}/match-review`);
+        } else if (notif.related_id) {
+            if (typeStr === 'alert' || titleStr.includes('scan')) {
+                navigate(`/resident/pet/${notif.related_id}/scan-history`);
+            } else {
+                navigate(`/resident/reports/${notif.related_id}`);
+            }
+        }
     };
 
     useEffect(() => {
@@ -1061,6 +1114,7 @@ const ResiHomePage = () => {
                 onMarkNotificationRead={handleMarkNotificationRead}
                 onDeleteNotification={handleDismissNotification}
                 onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+                onNotificationClick={handleNotificationClick}
                 hasMoreNotifications={notifications.filter(n => !dismissedNotificationIds.has(n.notification_id)).length > notificationsLimit}
                 onLoadMoreNotifications={() => setNotificationsLimit(prev => prev + 10)}
             />
@@ -1418,48 +1472,56 @@ const ResiHomePage = () => {
                                     </div>
                                 </div>
 
-                                {/* Interactive Map Picker */}
-                                <div>
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4 block">Pinpoint Location</label>
-                                    <div className="w-full h-64 rounded-[2rem] overflow-visible border-2 border-gray-50 shadow-sm relative group mb-6">
-                                        <MapContainer
-                                            center={[formData.latitude, formData.longitude]}
-                                            zoom={15}
-                                            className="h-full w-full z-10"
-                                            scrollWheelZoom={true}
+                                {/* Nearby Landmark & Location Section */}
+                                <div className="space-y-4 bg-gray-50/50 p-5 rounded-[2rem] border border-gray-100">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest block">
+                                            Landmark & Location
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setTempLandmark(formData.landmark);
+                                                setIsMapPickerOpen(true);
+                                            }}
+                                            className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-200 active:scale-95 cursor-pointer"
                                         >
-                                            <TileLayer
-                                                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                                            />
-                                            <LocationPicker
-                                                position={[formData.latitude, formData.longitude]}
-                                                onLocationSelect={(lat, lng) => setFormData({ ...formData, latitude: lat, longitude: lng })}
-                                            />
-                                            <Polygon
-                                                positions={SELERA_POLYGON.map(p => [p.lat, p.lng] as [number, number])}
-                                                pathOptions={{
-                                                    color: '#F97316',
-                                                    fillColor: '#F97316',
-                                                    fillOpacity: 0.1,
-                                                    weight: 2,
-                                                    dashArray: '5, 10'
-                                                }}
-                                            />
-                                            <ReturnToSeleraButton />
-                                        </MapContainer>
-                                        <div className="absolute top-4 right-4 z-[20] bg-white/90 backdrop-blur-sm px-4 py-2 rounded-xl border border-gray-100 shadow-sm pointer-events-none">
-                                            <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest">Click map to move pin</p>
-                                        </div>
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            </svg>
+                                            {formData.landmark ? '📍 Change Landmark on Map' : '📍 Add Landmark'}
+                                        </button>
                                     </div>
 
-                                    {/* Resolved Address directly under map */}
+                                    {/* Landmark Input Field */}
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            placeholder="Click 'Add Landmark' above or type custom landmark..."
+                                            className="w-full bg-white border border-gray-200 rounded-[1.5rem] px-6 py-4 text-xs font-bold text-[#1a1208] focus:outline-none focus:border-orange-300 transition-all placeholder:text-gray-350 shadow-sm pr-12"
+                                            value={formData.landmark}
+                                            onChange={(e) => setFormData({ ...formData, landmark: e.target.value })}
+                                        />
+                                        {formData.landmark && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setFormData({ ...formData, landmark: '' })}
+                                                className="absolute right-4 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-600 text-[10px] font-bold transition-all"
+                                                title="Clear landmark"
+                                            >
+                                                ✕
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Resolved Street Address Readout */}
                                     <div className="w-full">
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Street Address</label>
+                                        <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 block">Street Address</label>
                                         <div className="relative">
                                             <input
                                                 type="text"
-                                                className={`w-full bg-[#FAFAF9] border border-gray-50 rounded-2xl px-5 py-3 text-[11px] font-bold text-[#F97316] shadow-sm pr-10 transition-opacity duration-200 ${isGeocoding ? 'opacity-60' : ''}`}
+                                                className={`w-full bg-white border border-gray-100 rounded-2xl px-5 py-3 text-[11px] font-bold text-[#F97316] shadow-sm pr-10 transition-opacity duration-200 ${isGeocoding ? 'opacity-60' : ''}`}
                                                 value={resolvedAddress || (isGeocoding ? 'Resolving street address...' : 'Loading address...')}
                                                 readOnly
                                             />
@@ -1473,18 +1535,6 @@ const ResiHomePage = () => {
                                             )}
                                         </div>
                                     </div>
-                                </div>
-
-                                {/* Nearby Landmark */}
-                                <div>
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4 block">Nearby Landmark (e.g., Blue Gate, Sari-sari Store)</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Add a landmark to help responders find the exact spot..."
-                                        className="w-full bg-[#FAFAF9] border border-gray-50 rounded-[1.5rem] px-6 py-4 text-xs font-medium text-[#1a1208] focus:outline-none focus:border-orange-200 transition-all placeholder:text-gray-300 shadow-sm"
-                                        value={formData.landmark}
-                                        onChange={(e) => setFormData({ ...formData, landmark: e.target.value })}
-                                    />
                                 </div>
 
                                 {/* Visibility Settings */}
@@ -2475,59 +2525,79 @@ const ResiHomePage = () => {
                                         </p>
                                     </div>
                                 ) : (
-                                    notifications.filter(n => !dismissedNotificationIds.has(n.notification_id)).slice(0, notificationsLimit).map((notif) => (
-                                        <div
-                                            key={notif.notification_id}
-                                            className={`relative p-4 rounded-2xl border transition-all duration-300 ${notif.is_read
-                                                ? 'bg-[#FAFAF9]/50 border-gray-50'
-                                                : 'bg-orange-50/20 border-orange-100/50 shadow-sm'
-                                                }`}
-                                        >
-                                            {/* Unread indicator */}
-                                            {!notif.is_read && (
-                                                <span className="absolute top-4 left-4 w-2 h-2 bg-[#F97316] rounded-full" />
-                                            )}
+                                    notifications.filter(n => !dismissedNotificationIds.has(n.notification_id)).slice(0, notificationsLimit).map((notif) => {
+                                        const typeStr = (notif.type || '').toLowerCase();
+                                        const titleStr = (notif.title || '').toLowerCase();
+                                        const msgStr = (notif.message || '').toLowerCase();
+                                        const isMatch = typeStr === 'potential_match' ||
+                                            typeStr === 'match_review' ||
+                                            titleStr.includes('match') ||
+                                            titleStr.includes('sighting') ||
+                                            msgStr.includes('match') ||
+                                            msgStr.includes('potential match') ||
+                                            msgStr.includes('matches of your dog');
+                                        return (
+                                            <div
+                                                key={notif.notification_id}
+                                                onClick={() => handleNotificationClick(notif)}
+                                                className={`relative p-4 rounded-2xl border transition-all duration-300 cursor-pointer hover:border-orange-300 active:scale-[0.99] ${notif.is_read
+                                                    ? 'bg-[#FAFAF9]/50 border-gray-50'
+                                                    : 'bg-orange-50/20 border-orange-100/50 shadow-sm'
+                                                    }`}
+                                            >
+                                                {/* Unread indicator */}
+                                                {!notif.is_read && (
+                                                    <span className="absolute top-4 left-4 w-2 h-2 bg-[#F97316] rounded-full" />
+                                                )}
 
-                                            <div className={!notif.is_read ? 'pl-4' : ''}>
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <div className="flex-1">
-                                                        <h4 className="text-xs font-black text-[#1a1208]">
-                                                            {notif.title}
-                                                        </h4>
-                                                        <p className="text-[11px] font-semibold text-gray-650 mt-1 leading-relaxed">
-                                                            {notif.message}
-                                                        </p>
-                                                        <span className="text-[9px] font-bold text-gray-400 mt-2 block uppercase tracking-widest">
-                                                            {formatTimestamp(notif.created_at)}
-                                                        </span>
-                                                    </div>
+                                                <div className={!notif.is_read ? 'pl-4' : ''}>
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="flex-1">
+                                                            <h4 className="text-xs font-black text-[#1a1208]">
+                                                                {notif.title}
+                                                            </h4>
+                                                            <p className="text-[11px] font-semibold text-gray-650 mt-1 leading-relaxed">
+                                                                {notif.message}
+                                                            </p>
+                                                            <div className="flex items-center gap-2 mt-2">
+                                                                <span className="text-[9px] font-bold text-gray-400 block uppercase tracking-widest">
+                                                                    {formatTimestamp(notif.created_at)}
+                                                                </span>
+                                                                {isMatch && (
+                                                                    <span className="text-[8px] font-black text-[#F97316] bg-orange-100/80 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                                                        Review Match →
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
 
-                                                    <div className="flex items-center gap-1 shrink-0">
-                                                        {!notif.is_read && (
+                                                        <div className="flex items-center gap-1 shrink-0">
+                                                            {!notif.is_read && (
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleMarkNotificationRead(notif.notification_id); }}
+                                                                    className="p-1 hover:bg-orange-50 rounded text-[#F97316]"
+                                                                    title="Mark as read"
+                                                                >
+                                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                                                    </svg>
+                                                                </button>
+                                                            )}
                                                             <button
-                                                                onClick={() => handleMarkNotificationRead(notif.notification_id)}
-                                                                className="p-1 hover:bg-orange-50 rounded text-[#F97316]"
-                                                                title="Mark as read"
+                                                                onClick={(e) => { e.stopPropagation(); handleDismissNotification(notif.notification_id); }}
+                                                                className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                                                                title="Dismiss"
                                                             >
                                                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                                                 </svg>
                                                             </button>
-                                                        )}
-                                                        <button
-                                                            onClick={() => handleDismissNotification(notif.notification_id)}
-                                                            className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
-                                                            title="Dismiss"
-                                                        >
-                                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                                            </svg>
-                                                        </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))
+                                        );
+                                    })
                                 )}
                                 {notifications.filter(n => !dismissedNotificationIds.has(n.notification_id)).length > notificationsLimit && (
                                     <button
@@ -2687,6 +2757,110 @@ const ResiHomePage = () => {
                             <p className="text-white/40 text-[9px] font-black uppercase tracking-[0.4em]">
                                 Media {activeGallery.index + 1} of {activeGallery.media.length} • StraySafe Surveillance
                             </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Full-Screen Landmark Map Picker Modal */}
+            {isMapPickerOpen && (
+                <div className="fixed inset-0 z-[500] bg-[#1a1208]/75 backdrop-blur-md flex flex-col items-center justify-center p-2 sm:p-6 animate-in fade-in duration-300">
+                    <div className="relative w-full max-w-4xl h-[90vh] bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col border border-gray-100">
+                        {/* Modal Header */}
+                        <div className="px-6 py-4 bg-white border-b border-gray-100 flex items-center justify-between z-20 shrink-0">
+                            <div>
+                                <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
+                                    <span>📍 Pinpoint Landmark & Location</span>
+                                </h3>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                                    Click anywhere on the map to set pin and auto-fetch landmark API details
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsMapPickerOpen(false)}
+                                className="p-2.5 bg-gray-50 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-2xl transition-all"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Interactive Leaflet Map View */}
+                        <div className="relative flex-1 w-full overflow-hidden bg-gray-100">
+                            <MapContainer
+                                center={[formData.latitude, formData.longitude]}
+                                zoom={17}
+                                className="h-full w-full z-10"
+                                scrollWheelZoom={true}
+                            >
+                                <TileLayer
+                                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                />
+                                <RecenterMap center={[formData.latitude, formData.longitude]} />
+                                <LocationPicker
+                                    position={[formData.latitude, formData.longitude]}
+                                    onLocationSelect={(lat, lng) => {
+                                        setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }));
+                                    }}
+                                />
+                                <Polygon
+                                    positions={SELERA_POLYGON.map(p => [p.lat, p.lng] as [number, number])}
+                                    pathOptions={{
+                                        color: '#F97316',
+                                        fillColor: '#F97316',
+                                        fillOpacity: 0.1,
+                                        weight: 2,
+                                        dashArray: '5, 10'
+                                    }}
+                                />
+                                <ReturnToSeleraButton />
+                            </MapContainer>
+
+                            {/* Floating Map Hint Overlay */}
+                            <div className="absolute top-4 right-4 z-[20] bg-white/95 backdrop-blur-md px-4 py-2 rounded-2xl border border-gray-100 shadow-md pointer-events-none flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-[#F97316] animate-ping" />
+                                <p className="text-[10px] font-black text-[#1a1208] uppercase tracking-widest">Click map to pick location & landmark</p>
+                            </div>
+                        </div>
+
+                        {/* Bottom Action Footer */}
+                        <div className="p-5 bg-white border-t border-gray-100 shadow-2xl z-20 shrink-0 space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
+                                <div className="sm:col-span-2 space-y-1">
+                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block">
+                                        Detected Landmark / Place Name
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="w-full bg-[#FAFAF9] border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-[#1a1208] focus:outline-none focus:border-orange-400 transition-all shadow-inner"
+                                        value={tempLandmark}
+                                        onChange={(e) => setTempLandmark(e.target.value)}
+                                        placeholder="Type or auto-detected landmark (e.g. PEL PHARMA SELERA)..."
+                                    />
+                                    <p className="text-[9px] font-semibold text-[#F97316] truncate mt-1">
+                                        📍 {resolvedAddress || 'Resolving address details...'}
+                                    </p>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setFormData(prev => ({ ...prev, landmark: tempLandmark }));
+                                            setIsMapPickerOpen(false);
+                                        }}
+                                        className="w-full py-3.5 px-6 bg-[#F97316] hover:bg-orange-600 active:scale-[0.98] text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        Done
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

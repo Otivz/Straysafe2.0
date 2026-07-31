@@ -77,7 +77,8 @@ This creates these accounts (all passwords: `password123`):
 
 | Role | Email |
 |------|-------|
-| Citizen | `emmanuelvitocruz@gmail.com` |
+| Citizen 1 | `emmanuelvitocruz@gmail.com` |
+| Citizen 2 | `resident2@straysafe.com` |
 | Subdivision Leader | `kylajoyarriola@gmail.com` |
 | Barangay Staff | `kylabiancafrias@gmail.com` |
 | Admin | *(your `ADMIN_EMAIL` from `.env`)* |

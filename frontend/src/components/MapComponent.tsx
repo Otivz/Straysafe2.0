@@ -174,6 +174,55 @@ import HeatmapLayer from './HeatmapLayer';
 import RoutingControl from './RoutingControl';
 import ReturnToSeleraButton from './MapControls/ReturnToSeleraButton';
 
+export const PRESET_LANDMARKS = [
+    { id: 'alfamart', name: 'Alfamart', lat: 14.801600, lng: 121.004200, icon: '🏪', type: 'Store' },
+    { id: 'lugawan', name: 'Lugawan ni Bading', lat: 14.800800, lng: 121.003400, icon: '🥣', type: 'Eatery' },
+    { id: 'court', name: 'Basketball Court', lat: 14.801900, lng: 121.003800, icon: '🏀', type: 'Sports' },
+    { id: 'clubhouse', name: 'Selera Clubhouse', lat: 14.801200, lng: 121.002900, icon: '🏛️', type: 'Facility' },
+    { id: 'maingate', name: 'Selera Main Gate', lat: 14.802300, lng: 121.003200, icon: '⛩️', type: 'Gate' },
+    { id: 'daycare', name: 'Daycare Center', lat: 14.800300, lng: 121.002600, icon: '🏫', type: 'School' },
+    { id: 'chapel', name: 'Grotto / Chapel', lat: 14.800500, lng: 121.004500, icon: '💒', type: 'Church' },
+    { id: 'terminal', name: 'Tricycle Terminal', lat: 14.802100, lng: 121.004800, icon: '🛺', type: 'Transport' },
+];
+
+export const createLandmarkIcon = (iconEmoji: string, name: string, isSelected: boolean = false) => L.divIcon({
+    html: `
+        <div style="display: flex; flex-direction: column; align-items: center; cursor: pointer; transition: transform 0.2s;" class="group">
+            <div style="
+                background: ${isSelected ? '#F97316' : '#FFFFFF'};
+                color: ${isSelected ? '#FFFFFF' : '#1A1208'};
+                font-size: 8px;
+                font-weight: 900;
+                padding: 3px 8px;
+                border-radius: 9999px;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                border: 2px solid ${isSelected ? '#FFFFFF' : '#F97316'};
+                white-space: nowrap;
+                margin-bottom: 2px;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            ">
+                <span>${iconEmoji}</span>
+                <span>${name}</span>
+            </div>
+            <div style="
+                width: 10px;
+                height: 10px;
+                background: ${isSelected ? '#F97316' : '#FFFFFF'};
+                border: 2px solid ${isSelected ? '#FFFFFF' : '#F97316'};
+                border-radius: 50%;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            "></div>
+        </div>
+    `,
+    className: '',
+    iconSize: [120, 50],
+    iconAnchor: [60, 45]
+});
+
 interface MapComponentProps {
     height?: string;
     center?: [number, number];
@@ -202,6 +251,7 @@ interface MapComponentProps {
     onMarkerClick?: (marker: any) => void;
     onViewDetails?: (marker: any) => void;
     showGeofence?: boolean;
+    showLandmarks?: boolean;
 }
 
 // Internal component to handle view changes
@@ -246,7 +296,8 @@ const MapComponent = ({
     routing,
     onMarkerClick,
     onViewDetails,
-    showGeofence = true
+    showGeofence = true,
+    showLandmarks = false
 }: MapComponentProps) => {
     const SELERA_BOUNDS: [number, number][] = [
         [14.801496, 121.005174],
@@ -297,6 +348,28 @@ const MapComponent = ({
                     </Popup>
                 </Polygon>
             )}
+
+            {showLandmarks && PRESET_LANDMARKS.map(lm => (
+                <Marker
+                    key={`poi-lm-${lm.id}`}
+                    position={[lm.lat, lm.lng]}
+                    icon={createLandmarkIcon(lm.icon, lm.name, false)}
+                    eventHandlers={{
+                        click: () => {
+                            if (onLocationChange) {
+                                onLocationChange(lm.lat, lm.lng);
+                            }
+                        }
+                    }}
+                >
+                    <Popup>
+                        <div className="p-1.5 text-center">
+                            <p className="text-[10px] font-black uppercase text-[#F97316]">{lm.icon} {lm.name}</p>
+                            <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">{lm.type} Landmark</p>
+                        </div>
+                    </Popup>
+                </Marker>
+            ))}
 
             {showHeatmap && (
                 <HeatmapLayer

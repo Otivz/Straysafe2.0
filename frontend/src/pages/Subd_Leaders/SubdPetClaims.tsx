@@ -48,6 +48,53 @@ const SubdPetClaims = () => {
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
     const [openKebab, setOpenKebab] = useState<number | null>(null);
     const kebabRef = useRef<HTMLDivElement>(null);
+    const [viewReportAddress, setViewReportAddress] = useState('');
+    const [isViewReportAddressLoading, setIsViewReportAddressLoading] = useState(false);
+
+    useEffect(() => {
+        if (!selectedClaim || !selectedClaim.sighting_lat || !selectedClaim.sighting_lng) {
+            setViewReportAddress('');
+            return;
+        }
+
+        const fetchAddress = async () => {
+            setIsViewReportAddressLoading(true);
+            try {
+                const response = await axios.get('https://nominatim.openstreetmap.org/reverse', {
+                    params: {
+                        format: 'jsonv2',
+                        lat: selectedClaim.sighting_lat,
+                        lon: selectedClaim.sighting_lng,
+                        addressdetails: 1
+                    }
+                });
+                if (response.data && response.data.address) {
+                    const addr = response.data.address;
+                    const parts = [];
+                    const road = addr.road || addr.pedestrian || addr.path || '';
+                    if (road) parts.push(road);
+                    const neighbourhood = addr.neighbourhood || addr.village || addr.suburb || '';
+                    if (neighbourhood && neighbourhood !== road) {
+                        parts.push(neighbourhood);
+                    }
+                    const city = addr.city || addr.town || addr.municipality || '';
+                    if (city) parts.push(city);
+
+                    const addressStr = parts.join(', ') || response.data.display_name;
+                    setViewReportAddress(addressStr);
+                } else {
+                    setViewReportAddress(`${selectedClaim.sighting_lat.toFixed(6)}, ${selectedClaim.sighting_lng.toFixed(6)}`);
+                }
+            } catch (err) {
+                console.error('Error fetching street address:', err);
+                setViewReportAddress(`${selectedClaim.sighting_lat.toFixed(6)}, ${selectedClaim.sighting_lng.toFixed(6)}`);
+            } finally {
+                setIsViewReportAddressLoading(false);
+            }
+        };
+
+        fetchAddress();
+    }, [selectedClaim?.claim_id]);
 
     const staffUserStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const staffUser = staffUserStr ? JSON.parse(staffUserStr) : null;
@@ -98,7 +145,7 @@ const SubdPetClaims = () => {
                 primary_color: bc.pet?.primary_color || 'Brown',
                 secondary_color: bc.pet?.secondary_color || '',
                 distinctive_markings: bc.pet?.distinctive_markings || bc.pet?.color_markings || '',
-                registered_address: bc.pet?.registered_address || 'Selera Homes',
+                registered_address: bc.pet?.registered_address || bc.pet?.owner?.address || bc.claimant?.address || 'Registered Owner Address',
                 registered_since: bc.pet?.created_at ? new Date(bc.pet.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'January 2025',
                 registered_latitude: bc.pet?.registered_latitude ? parseFloat(bc.pet.registered_latitude) : 14.801496,
                 registered_longitude: bc.pet?.registered_longitude ? parseFloat(bc.pet.registered_longitude) : 121.003280,
@@ -615,7 +662,12 @@ const SubdPetClaims = () => {
                                                             <li><span className="text-gray-400 font-semibold">Breed: </span><span className="font-bold text-gray-800 truncate block">{selectedClaim.report?.animal_breed || selectedClaim.report?.ai_possible_breed || "Unknown"}</span></li>
                                                             <li><span className="text-gray-400 font-semibold">Type: </span><span className="font-bold text-gray-800">{selectedClaim.report?.animal_type || selectedClaim.report?.ai_animal_type || "Unknown"}</span></li>
                                                             <li className="col-span-2"><span className="text-gray-400 font-semibold">Colors: </span><span className="font-bold text-gray-800">{selectedClaim.report?.animal_color || selectedClaim.report?.ai_dominant_color || "Unknown"}</span></li>
-                                                            <li className="col-span-2"><span className="text-gray-400 font-semibold">Street: </span><span className="font-bold text-gray-800 truncate block">{selectedClaim.sighting_location}</span></li>
+                                                            <li className="col-span-2">
+                                                                <span className="text-gray-400 font-semibold">Street: </span>
+                                                                <span className="font-bold text-gray-800 truncate block">
+                                                                    {isViewReportAddressLoading ? 'Resolving street...' : (viewReportAddress || selectedClaim.sighting_location)}
+                                                                </span>
+                                                            </li>
                                                         </ul>
                                                     </div>
                                                 </div>
@@ -865,9 +917,10 @@ const SubdPetClaims = () => {
                                                 zoom={15}
                                                 showHeatmap={false}
                                                 showGeofence={true}
+                                                showLandmarks={false}
                                                 markers={[
-                                                    { id: 1, lat: selectedClaim.sighting_lat, lng: selectedClaim.sighting_lng, title: selectedClaim.sighting_location || 'Sighting Location', category: 'Stray Sighting', color: 'orange' },
-                                                    { id: 2, lat: selectedClaim.pet?.registered_latitude || selectedClaim.sighting_lat - 0.0004, lng: selectedClaim.pet?.registered_longitude || selectedClaim.sighting_lng - 0.0003, title: selectedClaim.pet?.registered_address || 'Registered Owner Home', category: 'User Location' },
+                                                    { id: 1, lat: selectedClaim.sighting_lat, lng: selectedClaim.sighting_lng, title: viewReportAddress || selectedClaim.sighting_location || 'Sighting Location', category: 'Stray Sighting', color: 'orange' },
+                                                    { id: 2, lat: selectedClaim.pet?.registered_latitude || selectedClaim.sighting_lat - 0.0004, lng: selectedClaim.pet?.registered_longitude || selectedClaim.sighting_lng - 0.0003, title: selectedClaim.pet?.registered_address || selectedClaim.pet?.owner?.address || 'Registered Owner Address', category: 'User Location' },
                                                 ]}
                                             />
                                         </div>
@@ -875,12 +928,14 @@ const SubdPetClaims = () => {
                                             <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Sighting Location</p>
                                                 <p className="text-xs font-bold text-gray-800 mt-1">{selectedClaim.sighting_location}</p>
-                                                <p className="text-[9px] font-bold text-gray-400 mt-0.5">{selectedClaim.sighting_location}</p>
+                                                <p className="text-[9px] font-bold text-gray-400 mt-0.5">
+                                                    {isViewReportAddressLoading ? 'Resolving street...' : (viewReportAddress || selectedClaim.sighting_location)}
+                                                </p>
                                             </div>
                                             <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Registered Address</p>
-                                                <p className="text-xs font-bold text-gray-800 mt-1">{selectedClaim.pet?.registered_address}</p>
-                                                <p className="text-[9px] font-bold text-gray-400 mt-0.5">{selectedClaim.pet?.registered_address || 'Selera Homes'}</p>
+                                                <p className="text-xs font-bold text-gray-800 mt-1">{selectedClaim.pet?.registered_address || selectedClaim.pet?.owner?.address || 'Registered Owner Address'}</p>
+                                                <p className="text-[9px] font-bold text-gray-400 mt-0.5">{selectedClaim.pet?.registered_address || selectedClaim.pet?.owner?.address || 'Registered Owner Address'}</p>
                                             </div>
                                             <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Distance</p>
