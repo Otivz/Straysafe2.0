@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import SubdSidebar from '../../components/SubdSidebar';
@@ -18,6 +19,7 @@ interface Report {
     landmark: string;
     animal_count: number;
     animal_type: string;
+    animal_color?: string | null;
     breed?: string;
     condition: string;
     behavior_tags?: string;
@@ -489,12 +491,12 @@ const SubdViewReport = () => {
 
                                 {/* AI Suggestion Panel */}
                                 <AISuggestionPanel
-                                    animalType={report.ai_animal_type}
-                                    dominantColor={report.ai_dominant_color}
-                                    estimatedSize={report.ai_estimated_size}
+                                    animalType={report.animal_type || report.ai_animal_type}
+                                    dominantColor={(report as any).animal_color || report.ai_dominant_color}
+                                    estimatedSize={(report as any).estimated_size || report.ai_estimated_size}
                                     suggestedRiskLevel={report.ai_suggested_risk_level}
                                     suggestedPriority={report.ai_suggested_priority}
-                                    possibleBreed={report.ai_possible_breed}
+                                    possibleBreed={(report as any).animal_breed || (report as any).breed || report.ai_possible_breed}
                                     description={report.description}
                                     categoryName={categoryMap[report.category_id]}
                                     suggestedPriorityReason={report.ai_suggested_priority_reason}
@@ -773,13 +775,12 @@ const SubdViewReport = () => {
                                                             <div key={c.comment_id} className="mb-4 last:mb-0">
                                                                 <div className="flex gap-3 relative">
                                                                     <div className="relative flex flex-col items-center shrink-0">
-                                                                        {c.user_photo ? (
-                                                                            <img src={c.user_photo} className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm" alt={c.user_name} />
-                                                                        ) : (
-                                                                            <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center text-[#F97316] font-black text-xs z-10 ring-4 ring-white border border-orange-100">
-                                                                                {c.user_name?.charAt(0).toUpperCase() || 'U'}
-                                                                            </div>
-                                                                        )}
+                                                                        <img 
+                                                                            src={getProfilePicture(c.user_photo)} 
+                                                                            className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm" 
+                                                                            alt={c.user_name || 'User'} 
+                                                                            onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                                                        />
                                                                         {(replies.length > 0 || replyingTo?.commentId === c.comment_id) && (
                                                                             <div className="absolute top-8 bottom-[-16px] left-1/2 -translate-x-1/2 w-[2px] bg-gray-100 z-0"></div>
                                                                         )}
@@ -809,13 +810,12 @@ const SubdViewReport = () => {
                                                                                             <div className="absolute top-[16px] bottom-[-100px] left-[-30px] w-[6px] bg-white z-0 pointer-events-none"></div>
                                                                                         )}
 
-                                                                                        {reply.user_photo ? (
-                                                                                            <img src={reply.user_photo} className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0" alt={reply.user_name} />
-                                                                                        ) : (
-                                                                                            <div className="w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 font-bold text-[10px] z-10 mt-1 ring-4 ring-white border border-gray-100 shrink-0">
-                                                                                                {reply.user_name?.charAt(0).toUpperCase() || 'U'}
-                                                                                            </div>
-                                                                                        )}
+                                                                                        <img 
+                                                                                            src={getProfilePicture(reply.user_photo)} 
+                                                                                            className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0" 
+                                                                                            alt={reply.user_name || 'User'} 
+                                                                                            onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                                                                        />
 
                                                                                         <div className="flex-1">
                                                                                             <div className="bg-[#FAFAF9] rounded-[1.2rem] p-3 px-4 border border-gray-50 shadow-sm inline-block">
@@ -841,10 +841,12 @@ const SubdViewReport = () => {
                                                                             <div className="mt-4 flex items-center gap-3 relative z-10 animate-in fade-in slide-in-from-top-2 duration-200">
                                                                                 <div className="absolute top-[-10px] left-[-28px] w-[28px] h-[24px] border-b-[2px] border-l-[2px] border-gray-100 rounded-bl-[12px] z-0 pointer-events-none"></div>
                                                                                 <div className="absolute top-[14px] bottom-[-100px] left-[-30px] w-[6px] bg-white z-0 pointer-events-none"></div>
-
-                                                                                <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center text-[#F97316] font-black text-[10px] shrink-0 border border-orange-200 z-10 bg-white ring-4 ring-white">
-                                                                                    {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}
-                                                                                </div>
+                                                                                <img 
+                                                                                    src={getProfilePicture(currentUser?.profile_picture)} 
+                                                                                    className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0" 
+                                                                                    alt={currentUser?.name || 'User'} 
+                                                                                    onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                                                                />
                                                                                 <div className="flex-1 relative flex items-center">
                                                                                     <input
                                                                                         type="text"

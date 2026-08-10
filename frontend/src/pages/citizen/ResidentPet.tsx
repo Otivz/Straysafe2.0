@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
@@ -162,7 +163,7 @@ const ResidentPet = () => {
             ownerPhone: pet.emergency_contact_phone || (currentUser ? currentUser.phone : 'No Contact'),
             idNumber: `P-${(pet.pet_id || 0).toString().padStart(5, '0')}`,
             status: pet.status || 'Active',
-            avatar: pet.photo_url || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?q=80&w=400&auto=format&fit=crop',
+            avatar: getPetPicture(pet.photo_url),
             weight: pet.weight ? `${pet.weight}kg` : 'Unknown',
             primaryColor: pet.primary_color || 'Brown',
             secondaryColor: pet.secondary_color || '',
@@ -629,7 +630,7 @@ const ResidentPet = () => {
     };
 
     return (
-        <div className={`min-h-screen bg-[#FAFAF9] font-sans pb-24 ${isMobileSearchOpen ? 'overflow-hidden h-screen' : ''}`}>
+        <div className={`min-h-screen bg-[#FAFAF9] dark:bg-[#121212] text-[#1a1208] dark:text-gray-100 transition-colors duration-200 font-sans pb-24 ${isMobileSearchOpen ? 'overflow-hidden h-screen' : ''}`}>
             <ResiNavbar 
                 onMenuToggle={(isOpen) => setIsNavbarMenuOpen(isOpen)} 
                 onSearch={setSearchQuery}
@@ -768,16 +769,12 @@ const ResidentPet = () => {
                         filteredPets.map((pet) => (
                             <div key={pet.pet_id} className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden hover:shadow-2xl transition-all duration-300 group flex flex-col justify-between">
                                 <div className="relative h-56 overflow-hidden bg-gray-50">
-                                    {pet.photo_url ? (
-                                        <img src={pet.photo_url} alt={pet.pet_name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                                    ) : (
-                                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-300 gap-2">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                            </svg>
-                                            <span className="text-[10px] font-black uppercase tracking-widest">No Photo</span>
-                                        </div>
-                                    )}
+                                    <img 
+                                        src={getPetPicture(pet.photo_url)} 
+                                        alt={pet.pet_name} 
+                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+                                        onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
+                                    />
                                     <div className="absolute top-4 right-4 flex gap-2">
                                         <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm border ${
                                             pet.status === 'Healthy' || pet.status === 'Active' ? 'bg-green-50 text-green-600 border-green-100' :

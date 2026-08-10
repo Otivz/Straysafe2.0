@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate } from 'react-router-dom';
 import SubdSidebar from '../../components/SubdSidebar';
@@ -21,6 +22,7 @@ interface Report {
     landmark: string;
     animal_count: number;
     animal_type: string;
+    animal_color?: string | null;
     breed?: string;
     condition: string;
     behavior_tags?: string;
@@ -222,6 +224,17 @@ const SubdReports = () => {
                 index === self.findIndex((t: any) => t.report_id === report.report_id)
             );
             setReports(uniqueReports);
+
+            // Mark current reports as viewed so sidebar notification count clears after viewing
+            try {
+                const viewed = JSON.parse(localStorage.getItem('straysafe_viewed_subd_reports') || '[]');
+                const reportIds = uniqueReports.map((r: any) => r.report_id);
+                const updatedViewed = Array.from(new Set([...viewed, ...reportIds]));
+                localStorage.setItem('straysafe_viewed_subd_reports', JSON.stringify(updatedViewed));
+                window.dispatchEvent(new Event('straysafe_reports_viewed'));
+            } catch (e) {
+                console.warn('Could not mark reports as viewed', e);
+            }
         } catch (error) {
             console.error('Error fetching reports:', error);
             setReports([]);
@@ -815,12 +828,12 @@ const SubdReports = () => {
 
                                                 {/* AI Suggestion Panel */}
                                                 <AISuggestionPanel
-                                                    animalType={viewReport.ai_animal_type}
-                                                    dominantColor={viewReport.ai_dominant_color}
-                                                    estimatedSize={viewReport.ai_estimated_size}
+                                                    animalType={viewReport.animal_type || viewReport.ai_animal_type}
+                                                    dominantColor={(viewReport as any).animal_color || viewReport.ai_dominant_color}
+                                                    estimatedSize={(viewReport as any).estimated_size || viewReport.ai_estimated_size}
                                                     suggestedRiskLevel={viewReport.ai_suggested_risk_level}
                                                     suggestedPriority={viewReport.ai_suggested_priority}
-                                                    possibleBreed={viewReport.ai_possible_breed}
+                                                    possibleBreed={(viewReport as any).animal_breed || viewReport.breed || viewReport.ai_possible_breed}
                                                     description={viewReport.description}
                                                     categoryName={categoryMap[viewReport.category_id]}
                                                     suggestedPriorityReason={viewReport.ai_suggested_priority_reason}
@@ -1089,13 +1102,12 @@ const SubdReports = () => {
                                                                                 <div className="flex gap-3 relative">
                                                                                     {/* Parent Avatar & Vertical Line */}
                                                                                     <div className="relative flex flex-col items-center shrink-0">
-                                                                                        {c.user_photo ? (
-                                                                                            <img src={c.user_photo} className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm" alt={c.user_name} />
-                                                                                        ) : (
-                                                                                            <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center text-[#F97316] font-black text-xs z-10 ring-4 ring-white border border-orange-100">
-                                                                                                {c.user_name?.charAt(0).toUpperCase() || 'U'}
-                                                                                            </div>
-                                                                                        )}
+                                                                                        <img 
+                                                                                            src={getProfilePicture(c.user_photo)} 
+                                                                                            className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm" 
+                                                                                            alt={c.user_name || 'User'} 
+                                                                                            onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                                                                        />
                                                                                         {(replies.length > 0 || replyingTo[viewReport.report_id]?.commentId === c.comment_id) && (
                                                                                             <div className="absolute top-8 bottom-[-16px] left-1/2 -translate-x-1/2 w-[2px] bg-gray-100 z-0"></div>
                                                                                         )}
@@ -1132,13 +1144,12 @@ const SubdReports = () => {
                                                                                                         )}
 
                                                                                                         {/* Child Avatar */}
-                                                                                                        {reply.user_photo ? (
-                                                                                                            <img src={reply.user_photo} className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0" alt={reply.user_name} />
-                                                                                                        ) : (
-                                                                                                            <div className="w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 font-bold text-[10px] z-10 mt-1 ring-4 ring-white border border-gray-100 shrink-0">
-                                                                                                                {reply.user_name?.charAt(0).toUpperCase() || 'U'}
-                                                                                                            </div>
-                                                                                                        )}
+                                                                                                        <img 
+                                                                                                            src={getProfilePicture(reply.user_photo)} 
+                                                                                                            className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0" 
+                                                                                                            alt={reply.user_name || 'User'} 
+                                                                                                            onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                                                                                        />
 
                                                                                                         <div className="flex-1">
                                                                                                             {/* Child Bubble */}

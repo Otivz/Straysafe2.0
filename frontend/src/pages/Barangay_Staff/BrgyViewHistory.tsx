@@ -16,6 +16,7 @@ interface Report {
     landmark: string;
     animal_count: number;
     animal_type: string;
+    animal_color?: string | null;
     breed?: string;
     condition: string;
     behavior_tags?: string;
@@ -450,7 +451,7 @@ const BrgyViewHistory = () => {
                                             </div>
                                             <div>
                                                 <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Dominant Color</span>
-                                                <span className="text-sm font-semibold text-gray-900">{report.ai_dominant_color || 'Unknown'}</span>
+                                                <span className="text-sm font-semibold text-gray-900">{report.animal_color || report.ai_dominant_color || 'Unknown'}</span>
                                             </div>
                                             <div>
                                                 <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Estimated Size</span>

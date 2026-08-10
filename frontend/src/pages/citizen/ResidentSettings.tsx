@@ -1,0 +1,989 @@
+import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
+import Button from '../../components/Button';
+import ResiNavbar from '../../components/Navbars/ResiNavbar';
+import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import { useTheme } from '../../context/ThemeContext';
+
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+
+const DefaultIcon = L.icon({
+    iconUrl: markerIcon,
+    iconRetinaUrl: markerIconRetina,
+    shadowUrl: markerShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
+
+const LocationPicker = ({ onLocationSelect, position }: { onLocationSelect: (lat: number, lng: number) => void, position: [number, number] }) => {
+    useMapEvents({
+        click(e) {
+            onLocationSelect(e.latlng.lat, e.latlng.lng);
+        },
+    });
+    return (position && position[0] && position[1]) ? <Marker position={position} /> : null;
+};
+
+const RecenterMap = ({ position }: { position: [number, number] }) => {
+    const map = useMap();
+    useEffect(() => {
+        if (position && position[0] && position[1]) {
+            map.setView(position, map.getZoom());
+        }
+    }, [position, map]);
+    return null;
+};
+
+type SettingCategory = 'account' | 'my-pets' | 'notifications' | 'privacy' | 'location' | 'appearance' | 'help' | 'about';
+
+const ResidentSettings = () => {
+    const navigate = useNavigate();
+    const { theme: globalTheme, setTheme: setGlobalTheme } = useTheme();
+    const [activeTab, setActiveTab] = useState<SettingCategory>('account');
+    const [isNavbarMenuOpen, setIsNavbarMenuOpen] = useState(false);
+    const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+    const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
+    const [saveErrorMsg, setSaveErrorMsg] = useState('');
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Initial User Data
+    const userStr = localStorage.getItem('resident_user');
+    const initialUser = userStr ? {
+        latitude: null,
+        longitude: null,
+        ...JSON.parse(userStr)
+    } : {
+        name: 'Resident User',
+        email: 'resident@straysafe.org',
+        phone: '',
+        address: 'San Roque, Tarlac',
+        latitude: 15.4802,
+        longitude: 120.5979,
+        user_id: 4,
+        created_at: new Date().toISOString()
+    };
+
+    const [userData, setUserData] = useState<any>(initialUser);
+    const [editData, setEditData] = useState({ ...initialUser });
+
+    // Password State
+    const [passwords, setPasswords] = useState({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+    });
+
+    // Preferences Local State
+    const [qrIncludeContact, setQrIncludeContact] = useState(true);
+    const [qrNotifyScan, setQrNotifyScan] = useState(true);
+    const [vacReminder, setVacReminder] = useState(true);
+    const [dewormReminder, setDewormReminder] = useState(true);
+
+    const [notifComments, setNotifComments] = useState(true);
+    const [notifStatusUpdates, setNotifStatusUpdates] = useState(true);
+    const [notifRescueCompleted, setNotifRescueCompleted] = useState(true);
+    const [notifHazardAlerts, setNotifHazardAlerts] = useState(true);
+    const [notifLostPet, setNotifLostPet] = useState(true);
+    const [notifQrScan, setNotifQrScan] = useState(true);
+    const [emailNotif, setEmailNotif] = useState(true);
+    const [pushNotif, setPushNotif] = useState(true);
+
+    const [reportVisibility, setReportVisibility] = useState<'Public' | 'Private'>('Private');
+    const [hideIdentity, setHideIdentity] = useState(false);
+    const [allowContact, setAllowContact] = useState(true);
+    const [showPhoneRescuersOnly, setShowPhoneRescuersOnly] = useState(true);
+
+    const [allowGPS, setAllowGPS] = useState(true);
+    const [autoLocation, setAutoLocation] = useState(true);
+    const [locationAccuracy, setLocationAccuracy] = useState('High');
+
+    const [mapStyle, setMapStyle] = useState('Default');
+    const [language, setLanguage] = useState('English');
+
+    useEffect(() => {
+        fetchUserProfile();
+    }, []);
+
+    const fetchUserProfile = async () => {
+        const storedUser = localStorage.getItem('resident_user');
+        const userId = storedUser ? JSON.parse(storedUser).user_id : initialUser.user_id;
+
+        try {
+            const response = await axios.get(`http://localhost:8000/users/${userId}`);
+            setUserData(response.data);
+            setEditData(response.data);
+            localStorage.setItem('resident_user', JSON.stringify(response.data));
+        } catch (error) {
+            console.error('Error fetching user profile:', error);
+        }
+    };
+
+    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploadingPhoto(true);
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            await axios.post(`http://localhost:8000/users/${userData.user_id}/profile-picture`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            fetchUserProfile();
+            showNotification('Profile photo updated successfully!');
+        } catch (error) {
+            console.error('Error uploading photo:', error);
+            alert('Failed to upload profile picture.');
+        } finally {
+            setIsUploadingPhoto(false);
+        }
+    };
+
+    const showNotification = (msg: string, isError = false) => {
+        if (isError) {
+            setSaveErrorMsg(msg);
+            setTimeout(() => setSaveErrorMsg(''), 4000);
+        } else {
+            setSaveSuccessMsg(msg);
+            setTimeout(() => setSaveSuccessMsg(''), 4000);
+        }
+    };
+
+    const handleSaveChanges = async () => {
+        try {
+            await axios.put(`http://localhost:8000/users/${userData.user_id}`, editData);
+            fetchUserProfile();
+            showNotification('Settings saved successfully!');
+        } catch (error) {
+            console.error('Error saving settings:', error);
+            showNotification('Failed to save settings. Please try again.', true);
+        }
+    };
+
+    const handleChangePassword = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!passwords.currentPassword) {
+            showNotification('Please enter your current password.', true);
+            return;
+        }
+        if (passwords.newPassword !== passwords.confirmPassword) {
+            showNotification('New password and confirm password do not match.', true);
+            return;
+        }
+        if (passwords.newPassword.length < 6) {
+            showNotification('Password must be at least 6 characters long.', true);
+            return;
+        }
+        showNotification('Password updated successfully!');
+        setPasswords({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    };
+
+    const navItems: { id: SettingCategory; label: string; icon: ReactNode }[] = [
+        {
+            id: 'account',
+            label: 'Account',
+            icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+            )
+        },
+        {
+            id: 'my-pets',
+            label: 'My Pets',
+            icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h.01M10 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-4l-4 4-1-4z" />
+                </svg>
+            )
+        },
+        {
+            id: 'notifications',
+            label: 'Notifications',
+            icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+            )
+        },
+        {
+            id: 'privacy',
+            label: 'Privacy',
+            icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+            )
+        },
+        {
+            id: 'location',
+            label: 'Location',
+            icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+            )
+        },
+        {
+            id: 'appearance',
+            label: 'Appearance',
+            icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                </svg>
+            )
+        },
+        {
+            id: 'help',
+            label: 'Help & Support',
+            icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            )
+        },
+        {
+            id: 'about',
+            label: 'About',
+            icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            )
+        }
+    ];
+
+    return (
+        <div className="min-h-screen bg-[#F7F7F7] font-sans pb-24">
+            <ResiNavbar
+                onMenuToggle={(isOpen) => setIsNavbarMenuOpen(isOpen)}
+                onSearch={setSearchQuery}
+                searchValue={searchQuery}
+                isMobileSearchOpen={isMobileSearchOpen}
+                onCloseSearch={() => setIsMobileSearchOpen(false)}
+            />
+
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-32">
+                {/* Header Title with Global Save Button */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+                    <div>
+                        <h1 className="text-2xl font-black text-[#1a1208] flex items-center gap-3">
+                            <span className="p-2.5 bg-orange-50 text-[#F97316] rounded-xl">
+                                ⚙️
+                            </span>
+                            Settings
+                        </h1>
+                        <p className="text-xs text-gray-500 font-semibold mt-1">Manage your account preferences, privacy, pet options, and notifications</p>
+                    </div>
+
+                    <Button
+                        variant="primary"
+                        onClick={handleSaveChanges}
+                        className="py-3 px-6 gap-2 shadow-lg shadow-orange-100 uppercase tracking-widest text-xs font-black"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Save Changes
+                    </Button>
+                </div>
+
+                {/* Success / Error Alerts */}
+                {saveSuccessMsg && (
+                    <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                        <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        {saveSuccessMsg}
+                    </div>
+                )}
+
+                {saveErrorMsg && (
+                    <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                        <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        {saveErrorMsg}
+                    </div>
+                )}
+
+                {/* Main Settings Layout Grid */}
+                <div className="flex flex-col lg:flex-row gap-8">
+                    {/* Sidebar Nav Tabs */}
+                    <div className="lg:w-64 shrink-0">
+                        <div className="bg-white border border-gray-200 rounded-2xl p-3 shadow-sm space-y-1">
+                            {navItems.map((item) => {
+                                const isActive = activeTab === item.id;
+                                return (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => setActiveTab(item.id)}
+                                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all text-left ${
+                                            isActive
+                                                ? 'bg-[#F97316] text-white shadow-md shadow-orange-100 font-black'
+                                                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                        }`}
+                                    >
+                                        <span className={isActive ? 'text-white' : 'text-gray-400'}>{item.icon}</span>
+                                        {item.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Right Panel Content */}
+                    <div className="flex-1 bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 shadow-sm">
+                        
+                        {/* 1. ACCOUNT CATEGORY */}
+                        {activeTab === 'account' && (
+                            <div className="space-y-8 animate-in fade-in duration-200">
+                                <div>
+                                    <h2 className="text-lg font-black text-[#1a1208] flex items-center gap-2">
+                                        👤 Personal Information
+                                    </h2>
+                                    <p className="text-xs text-gray-500 font-semibold mt-1">Update your basic profile info and security settings</p>
+                                </div>
+
+                                {/* Profile Picture Section */}
+                                <div className="flex items-center gap-6 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                                    <div className="relative group">
+                                        <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-white shadow-md">
+                                            <img
+                                                src={getProfilePicture(userData.profile_picture)}
+                                                alt={userData.name}
+                                                className="w-full h-full object-cover"
+                                                onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                            />
+                                        </div>
+                                        {isUploadingPhoto && (
+                                            <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center">
+                                                <svg className="animate-spin h-6 w-6 text-white" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <span className="text-xs font-black text-[#1a1208] block">Profile Picture</span>
+                                        <p className="text-[11px] text-gray-400 font-medium mb-3">PNG, JPG or WEBP (Max 5MB)</p>
+                                        <button
+                                            onClick={() => fileInputRef.current?.click()}
+                                            disabled={isUploadingPhoto}
+                                            className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:border-orange-300 hover:text-[#F97316] transition-all shadow-sm"
+                                        >
+                                            Change Photo
+                                        </button>
+                                        <input type="file" ref={fileInputRef} onChange={handlePhotoUpload} className="hidden" accept="image/*" />
+                                    </div>
+                                </div>
+
+                                {/* Form Inputs */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Full Name</label>
+                                        <input
+                                            type="text"
+                                            value={editData.name || ''}
+                                            onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+                                            className="w-full h-11 bg-gray-50 border border-gray-150 rounded-xl px-4 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316] focus:bg-white transition-all"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Email Address</label>
+                                        <input
+                                            type="email"
+                                            value={editData.email || ''}
+                                            onChange={(e) => setEditData({ ...editData, email: e.target.value })}
+                                            className="w-full h-11 bg-gray-50 border border-gray-150 rounded-xl px-4 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316] focus:bg-white transition-all"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Phone Number</label>
+                                        <input
+                                            type="text"
+                                            value={editData.phone || ''}
+                                            onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
+                                            placeholder="0917-XXX-XXXX"
+                                            className="w-full h-11 bg-gray-50 border border-gray-150 rounded-xl px-4 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316] focus:bg-white transition-all"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Address / Subdivision</label>
+                                        <input
+                                            type="text"
+                                            value={editData.address || ''}
+                                            onChange={(e) => setEditData({ ...editData, address: e.target.value })}
+                                            className="w-full h-11 bg-gray-50 border border-gray-150 rounded-xl px-4 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316] focus:bg-white transition-all"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="pt-6 border-t border-gray-100">
+                                    <h3 className="text-sm font-black text-[#1a1208] mb-4 flex items-center gap-2">
+                                        🔒 Change Password
+                                    </h3>
+                                    <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
+                                        <div>
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">Current Password</label>
+                                            <input
+                                                type="password"
+                                                value={passwords.currentPassword}
+                                                onChange={(e) => setPasswords({ ...passwords, currentPassword: e.target.value })}
+                                                className="w-full h-10 bg-gray-50 border border-gray-150 rounded-xl px-3.5 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316] focus:bg-white transition-all"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">New Password</label>
+                                            <input
+                                                type="password"
+                                                value={passwords.newPassword}
+                                                onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })}
+                                                className="w-full h-10 bg-gray-50 border border-gray-150 rounded-xl px-3.5 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316] focus:bg-white transition-all"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">Confirm Password</label>
+                                            <input
+                                                type="password"
+                                                value={passwords.confirmPassword}
+                                                onChange={(e) => setPasswords({ ...passwords, confirmPassword: e.target.value })}
+                                                className="w-full h-10 bg-gray-50 border border-gray-150 rounded-xl px-3.5 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316] focus:bg-white transition-all"
+                                            />
+                                        </div>
+                                        <button
+                                            type="submit"
+                                            className="px-5 py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-all shadow-sm"
+                                        >
+                                            Update Password
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 2. MY PETS CATEGORY */}
+                        {activeTab === 'my-pets' && (
+                            <div className="space-y-8 animate-in fade-in duration-200">
+                                <div>
+                                    <h2 className="text-lg font-black text-[#1a1208] flex items-center gap-2">
+                                        🐾 Pet Preferences
+                                    </h2>
+                                    <p className="text-xs text-gray-500 font-semibold mt-1">Manage pet-related settings, QR codes, and automated reminders</p>
+                                </div>
+
+                                {/* Pet Management Shortcut Card */}
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-5 bg-orange-50/60 border border-orange-100 rounded-2xl">
+                                    <div>
+                                        <span className="text-xs font-black text-[#1a1208] block">Registered Pets</span>
+                                        <p className="text-xs text-gray-500 font-semibold mt-0.5">Manage your pet records and generate QR tags</p>
+                                    </div>
+                                    <Button
+                                        variant="primary"
+                                        onClick={() => navigate('/resident/pets')}
+                                        className="py-2.5 px-5 text-xs font-black uppercase tracking-widest gap-2"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                        View My Pets
+                                    </Button>
+                                </div>
+
+                                {/* QR Preferences */}
+                                <div>
+                                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Default QR Card Download Options</h3>
+                                    <div className="space-y-3">
+                                        <label className="flex items-center gap-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={qrIncludeContact}
+                                                onChange={(e) => setQrIncludeContact(e.target.checked)}
+                                                className="w-4.5 h-4.5 accent-[#F97316] rounded border-gray-300"
+                                            />
+                                            <span className="text-xs font-bold text-gray-800">Include Owner Contact Information on QR Card</span>
+                                        </label>
+                                        <label className="flex items-center gap-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={qrNotifyScan}
+                                                onChange={(e) => setQrNotifyScan(e.target.checked)}
+                                                className="w-4.5 h-4.5 accent-[#F97316] rounded border-gray-300"
+                                            />
+                                            <span className="text-xs font-bold text-gray-800">Notify me immediately when pet's QR code is scanned</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {/* Reminders */}
+                                <div className="pt-6 border-t border-gray-100">
+                                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Auto Reminders</h3>
+                                    <div className="space-y-3">
+                                        <label className="flex items-center gap-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={vacReminder}
+                                                onChange={(e) => setVacReminder(e.target.checked)}
+                                                className="w-4.5 h-4.5 accent-[#F97316] rounded border-gray-300"
+                                            />
+                                            <span className="text-xs font-bold text-gray-800">Vaccination Reminder</span>
+                                        </label>
+                                        <label className="flex items-center gap-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={dewormReminder}
+                                                onChange={(e) => setDewormReminder(e.target.checked)}
+                                                className="w-4.5 h-4.5 accent-[#F97316] rounded border-gray-300"
+                                            />
+                                            <span className="text-xs font-bold text-gray-800">Deworming Reminder</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 3. NOTIFICATIONS CATEGORY */}
+                        {activeTab === 'notifications' && (
+                            <div className="space-y-8 animate-in fade-in duration-200">
+                                <div>
+                                    <h2 className="text-lg font-black text-[#1a1208] flex items-center gap-2">
+                                        🔔 Notification Preferences
+                                    </h2>
+                                    <p className="text-xs text-gray-500 font-semibold mt-1">Choose what updates you want to receive</p>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer">
+                                        <span className="text-xs font-bold text-gray-800">New comments on my reports</span>
+                                        <input type="checkbox" checked={notifComments} onChange={(e) => setNotifComments(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
+                                    </label>
+
+                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer">
+                                        <span className="text-xs font-bold text-gray-800">Report status updates</span>
+                                        <input type="checkbox" checked={notifStatusUpdates} onChange={(e) => setNotifStatusUpdates(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
+                                    </label>
+
+                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer">
+                                        <span className="text-xs font-bold text-gray-800">Rescue completed alerts</span>
+                                        <input type="checkbox" checked={notifRescueCompleted} onChange={(e) => setNotifRescueCompleted(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
+                                    </label>
+
+                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer">
+                                        <span className="text-xs font-bold text-gray-800">Hazard announcements in my area</span>
+                                        <input type="checkbox" checked={notifHazardAlerts} onChange={(e) => setNotifHazardAlerts(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
+                                    </label>
+
+                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer">
+                                        <span className="text-xs font-bold text-gray-800">Lost pet alerts nearby</span>
+                                        <input type="checkbox" checked={notifLostPet} onChange={(e) => setNotifLostPet(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
+                                    </label>
+
+                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer">
+                                        <span className="text-xs font-bold text-gray-800">QR code scan alerts</span>
+                                        <input type="checkbox" checked={notifQrScan} onChange={(e) => setNotifQrScan(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
+                                    </label>
+                                </div>
+
+                                <div className="pt-6 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="p-4 bg-gray-50 rounded-2xl border border-gray-150 flex items-center justify-between">
+                                        <div>
+                                            <span className="text-xs font-black text-gray-800 block">Email Notifications</span>
+                                            <span className="text-[10px] text-gray-400 font-semibold">Receive digests & critical alerts via email</span>
+                                        </div>
+                                        <button
+                                            onClick={() => setEmailNotif(!emailNotif)}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all ${
+                                                emailNotif ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'
+                                            }`}
+                                        >
+                                            {emailNotif ? 'ON' : 'OFF'}
+                                        </button>
+                                    </div>
+
+                                    <div className="p-4 bg-gray-50 rounded-2xl border border-gray-150 flex items-center justify-between">
+                                        <div>
+                                            <span className="text-xs font-black text-gray-800 block">Push Notifications</span>
+                                            <span className="text-[10px] text-gray-400 font-semibold">Browser push notifications</span>
+                                        </div>
+                                        <button
+                                            onClick={() => setPushNotif(!pushNotif)}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all ${
+                                                pushNotif ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'
+                                            }`}
+                                        >
+                                            {pushNotif ? 'ON' : 'OFF'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 4. PRIVACY CATEGORY */}
+                        {activeTab === 'privacy' && (
+                            <div className="space-y-8 animate-in fade-in duration-200">
+                                <div>
+                                    <h2 className="text-lg font-black text-[#1a1208] flex items-center gap-2">
+                                        🔒 Privacy & Visibility Settings
+                                    </h2>
+                                    <p className="text-xs text-gray-500 font-semibold mt-1">Configure report visibility and who can contact you</p>
+                                </div>
+
+                                <div>
+                                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Default Report Visibility</h3>
+                                    <div className="grid grid-cols-2 gap-4 max-w-md">
+                                        <button
+                                            onClick={() => setReportVisibility('Public')}
+                                            className={`p-4 rounded-2xl border text-left transition-all ${
+                                                reportVisibility === 'Public'
+                                                    ? 'border-[#F97316] bg-orange-50/50 text-[#F97316] font-black shadow-sm'
+                                                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            <span className="text-xs block">🌐 Public</span>
+                                            <span className="text-[10px] text-gray-400 font-normal">Visible to community members</span>
+                                        </button>
+
+                                        <button
+                                            onClick={() => setReportVisibility('Private')}
+                                            className={`p-4 rounded-2xl border text-left transition-all ${
+                                                reportVisibility === 'Private'
+                                                    ? 'border-[#F97316] bg-orange-50/50 text-[#F97316] font-black shadow-sm'
+                                                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            <span className="text-xs block">🔒 Private</span>
+                                            <span className="text-[10px] text-gray-400 font-normal">Visible to leaders & staff only</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4 pt-4 border-t border-gray-100">
+                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer">
+                                        <div>
+                                            <span className="text-xs font-bold text-gray-800 block">Hide my identity on reports</span>
+                                            <span className="text-[10px] text-gray-400 font-semibold">Post reports anonymously to other residents</span>
+                                        </div>
+                                        <input type="checkbox" checked={hideIdentity} onChange={(e) => setHideIdentity(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
+                                    </label>
+
+                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer">
+                                        <div>
+                                            <span className="text-xs font-bold text-gray-800 block">Allow other users to contact me</span>
+                                            <span className="text-[10px] text-gray-400 font-semibold">Allow direct inquiries for lost pet sightings</span>
+                                        </div>
+                                        <input type="checkbox" checked={allowContact} onChange={(e) => setAllowContact(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
+                                    </label>
+
+                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer">
+                                        <div>
+                                            <span className="text-xs font-bold text-gray-800 block">Show phone number to rescuers only</span>
+                                            <span className="text-[10px] text-gray-400 font-semibold">Keep phone hidden from general public</span>
+                                        </div>
+                                        <input type="checkbox" checked={showPhoneRescuersOnly} onChange={(e) => setShowPhoneRescuersOnly(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
+                                    </label>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 5. LOCATION CATEGORY */}
+                        {activeTab === 'location' && (
+                            <div className="space-y-8 animate-in fade-in duration-200">
+                                <div>
+                                    <h2 className="text-lg font-black text-[#1a1208] flex items-center gap-2">
+                                        📍 Location & Mapping Settings
+                                    </h2>
+                                    <p className="text-xs text-gray-500 font-semibold mt-1">Set default address and location permissions</p>
+                                </div>
+
+                                <div>
+                                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Default Address</label>
+                                    <input
+                                        type="text"
+                                        value={editData.address || ''}
+                                        onChange={(e) => setEditData({ ...editData, address: e.target.value })}
+                                        className="w-full h-11 bg-gray-50 border border-gray-150 rounded-xl px-4 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316]"
+                                    />
+                                </div>
+
+                                {/* Leaflet Map Pinpoint */}
+                                <div>
+                                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Pinpoint Coordinates</label>
+                                    <div className="w-full h-52 rounded-2xl overflow-hidden border border-gray-200 relative z-10">
+                                        <MapContainer
+                                            center={[
+                                                editData.latitude ? parseFloat(editData.latitude) : 15.4802,
+                                                editData.longitude ? parseFloat(editData.longitude) : 120.5979
+                                            ]}
+                                            zoom={15}
+                                            className="h-full w-full"
+                                        >
+                                            <TileLayer
+                                                attribution='&copy; OpenStreetMap'
+                                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                            />
+                                            <LocationPicker
+                                                position={[
+                                                    editData.latitude ? parseFloat(editData.latitude) : 15.4802,
+                                                    editData.longitude ? parseFloat(editData.longitude) : 120.5979
+                                                ]}
+                                                onLocationSelect={(latVal, lngVal) => setEditData({ ...editData, latitude: latVal, longitude: lngVal })}
+                                            />
+                                            <RecenterMap
+                                                position={[
+                                                    editData.latitude ? parseFloat(editData.latitude) : 15.4802,
+                                                    editData.longitude ? parseFloat(editData.longitude) : 120.5979
+                                                ]}
+                                            />
+                                        </MapContainer>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4 pt-4 border-t border-gray-100">
+                                    <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100">
+                                        <span className="text-xs font-bold text-gray-800">Allow GPS Permission</span>
+                                        <button onClick={() => setAllowGPS(!allowGPS)} className={`px-3 py-1.5 rounded-full text-xs font-black uppercase ${allowGPS ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                                            {allowGPS ? 'ON' : 'OFF'}
+                                        </button>
+                                    </div>
+
+                                    <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100">
+                                        <span className="text-xs font-bold text-gray-800">Use Current Location Automatically when Reporting</span>
+                                        <button onClick={() => setAutoLocation(!autoLocation)} className={`px-3 py-1.5 rounded-full text-xs font-black uppercase ${autoLocation ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                                            {autoLocation ? 'ON' : 'OFF'}
+                                        </button>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Location Accuracy</label>
+                                        <select
+                                            value={locationAccuracy}
+                                            onChange={(e) => setLocationAccuracy(e.target.value)}
+                                            className="w-full h-11 bg-gray-50 border border-gray-150 rounded-xl px-4 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316]"
+                                        >
+                                            <option value="High">High (GPS + Network)</option>
+                                            <option value="Medium">Balanced Power</option>
+                                            <option value="Low">Low (Approximate Area)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 6. APPEARANCE CATEGORY */}
+                        {activeTab === 'appearance' && (
+                            <div className="space-y-8 animate-in fade-in duration-200">
+                                <div>
+                                    <h2 className="text-lg font-black text-[#1a1208] flex items-center gap-2">
+                                        🎨 Appearance & Display
+                                    </h2>
+                                    <p className="text-xs text-gray-500 font-semibold mt-1">Customize app themes, map styles, and language</p>
+                                </div>
+
+                                <div>
+                                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Theme</h3>
+                                    <div className="grid grid-cols-2 gap-4 max-w-md">
+                                        <button
+                                            onClick={() => setGlobalTheme('light')}
+                                            className={`p-4 rounded-2xl border text-left transition-all ${
+                                                globalTheme === 'light'
+                                                    ? 'border-[#F97316] bg-orange-50/50 dark:bg-orange-950/30 text-[#F97316] font-black shadow-sm'
+                                                    : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                                            }`}
+                                        >
+                                            <span className="text-xs block font-bold">☀️ Light Mode</span>
+                                            <span className="text-[10px] text-gray-400 font-normal">Clean bright interface</span>
+                                        </button>
+
+                                        <button
+                                            onClick={() => setGlobalTheme('dark')}
+                                            className={`p-4 rounded-2xl border text-left transition-all ${
+                                                globalTheme === 'dark'
+                                                    ? 'border-[#F97316] bg-gray-900 dark:bg-gray-800 text-white font-black shadow-sm'
+                                                    : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                                            }`}
+                                        >
+                                            <span className="text-xs block font-bold">🌙 Dark Mode</span>
+                                            <span className="text-[10px] text-gray-400 font-normal">Sleek dark interface</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-gray-100">
+                                    <div>
+                                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Map Style</label>
+                                        <select
+                                            value={mapStyle}
+                                            onChange={(e) => setMapStyle(e.target.value)}
+                                            className="w-full h-11 bg-gray-50 border border-gray-150 rounded-xl px-4 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316]"
+                                        >
+                                            <option value="Default">Default OpenStreetMap</option>
+                                            <option value="Satellite">Satellite View</option>
+                                            <option value="Terrain">Terrain View</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Language</label>
+                                        <select
+                                            value={language}
+                                            onChange={(e) => setLanguage(e.target.value)}
+                                            className="w-full h-11 bg-gray-50 border border-gray-150 rounded-xl px-4 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316]"
+                                        >
+                                            <option value="English">English</option>
+                                            <option value="Filipino">Filipino (Tagalog)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 7. HELP & SUPPORT CATEGORY */}
+                        {activeTab === 'help' && (
+                            <div className="space-y-8 animate-in fade-in duration-200">
+                                <div>
+                                    <h2 className="text-lg font-black text-[#1a1208] flex items-center gap-2">
+                                        ❓ Help & Support
+                                    </h2>
+                                    <p className="text-xs text-gray-500 font-semibold mt-1">Frequently asked questions and direct contact support</p>
+                                </div>
+
+                                {/* FAQ Section */}
+                                <div className="space-y-4">
+                                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Frequently Asked Questions</h3>
+                                    
+                                    <details className="bg-gray-50 border border-gray-150 rounded-2xl p-4 group">
+                                        <summary className="font-bold text-xs text-gray-800 cursor-pointer flex justify-between items-center">
+                                            How to report a stray animal?
+                                            <span className="text-gray-400 group-open:rotate-180 transition-transform">▼</span>
+                                        </summary>
+                                        <p className="text-xs text-gray-600 mt-3 leading-relaxed">
+                                            Go to your Home feed and click "Report Stray". Fill out the animal details, photo/video, landmark, priority, and visibility. Your subdivision leader will verify it promptly.
+                                        </p>
+                                    </details>
+
+                                    <details className="bg-gray-50 border border-gray-150 rounded-2xl p-4 group">
+                                        <summary className="font-bold text-xs text-gray-800 cursor-pointer flex justify-between items-center">
+                                            How does pet QR Code scanning work?
+                                            <span className="text-gray-400 group-open:rotate-180 transition-transform">▼</span>
+                                        </summary>
+                                        <p className="text-xs text-gray-600 mt-3 leading-relaxed">
+                                            Register your pet under "My Pets". Download and print the generated QR card for your pet's collar. If your pet is found lost, anyone scanning the tag can view contact info or notify you with their location.
+                                        </p>
+                                    </details>
+
+                                    <details className="bg-gray-50 border border-gray-150 rounded-2xl p-4 group">
+                                        <summary className="font-bold text-xs text-gray-800 cursor-pointer flex justify-between items-center">
+                                            What is the difference between Public and Private reports?
+                                            <span className="text-gray-400 group-open:rotate-180 transition-transform">▼</span>
+                                        </summary>
+                                        <p className="text-xs text-gray-600 mt-3 leading-relaxed">
+                                            Public reports are visible to all registered residents in your community feed. Private reports are strictly routed to your Subdivision Leader and Barangay Staff for discreet rescue actions.
+                                        </p>
+                                    </details>
+                                </div>
+
+                                {/* Support Actions */}
+                                <div className="pt-6 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <button
+                                        onClick={() => alert('Barangay Emergency Hotline: (045) 982-1234')}
+                                        className="p-4 bg-orange-50 border border-orange-150 rounded-2xl text-center group hover:bg-orange-100 transition-all"
+                                    >
+                                        <span className="text-xl block mb-1">📞</span>
+                                        <span className="text-xs font-black text-[#F97316] uppercase block">Contact Barangay</span>
+                                        <span className="text-[10px] text-gray-500 font-semibold">Direct hotline info</span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => alert('Bug report feature submitted to system administrators.')}
+                                        className="p-4 bg-gray-50 border border-gray-150 rounded-2xl text-center group hover:bg-gray-100 transition-all"
+                                    >
+                                        <span className="text-xl block mb-1">🐛</span>
+                                        <span className="text-xs font-black text-gray-800 uppercase block">Report a Bug</span>
+                                        <span className="text-[10px] text-gray-500 font-semibold">Submit technical issue</span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => alert('Thank you! Your feedback will help improve StraySafe.')}
+                                        className="p-4 bg-gray-50 border border-gray-150 rounded-2xl text-center group hover:bg-gray-100 transition-all"
+                                    >
+                                        <span className="text-xl block mb-1">💬</span>
+                                        <span className="text-xs font-black text-gray-800 uppercase block">Send Feedback</span>
+                                        <span className="text-[10px] text-gray-500 font-semibold">Share your suggestions</span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 8. ABOUT CATEGORY */}
+                        {activeTab === 'about' && (
+                            <div className="space-y-8 animate-in fade-in duration-200">
+                                <div>
+                                    <h2 className="text-lg font-black text-[#1a1208] flex items-center gap-2">
+                                        ℹ️ About STRAY-SAFE
+                                    </h2>
+                                    <p className="text-xs text-gray-500 font-semibold mt-1">System version and legal documentation</p>
+                                </div>
+
+                                <div className="text-center p-8 bg-gradient-to-b from-orange-50/50 to-white rounded-3xl border border-orange-100">
+                                    <img src="/SSLOGO.png" alt="StraySafe Logo" className="h-16 w-auto mx-auto mb-3" />
+                                    <h3 className="text-xl font-black text-[#1a1208] uppercase tracking-wider">STRAY-SAFE</h3>
+                                    <span className="px-3 py-1 bg-orange-100 text-[#F97316] text-[10px] font-black rounded-full uppercase tracking-widest inline-block mt-2">
+                                        Version 2.0.0
+                                    </span>
+                                    <p className="text-xs text-gray-500 max-w-md mx-auto mt-4 leading-relaxed">
+                                        A smart community-driven stray management and animal welfare platform empowering residents, subdivision leaders, and barangay staff.
+                                    </p>
+                                </div>
+
+                                <div className="space-y-3 pt-4 border-t border-gray-100">
+                                    <button
+                                        onClick={() => alert('Privacy Policy: StraySafe protects your location and personal identity in accordance with Philippine Data Privacy Act of 2012.')}
+                                        className="w-full flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-150 text-xs font-bold text-gray-800 hover:bg-gray-100 transition-all"
+                                    >
+                                        <span>🔒 Privacy Policy</span>
+                                        <span className="text-gray-400">→</span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => alert('Terms & Conditions: Users agree to submit truthful reports regarding stray animals and pet registrations.')}
+                                        className="w-full flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-150 text-xs font-bold text-gray-800 hover:bg-gray-100 transition-all"
+                                    >
+                                        <span>📄 Terms & Conditions</span>
+                                        <span className="text-gray-400">→</span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => alert('Open Source Licenses: React, Vite, Leaflet, FastAPI, Tailwind CSS, Lucide icons.')}
+                                        className="w-full flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-150 text-xs font-bold text-gray-800 hover:bg-gray-100 transition-all"
+                                    >
+                                        <span>📜 Open Source Licenses</span>
+                                        <span className="text-gray-400">→</span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </main>
+
+            <ResiMobileNav
+                isNavbarMenuOpen={isNavbarMenuOpen}
+                isSearchOpen={isMobileSearchOpen}
+                onSearchClick={() => setIsMobileSearchOpen(true)}
+                onAddReportClick={() => navigate('/resident-home', { state: { openAddModal: true, from: '/resident/settings' } })}
+            />
+        </div>
+    );
+};
+
+export default ResidentSettings;

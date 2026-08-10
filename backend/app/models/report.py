@@ -183,16 +183,18 @@ class Rescue(Base):
 
 class ReportVerification(Base):
     __tablename__ = "report_verifications"
+    __allow_unmapped__ = True
 
     verification_id = Column(Integer, primary_key=True, index=True)
     report_id = Column(Integer, ForeignKey("reports.report_id", ondelete="CASCADE"), nullable=False)
-    leader_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
-    # FK to report_status (not verification_statuses)
-    status_id = Column(Integer, ForeignKey("report_status.status_id"), nullable=False)
-    remarks = Column(Text)
+    verified_by = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=True)
+    leader_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=True)
+    is_valid = Column(Boolean, nullable=True, default=True)
+    status_id = Column(Integer, ForeignKey("report_status.status_id"), nullable=True)
+    remarks = Column(Text, nullable=True)
     verified_at = Column(DateTime, server_default=func.now())
 
-    leader = relationship("User")
+    leader = relationship("User", foreign_keys=[verified_by])
 
 
 class StatusHistory(Base):
@@ -223,8 +225,7 @@ class RescueAssignment(Base):
 
     assignment_id = Column(Integer, primary_key=True, index=True)
     rescue_id = Column(Integer, ForeignKey("rescues.rescue_id", ondelete="CASCADE"), nullable=False)
-    staff_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
-    assigned_by = Column(Integer, ForeignKey("users.user_id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
     assigned_at = Column(DateTime, server_default=func.now())
     
     # DB ENUM: 'Assigned', 'In Transit', 'On Site', 'Completed', 'Cancelled'
@@ -233,8 +234,7 @@ class RescueAssignment(Base):
 
     # Relationships
     rescue = relationship("Rescue", back_populates="assignments")
-    staff = relationship("User", foreign_keys=[staff_id])
-    assigner = relationship("User", foreign_keys=[assigned_by])
+    staff = relationship("User", foreign_keys=[user_id])
 
 
 # ─── Holding Facility Models ───────────────────────────────────────────────────

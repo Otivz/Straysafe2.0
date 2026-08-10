@@ -90,6 +90,7 @@ interface Report {
     user_id: number;
     reporter_name?: string;
     animal_type?: string;
+    animal_color?: string | null;
     breed?: string;
     animal_condition?: string;
     behavior_tags?: string | string[];
@@ -187,6 +188,17 @@ const AdminReport = () => {
             // Sort by report_id descending to show new reports at the top
             const sortedData = (response.data || []).sort((a: any, b: any) => b.report_id - a.report_id);
             setReports(sortedData);
+
+            // Mark current reports as viewed so sidebar notification count clears after viewing
+            try {
+                const viewed = JSON.parse(localStorage.getItem('straysafe_viewed_admin_reports') || '[]');
+                const reportIds = sortedData.map((r: any) => r.report_id);
+                const updatedViewed = Array.from(new Set([...viewed, ...reportIds]));
+                localStorage.setItem('straysafe_viewed_admin_reports', JSON.stringify(updatedViewed));
+                window.dispatchEvent(new Event('straysafe_admin_viewed'));
+            } catch (e) {
+                console.warn('Could not mark admin reports as viewed', e);
+            }
         } catch (error) {
             console.error('Error fetching reports:', error);
         } finally {
@@ -764,14 +776,14 @@ const AdminReport = () => {
                                                 </div>
                                             </div>
 
-                                            {/* AI Suggestion Panel */}
+                                             {/* AI Suggestion Panel */}
                                              <AISuggestionPanel
-                                                 animalType={viewReport.ai_animal_type}
-                                                 dominantColor={viewReport.ai_dominant_color}
-                                                 estimatedSize={viewReport.ai_estimated_size}
+                                                 animalType={viewReport.animal_type || viewReport.ai_animal_type}
+                                                 dominantColor={(viewReport as any).animal_color || viewReport.ai_dominant_color}
+                                                 estimatedSize={(viewReport as any).estimated_size || viewReport.ai_estimated_size}
                                                  suggestedRiskLevel={viewReport.ai_suggested_risk_level}
                                                  suggestedPriority={viewReport.ai_suggested_priority}
-                                                 possibleBreed={viewReport.ai_possible_breed}
+                                                 possibleBreed={(viewReport as any).animal_breed || (viewReport as any).breed || viewReport.ai_possible_breed}
                                                  description={viewReport.description}
                                                  categoryName={categoryMap[viewReport.category_id]}
                                                  suggestedPriorityReason={viewReport.ai_suggested_priority_reason}

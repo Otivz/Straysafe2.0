@@ -37,16 +37,16 @@ def generate_ai_suggestions(
                 * Estimated Size: {media_estimated_size}
 
             Your task is to classify this stray animal sighting and output a JSON object with the following fields:
-            1. "ai_animal_type": Must be "Dog", "Cat", or "Unknown". Prefer the YOLOv8 Visual detection if provided, otherwise infer from the description.
-            2. "ai_dominant_color": Dominant color or colors (e.g. "Brown", "Black, White"). Prefer YOLOv8 visual detection if provided, otherwise infer from description.
+            1. "ai_animal_type": Must be "Dog", "Cat", or "Unknown". Prefer media_animal_type if provided (e.g. "Cat"), otherwise infer accurately from user description.
+            2. "ai_dominant_color": Dominant color or colors (e.g. "Brown", "Black, White"). Prefer visual detection if provided, otherwise infer from description.
             3. "ai_estimated_size": Must be "Small", "Medium", "Large", or "Unknown". For cats, default to "Small".
             4. "ai_suggested_risk_level": Must be "Low Risk", "Medium Risk", or "High Risk".
                - High Risk: Aggressive behaviors (biting, snarling, attacks, foaming) or severe injury/trauma.
                - Medium Risk: Nuisance behaviors (barking, chasing cars, roaming pack, crying, skinny/sick).
                - Low Risk: Normal stray animal condition (healthy, calm, not aggressive).
             5. "ai_suggested_priority": Must be "Low Priority", "Medium Priority", or "High Priority". Matches the risk level or urgency.
-            6. "ai_possible_breed": Likely breed (e.g., "Aspin", "Puspin", "Golden Retriever", "Siamese"). Default to "Aspin" for unknown dogs, "Puspin" for unknown cats.
-            7. "ai_suggested_priority_reason": A short, conversational, warm, and helpful explanation (1-2 sentences) of why this priority level was suggested. Do not sound technical or mention 'rules', 'heuristics', or 'database columns'. Explain it as a friendly dispatcher would (e.g., "High Priority suggested because the animal appears to have a leg injury and needs immediate medical attention.").
+            6. "ai_possible_breed": Likely breed (e.g., "Aspin", "Puspin", "Golden Retriever", "Siamese"). Default to "Puspin" for cats, "Aspin" for dogs.
+            7. "ai_suggested_priority_reason": A short, conversational, warm, and helpful explanation (1-2 sentences) of why this priority level was suggested. Explain accurately without inventing unmentioned items (like collars or leashes).
 
             Respond ONLY with a valid JSON block.
             """

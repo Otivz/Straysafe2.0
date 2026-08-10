@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import MapComponent from '../../components/MapComponent';
 
 interface PublicPetDetails {
@@ -238,11 +239,12 @@ const PetScanPage = () => {
             <div className="w-full max-w-2xl bg-white rounded-[3rem] border border-gray-100 shadow-2xl overflow-hidden">
                 {/* Visual Header */}
                 <div className="relative h-64 bg-gray-50 overflow-hidden">
-                    {pet.photo_url ? (
-                        <img src={pet.photo_url} alt={pet.pet_name} className="w-full h-full object-cover" />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-300 text-6xl">🐾</div>
-                    )}
+                    <img 
+                        src={getPetPicture(pet.photo_url)} 
+                        alt={pet.pet_name} 
+                        className="w-full h-full object-cover" 
+                        onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
+                    />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
                     <div className="absolute bottom-6 left-8 text-white">
                         <span className="text-[10px] font-black uppercase text-[#F97316] tracking-[0.2em] bg-orange-50 px-2 py-0.5 rounded-md mb-2 inline-block">STRAY-SAFE pet found</span>

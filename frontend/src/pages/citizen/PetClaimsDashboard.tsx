@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import { MapContainer, TileLayer, Marker, Popup, Polygon } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -274,7 +275,7 @@ const PetClaimsDashboard = () => {
                             registered_address: c.pet?.registered_address || c.pet?.owner?.address || "Registered Owner Address",
                             registered_latitude: c.pet?.registered_latitude ? parseFloat(c.pet.registered_latitude) : 14.801496,
                             registered_longitude: c.pet?.registered_longitude ? parseFloat(c.pet.registered_longitude) : 121.003280,
-                            photo_url: c.pet?.photo_url || "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop"
+                            photo_url: getPetPicture(c.pet?.photo_url)
                         },
                         evidence_url: c.evidence_url || "",
                         previous_photos: matchedMock?.previous_photos || [],
@@ -621,7 +622,12 @@ const PetClaimsDashboard = () => {
                                                 <div className="space-y-3">
                                                     <span className="text-[9px] font-black text-gray-500 bg-gray-100 px-2.5 py-1 rounded uppercase tracking-wider">Your Registered Pet</span>
                                                     <div className="relative h-56 rounded-2xl overflow-hidden border border-gray-150 shadow-inner group">
-                                                        <img src={selectedClaim.pet.photo_url} className="w-full h-full object-cover" alt="Registered pet" />
+                                                         <img 
+                                                            src={getPetPicture(selectedClaim.pet.photo_url)} 
+                                                            className="w-full h-full object-cover" 
+                                                            alt="Registered pet" 
+                                                            onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
+                                                        />
                                                         <button 
                                                             onClick={() => setLightboxImage(selectedClaim.pet.photo_url)}
                                                             className="absolute inset-0 bg-black/40 flex items-center justify-center text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity font-black uppercase tracking-widest cursor-pointer"

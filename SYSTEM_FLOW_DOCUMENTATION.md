@@ -318,16 +318,21 @@ HTTP Client        │ Axios             │ Frontend API communication
 Routing            │ React Router DOM  │ SPA navigation and protected routes
 
 
-8.  UI Color Palette
+8.  UI Color Palette (Light & Dark Mode)
 
-Swatch     │ Name          │ Usage
-───────────┼───────────────┼──────────────────────────────────────
-#F97316    │ Burnt Orange  │ Primary — Rescue, urgency, warmth
-#FACC15    │ Soft Amber    │ Primary — Hope, positivity
-#86EFAC    │ Sage Green    │ Secondary — Care, healing
-#FAFAF9    │ Off White     │ Secondary — Clean interface background
-#EF4444    │ Soft Red      │ Alert — Urgent or injured animal reports
-#8B5CF6    │ Purple        │ History, archive, and closed case indicators
+Swatch (Light) │ Swatch (Dark) │ Name          │ Usage
+───────────────┼───────────────┼───────────────┼──────────────────────────────────────────────
+#FAFAF9        │ #0F172A       │ Deep Navy Bg  │ Off White (Light) / Slate Navy (Dark)
+#FFFFFF        │ #1E293B       │ Card Surface  │ Pure White (Light) / Dark Slate Card (Dark)
+#FFFFFF        │ #111827       │ Sidebar       │ White Sidebar (Light) / Deep Midnight (Dark)
+#1F2937        │ #F8FAFC       │ Primary Text  │ Dark Charcoal (Light) / Off White Text (Dark)
+#6B7280        │ #CBD5E1       │ Muted Text    │ Slate Gray (Light) / Soft Gray Text (Dark)
+#E5E7EB        │ #334155       │ Border Color  │ Light Slate Border / Dark Slate Border
+#F97316        │ #FB923C       │ Burnt Orange  │ Primary — Rescue, primary actions & buttons
+#FACC15        │ #FDE047       │ Soft Amber    │ Highlights, status warnings, rabies risk
+#86EFAC        │ #4ADE80       │ Sage Green    │ Success — Care, healing, resolved status
+#EF4444        │ #F87171       │ Soft Red      │ Alert — Emergency, rabies alert, errors
+#8B5CF6        │ #A78BFA       │ Purple        │ History — Archived cases, closed reports
 
 
 9.  Key Innovations
@@ -342,6 +347,7 @@ Swatch     │ Name          │ Usage
 08  Pet QR Code system enables instant pet identification and owner contact via scannable cards
 09  Escalation guard prevents resolution conflicts — once escalated, only Barangay can close a case
 10  Session verification on every page load auto-logs out users whose accounts are deactivated
+11  Global Dark Mode theme support for all resident pages, tabs, forms, and modals
 
 
 System Framework
@@ -351,4 +357,4 @@ RESCUE
 MONITOR
 PROTECT
 
-Last Updated: June 2026 | StraySafe 2.0
+Last Updated: August 2026 | StraySafe 2.0

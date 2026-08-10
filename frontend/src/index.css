@@ -1,1 +1,175 @@
 @import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --bg-main: #FAFAF9;
+    --bg-surface: #FFFFFF;
+    --bg-sidebar: #FFFFFF;
+    --text-primary: #1F2937;
+    --text-secondary: #6B7280;
+    --border-color: #E5E7EB;
+    
+    --brand-orange: #F97316;
+    --brand-amber: #FACC15;
+    --brand-green: #86EFAC;
+    --brand-red: #EF4444;
+    --brand-purple: #8B5CF6;
+  }
+
+  html.dark {
+    --bg-main: #0B0F19;
+    --bg-surface: #151C2C;
+    --bg-sidebar: #090C15;
+    --text-primary: #F8FAFC;
+    --text-secondary: #94A3B8;
+    --border-color: #1E293B;
+
+    --brand-orange: #F97316;
+    --brand-amber: #FDE047;
+    --brand-green: #4ADE80;
+    --brand-red: #F87171;
+    --brand-purple: #A78BFA;
+  }
+
+  body {
+    background-color: var(--bg-main) !important;
+    color: var(--text-primary) !important;
+    transition: background-color 300ms cubic-bezier(0.4, 0, 0.2, 1), color 300ms cubic-bezier(0.4, 0, 0.2, 1), border-color 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* -------------------------------------------------------------------------- */
+  /* Theme Overrides - Rich Dark Mode (#0B0F19 background, #151C2C surface) */
+  /* -------------------------------------------------------------------------- */
+
+  html.dark body {
+    background-color: #0B0F19 !important;
+    color: #F8FAFC !important;
+  }
+
+  /* Main background containers */
+  html.dark div.min-h-screen,
+  html.dark main,
+  html.dark .bg-\[\#F7F7F7\],
+  html.dark .bg-\[\#FAFAF9\],
+  html.dark .bg-\[\#FAF9F6\],
+  html.dark .bg-gray-50 {
+    background-color: #0B0F19 !important;
+  }
+
+  /* Cards & Surface Elements */
+  html.dark .bg-white {
+    background-color: #151C2C !important;
+    color: #F8FAFC !important;
+  }
+
+  html.dark .bg-gray-100 {
+    background-color: #1A2338 !important;
+  }
+
+  html.dark .bg-gray-200 {
+    background-color: #222E48 !important;
+  }
+
+  /* Navbars & Sidebars */
+  html.dark nav,
+  html.dark .bg-\[\#111827\],
+  html.dark .dark\:bg-gray-900,
+  html.dark .dark\:bg-gray-900\/80,
+  html.dark .dark\:bg-gray-900\/90 {
+    background-color: #090C15 !important;
+    border-color: #1E293B !important;
+  }
+
+  /* Borders */
+  html.dark .border-gray-50,
+  html.dark .border-gray-100,
+  html.dark .border-gray-150,
+  html.dark .border-gray-200,
+  html.dark .border-white\/60,
+  html.dark .border-gray-100\/80,
+  html.dark .border-gray-100\/60 {
+    border-color: #1E293B !important;
+  }
+
+  /* Text Colors - Bright High-Contrast White for Headings & Branding */
+  html.dark .text-\[\#1a1208\],
+  html.dark .text-\[\#4a3b28\],
+  html.dark .text-gray-900,
+  html.dark .text-gray-800,
+  html.dark .text-gray-700,
+  html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5, html.dark h6,
+  html.dark span.font-black {
+    color: #FFFFFF !important;
+  }
+
+  html.dark .text-gray-600,
+  html.dark .text-gray-500,
+  html.dark .text-gray-400,
+  html.dark .text-\[\#4a3b28\]\/85 {
+    color: #94A3B8 !important;
+  }
+
+  /* Hover Overrides in Dark Mode */
+  html.dark .hover\:bg-\[\#FAFAF9\]:hover,
+  html.dark .hover\:bg-\[\#F7F7F7\]:hover,
+  html.dark .hover\:bg-\[\#FAF9F6\]:hover,
+  html.dark .hover\:bg-gray-50:hover,
+  html.dark .hover\:bg-gray-100:hover {
+    background-color: #1A2338 !important;
+  }
+
+  html.dark .hover\:text-\[\#F97316\]:hover,
+  html.dark .hover\:text-orange-500:hover {
+    color: #F97316 !important;
+  }
+
+  /* Specific fix for STRAYSAFE logo text in navbar */
+  html.dark nav a span,
+  html.dark nav span {
+    color: #FFFFFF !important;
+  }
+
+  /* Form Elements */
+  html.dark input[type="text"],
+  html.dark input[type="email"],
+  html.dark input[type="password"],
+  html.dark input[type="tel"],
+  html.dark input[type="search"],
+  html.dark input[type="date"],
+  html.dark textarea,
+  html.dark select {
+    background-color: #151C2C !important;
+    color: #FFFFFF !important;
+    border-color: #1E293B !important;
+  }
+
+  html.dark input::placeholder,
+  html.dark textarea::placeholder {
+    color: #64748B !important;
+  }
+
+  /* Orange Brand Action Buttons & Text */
+  html.dark .text-\[\#F97316\] {
+    color: #F97316 !important;
+  }
+
+  html.dark .border-\[\#F97316\] {
+    border-color: #F97316 !important;
+  }
+
+  /* Modals Backdrop */
+  html.dark .bg-\[\#1a1208\]\/60,
+  html.dark .bg-black\/50,
+  html.dark .bg-\[\#1a1208\]\/40 {
+    background-color: rgba(9, 12, 21, 0.8) !important;
+  }
+
+  /* Smooth Switcher Transitions */
+  *, *::before, *::after {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 250ms;
+  }
+}

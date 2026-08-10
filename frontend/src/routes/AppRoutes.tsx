@@ -45,6 +45,8 @@ import BrgyViewHistory from '../pages/Barangay_Staff/BrgyViewHistory';
 import SubdHazardAlert from '../pages/Subd_Leaders/SubdHazardAlert';
 import PetMatchReview from '../pages/citizen/PetMatchReview';
 import PetClaimsDashboard from '../pages/citizen/PetClaimsDashboard';
+import ReportStrayPage from '../pages/citizen/ReportStrayPage';
+import ResidentSettings from '../pages/citizen/ResidentSettings';
 
 
 
@@ -146,9 +148,11 @@ const AppRoutes = () => {
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<ResidentsLogin />} />
             <Route path="/resident-home" element={<ResiHomePage />} />
+            <Route path="/resident/report/new" element={<ReportStrayPage />} />
             <Route path="/resident/reports/:id" element={<ResiViewReport />} />
             <Route path="/resident/pets" element={<ResidentPet />} />
             <Route path="/resident/profile" element={<ResiProfile />} />
+            <Route path="/resident/settings" element={<ResidentSettings />} />
 
             {/* Pet QR Code System Routes */}
             <Route path="/pet/scan/:token" element={<PetScanPage />} />

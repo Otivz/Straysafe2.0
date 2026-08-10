@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-
+import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
+import { useTheme } from '../../context/ThemeContext';
 
 interface ResiNavbarProps {
     onMenuToggle?: (isOpen: boolean) => void;
@@ -37,6 +38,7 @@ const ResiNavbar = ({
     onNotificationClick
 }: ResiNavbarProps) => {
     const navigate = useNavigate();
+    const { theme, toggleTheme } = useTheme();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isMobileHamburgerOpen, setIsMobileHamburgerOpen] = useState(false);
@@ -102,7 +104,7 @@ const ResiNavbar = ({
 
 
 
-    const profilePic = user?.profile_picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name || 'User'}`;
+    const profilePic = getProfilePicture(user?.profile_picture);
     const unreadCount = (notifications || []).filter((n: any) => !n.is_read).length;
 
     const handleLogout = () => {
@@ -120,7 +122,7 @@ const ResiNavbar = ({
 
     return (
         <>
-            <nav className="fixed top-0 left-0 right-0 z-[100] bg-white/80 backdrop-blur-md border-b border-gray-100 font-sans tracking-tight h-20">
+            <nav className="fixed top-0 left-0 right-0 z-[100] bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 font-sans tracking-tight h-20 transition-colors duration-200">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full">
                     <div className="flex justify-between items-center h-full">
 
@@ -131,7 +133,7 @@ const ResiNavbar = ({
                                 alt="StraySafe Logo"
                                 className="h-10 w-auto group-hover:scale-110 transition-transform"
                             />
-                            <span className="font-black text-2xl tracking-tighter text-[#1a1208] uppercase">STRAYSAFE</span>
+                            <span className="font-black text-2xl tracking-tighter text-[#1a1208] dark:text-white uppercase">STRAYSAFE</span>
                         </Link>
 
                         {/* DESKTOP NAV REMOVED */}
@@ -149,12 +151,27 @@ const ResiNavbar = ({
                                     value={searchValue || ''}
                                     onChange={(e) => onSearch && onSearch(e.target.value)}
                                     placeholder="Search reports..."
-                                    className="w-64 pl-10 pr-4 py-2.5 bg-[#FAFAF9] border border-gray-100 rounded-full text-[#1a1208] text-sm focus:outline-none focus:ring-2 focus:ring-[#F97316]/50 focus:bg-white transition-all shadow-sm"
+                                    className="w-64 pl-10 pr-4 py-2.5 bg-[#FAFAF9] dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-full text-[#1a1208] dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-[#F97316]/50 focus:bg-white dark:focus:bg-gray-900 transition-all shadow-sm"
                                 />
                             </div>
 
-                            {/* Only Profile Dropdown remains on desktop */}
-                            
+                            {/* DARK MODE TOGGLE BUTTON */}
+                            <button
+                                onClick={toggleTheme}
+                                className="p-2.5 rounded-full bg-[#FAFAF9] dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-[#4a3b28] dark:text-amber-400 hover:text-[#F97316] hover:bg-orange-50 dark:hover:bg-gray-700 transition-all active:scale-95"
+                                title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                            >
+                                {theme === 'dark' ? (
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                                    </svg>
+                                ) : (
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                                    </svg>
+                                )}
+                            </button>
+
                             {/* PROFILE DROPDOWN */}
                             <div className="relative">
                                 <button
@@ -162,16 +179,17 @@ const ResiNavbar = ({
                                     className="relative group focus:outline-none"
                                 >
                                     {/* Avatar Container */}
-                                    <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-md group-hover:border-[#F97316] transition-all duration-300">
+                                    <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white dark:border-gray-800 shadow-md group-hover:border-[#F97316] transition-all duration-300">
                                         <img
                                             src={profilePic}
                                             alt="User"
-                                            className="w-full h-full object-cover bg-gray-100"
+                                            className="w-full h-full object-cover bg-gray-100 dark:bg-gray-800"
+                                            onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
                                         />
                                     </div>
 
                                     {/* Overlapping Arrow Button */}
-                                    <div className={`absolute bottom-0 right-0 w-6 h-6 rounded-full bg-[#1a1208] border-2 border-white flex items-center justify-center text-white shadow-lg transition-transform duration-300 ${isDropdownOpen ? 'rotate-180 bg-[#F97316]' : 'group-hover:scale-110'}`}>
+                                    <div className={`absolute bottom-0 right-0 w-6 h-6 rounded-full bg-[#1a1208] dark:bg-gray-800 border-2 border-white dark:border-gray-800 flex items-center justify-center text-white shadow-lg transition-transform duration-300 ${isDropdownOpen ? 'rotate-180 bg-[#F97316]' : 'group-hover:scale-110'}`}>
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M19 9l-7 7-7-7" />
                                         </svg>
@@ -182,21 +200,21 @@ const ResiNavbar = ({
                                 {isDropdownOpen && (
                                     <>
                                         <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)} />
-                                        <div className="absolute right-0 mt-3 w-56 bg-white rounded-2xl shadow-2xl border border-gray-100 py-3 z-20 animate-in fade-in zoom-in-95 duration-200">
+                                        <div className="absolute right-0 mt-3 w-56 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 py-3 z-20 animate-in fade-in zoom-in-95 duration-200">
 
-                                            <Link to="/resident/profile" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] hover:bg-[#FAFAF9] hover:text-[#F97316] transition-all">
+                                            <Link to="/resident/profile" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
                                                 View Profile
                                             </Link>
-                                            <Link to="/resident/pets" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] hover:bg-[#FAFAF9] hover:text-[#F97316] transition-all">
+                                            <Link to="/resident/pets" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
                                                 My Pets
                                             </Link>
-                                            <Link to="/resident/settings" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] hover:bg-[#FAFAF9] hover:text-[#F97316] transition-all">
-                                                Preferences
+                                            <Link to="/resident/settings" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
+                                                Settings
                                             </Link>
-                                            <div className="mx-4 my-2 h-[1px] bg-gray-50" />
+                                            <div className="mx-4 my-2 h-[1px] bg-gray-50 dark:bg-gray-800" />
                                             <button
                                                 onClick={handleLogout}
-                                                className="w-full flex items-center px-6 py-3 text-xs font-black text-[#EF4444] hover:bg-red-50 transition-all uppercase tracking-widest"
+                                                className="w-full flex items-center px-6 py-3 text-xs font-black text-[#EF4444] hover:bg-red-50 dark:hover:bg-red-950/30 transition-all uppercase tracking-widest"
                                             >
                                                 Logout
                                             </button>
@@ -281,6 +299,19 @@ const ResiNavbar = ({
 
                     {/* Menu Items */}
                     <div className="flex-1 px-4 py-6 space-y-2.5">
+                        <Link
+                            to="/resident/settings"
+                            onClick={() => setIsMobileHamburgerOpen(false)}
+                            className="flex items-center gap-4 px-4 py-3.5 rounded-2xl hover:bg-orange-50/50 hover:pl-6 text-[#4a3b28] hover:text-[#F97316] transition-all duration-300 ease-out group active:scale-[0.98]"
+                        >
+                            <div className="w-10 h-10 bg-orange-50 group-hover:bg-orange-100 rounded-xl flex items-center justify-center text-[#F97316] shadow-sm shadow-orange-100/50 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shrink-0">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                            </div>
+                            <span className="font-black text-xs uppercase tracking-[0.15em] transition-colors">Settings</span>
+                        </Link>
                         <Link
                             to="/resident/pets"
                             onClick={() => setIsMobileHamburgerOpen(false)}

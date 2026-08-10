@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import { Html5Qrcode } from 'html5-qrcode';
 
 interface QRScannerModalProps {
@@ -559,11 +560,12 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
 
                                 {/* Photo */}
                                 <div className="w-32 h-32 rounded-3xl bg-white border border-gray-200 shadow-sm overflow-hidden shrink-0 self-center flex items-center justify-center">
-                                    {pet.photo_url ? (
-                                        <img src={pet.photo_url} alt={pet.pet_name} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <span className="text-4xl text-gray-300 font-black">🐾</span>
-                                    )}
+                                    <img 
+                                        src={getPetPicture(pet.photo_url)} 
+                                        alt={pet.pet_name} 
+                                        className="w-full h-full object-cover" 
+                                        onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
+                                    />
                                 </div>
 
                                 {/* Core fields */}

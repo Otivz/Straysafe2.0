@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
+import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import Button from '../../components/Button';
@@ -255,11 +256,12 @@ const PetQrCardPage = () => {
 
                             {/* Pet Avatar in Circle */}
                             <div className="w-32 h-32 mx-auto rounded-full overflow-hidden border-4 border-orange-50 shadow-md mb-4 bg-gray-50">
-                                {pet.photo_url ? (
-                                    <img src={pet.photo_url} alt={pet.pet_name} className="w-full h-full object-cover" />
-                                ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-gray-300">🐾</div>
-                                )}
+                                <img 
+                                    src={getPetPicture(pet.photo_url)} 
+                                    alt={pet.pet_name} 
+                                    className="w-full h-full object-cover" 
+                                    onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
+                                />
                             </div>
 
                             {/* Pet details */}

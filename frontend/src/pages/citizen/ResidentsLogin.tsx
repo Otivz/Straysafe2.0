@@ -3,9 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import Button from '../../components/Button';
 import { EyeIcon, EyeOffIcon } from '../../components/icon';
 import SuccessModal from '../../components/Modals/SuccessModal';
+import { useTheme } from '../../context/ThemeContext';
 
 const ResidentsLogin = () => {
     const navigate = useNavigate();
+    const { setTheme } = useTheme();
+
+    useEffect(() => {
+        setTheme('light');
+    }, [setTheme]);
+
     const [isRegistering, setIsRegistering] = useState(false);
 
     // Login State
@@ -126,7 +133,7 @@ const ResidentsLogin = () => {
     };
 
     return (
-        <div className="fixed inset-0 w-screen h-screen bg-white overflow-y-auto lg:overflow-hidden flex font-sans">
+        <div className="fixed inset-0 w-screen h-screen bg-white dark:bg-gray-900 text-[#1a1208] dark:text-gray-100 transition-colors duration-200 overflow-y-auto lg:overflow-hidden flex font-sans">
 
             {/* 1. LEFT SIDE CONTENT AREA */}
             <div className="w-1/2 h-full relative hidden lg:block">

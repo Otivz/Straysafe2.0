@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
+import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
@@ -190,7 +191,7 @@ const ResiProfile = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#F7F7F7] font-sans pb-24">
+        <div className="min-h-screen bg-[#F7F7F7] dark:bg-[#121212] font-sans pb-24 text-[#1a1208] dark:text-gray-100 transition-colors duration-200">
             <ResiNavbar
                 onMenuToggle={(isOpen) => setIsNavbarMenuOpen(isOpen)}
                 onSearch={setSearchQuery}
@@ -209,9 +210,10 @@ const ResiProfile = () => {
                             <div className="relative inline-block mb-4 mt-4 group">
                                 <div className="w-36 h-36 rounded-full overflow-hidden border-2 border-white shadow-xl mx-auto relative">
                                     <img
-                                        src={userData.profile_picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.name}`}
+                                        src={getProfilePicture(userData.profile_picture)}
                                         alt={userData.name}
                                         className={`w-full h-full object-cover transition-all duration-300 ${isUploadingPhoto ? 'opacity-50 blur-sm' : 'group-hover:scale-110'}`}
+                                        onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
                                     />
 
                                     {/* Upload Overlay */}

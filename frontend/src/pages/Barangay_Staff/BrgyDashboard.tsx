@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import MapComponent from '../../components/MapComponent';
@@ -397,13 +398,12 @@ const BrgyDashboard = () => {
                                                 return (
                                                     <tr key={p.user_id} className="hover:bg-gray-50/50 transition-colors">
                                                         <td className="py-3.5 pl-2 font-bold text-gray-900 flex items-center gap-3">
-                                                            {p.profile_picture ? (
-                                                                <img src={p.profile_picture} alt={p.name} className="w-7 h-7 rounded-full object-cover border border-gray-100" />
-                                                            ) : (
-                                                                <div className="w-7 h-7 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-xs">
-                                                                    {p.name.charAt(0).toUpperCase()}
-                                                                </div>
-                                                            )}
+                                                            <img 
+                                                                src={getProfilePicture(p.profile_picture)} 
+                                                                alt={p.name} 
+                                                                className="w-7 h-7 rounded-full object-cover border border-gray-100" 
+                                                                onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                                            />
                                                             {p.name}
                                                         </td>
                                                         <td className="py-3.5 text-gray-500 font-medium">{getPositionName(p.position_id)}</td>

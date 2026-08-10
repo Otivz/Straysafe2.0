@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import StatCard from '../../components/PetRecords/StatCard';
@@ -32,7 +33,7 @@ const PetRecords = () => {
                 ownerPhone: pet.emergency_contact_phone || pet.owner?.phone || 'No Contact',
                 idNumber: `P-${pet.pet_id.toString().padStart(5, '0')}`,
                 status: pet.status || 'Active',
-                avatar: pet.photo_url || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?q=80&w=400&auto=format&fit=crop',
+                avatar: getPetPicture(pet.photo_url),
                 weight: pet.weight ? `${pet.weight}kg` : 'Unknown',
                 colorMarkings: pet.color_markings || 'Unknown',
                 sizeCategory: pet.size_category || 'Medium',

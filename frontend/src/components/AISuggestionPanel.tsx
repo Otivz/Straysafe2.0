@@ -29,8 +29,8 @@ const getColorHex = (colorName: string): string => {
 };
 
 const getSwatchStyle = (colorStr?: string | null): string => {
-    const colors = (colorStr || 'Brown').split(',').map(c => c.trim()).filter(Boolean);
-    if (colors.length === 0) return '#8B5A2B';
+    const colors = (colorStr || 'Gray').split(',').map(c => c.trim()).filter(Boolean);
+    if (colors.length === 0) return '#71717A';
     if (colors.length === 1) return getColorHex(colors[0]);
     // Beautiful split linear gradient for multiple colors
     const hex1 = getColorHex(colors[0]);

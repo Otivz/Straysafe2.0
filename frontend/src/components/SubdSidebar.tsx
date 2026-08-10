@@ -1,12 +1,64 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import axios from 'axios';
 import Button from './Button';
 import QRScannerModal from './Modals/QRScannerModal';
 
 const SubdSidebar = () => {
     const [isOpen, setIsOpen] = useState(true);
     const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
+    const [pendingReportsCount, setPendingReportsCount] = useState<number>(0);
+    const [pendingClaimsCount, setPendingClaimsCount] = useState<number>(0);
     const location = useLocation();
+
+    useEffect(() => {
+        const fetchCounts = async () => {
+            try {
+                // Get set of report IDs that have already been viewed by the leader
+                const viewedReportIds = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_subd_reports') || '[]'));
+                const reportsRes = await axios.get('http://localhost:8000/reports/');
+                if (Array.isArray(reportsRes.data)) {
+                    // Count unviewed new reports with status_id = 1 (Reported)
+                    const unviewedPending = reportsRes.data.filter((r: any) => {
+                        const sid = r.current_status_id || r.status_id;
+                        return sid === 1 && !viewedReportIds.has(r.report_id);
+                    }).length;
+                    setPendingReportsCount(unviewedPending);
+                }
+            } catch (e) {
+                console.warn("Could not fetch report count for sidebar", e);
+            }
+
+            try {
+                // Get set of claim IDs that have already been viewed by the leader
+                const viewedClaimIds = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_subd_claims') || '[]'));
+                const claimsRes = await axios.get('http://localhost:8000/claims/');
+                if (Array.isArray(claimsRes.data)) {
+                    const unviewedClaims = claimsRes.data.filter((c: any) => {
+                        const isPending = c.status === 'Pending Review' || c.status === 'Evidence Requested' || c.status === 'Potential Owner Match';
+                        return isPending && !viewedClaimIds.has(c.claim_id);
+                    }).length;
+                    setPendingClaimsCount(unviewedClaims);
+                }
+            } catch (e) {
+                console.warn("Could not fetch claims count for sidebar", e);
+            }
+        };
+
+        fetchCounts();
+        const interval = setInterval(fetchCounts, 4000);
+
+        window.addEventListener('straysafe_reports_viewed', fetchCounts);
+        window.addEventListener('straysafe_claims_viewed', fetchCounts);
+        window.addEventListener('storage', fetchCounts);
+
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('straysafe_reports_viewed', fetchCounts);
+            window.removeEventListener('straysafe_claims_viewed', fetchCounts);
+            window.removeEventListener('storage', fetchCounts);
+        };
+    }, []);
 
     const menuItems = [
         {
@@ -21,6 +73,7 @@ const SubdSidebar = () => {
         {
             path: '/subd/reports',
             label: 'Resident Reports',
+            badgeCount: pendingReportsCount,
             icon: (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
@@ -85,6 +138,7 @@ const SubdSidebar = () => {
         {
             path: '/subd/pet-claims',
             label: 'Pet Claims',
+            badgeCount: pendingClaimsCount,
             icon: (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -92,7 +146,6 @@ const SubdSidebar = () => {
             )
         }
     ];
-
 
     return (
         <aside className={`${isOpen ? 'w-64' : 'w-20'} relative bg-white border-r border-gray-100 flex flex-col justify-between flex-shrink-0 transition-all duration-300 z-50 h-screen`}>
@@ -119,7 +172,6 @@ const SubdSidebar = () => {
                     )}
                 </div>
 
-
                 {/* Navigation */}
                 <nav className="space-y-1 flex-1">
                     {menuItems.map((item) => {
@@ -137,6 +189,7 @@ const SubdSidebar = () => {
                             );
                         }
                         const isActive = item.path ? location.pathname.includes(item.path) : false;
+                        const hasBadge = !!(item.badgeCount && item.badgeCount > 0);
                         return (
                             <div key={item.path} className="relative group overflow-hidden">
                                 {isActive && (
@@ -149,8 +202,24 @@ const SubdSidebar = () => {
                                         : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
                                         } ${isOpen ? 'px-8' : 'justify-center px-0'}`}
                                 >
-                                    <span className="shrink-0">{item.icon}</span>
-                                    {isOpen && <span className="ml-4 whitespace-nowrap animate-in fade-in duration-300">{item.label}</span>}
+                                    <div className="relative shrink-0">
+                                        {item.icon}
+                                        {!isOpen && hasBadge && (
+                                            <span className="absolute -top-1.5 -right-2 bg-[#F97316] text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
+                                                {item.badgeCount! > 9 ? '9+' : item.badgeCount}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {isOpen && (
+                                        <div className="ml-4 flex-1 flex items-center justify-between overflow-hidden">
+                                            <span className="truncate">{item.label}</span>
+                                            {hasBadge && (
+                                                <span className="ml-2 shrink-0 bg-[#F97316] text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-sm animate-pulse">
+                                                    {item.badgeCount}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                 </Link>
                             </div>
                         );

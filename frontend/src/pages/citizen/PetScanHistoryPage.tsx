@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
+import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import MapComponent from '../../components/MapComponent';
@@ -140,11 +141,12 @@ const PetScanHistoryPage = () => {
                     </button>
                     <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-full overflow-hidden border border-gray-100 shadow-sm bg-gray-50 shrink-0">
-                            {pet.photo_url ? (
-                                <img src={pet.photo_url} alt={pet.pet_name} className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center text-gray-300">🐾</div>
-                            )}
+                                <img 
+                                    src={getPetPicture(pet.photo_url)} 
+                                    alt={pet.pet_name} 
+                                    className="w-full h-full object-cover" 
+                                    onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
+                                />
                         </div>
                         <div>
                             <h1 className="text-3xl font-black text-[#1a1208] uppercase tracking-tighter">Scan Sighting <span className="text-[#F97316]">History</span></h1>

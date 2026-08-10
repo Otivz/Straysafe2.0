@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 
@@ -414,7 +415,8 @@ const PetMatchReview = () => {
             (rReportedBreed && (pBreed === rReportedBreed || pBreed.includes(rReportedBreed) || rReportedBreed.includes(pBreed)))
         );
 
-        const rColors = (report.ai_dominant_color || "").toLowerCase().split(",").map((c: string) => c.trim());
+        const reportColorRaw = report.animal_color || report.ai_dominant_color || "";
+        const rColors = reportColorRaw.toLowerCase().split(/,| and |\/|\s+/).map((c: string) => c.trim()).filter(Boolean);
         const pMarkings = (matchedPet.color_markings || "").toLowerCase();
         const pPrimary = (matchedPet.primary_color || "").toLowerCase().trim();
         const pSecondary = (matchedPet.secondary_color || "").toLowerCase().trim();
@@ -466,7 +468,7 @@ const PetMatchReview = () => {
                                         <p className="text-xs font-black text-[#1a1208] uppercase">Sighting Details</p>
                                         <p className="text-xs text-gray-500 font-bold">Species: <span className="text-[#1a1208]">{report.animal_type || report.ai_animal_type || "Dog"}</span></p>
                                         <p className="text-xs text-gray-500 font-bold">Breed: <span className="text-[#1a1208]">{report.animal_breed || report.ai_possible_breed || "Unknown"}</span></p>
-                                        <p className="text-xs text-gray-500 font-bold">Color: <span className="text-[#1a1208]">{report.ai_dominant_color || report.animal_color || "Unknown"}</span></p>
+                                        <p className="text-xs text-gray-500 font-bold">Color: <span className="text-[#1a1208]">{report.animal_color || report.ai_dominant_color || "Unknown"}</span></p>
                                         <p className="text-xs text-gray-500 font-bold">Location: <span className="text-[#1a1208]">{report.street_address || report.address || (report.landmark ? `${report.landmark}, Selera Homes` : "Selera Homes")}</span></p>
                                     </div>
                                 </div>
@@ -478,7 +480,7 @@ const PetMatchReview = () => {
                                     </div>
                                     <div className="relative h-64 rounded-3xl overflow-hidden bg-gray-50 border border-gray-100">
                                         {matchedPet && matchedPet.photo_url ? (
-                                            <img src={matchedPet.photo_url} alt={matchedPet.pet_name} className="w-full h-full object-cover" />
+                                            <img src={getPetPicture(matchedPet.photo_url)} alt={matchedPet.pet_name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }} />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center text-gray-300">Select a pet below</div>
                                         )}
@@ -595,7 +597,7 @@ const PetMatchReview = () => {
                                              {matchedPet ? (
                                                  <div className="flex items-center gap-4 p-4 bg-orange-50/30 border border-orange-100 rounded-2xl">
                                                      <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-100 border border-gray-250 flex-shrink-0">
-                                                         <img src={matchedPet.photo_url || "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=200"} alt={matchedPet.pet_name} className="w-full h-full object-cover" />
+                                                         <img src={getPetPicture(matchedPet.photo_url)} alt={matchedPet.pet_name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }} />
                                                      </div>
                                                      <div>
                                                          <p className="text-sm font-black text-[#1a1208] uppercase leading-tight">{matchedPet.pet_name}</p>

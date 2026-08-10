@@ -192,6 +192,17 @@ const BrgyRescueRequests = () => {
                 req.report?.status_id !== 3
             );
             setRequests(activeRequests);
+
+            // Mark current requests as viewed so sidebar count clears
+            try {
+                const viewed = JSON.parse(localStorage.getItem('straysafe_viewed_brgy_requests') || '[]');
+                const requestIds = activeRequests.map((req: any) => req.rescue_id || req.report_id || req.report?.report_id);
+                const updatedViewed = Array.from(new Set([...viewed, ...requestIds]));
+                localStorage.setItem('straysafe_viewed_brgy_requests', JSON.stringify(updatedViewed));
+                window.dispatchEvent(new Event('straysafe_brgy_viewed'));
+            } catch (e) {
+                console.warn('Could not mark brgy requests as viewed', e);
+            }
         } catch (error) {
             console.error('Error fetching rescue requests:', error);
             setRequests([]);
@@ -677,12 +688,12 @@ const BrgyRescueRequests = () => {
 
                                 {/* AI Suggestion Panel */}
                                 <AISuggestionPanel
-                                    animalType={viewingRequest.report?.ai_animal_type}
-                                    dominantColor={viewingRequest.report?.ai_dominant_color}
-                                    estimatedSize={viewingRequest.report?.ai_estimated_size}
+                                    animalType={viewingRequest.report?.animal_type || viewingRequest.report?.ai_animal_type}
+                                    dominantColor={(viewingRequest.report as any)?.animal_color || viewingRequest.report?.ai_dominant_color}
+                                    estimatedSize={(viewingRequest.report as any)?.estimated_size || viewingRequest.report?.ai_estimated_size}
                                     suggestedRiskLevel={viewingRequest.report?.ai_suggested_risk_level}
                                     suggestedPriority={viewingRequest.report?.ai_suggested_priority}
-                                    possibleBreed={viewingRequest.report?.ai_possible_breed}
+                                    possibleBreed={(viewingRequest.report as any)?.animal_breed || (viewingRequest.report as any)?.breed || viewingRequest.report?.ai_possible_breed}
                                     description={viewingRequest.report?.description}
                                     categoryName={categoryMap[viewingRequest.report?.category_id || 0]}
                                     suggestedPriorityReason={viewingRequest.report?.ai_suggested_priority_reason}

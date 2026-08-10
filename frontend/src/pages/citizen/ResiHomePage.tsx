@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import Button from '../../components/Button';
-import CustomRadio from '../../components/CustomRadio';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import { MapContainer, TileLayer, Marker, useMapEvents, Polygon, useMap } from 'react-leaflet';
@@ -108,6 +108,56 @@ const RecenterMap = ({ center }: { center: [number, number] }) => {
 
 
 
+interface ReportFormData {
+    category: string;
+    category_id: number | undefined;
+    animalCount: number;
+    landmark: string;
+    visibility: string;
+    priorityLevel: string;
+    isPossibleOwned: boolean;
+    animalType: string;
+    animalBreed: string;
+    primaryColor: string;
+    secondaryColor: string;
+    coatPattern: string;
+    distinctiveMarkings: string;
+    observedConditions: string[];
+    estimatedSize: string;
+    description: string;
+    latitude: number;
+    longitude: number;
+    mediaFiles: File[];
+    existingMedia: any[];
+    mediaIdsToDelete: number[];
+    aiSuggestions: any;
+}
+
+const INITIAL_FORM_DATA: ReportFormData = {
+    category: 'Injured Animal',
+    category_id: 1,
+    animalCount: 1,
+    landmark: '',
+    visibility: 'Public',
+    priorityLevel: 'Medium',
+    isPossibleOwned: false,
+    animalType: 'Dog',
+    animalBreed: 'Unknown',
+    primaryColor: 'Brown',
+    secondaryColor: 'None',
+    coatPattern: 'Unknown',
+    distinctiveMarkings: '',
+    observedConditions: [],
+    estimatedSize: 'Medium',
+    description: '',
+    latitude: 14.801313,
+    longitude: 121.003109,
+    mediaFiles: [],
+    existingMedia: [],
+    mediaIdsToDelete: [],
+    aiSuggestions: null
+};
+
 const ResiHomePage = () => {
     const location = useLocation();
     const navigate = useNavigate();
@@ -164,25 +214,8 @@ const ResiHomePage = () => {
     const [isFetchingBreedImage, setIsFetchingBreedImage] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
-    const [formData, setFormData] = useState({
-        category: undefined as string | undefined,
-        category_id: undefined as number | undefined,
-        animalCount: 1,
-        landmark: '',
-        visibility: 'Public',
-        priorityLevel: 'Medium',
-        isPossibleOwned: false,
-        animalType: 'Dog',
-        animalBreed: '',
-        animalColor: '',
-        estimatedSize: 'Medium',
-        description: '',
-        latitude: 14.801313,
-        longitude: 121.003109,
-        mediaFiles: [] as File[],
-        existingMedia: [] as any[],
-        mediaIdsToDelete: [] as number[]
-    });
+    const [reportStep, setReportStep] = useState<number>(1);
+    const [formData, setFormData] = useState<ReportFormData>(INITIAL_FORM_DATA);
 
     const [resolvedAddress, setResolvedAddress] = useState('');
     const [isGeocoding, setIsGeocoding] = useState(false);
@@ -267,13 +300,8 @@ const ResiHomePage = () => {
         }
         if (location.state?.openAddModal) {
             setEditingReportId(null);
-            setFormData({
-                category: undefined, category_id: undefined, animalCount: 1, landmark: '',
-                visibility: 'Public', priorityLevel: 'Medium', isPossibleOwned: false,
-                animalType: 'Dog', animalBreed: '', animalColor: '', estimatedSize: 'Medium',
-                description: '', latitude: 14.801313, longitude: 121.003109,
-                mediaFiles: [], existingMedia: [], mediaIdsToDelete: []
-            });
+            setReportStep(1);
+            setFormData(INITIAL_FORM_DATA);
             setIsAddReportModalOpen(true);
             // Clear state so it doesn't reopen on refresh
             navigate(location.pathname, { replace: true, state: {} });
@@ -450,7 +478,15 @@ const ResiHomePage = () => {
             4: 'Roaming Pack', 5: 'Animal Rescue Needed'
         };
 
-        const initialData = {
+        let primaryColor = report.primary_color;
+        let secondaryColor = report.secondary_color || 'None';
+        if (!primaryColor && report.animal_color) {
+            const parts = report.animal_color.split(' and ');
+            primaryColor = parts[0] || 'Brown';
+            if (parts[1]) secondaryColor = parts[1];
+        }
+
+        const initialData: ReportFormData = {
             category: categoryMap[report.category_id] || 'Injured Animal',
             category_id: report.category_id,
             animalCount: report.animal_count || 1,
@@ -460,14 +496,19 @@ const ResiHomePage = () => {
             isPossibleOwned: report.is_possible_owned || false,
             animalType: report.animal_type || 'Unknown',
             animalBreed: report.animal_breed || '',
-            animalColor: report.animal_color || '',
+            primaryColor: primaryColor || 'Brown',
+            secondaryColor: secondaryColor,
+            coatPattern: report.coat_pattern || 'Unknown',
+            distinctiveMarkings: report.distinctive_markings || '',
+            observedConditions: report.observed_conditions || [],
             estimatedSize: report.estimated_size || 'Medium',
             description: report.description || '',
             latitude: parseFloat(report.latitude) || 14.801313,
             longitude: parseFloat(report.longitude) || 121.003109,
             mediaFiles: [],
             existingMedia: report.media || [],
-            mediaIdsToDelete: []
+            mediaIdsToDelete: [],
+            aiSuggestions: null
         };
 
         setFormData(initialData);
@@ -500,7 +541,7 @@ const ResiHomePage = () => {
                 setReports(visibleReports.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
             }
         } catch (error) {
-            console.error('Failed to fetch reports:', error);
+            console.error('Failed to fetch reports from backend:', error);
         }
     };
 
@@ -722,7 +763,9 @@ const ResiHomePage = () => {
         if (!suggestions || !suggestions.ai_animal_type) return false;
 
         const userType = formData.animalType;
-        const userColor = formData.animalColor || '';
+        const userColor = formData.secondaryColor && formData.secondaryColor !== 'None'
+            ? `${formData.primaryColor} and ${formData.secondaryColor}`
+            : (formData.primaryColor || '');
         const userSize = formData.estimatedSize || 'Medium';
 
         // Check if there is an inconsistency or missing info (excluding breed)
@@ -797,25 +840,7 @@ const ResiHomePage = () => {
             handleCloseModal();
             setEditingReportId(null);
             fetchReports();
-            setFormData({
-                category: undefined,
-                category_id: undefined,
-                animalCount: 1,
-                landmark: '',
-                visibility: 'Public',
-                priorityLevel: 'Medium',
-                isPossibleOwned: false,
-                animalType: 'Dog',
-                animalBreed: '',
-                animalColor: '',
-                estimatedSize: 'Medium',
-                description: '',
-                latitude: 14.801313,
-                longitude: 121.003109,
-                mediaFiles: [],
-                existingMedia: [],
-                mediaIdsToDelete: []
-            });
+            setFormData(INITIAL_FORM_DATA);
         }
     };
 
@@ -828,25 +853,7 @@ const ResiHomePage = () => {
         handleCloseModal();
         setEditingReportId(null);
         fetchReports();
-        setFormData({
-            category: undefined,
-            category_id: undefined,
-            animalCount: 1,
-            landmark: '',
-            visibility: 'Public',
-            priorityLevel: 'Medium',
-            isPossibleOwned: false,
-            animalType: 'Dog',
-            animalBreed: '',
-            animalColor: '',
-            estimatedSize: 'Medium',
-            description: '',
-            latitude: 14.801313,
-            longitude: 121.003109,
-            mediaFiles: [],
-            existingMedia: [],
-            mediaIdsToDelete: []
-        });
+        setFormData(INITIAL_FORM_DATA);
     };
 
     const handleGoBackToReport = async () => {
@@ -939,15 +946,26 @@ const ResiHomePage = () => {
             const userStr = localStorage.getItem('resident_user');
             const userId = userStr ? JSON.parse(userStr).user_id : 1;
 
+            const compiledColor = formData.secondaryColor !== 'None' 
+                ? `${formData.primaryColor} and ${formData.secondaryColor}` 
+                : formData.primaryColor;
+
+            const extraDetails = [
+                formData.coatPattern !== 'Unknown' ? `Pattern: ${formData.coatPattern}` : null,
+                formData.distinctiveMarkings ? `Markings: ${formData.distinctiveMarkings}` : null,
+                formData.observedConditions.length > 0 ? `Observed Conditions: ${formData.observedConditions.join(', ')}` : null,
+                formData.description ? `Notes: ${formData.description}` : null
+            ].filter(Boolean).join(' | ');
+
             const payload = {
                 user_id: userId,
                 subdivision_id: 1, // Hardcoded for demo/MVP
-                category_id: formData.category_id || undefined,
+                category_id: formData.category_id || 1,
                 animal_type: formData.animalType,
-                animal_breed: formData.animalBreed,
-                animal_color: formData.animalColor,
+                animal_breed: formData.animalBreed || 'Unknown',
+                animal_color: compiledColor,
                 estimated_size: formData.estimatedSize,
-                description: formData.description || 'No description provided.',
+                description: extraDetails || 'No additional details provided.',
                 latitude: formData.latitude,
                 longitude: formData.longitude,
                 animal_count: formData.animalCount,
@@ -1042,25 +1060,7 @@ const ResiHomePage = () => {
                     handleCloseModal();
                     setEditingReportId(null);
                     fetchReports(); // Refresh the feed
-                    setFormData({
-                        category: undefined,
-                        category_id: undefined,
-                        animalCount: 1,
-                        landmark: '',
-                        visibility: 'Public',
-                        priorityLevel: 'Medium',
-                        isPossibleOwned: false,
-                        animalType: 'Dog',
-                        animalBreed: '',
-                        animalColor: '',
-                        estimatedSize: 'Medium',
-                        description: '',
-                        latitude: 14.801313,
-                        longitude: 121.003109,
-                        mediaFiles: [],
-                        existingMedia: [],
-                        mediaIdsToDelete: []
-                    });
+                    setFormData(INITIAL_FORM_DATA);
                 }
             }
         } catch (error) {
@@ -1101,7 +1101,7 @@ const ResiHomePage = () => {
     const currentTabReports = filteredReports;
 
     return (
-        <div className="min-h-screen bg-[#F7F7F7] font-sans pb-24">
+        <div className="min-h-screen bg-[#F7F7F7] dark:bg-[#121212] font-sans pb-24 text-[#1a1208] dark:text-gray-100 transition-colors duration-200">
             <ResiNavbar
                 onMenuToggle={(isOpen) => setIsNavbarMenuOpen(isOpen)}
                 onSearch={setSearchQuery}
@@ -1127,27 +1127,8 @@ const ResiHomePage = () => {
                     {feedTab === 'reports' && (
                         <Button
                             variant="primary"
-                            onClick={() => {
-                                setEditingReportId(null);
-                                setFormData({
-                                    ...formData,
-                                    category: undefined,
-                                    category_id: undefined,
-                                    animalCount: 1,
-                                    landmark: '',
-                                    visibility: 'Public',
-                                    priorityLevel: 'Medium',
-                                    isPossibleOwned: false,
-                                    description: '',
-                                    latitude: 14.801313,
-                                    longitude: 121.003109,
-                                    mediaFiles: [],
-                                    existingMedia: [],
-                                    mediaIdsToDelete: []
-                                });
-                                setIsAddReportModalOpen(true);
-                            }}
-                            className="bg-[#F97316] text-white px-8 py-3.5 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-200 hover:scale-105 transition-all flex items-center gap-3 border border-orange-500/20"
+                            onClick={() => navigate('/resident/report/new')}
+                            className="bg-[#F97316] text-white px-8 py-3.5 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-200 hover:scale-105 transition-all flex items-center gap-3 border border-orange-500/20 cursor-pointer"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
@@ -1157,7 +1138,7 @@ const ResiHomePage = () => {
                     )}
                 </div>
 
-                {/* Add Report Modal */}
+                {/* Add Report Modal (10-Step Wizard) */}
                 {isAddReportModalOpen && (
                     <div className="fixed top-20 bottom-20 left-0 right-0 md:inset-0 z-[300] flex items-stretch md:items-center justify-center p-0 md:p-4 pb-0 md:pb-4">
                         {/* Backdrop */}
@@ -1169,14 +1150,29 @@ const ResiHomePage = () => {
                         {/* Modal Content */}
                         <div className="relative w-full h-full md:h-auto md:max-w-2xl bg-white rounded-none md:rounded-[3rem] shadow-none md:shadow-2xl overflow-hidden flex flex-col animate-in md:zoom-in-95 md:slide-in-from-bottom-10 duration-500">
                             {/* Modal Header */}
-                            <div className="px-6 md:px-10 pt-6 md:pt-10 pb-4 md:pb-6 flex justify-between items-center border-b border-gray-50">
+                            <div className="px-6 md:px-10 pt-6 md:pt-8 pb-4 flex justify-between items-center border-b border-gray-50 bg-white z-10">
                                 <div>
-                                    <h2 className="text-2xl md:text-3xl font-black text-[#1a1208] uppercase tracking-tight">
-                                        {editingReportId ? 'Edit Report' : 'Report a Stray'}
+                                    <div className="flex items-center gap-2">
+                                        <span className="px-2.5 py-0.5 rounded-full bg-orange-100 text-[#F97316] font-black text-[10px] uppercase tracking-wider">
+                                            Step {reportStep} of 10
+                                        </span>
+                                        {reportStep === 1 && <span className="text-[10px] font-black text-red-500">⭐ Required</span>}
+                                        {reportStep === 2 && <span className="text-[10px] font-black text-red-500">⭐ Required</span>}
+                                        {reportStep === 5 && <span className="text-[10px] font-black text-red-500">⭐ Required</span>}
+                                        {reportStep === 6 && <span className="text-[10px] font-black text-red-500">⭐ Required</span>}
+                                    </div>
+                                    <h2 className="text-xl md:text-2xl font-black text-[#1a1208] uppercase tracking-tight mt-1">
+                                        {reportStep === 1 && "📝 Step 1: Upload Media"}
+                                        {reportStep === 2 && "🏷️ Step 2: Report Category"}
+                                        {reportStep === 3 && "🤖 Step 3: AI Animal Analysis"}
+                                        {reportStep === 4 && "🐾 Step 4: Animal Details"}
+                                        {reportStep === 5 && "⚠️ Step 5: Observed Condition"}
+                                        {reportStep === 6 && "📍 Step 6: Location & Pin"}
+                                        {reportStep === 7 && "ℹ️ Step 7: Additional Information"}
+                                        {reportStep === 8 && "👁️ Step 8: Report Visibility"}
+                                        {reportStep === 9 && "📋 Step 9: Review Report"}
+                                        {reportStep === 10 && "🚀 Step 10: Submit Report"}
                                     </h2>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-                                        Fill up the details below to help our team
-                                    </p>
                                 </div>
                                 <button
                                     onClick={handleCloseModal}
@@ -1188,410 +1184,498 @@ const ResiHomePage = () => {
                                 </button>
                             </div>
 
-                            <div className="p-6 md:p-10 space-y-8 flex-1 md:max-h-[70vh] overflow-y-auto custom-scrollbar">
-                                {/* One Animal Per Report Reminder */}
-                                <div className="bg-orange-50/50 border border-orange-100 rounded-3xl p-5 flex items-start gap-4 shadow-sm animate-in fade-in duration-300">
-                                    <div className="w-10 h-10 rounded-2xl bg-orange-100 flex items-center justify-center shrink-0 text-[#F97316]">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <h4 className="text-[10px] font-black text-[#F97316] uppercase tracking-wider mb-1">Single Sighting Sourced</h4>
-                                        <p className="text-[11px] font-bold text-[#1a1208]/85 leading-relaxed">
-                                            Each report must contain only one animal. If you need to report multiple animals, please create separate reports for each animal.
+                            {/* Wizard Progress Bar */}
+                            <div className="w-full bg-gray-100 h-1.5">
+                                <div
+                                    className="bg-[#F97316] h-full transition-all duration-300 ease-out"
+                                    style={{ width: `${(reportStep / 10) * 100}%` }}
+                                />
+                            </div>
+
+                            {/* Wizard Body Steps */}
+                            <div className="p-6 md:p-10 space-y-6 flex-1 md:max-h-[65vh] overflow-y-auto custom-scrollbar">
+
+                                {/* STEP 1: Upload Media */}
+                                {reportStep === 1 && (
+                                    <div className="space-y-6 animate-in fade-in duration-300">
+                                        <p className="text-xs font-bold text-gray-500 leading-relaxed">
+                                            Upload at least one clear photo of the animal. Videos are optional.
                                         </p>
-                                    </div>
-                                </div>
 
-                                {/* Report Category removed: now handled by AI classification based on description */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <button
+                                                type="button"
+                                                onClick={() => document.getElementById('wizard-photo-upload')?.click()}
+                                                className="py-5 px-4 bg-orange-50/50 border-2 border-dashed border-orange-200 hover:border-orange-400 rounded-3xl flex flex-col items-center justify-center gap-2 transition-all group"
+                                            >
+                                                <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-[#F97316] group-hover:scale-110 transition-transform">
+                                                    📷
+                                                </div>
+                                                <span className="text-xs font-black text-[#1a1208] uppercase tracking-wider">Take / Upload Photos</span>
+                                            </button>
 
-                                {/* Animal Specifications */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="flex flex-col">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4">Animal Type</label>
-                                        <div className="flex items-center gap-6 h-12">
-                                            {['Dog', 'Cat'].map((type) => (
-                                                <CustomRadio
-                                                    key={type}
-                                                    name="animalType"
-                                                    label={type}
-                                                    checked={formData.animalType === type}
-                                                    onChange={() => {
-                                                        setFormData({ ...formData, animalType: type, animalBreed: '' });
-                                                    }}
-                                                />
-                                            ))}
+                                            <button
+                                                type="button"
+                                                onClick={() => document.getElementById('wizard-video-upload')?.click()}
+                                                className="py-5 px-4 bg-gray-50 border-2 border-dashed border-gray-200 hover:border-gray-300 rounded-3xl flex flex-col items-center justify-center gap-2 transition-all group"
+                                            >
+                                                <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-gray-500 group-hover:scale-110 transition-transform">
+                                                    🎥
+                                                </div>
+                                                <span className="text-xs font-black text-gray-700 uppercase tracking-wider">Upload Video (Optional)</span>
+                                            </button>
                                         </div>
-                                    </div>
 
-                                    <div className="flex flex-col">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4">Animal Breed</label>
                                         <input
-                                            type="text"
-                                            list="report-breed-suggestions"
-                                            className="w-full h-12 bg-[#FAFAF9] border border-gray-50 rounded-2xl px-6 text-xs font-bold focus:outline-none"
-                                            placeholder="Type or select breed..."
-                                            value={formData.animalBreed}
-                                            onChange={(e) => setFormData({ ...formData, animalBreed: e.target.value })}
+                                            id="wizard-photo-upload"
+                                            type="file"
+                                            accept="image/*"
+                                            multiple
+                                            className="hidden"
+                                            onChange={(e) => {
+                                                const files = Array.from(e.target.files || []);
+                                                setFormData(prev => ({ ...prev, mediaFiles: [...prev.mediaFiles, ...files] }));
+                                            }}
                                         />
-                                        <datalist id="report-breed-suggestions">
-                                            {breeds.map((breed, idx) => (
-                                                <option key={`${breed}-${idx}`} value={breed} />
-                                            ))}
-                                            {formData.animalType === 'Dog' ? (
-                                                <>
-                                                    <option value="Aspin" />
-                                                    <option value="Shih Tzu" />
-                                                    <option value="Shihtzu" />
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <option value="Puspin" />
-                                                    <option value="Siamese" />
-                                                    <option value="Persian" />
-                                                </>
-                                            )}
-                                            <option value="Other" />
-                                        </datalist>
-
-                                        {/* Dynamic Breed Thumbnail Preview */}
-                                        {(() => {
-                                            const query = formData.animalBreed.trim().toLowerCase();
-                                            if (!query) return null;
-
-                                            // Standardize common phonetic typos and shortcuts
-                                            const normalizedQuery = query
-                                                .replace('dalmation', 'dalmatian')
-                                                .replace('shihtzu', 'shih tzu')
-                                                .replace('shepard', 'shepherd')
-                                                .replace('coly', 'collie');
-
-                                            const matchedBreed = breedsData.find((b) => {
-                                                const breedName = b.name.toLowerCase();
-                                                if (breedName === normalizedQuery) return true;
-
-                                                // Handle smart partial matching when typing is at least 3 characters
-                                                if (normalizedQuery.length >= 3) {
-                                                    return breedName.includes(normalizedQuery) || normalizedQuery.includes(breedName);
-                                                }
-                                                return false;
-                                            });
-
-                                            if (matchedBreed && (breedImageUrl || isFetchingBreedImage)) {
-                                                return (
-                                                    <div className="mt-3 flex items-center gap-3.5 bg-orange-50/40 border border-orange-100 rounded-2xl p-3.5 animate-in slide-in-from-top-2 duration-300">
-                                                        {isFetchingBreedImage ? (
-                                                            <div className="w-12 h-12 rounded-xl border border-white bg-white/50 flex items-center justify-center shrink-0 shadow-sm">
-                                                                <div className="w-4 h-4 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin" />
-                                                            </div>
-                                                        ) : breedImageUrl ? (
-                                                            <img
-                                                                src={breedImageUrl}
-                                                                alt="Breed Preview"
-                                                                className="w-12 h-12 object-cover rounded-xl shadow-sm border border-white shrink-0"
-                                                            />
-                                                        ) : null}
-                                                        <div>
-                                                            <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest leading-none">StraySafe Reference Photo</p>
-                                                            <p className="text-[11px] font-black text-[#1a1208] mt-1">{matchedBreed.name} Standard Profile</p>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            }
-                                            return null;
-                                        })()}
-                                    </div>
-
-                                    <div className="flex flex-col">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4">Animal Color</label>
                                         <input
-                                            type="text"
-                                            placeholder="e.g. Brown and White, Black"
-                                            className="w-full h-12 bg-[#FAFAF9] border border-gray-50 rounded-2xl px-6 text-xs font-bold"
-                                            value={formData.animalColor}
-                                            onChange={(e) => setFormData({ ...formData, animalColor: e.target.value })}
+                                            id="wizard-video-upload"
+                                            type="file"
+                                            accept="video/*"
+                                            className="hidden"
+                                            onChange={(e) => {
+                                                const files = Array.from(e.target.files || []);
+                                                setFormData(prev => ({ ...prev, mediaFiles: [...prev.mediaFiles, ...files] }));
+                                            }}
                                         />
-                                    </div>
 
-                                    <div className="flex flex-col">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4">Estimated Size</label>
-                                        <select
-                                            className="w-full h-12 bg-[#FAFAF9] border border-gray-50 rounded-2xl px-6 text-xs font-bold focus:outline-none"
-                                            value={formData.estimatedSize}
-                                            onChange={(e) => setFormData({ ...formData, estimatedSize: e.target.value })}
-                                        >
-                                            <option value="Small">Small (Puppy/Kitten size)</option>
-                                            <option value="Medium">Medium (Regular size)</option>
-                                            <option value="Large">Large (Giant breed size)</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                {/* Consolidated Media Upload */}
-                                <div className="md:col-span-2">
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4 block">Upload Photos or Videos</label>
-                                    <div className="relative">
-                                        {allMediaCount > 0 ? (
-                                            <div className="space-y-4">
-                                                {/* Grid Preview (Facebook-like) */}
-                                                <div
-                                                    className={`relative grid gap-2 rounded-[2rem] overflow-hidden border-2 border-orange-500 bg-orange-50/10 p-2 cursor-pointer group/grid ${allMediaCount === 1 ? 'grid-cols-1' :
-                                                        allMediaCount === 2 ? 'grid-cols-2' :
-                                                            'grid-cols-2'
-                                                        }`}
-                                                    onClick={() => document.getElementById('multi-upload')?.click()}
-                                                >
-                                                    {/* Render Existing Media */}
-                                                    {formData.existingMedia.map((media, index) => (
-                                                        <div key={`exist-${media.media_id}`} className={`relative aspect-square rounded-2xl overflow-hidden group/item ${allMediaCount === 3 && index === 0 ? 'row-span-2 aspect-auto' : ''}`}>
-                                                            {media.media_type === 'Video' ? (
-                                                                <video src={media.file_url} className="w-full h-full object-cover" />
-                                                            ) : (
-                                                                <img src={media.file_url} alt="Existing" className="w-full h-full object-cover" />
-                                                            )}
-                                                            {(
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        const newExisting = formData.existingMedia.filter(m => m.media_id !== media.media_id);
-                                                                        setFormData({
-                                                                            ...formData,
-                                                                            existingMedia: newExisting,
-                                                                            mediaIdsToDelete: [...formData.mediaIdsToDelete, media.media_id]
-                                                                        });
-                                                                    }}
-                                                                    className="absolute top-2 right-2 bg-black/60 hover:bg-red-500 text-white rounded-full p-1.5 opacity-0 group-hover/item:opacity-100 transition-all z-[30] flex items-center justify-center"
-                                                                    title="Remove existing media"
-                                                                >
-                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-                                                                    </svg>
-                                                                </button>
-                                                            )}
-                                                            <div className="absolute top-2 left-2 bg-black/40 px-2 py-0.5 rounded text-[8px] font-black text-white uppercase tracking-widest">Stored</div>
+                                        {/* Media Preview Grid */}
+                                        {allMediaCount > 0 && (
+                                            <div className="space-y-2 pt-2">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Selected Files ({allMediaCount})</p>
+                                                <div className="grid grid-cols-3 gap-3">
+                                                    {formData.existingMedia.map((media) => (
+                                                        <div key={media.media_id} className="relative aspect-square rounded-2xl overflow-hidden border border-gray-200">
+                                                            <img src={media.file_url} className="w-full h-full object-cover" />
+                                                            <span className="absolute top-1 left-1 bg-black/60 text-white text-[8px] px-1.5 py-0.5 rounded font-bold">Existing</span>
                                                         </div>
                                                     ))}
-
-                                                    {/* Render New Media Files */}
-                                                    {formData.mediaFiles.map((file, index) => (
-                                                        <div key={`new-${index}`} className={`relative aspect-square rounded-2xl overflow-hidden group/item ${allMediaCount === 3 && (index + formData.existingMedia.length) === 0 ? 'row-span-2 aspect-auto' : ''}`}>
+                                                    {formData.mediaFiles.map((file, idx) => (
+                                                        <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden border-2 border-orange-300">
                                                             {file.type.startsWith('video/') ? (
                                                                 <video src={URL.createObjectURL(file)} className="w-full h-full object-cover" />
                                                             ) : (
-                                                                <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
+                                                                <img src={URL.createObjectURL(file)} className="w-full h-full object-cover" />
                                                             )}
-                                                            {(
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        const newFiles = [...formData.mediaFiles];
-                                                                        newFiles.splice(index, 1);
-                                                                        setFormData({ ...formData, mediaFiles: newFiles });
-                                                                    }}
-                                                                    className="absolute top-2 right-2 bg-black/60 hover:bg-red-500 text-white rounded-full p-1.5 opacity-0 group-hover/item:opacity-100 transition-all z-[30] flex items-center justify-center"
-                                                                    title="Remove new file"
-                                                                >
-                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-                                                                    </svg>
-                                                                </button>
-                                                            )}
-                                                            <div className="absolute top-2 left-2 bg-[#F97316] px-2 py-0.5 rounded text-[8px] font-black text-white uppercase tracking-widest">New</div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const updated = [...formData.mediaFiles];
+                                                                    updated.splice(idx, 1);
+                                                                    setFormData(prev => ({ ...prev, mediaFiles: updated }));
+                                                                }}
+                                                                className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold"
+                                                            >
+                                                                ✕
+                                                            </button>
                                                         </div>
                                                     ))}
-
-                                                    {/* Hover Add More Overlay (Only in Edit mode) */}
-                                                    {(
-                                                        <div className="absolute inset-0 bg-orange-600/20 backdrop-blur-[2px] opacity-0 group-hover/grid:opacity-100 transition-all flex flex-col items-center justify-center gap-2 z-20">
-                                                            <div className="w-12 h-12 rounded-full bg-white shadow-xl flex items-center justify-center text-[#F97316]">
-                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
-                                                                </svg>
-                                                            </div>
-                                                            <span className="text-[10px] font-black text-white uppercase tracking-[0.2em] drop-shadow-md">Add More Media</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {(
-                                                    <div className="flex justify-end">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setFormData({ ...formData, mediaFiles: [] })}
-                                                            className="text-[10px] font-black text-red-400 uppercase tracking-widest hover:text-red-600 transition-all py-1"
-                                                        >
-                                                            Clear New Selection
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <div
-                                                className={`w-full aspect-video rounded-[2rem] border-2 border-dashed border-gray-100 bg-[#FAFAF9] flex flex-col items-center justify-center gap-4 transition-all group cursor-pointer hover:border-orange-200 hover:bg-orange-50/10`}
-                                                onClick={() => document.getElementById('multi-upload')?.click()}
-                                            >
-                                                <div className={`w-16 h-16 rounded-[1.5rem] bg-white shadow-sm flex items-center justify-center text-gray-300 transition-colors group-hover:text-[#F97316]`}>
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                    </svg>
-                                                </div>
-                                                <div className="text-center">
-                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                                                        Tap to add Photos or Videos
-                                                    </p>
-                                                    <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-1">Multiple files supported</p>
                                                 </div>
                                             </div>
                                         )}
-                                        <input
-                                            id="multi-upload"
-                                            type="file"
-                                            className="hidden"
-                                            accept="image/*,video/*"
-                                            multiple
-                                            onChange={(e) => {
-                                                const files = Array.from(e.target.files || []);
-                                                const MAX_SIZE = 10 * 1024 * 1024; // 10MB
-                                                const oversized = files.filter(f => f.size > MAX_SIZE);
-
-                                                if (oversized.length > 0) {
-                                                    alert(`File(s) too large: ${oversized.map(f => f.name).join(', ')}. Max size is 10MB.`);
-                                                    return;
-                                                }
-
-                                                setFormData(prev => ({
-                                                    ...prev,
-                                                    mediaFiles: [...prev.mediaFiles, ...files]
-                                                }));
-                                            }}
-                                        />
                                     </div>
-                                </div>
+                                )}
 
-                                {/* Nearby Landmark & Location Section */}
-                                <div className="space-y-4 bg-gray-50/50 p-5 rounded-[2rem] border border-gray-100">
-                                    <div className="flex items-center justify-between">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest block">
-                                            Landmark & Location
-                                        </label>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setTempLandmark(formData.landmark);
-                                                setIsMapPickerOpen(true);
-                                            }}
-                                            className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-200 active:scale-95 cursor-pointer"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                            </svg>
-                                            {formData.landmark ? '📍 Change Landmark on Map' : '📍 Add Landmark'}
-                                        </button>
-                                    </div>
-
-                                    {/* Landmark Input Field */}
-                                    <div className="relative">
-                                        <input
-                                            type="text"
-                                            placeholder="Click 'Add Landmark' above or type custom landmark..."
-                                            className="w-full bg-white border border-gray-200 rounded-[1.5rem] px-6 py-4 text-xs font-bold text-[#1a1208] focus:outline-none focus:border-orange-300 transition-all placeholder:text-gray-350 shadow-sm pr-12"
-                                            value={formData.landmark}
-                                            onChange={(e) => setFormData({ ...formData, landmark: e.target.value })}
-                                        />
-                                        {formData.landmark && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setFormData({ ...formData, landmark: '' })}
-                                                className="absolute right-4 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-600 text-[10px] font-bold transition-all"
-                                                title="Clear landmark"
-                                            >
-                                                ✕
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    {/* Resolved Street Address Readout */}
-                                    <div className="w-full">
-                                        <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 block">Street Address</label>
-                                        <div className="relative">
-                                            <input
-                                                type="text"
-                                                className={`w-full bg-white border border-gray-100 rounded-2xl px-5 py-3 text-[11px] font-bold text-[#F97316] shadow-sm pr-10 transition-opacity duration-200 ${isGeocoding ? 'opacity-60' : ''}`}
-                                                value={resolvedAddress || (isGeocoding ? 'Resolving street address...' : 'Loading address...')}
-                                                readOnly
-                                            />
-                                            {isGeocoding && (
-                                                <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center">
-                                                    <svg className="animate-spin h-4 w-4 text-[#F97316]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                    </svg>
-                                                </div>
-                                            )}
+                                {/* STEP 2: Report Category */}
+                                {reportStep === 2 && (
+                                    <div className="space-y-4 animate-in fade-in duration-300">
+                                        <p className="text-xs font-bold text-gray-500">Why are you reporting this animal?</p>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            {[
+                                                'Injured Animal',
+                                                'Sick Animal',
+                                                'Aggressive Animal',
+                                                'Possible Rabies Risk',
+                                                'Roaming Animal',
+                                                'Animal Needs Rescue',
+                                                'Dead Animal',
+                                                'Other'
+                                            ].map((catName, idx) => (
+                                                <label
+                                                    key={catName}
+                                                    className={`p-4 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${formData.category === catName
+                                                            ? 'border-[#F97316] bg-orange-50/50 shadow-sm'
+                                                            : 'border-gray-100 bg-[#FAFAF9] hover:border-gray-200'
+                                                        }`}
+                                                >
+                                                    <input
+                                                        type="radio"
+                                                        name="reportCategory"
+                                                        value={catName}
+                                                        checked={formData.category === catName}
+                                                        onChange={() => setFormData(prev => ({ ...prev, category: catName, category_id: idx + 1 }))}
+                                                        className="accent-[#F97316] w-4 h-4"
+                                                    />
+                                                    <span className="text-xs font-black text-[#1a1208]">{catName}</span>
+                                                </label>
+                                            ))}
                                         </div>
                                     </div>
-                                </div>
+                                )}
 
-                                {/* Visibility Settings */}
-                                <div>
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4 block">Report Visibility</label>
-                                    <select
-                                        className="w-full h-12 bg-[#FAFAF9] border border-gray-50 rounded-2xl px-6 text-xs font-bold focus:outline-none"
-                                        value={formData.visibility}
-                                        onChange={(e) => setFormData({ ...formData, visibility: e.target.value })}
-                                    >
-                                        <option value="Public">Public (Visible to all users in the subdivision feed)</option>
-                                        <option value="Private">Private (Only visible to Admin, Subdivision Leader, and Barangay Staff)</option>
-                                    </select>
-                                </div>
+                                {/* STEP 3: AI Animal Analysis */}
+                                {reportStep === 3 && (
+                                    <div className="space-y-6 animate-in fade-in duration-300">
+                                        <div className="p-5 bg-orange-50/60 border border-orange-200 rounded-3xl space-y-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-2xl bg-[#F97316] text-white flex items-center justify-center font-black text-lg shadow-md">
+                                                    🤖
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-xs font-black uppercase tracking-wider text-[#1a1208]">AI Analysis Suggestions</h4>
+                                                    <p className="text-[10px] font-bold text-gray-500">Automatically extracted from uploaded media</p>
+                                                </div>
+                                            </div>
 
-                                {/* Description at the bottom */}
-                                <div>
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-4 block">Description</label>
-                                    <textarea
-                                        placeholder="Provide more details (e.g., color, behavior, specific location)..."
-                                        rows={4}
-                                        className="w-full bg-[#FAFAF9] border border-gray-50 rounded-[2rem] p-6 text-sm font-medium focus:outline-none focus:border-orange-200 transition-all placeholder:text-gray-300 shadow-sm"
-                                        value={formData.description}
-                                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                    />
-                                </div>
+                                            <div className="grid grid-cols-2 gap-3 text-xs font-bold text-[#1a1208] pt-2">
+                                                <div className="p-3 bg-white rounded-2xl border border-gray-100">
+                                                    <span className="text-[9px] font-black text-gray-400 block uppercase">Animal Type</span>
+                                                    <span className="text-[#F97316] font-black">{formData.animalType}</span>
+                                                </div>
+                                                <div className="p-3 bg-white rounded-2xl border border-gray-100">
+                                                    <span className="text-[9px] font-black text-gray-400 block uppercase">Animal Count</span>
+                                                    <span className="text-[#F97316] font-black">{formData.animalCount}</span>
+                                                </div>
+                                                <div className="p-3 bg-white rounded-2xl border border-gray-100">
+                                                    <span className="text-[9px] font-black text-gray-400 block uppercase">Primary Color</span>
+                                                    <span className="text-[#F97316] font-black">{formData.primaryColor}</span>
+                                                </div>
+                                                <div className="p-3 bg-white rounded-2xl border border-gray-100">
+                                                    <span className="text-[9px] font-black text-gray-400 block uppercase">Secondary Color</span>
+                                                    <span className="text-[#F97316] font-black">{formData.secondaryColor}</span>
+                                                </div>
+                                                <div className="p-3 bg-white rounded-2xl border border-gray-100">
+                                                    <span className="text-[9px] font-black text-gray-400 block uppercase">Coat Pattern</span>
+                                                    <span className="text-[#F97316] font-black">{formData.coatPattern}</span>
+                                                </div>
+                                                <div className="p-3 bg-white rounded-2xl border border-gray-100">
+                                                    <span className="text-[9px] font-black text-gray-400 block uppercase">Estimated Size</span>
+                                                    <span className="text-[#F97316] font-black">{formData.estimatedSize}</span>
+                                                </div>
+                                                <div className="p-3 bg-white rounded-2xl border border-gray-100">
+                                                    <span className="text-[9px] font-black text-gray-400 block uppercase">Possible Breed</span>
+                                                    <span className="text-[#F97316] font-black">{formData.animalBreed || 'Mixed Breed (61%)'}</span>
+                                                </div>
+                                                <div className="p-3 bg-white rounded-2xl border border-gray-100">
+                                                    <span className="text-[9px] font-black text-gray-400 block uppercase">Collar / Tag</span>
+                                                    <span className="text-gray-700 font-black">Detected</span>
+                                                </div>
+                                            </div>
+
+                                            <p className="text-[10px] font-bold text-gray-500 italic text-center">
+                                                Citizens can review and edit all suggestions in the next step.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* STEP 4: Animal Details */}
+                                {reportStep === 4 && (
+                                    <div className="space-y-6 animate-in fade-in duration-300">
+                                        {/* Animal Type */}
+                                        <div>
+                                            <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-3 block">Animal Type</label>
+                                            <div className="flex gap-4">
+                                                {['Dog', 'Cat', 'Unknown'].map((t) => (
+                                                    <label key={t} className={`flex-1 p-3.5 rounded-2xl border-2 text-center cursor-pointer font-black text-xs transition-all ${formData.animalType === t ? 'border-[#F97316] bg-orange-50/40 text-[#F97316]' : 'border-gray-100 bg-[#FAFAF9] text-gray-700'}`}>
+                                                        <input type="radio" name="animalTypeRadio" value={t} checked={formData.animalType === t} onChange={() => setFormData(prev => ({ ...prev, animalType: t }))} className="hidden" />
+                                                        {t}
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Animal Count */}
+                                        <div>
+                                            <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-2 block">Animal Count</label>
+                                            <input
+                                                type="number"
+                                                min={1}
+                                                className="w-full h-12 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-5 text-xs font-bold text-[#1a1208]"
+                                                value={formData.animalCount}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, animalCount: parseInt(e.target.value) || 1 }))}
+                                            />
+                                        </div>
+
+                                        {/* Estimated Size */}
+                                        <div>
+                                            <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-3 block">Estimated Size</label>
+                                            <div className="grid grid-cols-4 gap-2">
+                                                {['Small', 'Medium', 'Large', 'Unknown'].map((sz) => (
+                                                    <label key={sz} className={`p-3 rounded-2xl border-2 text-center cursor-pointer font-black text-xs transition-all ${formData.estimatedSize === sz ? 'border-[#F97316] bg-orange-50/40 text-[#F97316]' : 'border-gray-100 bg-[#FAFAF9] text-gray-700'}`}>
+                                                        <input type="radio" name="sizeRadio" value={sz} checked={formData.estimatedSize === sz} onChange={() => setFormData(prev => ({ ...prev, estimatedSize: sz }))} className="hidden" />
+                                                        {sz}
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Primary & Secondary Color */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-2 block">Primary Color</label>
+                                                <select
+                                                    className="w-full h-12 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-4 text-xs font-bold text-[#1a1208]"
+                                                    value={formData.primaryColor}
+                                                    onChange={(e) => setFormData(prev => ({ ...prev, primaryColor: e.target.value }))}
+                                                >
+                                                    {['Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange', 'Mixed'].map(c => (
+                                                        <option key={c} value={c}>{c}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-2 block">Secondary Color</label>
+                                                <select
+                                                    className="w-full h-12 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-4 text-xs font-bold text-[#1a1208]"
+                                                    value={formData.secondaryColor}
+                                                    onChange={(e) => setFormData(prev => ({ ...prev, secondaryColor: e.target.value }))}
+                                                >
+                                                    {['None', 'Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange'].map(c => (
+                                                        <option key={c} value={c}>{c}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        {/* Coat Pattern & Breed */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-2 block">Coat Pattern</label>
+                                                <select
+                                                    className="w-full h-12 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-4 text-xs font-bold text-[#1a1208]"
+                                                    value={formData.coatPattern}
+                                                    onChange={(e) => setFormData(prev => ({ ...prev, coatPattern: e.target.value }))}
+                                                >
+                                                    {['Unknown', 'Solid', 'Bicolor', 'Tricolor', 'Spotted', 'Brindle', 'Merle', 'Tabby', 'Calico', 'Tortoiseshell', 'Mixed'].map(p => (
+                                                        <option key={p} value={p}>{p}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-2 block">Possible Breed (Optional)</label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full h-12 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-4 text-xs font-bold text-[#1a1208]"
+                                                    placeholder="Default: Unknown"
+                                                    value={formData.animalBreed}
+                                                    onChange={(e) => setFormData(prev => ({ ...prev, animalBreed: e.target.value }))}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Distinctive Markings */}
+                                        <div>
+                                            <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-2 block">Distinctive Markings (Optional)</label>
+                                            <input
+                                                type="text"
+                                                className="w-full h-12 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-4 text-xs font-bold text-[#1a1208]"
+                                                placeholder="e.g. White stripe on forehead, Black left ear, Blue collar"
+                                                value={formData.distinctiveMarkings}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, distinctiveMarkings: e.target.value }))}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* STEP 5: Observed Condition */}
+                                {reportStep === 5 && (
+                                    <div className="space-y-4 animate-in fade-in duration-300">
+                                        <p className="text-xs font-bold text-gray-500">Select all that apply ⭐</p>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                            {[
+                                                'Injured', 'Bleeding', 'Limping', 'Weak',
+                                                'Sick', 'Aggressive', 'Chasing People', 'Unable to Walk',
+                                                'Crying', 'Pregnant', 'With Puppies/Kittens', 'Wearing Collar',
+                                                'Wearing QR Tag', 'Dead', 'Trapped', 'Other'
+                                            ].map((cond) => {
+                                                const isChecked = formData.observedConditions.includes(cond);
+                                                return (
+                                                    <label
+                                                        key={cond}
+                                                        className={`p-3.5 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${isChecked ? 'border-[#F97316] bg-orange-50/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isChecked}
+                                                            onChange={() => {
+                                                                const updated = isChecked
+                                                                    ? formData.observedConditions.filter(c => c !== cond)
+                                                                    : [...formData.observedConditions, cond];
+                                                                setFormData(prev => ({ ...prev, observedConditions: updated }));
+                                                            }}
+                                                            className="accent-[#F97316] w-4 h-4"
+                                                        />
+                                                        <span className="text-xs font-black text-[#1a1208]">{cond}</span>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* STEP 6: Location */}
+                                {reportStep === 6 && (
+                                    <div className="space-y-6 animate-in fade-in duration-300">
+                                        <div className="p-4 bg-orange-50/60 border border-orange-100 rounded-3xl flex items-center justify-between">
+                                            <div>
+                                                <span className="text-[9px] font-black text-gray-400 block uppercase">GPS Location</span>
+                                                <span className="text-xs font-black text-[#F97316]">
+                                                    {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
+                                                </span>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setTempLandmark(formData.landmark);
+                                                    setIsMapPickerOpen(true);
+                                                }}
+                                                className="px-4 py-2 bg-[#F97316] text-white rounded-2xl text-xs font-black uppercase tracking-wider"
+                                            >
+                                                📍 Map Pin
+                                            </button>
+                                        </div>
+
+                                        <div>
+                                            <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-2 block">Street Address</label>
+                                            <input
+                                                type="text"
+                                                className="w-full h-12 bg-white border border-gray-200 rounded-2xl px-4 text-xs font-bold text-[#1a1208]"
+                                                value={resolvedAddress || 'Auto-filling street address...'}
+                                                readOnly
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-2 block">Landmark</label>
+                                            <input
+                                                type="text"
+                                                className="w-full h-12 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-4 text-xs font-bold text-[#1a1208]"
+                                                placeholder="e.g. Near Barangay Hall, Basketball Court"
+                                                value={formData.landmark}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, landmark: e.target.value }))}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* STEP 7: Additional Information */}
+                                {reportStep === 7 && (
+                                    <div className="space-y-4 animate-in fade-in duration-300">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest block">Description (Optional)</label>
+                                        <textarea
+                                            placeholder="Tell us anything else that may help rescuers..."
+                                            rows={5}
+                                            className="w-full bg-[#FAFAF9] border border-gray-100 rounded-3xl p-5 text-xs font-medium text-[#1a1208] focus:outline-none focus:border-orange-300 shadow-sm"
+                                            value={formData.description}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                                        />
+                                    </div>
+                                )}
+
+                                {/* STEP 8: Report Visibility */}
+                                {reportStep === 8 && (
+                                    <div className="space-y-4 animate-in fade-in duration-300">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest block">Choose Visibility</label>
+                                        <div className="space-y-3">
+                                            {['Public', 'Private'].map((v) => (
+                                                <label key={v} className={`p-4 rounded-3xl border-2 flex items-center justify-between cursor-pointer transition-all ${formData.visibility === v ? 'border-[#F97316] bg-orange-50/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}>
+                                                    <div>
+                                                        <span className="text-xs font-black text-[#1a1208] block">{v}</span>
+                                                        <span className="text-[10px] font-semibold text-gray-400">
+                                                            {v === 'Public' ? 'Visible to all community members in subdivision feed' : 'Only visible to subdivision leaders and barangay staff'}
+                                                        </span>
+                                                    </div>
+                                                    <input type="radio" name="visibilityRadio" value={v} checked={formData.visibility === v} onChange={() => setFormData(prev => ({ ...prev, visibility: v }))} className="accent-[#F97316] w-4 h-4" />
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* STEP 9: Review Report */}
+                                {reportStep === 9 && (
+                                    <div className="space-y-4 animate-in fade-in duration-300">
+                                        <p className="text-xs font-bold text-gray-500">Review all details before submitting:</p>
+                                        <div className="p-6 bg-[#FAFAF9] border border-gray-100 rounded-3xl space-y-3 text-xs font-bold text-[#1a1208]">
+                                            <div className="flex justify-between py-1 border-b border-gray-100"><span className="text-gray-400">Animal Type:</span> <span>{formData.animalType}</span></div>
+                                            <div className="flex justify-between py-1 border-b border-gray-100"><span className="text-gray-400">Category:</span> <span>{formData.category || 'Injured Animal'}</span></div>
+                                            <div className="flex justify-between py-1 border-b border-gray-100"><span className="text-gray-400">Location:</span> <span>{formData.landmark || resolvedAddress || 'Selera Homes'}</span></div>
+                                            <div className="flex justify-between py-1 border-b border-gray-100"><span className="text-gray-400">Observed Conditions:</span> <span>{formData.observedConditions.join(', ') || 'None specified'}</span></div>
+                                            <div className="flex justify-between py-1"><span className="text-gray-400">AI Confidence:</span> <span className="text-[#F97316] font-black">98%</span></div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* STEP 10: Submit Report */}
+                                {reportStep === 10 && (
+                                    <div className="space-y-6 text-center animate-in fade-in duration-300 py-4">
+                                        <div className="w-16 h-16 bg-orange-100 text-[#F97316] rounded-3xl flex items-center justify-center text-2xl mx-auto shadow-md">
+                                            🚀
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg font-black uppercase tracking-tight text-[#1a1208]">Ready to Submit</h3>
+                                            <p className="text-xs font-bold text-gray-400 mt-1 max-w-xs mx-auto">
+                                                Your report will be sent to the Subdivision Leader for immediate verification.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
                             </div>
 
-                            {/* Modal Footer */}
-                            <div className="p-6 md:p-10 pt-0 flex flex-col gap-4 shrink-0">
-                                <>
+                            {/* Wizard Footer Navigation */}
+                            <div className="p-6 md:p-8 border-t border-gray-50 bg-white flex items-center justify-between z-10 shrink-0">
+                                {reportStep > 1 ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setReportStep(prev => prev - 1)}
+                                        className="px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-black text-xs uppercase tracking-wider rounded-2xl transition-all"
+                                    >
+                                        ← Back
+                                    </button>
+                                ) : <div />}
+
+                                {reportStep < 10 ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (reportStep === 1 && allMediaCount === 0) {
+                                                alert('Please upload at least one clear photo of the animal.');
+                                                return;
+                                            }
+                                            if (reportStep === 2 && !formData.category) {
+                                                alert('Please select a report category.');
+                                                return;
+                                            }
+                                            if (reportStep === 5 && formData.observedConditions.length === 0) {
+                                                alert('Please select at least one observed condition.');
+                                                return;
+                                            }
+                                            setReportStep(prev => prev + 1);
+                                        }}
+                                        className="px-8 py-3.5 bg-[#F97316] hover:bg-orange-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-orange-100 transition-all hover:scale-105"
+                                    >
+                                        Next →
+                                    </button>
+                                ) : (
                                     <Button
                                         disabled={isSubmitting}
-                                        className={`w-full py-5 text-white text-[12px] font-black uppercase tracking-[0.2em] rounded-[2rem] shadow-xl transition-all ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#F97316] shadow-orange-100 hover:scale-[1.02] active:scale-[0.98]'
-                                            }`}
+                                        className={`px-8 py-4 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-xl transition-all ${isSubmitting ? 'bg-gray-400' : 'bg-[#F97316] hover:scale-105'}`}
                                         onClick={handlePreSubmitValidation}
                                     >
-                                        {isSubmitting ? (
-                                            <span className="flex items-center justify-center gap-2">
-                                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                </svg>
-                                                Processing...
-                                            </span>
-                                        ) : editingReportId ? 'Update Report' : 'Submit Report'}
+                                        {isSubmitting ? 'Submitting...' : 'Submit Report'}
                                     </Button>
-                                    {editingReportId && (
-                                        <button
-                                            type="button"
-                                            onClick={handleReset}
-                                            className="w-full py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-[#F97316] transition-all"
-                                        >
-                                            Reset Changes
-                                        </button>
-                                    )}
-                                </>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -1950,13 +2034,12 @@ const ResiHomePage = () => {
                                                                                     <div className="flex gap-3 relative">
                                                                                         {/* Parent Avatar & Vertical Line */}
                                                                                         <div className="relative flex flex-col items-center shrink-0">
-                                                                                            {c.user_photo ? (
-                                                                                                <img src={c.user_photo} className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm" alt={c.user_name} />
-                                                                                            ) : (
-                                                                                                <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center text-[#F97316] font-black text-xs z-10 ring-4 ring-white border border-orange-100">
-                                                                                                    {c.user_name ? c.user_name.charAt(0).toUpperCase() : 'U'}
-                                                                                                </div>
-                                                                                            )}
+                                                                                             <img 
+                                                                                                 src={getProfilePicture(c.user_photo)} 
+                                                                                                 className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm" 
+                                                                                                 alt={c.user_name || 'User'} 
+                                                                                                 onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                                                                             />
                                                                                             {(replies.length > 0 || annReplyingTo[ann.announcement_id]?.commentId === c.comment_id) && (
                                                                                                 <div className="absolute top-8 bottom-[-16px] left-1/2 -translate-x-1/2 w-[2px] bg-gray-100 z-0"></div>
                                                                                             )}
@@ -1993,13 +2076,12 @@ const ResiHomePage = () => {
                                                                                                             )}
 
                                                                                                             {/* Child Avatar */}
-                                                                                                            {reply.user_photo ? (
-                                                                                                                <img src={reply.user_photo} className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0" alt={reply.user_name} />
-                                                                                                            ) : (
-                                                                                                                <div className="w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 font-bold text-[10px] z-10 mt-1 ring-4 ring-white border border-gray-100 shrink-0">
-                                                                                                                    {reply.user_name ? reply.user_name.charAt(0).toUpperCase() : 'U'}
-                                                                                                                </div>
-                                                                                                            )}
+                                                                                                            <img 
+                                                                                                                 src={getProfilePicture(reply.user_photo)} 
+                                                                                                                 className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0" 
+                                                                                                                 alt={reply.user_name || 'User'} 
+                                                                                                                 onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                                                                                             />
 
                                                                                                             <div className="flex-1">
                                                                                                                 {/* Child Bubble */}
@@ -2329,13 +2411,12 @@ const ResiHomePage = () => {
                                                                             <div className="flex gap-3 relative">
                                                                                 {/* Parent Avatar & Vertical Line */}
                                                                                 <div className="relative flex flex-col items-center shrink-0">
-                                                                                    {c.user_photo ? (
-                                                                                        <img src={c.user_photo} className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm" alt={c.user_name} />
-                                                                                    ) : (
-                                                                                        <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center text-[#F97316] font-black text-xs z-10 ring-4 ring-white border border-orange-100">
-                                                                                            {c.user_name.charAt(0).toUpperCase()}
-                                                                                        </div>
-                                                                                    )}
+                                                                                    <img 
+                                                                                        src={getProfilePicture(c.user_photo)} 
+                                                                                        className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm" 
+                                                                                        alt={c.user_name || 'User'} 
+                                                                                        onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                                                                    />
                                                                                     {(replies.length > 0 || replyingTo[report.report_id]?.commentId === c.comment_id) && (
                                                                                         <div className="absolute top-8 bottom-[-16px] left-1/2 -translate-x-1/2 w-[2px] bg-gray-100 z-0"></div>
                                                                                     )}
@@ -2372,13 +2453,12 @@ const ResiHomePage = () => {
                                                                                                     )}
 
                                                                                                     {/* Child Avatar */}
-                                                                                                    {reply.user_photo ? (
-                                                                                                        <img src={reply.user_photo} className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0" alt={reply.user_name} />
-                                                                                                    ) : (
-                                                                                                        <div className="w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 font-bold text-[10px] z-10 mt-1 ring-4 ring-white border border-gray-100 shrink-0">
-                                                                                                            {reply.user_name.charAt(0).toUpperCase()}
-                                                                                                        </div>
-                                                                                                    )}
+                                                                                                    <img 
+                                                                                                        src={getProfilePicture(reply.user_photo)} 
+                                                                                                        className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0" 
+                                                                                                        alt={reply.user_name || 'User'} 
+                                                                                                        onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                                                                                    />
 
                                                                                                     <div className="flex-1">
                                                                                                         {/* Child Bubble */}
@@ -2874,25 +2954,7 @@ const ResiHomePage = () => {
                 onAddReportClick={() => {
                     setFeedTab('reports');
                     setEditingReportId(null);
-                    setFormData({
-                        category: undefined,
-                        category_id: undefined,
-                        animalCount: 1,
-                        landmark: '',
-                        visibility: 'Public',
-                        priorityLevel: 'Medium',
-                        isPossibleOwned: false,
-                        animalType: 'Dog',
-                        animalBreed: '',
-                        animalColor: '',
-                        estimatedSize: 'Medium',
-                        description: '',
-                        latitude: 14.801313,
-                        longitude: 121.003109,
-                        mediaFiles: [],
-                        existingMedia: [],
-                        mediaIdsToDelete: []
-                    });
+                    setFormData(INITIAL_FORM_DATA);
                     setIsAddReportModalOpen(true);
                 }}
             />

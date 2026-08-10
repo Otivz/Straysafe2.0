@@ -333,6 +333,123 @@ def ensure_qr_tables_exist():
             )
         """))
 
+def ensure_announcement_tables_columns():
+    with engine.begin() as conn:
+        for col_name, col_type in [
+            ("barangay_id", "INT NULL"),
+            ("cover_image", "VARCHAR(255) NULL"),
+            ("allow_comments", "TINYINT(1) DEFAULT 1")
+        ]:
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'announcements' "
+                f"AND COLUMN_NAME = '{col_name}'"
+            ))
+            if result.scalar() == 0:
+                conn.execute(text(f"ALTER TABLE announcements ADD COLUMN {col_name} {col_type}"))
+
+        # Check visibility ENUM
+        try:
+            conn.execute(text(
+                "ALTER TABLE announcements MODIFY COLUMN visibility "
+                "ENUM('Public', 'Subdivision Only', 'Barangay Only') DEFAULT 'Public'"
+            ))
+        except Exception:
+            pass
+
+        # Check priority_level ENUM
+        try:
+            conn.execute(text(
+                "ALTER TABLE announcements MODIFY COLUMN priority_level "
+                "ENUM('Low', 'Normal', 'High', 'Emergency') DEFAULT 'Normal'"
+            ))
+        except Exception:
+            pass
+
+        # Check announcement_categories columns
+        for col_name, col_type in [
+            ("description", "TEXT NULL"),
+            ("created_at", "DATETIME DEFAULT CURRENT_TIMESTAMP")
+        ]:
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'announcement_categories' "
+                f"AND COLUMN_NAME = '{col_name}'"
+            ))
+            if result.scalar() == 0:
+                conn.execute(text(f"ALTER TABLE announcement_categories ADD COLUMN {col_name} {col_type}"))
+
+        # Check announcement_media columns
+        for col_name, col_type in [
+            ("caption", "TEXT NULL"),
+            ("uploaded_at", "DATETIME DEFAULT CURRENT_TIMESTAMP")
+        ]:
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'announcement_media' "
+                f"AND COLUMN_NAME = '{col_name}'"
+            ))
+def ensure_endorsement_letters_columns():
+    with engine.begin() as conn:
+        for col_name, col_type in [
+            ("title", "VARCHAR(255) NULL"),
+            ("letter_content", "TEXT NULL"),
+            ("file_url", "VARCHAR(255) NULL"),
+            ("issued_at", "DATETIME DEFAULT CURRENT_TIMESTAMP")
+        ]:
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'endorsement_letters' "
+                f"AND COLUMN_NAME = '{col_name}'"
+            ))
+            if result.scalar() == 0:
+                conn.execute(text(f"ALTER TABLE endorsement_letters ADD COLUMN {col_name} {col_type}"))
+
+def ensure_rescue_tables_columns():
+    with engine.begin() as conn:
+        for col_name, col_type in [
+            ("staff_id", "INT NULL"),
+            ("leader_id", "INT NULL"),
+            ("started_at", "DATETIME NULL")
+        ]:
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rescues' "
+                f"AND COLUMN_NAME = '{col_name}'"
+            ))
+            if result.scalar() == 0:
+                conn.execute(text(f"ALTER TABLE rescues ADD COLUMN {col_name} {col_type}"))
+
+        for col_name, col_type in [
+            ("staff_id", "INT NULL"),
+            ("assigned_by", "INT NULL"),
+            ("assignment_status", "ENUM('Assigned', 'In Transit', 'On Site', 'Completed', 'Cancelled') DEFAULT 'Assigned'"),
+            ("remarks", "TEXT NULL")
+        ]:
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rescue_assignments' "
+                f"AND COLUMN_NAME = '{col_name}'"
+            ))
+            if result.scalar() == 0:
+                conn.execute(text(f"ALTER TABLE rescue_assignments ADD COLUMN {col_name} {col_type}"))
+
+def ensure_report_verifications_columns():
+    with engine.begin() as conn:
+        for col_name, col_type in [
+            ("verified_by", "INT NULL"),
+            ("leader_id", "INT NULL"),
+            ("is_valid", "TINYINT(1) DEFAULT 1"),
+            ("status_id", "INT NULL")
+        ]:
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'report_verifications' "
+                f"AND COLUMN_NAME = '{col_name}'"
+            ))
+            if result.scalar() == 0:
+                conn.execute(text(f"ALTER TABLE report_verifications ADD COLUMN {col_name} {col_type}"))
+
 # Create tables
 Base.metadata.create_all(bind=engine)
 ensure_report_media_status_column()
@@ -349,6 +466,10 @@ ensure_holding_tables()
 ensure_pet_claims_status_enum()
 ensure_pet_side_photos_columns()
 ensure_user_default_address_columns()
+ensure_endorsement_letters_columns()
+ensure_announcement_tables_columns()
+ensure_rescue_tables_columns()
+ensure_report_verifications_columns()
 
 app = FastAPI(title="StraySafe API")
 
