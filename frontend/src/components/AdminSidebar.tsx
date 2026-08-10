@@ -1,12 +1,45 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import axios from 'axios';
 import Button from './Button';
 import QRScannerModal from './Modals/QRScannerModal';
 
 const AdminSidebar = () => {
     const [isOpen, setIsOpen] = useState(true);
     const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
+    const [activeReportsCount, setActiveReportsCount] = useState<number>(0);
     const location = useLocation();
+
+    useEffect(() => {
+        const fetchCounts = async () => {
+            try {
+                const viewed = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_admin_reports') || '[]'));
+                const res = await axios.get('http://localhost:8000/reports/');
+                if (Array.isArray(res.data)) {
+                    // Active non-closed reports (status_id != 3, 9, 10, 11, 12) that have not been viewed yet
+                    const unviewedActive = res.data.filter((r: any) => {
+                        const sid = r.current_status_id || r.status_id;
+                        return ![3, 9, 10, 11, 12].includes(sid) && !viewed.has(r.report_id);
+                    }).length;
+                    setActiveReportsCount(unviewedActive);
+                }
+            } catch (e) {
+                console.warn("Could not fetch admin reports count", e);
+            }
+        };
+
+        fetchCounts();
+        const interval = setInterval(fetchCounts, 4000);
+
+        window.addEventListener('straysafe_admin_viewed', fetchCounts);
+        window.addEventListener('storage', fetchCounts);
+
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('straysafe_admin_viewed', fetchCounts);
+            window.removeEventListener('storage', fetchCounts);
+        };
+    }, []);
 
     const menuItems = [
         {
@@ -27,10 +60,10 @@ const AdminSidebar = () => {
                 </svg>
             )
         },
-
         {
             path: '/admin/incidents',
             label: 'Report Management',
+            badgeCount: activeReportsCount,
             icon: (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
@@ -42,7 +75,7 @@ const AdminSidebar = () => {
             label: 'User Management',
             icon: (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                    <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0019 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
                 </svg>
             )
         },
@@ -55,7 +88,6 @@ const AdminSidebar = () => {
                 </svg>
             )
         },
-
         {
             isAction: true,
             onClick: () => setIsQRScannerOpen(true),
@@ -93,7 +125,6 @@ const AdminSidebar = () => {
                     )}
                 </div>
 
-
                 {/* Navigation */}
                 <nav className="space-y-1">
                     {menuItems.map((item) => {
@@ -111,6 +142,7 @@ const AdminSidebar = () => {
                             );
                         }
                         const isActive = item.path ? location.pathname === item.path : false;
+                        const hasBadge = !!(item.badgeCount && item.badgeCount > 0);
                         return (
                             <div key={item.path} className="relative group overflow-hidden">
                                 {isActive && (
@@ -124,8 +156,24 @@ const AdminSidebar = () => {
                                             : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
                                     } ${isOpen ? 'px-8' : 'justify-center px-0'}`}
                                 >
-                                    <span className="shrink-0">{item.icon}</span>
-                                    {isOpen && <span className="ml-4 whitespace-nowrap animate-in fade-in duration-300">{item.label}</span>}
+                                    <div className="relative shrink-0">
+                                        {item.icon}
+                                        {!isOpen && hasBadge && (
+                                            <span className="absolute -top-1.5 -right-2 bg-[#F97316] text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
+                                                {item.badgeCount! > 9 ? '9+' : item.badgeCount}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {isOpen && (
+                                        <div className="ml-4 flex-1 flex items-center justify-between overflow-hidden">
+                                            <span className="truncate">{item.label}</span>
+                                            {hasBadge && (
+                                                <span className="ml-2 shrink-0 bg-[#F97316] text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-sm animate-pulse">
+                                                    {item.badgeCount}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                 </Link>
                             </div>
                         );

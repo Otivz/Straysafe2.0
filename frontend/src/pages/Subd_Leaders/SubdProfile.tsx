@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import Button from '../../components/Button';
@@ -212,17 +213,12 @@ const SubdProfile = () => {
                                                 />
                                             </label>
                                         )}
-                                        {user?.profile_picture ? (
-                                            <img 
-                                                src={user.profile_picture} 
-                                                alt={user.name} 
-                                                className="w-full h-full object-cover"
-                                            />
-                                        ) : (
-                                            <div className="w-full h-full bg-gradient-to-br from-orange-400 to-[#B35D25] text-white flex items-center justify-center font-black text-4xl uppercase select-none">
-                                                {user?.name?.charAt(0) || 'S'}
-                                            </div>
-                                        )}
+                                        <img 
+                                            src={getProfilePicture(user?.profile_picture)} 
+                                            alt={user?.name || 'Profile'} 
+                                            className="w-full h-full object-cover"
+                                            onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                        />
                                     </div>
 
                                     <h2 className="text-lg font-black text-gray-900 leading-snug">{user?.name}</h2>

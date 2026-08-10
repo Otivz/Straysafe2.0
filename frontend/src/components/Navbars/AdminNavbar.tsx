@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 
 interface AdminNavbarProps {
     leftContent?: ReactNode;
@@ -54,10 +55,12 @@ const AdminNavbar = ({ leftContent }: AdminNavbarProps) => {
                             <p className="text-[10px] font-medium text-gray-400 mt-1 uppercase tracking-wider">Super Administrator</p>
                         </div>
                         <div className="w-10 h-10 rounded-full border-2 border-white shadow-sm overflow-hidden bg-gray-200">
-                            {/* Avatar Image Placeholder */}
-                            <div className="w-full h-full flex items-center justify-center bg-[#F97316] text-white font-extrabold text-sm uppercase">
-                                {user.name ? user.name.charAt(0) : 'A'}
-                            </div>
+                            <img 
+                                src={getProfilePicture(user.profile_picture)} 
+                                alt={user.name || 'Admin'} 
+                                className="w-full h-full object-cover"
+                                onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                            />
                         </div>
                     </button>
 

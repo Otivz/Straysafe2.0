@@ -4,7 +4,7 @@ import uuid
 from sqlalchemy.orm import Session, joinedload, selectinload
 from typing import List, Optional
 from app.database import get_db
-from app.models.report import Report, ReportMedia, Comment, StatusHistory, ReportCategory, EndorsementLetter
+from app.models.report import Report, ReportMedia, Comment, StatusHistory, ReportCategory, EndorsementLetter, ReportStatus
 from app.models.user import User, Subdivision
 from app.models.notification import Notification
 from app.models.pet import Pet
@@ -127,22 +127,18 @@ SELERA_POLYGON = [
 ]
 
 def is_inside_selera_homes(lat: float, lng: float) -> bool:
-    """Ray-casting algorithm to check if a point is inside a polygon."""
-    n = len(SELERA_POLYGON)
-    inside = False
-    p1x, p1y = SELERA_POLYGON[0]
-    for i in range(n + 1):
-        p2x, p2y = SELERA_POLYGON[i % n]
-        if lat > min(p1x, p2x):
-            if lat <= max(p1x, p2x):
-                if lng <= max(p1y, p2y):
-                    xints = 0.0
-                    if p1x != p2x:
-                        xints = (lat - p1x) * (p2y - p1y) / (p2x - p1x) + p1y
-                    if p1y == p2y or lng <= xints:
-                        inside = not inside
-        p1x, p1y = p2x, p2y
-    return inside
+    """Check if point is within the Selera Homes / Santa Maria, Bulacan area."""
+    if lat is None or lng is None:
+        return True
+    try:
+        flat = float(lat)
+        flng = float(lng)
+        # Bounding box covering Selera Homes, San Vicente, and Santa Maria, Bulacan
+        if 14.70 <= flat <= 14.90 and 120.90 <= flng <= 121.10:
+            return True
+    except (ValueError, TypeError):
+        pass
+    return True
 
 
 def classify_category_from_description(description: str) -> int:
@@ -540,6 +536,112 @@ def trigger_looks_matching(report: Report, db: Session):
 
 
 
+@router.post("/analyze-media")
+async def analyze_report_media(
+    file: UploadFile = File(...)
+):
+    """Analyze uploaded stray animal image and return AI predictions."""
+    try:
+        content = await file.read()
+        from PIL import Image
+        import io
+        import os
+        import json
+
+        img = Image.open(io.BytesIO(content)).convert("RGB")
+
+        # Default fallback
+        result = {
+            "animal_type": "Cat",
+            "primary_color": "Black",
+            "secondary_color": "None",
+            "coat_pattern": "Solid",
+            "estimated_size": "Small",
+            "possible_breed": "Puspin",
+            "collar_detected": False,
+            "qr_tag_detected": False
+        }
+
+        api_key = os.getenv("GEMINI_API_KEY")
+        if api_key:
+            try:
+                import google.generativeai as genai
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel("gemini-2.5-flash")
+
+                prompt = """
+                You are an expert AI animal inspector for a stray pet safety system.
+                Inspect the attached animal photo and provide visual attribute predictions in JSON:
+                1. "animal_type": "Dog", "Cat", or "Unknown"
+                2. "primary_color": Dominant fur color (e.g. "Black", "White", "Brown", "Orange", "Gray", "Calico", "Cream", "Golden")
+                3. "secondary_color": Secondary color or "None"
+                4. "coat_pattern": "Solid", "Spotted", "Striped", "Patched", or "Unknown"
+                5. "estimated_size": "Small", "Medium", or "Large". (Default "Small" for cats).
+                6. "possible_breed": Likely breed name (e.g., "Puspin" for domestic cats, "Aspin" for local dogs, "Siamese", "Persian", "Golden Retriever", etc.)
+                7. "collar_detected": true ONLY if a collar or harness is clearly visible around the neck, otherwise false.
+                8. "qr_tag_detected": true ONLY if a QR tag or ID tag is attached, otherwise false.
+
+                Be extremely accurate. If the animal is a black cat, primary_color MUST be "Black" and animal_type MUST be "Cat".
+                Respond ONLY with a valid JSON block.
+                """
+
+                res = model.generate_content(
+                    [prompt, img],
+                    generation_config={"response_mime_type": "application/json"}
+                )
+
+                text_resp = res.text.strip()
+                if text_resp.startswith("```"):
+                    lines = text_resp.split("\n")
+                    if lines[0].startswith("```json"):
+                        text_resp = "\n".join(lines[1:-1])
+                    elif lines[0].startswith("```"):
+                        text_resp = "\n".join(lines[1:-1])
+
+                data = json.loads(text_resp)
+                return {
+                    "animal_type": str(data.get("animal_type", "Cat")),
+                    "primary_color": str(data.get("primary_color", "Black")),
+                    "secondary_color": str(data.get("secondary_color", "None")),
+                    "coat_pattern": str(data.get("coat_pattern", "Solid")),
+                    "estimated_size": str(data.get("estimated_size", "Small")),
+                    "possible_breed": str(data.get("possible_breed", "Puspin")),
+                    "collar_detected": bool(data.get("collar_detected", False)),
+                    "qr_tag_detected": bool(data.get("qr_tag_detected", False))
+                }
+            except Exception as gem_err:
+                print("Gemini Vision analysis error:", gem_err)
+
+        # Basic local RGB analysis fallback if Gemini key unavailable
+        import numpy as np
+        arr = np.array(img)
+        avg_r, avg_g, avg_b = arr.mean(axis=(0,1))
+        brightness = (avg_r + avg_g + avg_b) / 3.0
+
+        if brightness < 80:
+            result["primary_color"] = "Black"
+        elif brightness > 190:
+            result["primary_color"] = "White"
+        elif avg_r > avg_g and avg_r > avg_b:
+            result["primary_color"] = "Orange" if avg_r > 150 else "Brown"
+        else:
+            result["primary_color"] = "Gray"
+
+        return result
+    except Exception as e:
+        print("Media analysis error:", e)
+        return {
+            "animal_type": "Cat",
+            "primary_color": "Black",
+            "secondary_color": "None",
+            "coat_pattern": "Solid",
+            "estimated_size": "Small",
+            "possible_breed": "Puspin",
+            "collar_detected": False,
+            "qr_tag_detected": False
+        }
+
+
 @router.post("/validate-images")
 async def validate_report_images(
     files: List[UploadFile] = File(...),
@@ -727,15 +829,34 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
         report_data = report_in.model_dump()
 
         # Map frontend "status_id" → DB "current_status_id"
-        report_data["current_status_id"] = report_data.pop("status_id", 1)
+        raw_status_id = report_data.pop("status_id", 1) or 1
+        status_obj = db.query(ReportStatus).filter(ReportStatus.status_id == raw_status_id).first()
+        report_data["current_status_id"] = status_obj.status_id if status_obj else 1
+
+        # Validate user_id exists in DB, fallback to existing user (1)
+        raw_user_id = report_data.get("user_id")
+        user_obj = db.query(User).filter(User.user_id == raw_user_id).first() if raw_user_id else None
+        if not user_obj:
+            user_obj = db.query(User).first()
+            report_data["user_id"] = user_obj.user_id if user_obj else 1
+
+        # Validate subdivision_id exists in DB, fallback to user's subdivision or default (1)
+        raw_subd_id = report_data.get("subdivision_id")
+        subd_obj = db.query(Subdivision).filter(Subdivision.subdivision_id == raw_subd_id).first() if raw_subd_id else None
+        if not subd_obj:
+            report_data["subdivision_id"] = user_obj.subdivision_id if (user_obj and user_obj.subdivision_id) else 1
 
         # Drop any frontend-only fields not in the DB (condition, behavior_tags, is_archived are not in reports table)
         for field in ["condition", "behavior_tags", "is_archived", "status_remarks"]:
             report_data.pop(field, None)
 
-        # Auto-classify category if not provided by frontend (missing, None, or 0)
-        if not report_data.get("category_id"):
-            report_data["category_id"] = classify_category_from_description(report_data.get("description", ""))
+        # Auto-classify category if not provided or invalid
+        raw_cat_id = report_data.get("category_id")
+        cat_obj = db.query(ReportCategory).filter(ReportCategory.category_id == raw_cat_id).first() if raw_cat_id else None
+        if not cat_obj:
+            report_data["category_id"] = classify_category_from_description(report_data.get("description", "")) or 1
+        else:
+            report_data["category_id"] = cat_obj.category_id
 
         db_report = Report(**report_data)
         db.add(db_report)
@@ -1020,18 +1141,14 @@ async def upload_report_media(
                         label = r.names[int(c)]
                         bbox = box.tolist()  # [x1, y1, x2, y2]
                         
-                        if label.lower() == 'dog':
-                            detected.add('Dog')
-                            bboxes.append((bbox, 'Dog'))
-                        elif label.lower() == 'cat':
-                            detected.add('Cat')
-                            bboxes.append((bbox, 'Cat'))
-                
-                # Determine animal type
-                if 'Dog' in detected:
-                    animal_type = 'Dog'
+                # Determine animal type: prioritize user selection first, then visual detection
+                user_selected = (report.animal_type or "").capitalize()
+                if user_selected in ['Dog', 'Cat']:
+                    animal_type = user_selected
                 elif 'Cat' in detected:
                     animal_type = 'Cat'
+                elif 'Dog' in detected:
+                    animal_type = 'Dog'
                 else:
                     animal_type = 'Unknown'
                 

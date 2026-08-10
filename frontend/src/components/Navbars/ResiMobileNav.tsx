@@ -1,4 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 
 interface ResiMobileNavProps {
     isNavbarMenuOpen: boolean;
@@ -34,7 +36,7 @@ const ResiMobileNav = ({
     return (
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-[700]">
             {/* Glass bar */}
-            <div className="relative bg-white/90 backdrop-blur-2xl border-t border-gray-100/80 shadow-[0_-8px_32px_rgba(0,0,0,0.08)] flex items-center justify-around px-1 pt-2 pb-7">
+            <div className="relative bg-white/90 dark:bg-gray-900/90 backdrop-blur-2xl border-t border-gray-100/80 dark:border-gray-800 shadow-[0_-8px_32px_rgba(0,0,0,0.08)] flex items-center justify-around px-1 pt-2 pb-7 transition-colors duration-200">
 
                 {/* HOME */}
                 <Link
@@ -121,11 +123,12 @@ const ResiMobileNav = ({
                     <span className={`absolute -top-2 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#F97316] transition-all duration-300 ${isProfile ? 'opacity-100 scale-100' : 'opacity-0 scale-0'}`} />
                     <div className={`p-1 rounded-xl transition-all duration-200 ${isProfile ? 'bg-orange-50' : ''}`}>
                         <div className={`w-6 h-6 rounded-full border-2 overflow-hidden bg-gray-100 transition-all duration-200 ${isProfile ? 'border-[#F97316] scale-110 shadow-sm shadow-orange-200' : 'border-gray-200'}`}>
-                            {user?.profile_picture ? (
-                                <img src={user.profile_picture} alt="Profile" className="w-full h-full object-cover" />
-                            ) : (
-                                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name || 'User'}`} alt="Profile" className="w-full h-full object-cover" />
-                            )}
+                            <img 
+                                src={getProfilePicture(user?.profile_picture)} 
+                                alt="Profile" 
+                                className="w-full h-full object-cover" 
+                                onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                            />
                         </div>
                     </div>
                     <span className={`text-[8px] uppercase tracking-widest transition-all duration-200 ${isProfile ? 'font-black' : 'font-bold'}`}>Profile</span>

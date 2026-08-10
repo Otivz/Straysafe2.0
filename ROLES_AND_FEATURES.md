@@ -86,6 +86,6 @@ The governance layer. Admins ensure the system is secure, functional, and data-d
 
 
 - Residents dashboard ilagay daw ung mga important updates and data
-- ung description para malaman kung dapat ba hulihin or hindi ung aso 
+- ung description para malaman kung dapat ba hulihin or hindi ung aso (See detailed guide: [ANIMAL_PICKUP_NOTIFICATION_GUIDE.md](file:///c:/Users/User/Desktop/Straysafe2.0/ANIMAL_PICKUP_NOTIFICATION_GUIDE.md))
 - adoption ng strays 
 - accuracy ng ai, pano raw kung madilim

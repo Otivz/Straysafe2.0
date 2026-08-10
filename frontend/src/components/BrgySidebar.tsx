@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import axios from 'axios';
 import Button from './Button';
 
 interface BrgySidebarProps {
@@ -9,7 +10,39 @@ interface BrgySidebarProps {
 
 const BrgySidebar = ({ isMobileOpen, onCloseMobile }: BrgySidebarProps) => {
     const [isOpen, setIsOpen] = useState(true);
+    const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
     const location = useLocation();
+
+    useEffect(() => {
+        const fetchCounts = async () => {
+            try {
+                const viewed = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_brgy_requests') || '[]'));
+                const res = await axios.get('http://localhost:8000/reports/');
+                if (Array.isArray(res.data)) {
+                    // Escalated (4), Approved (13), or Rescue In Progress (5) that have not been viewed yet
+                    const unviewed = res.data.filter((r: any) => {
+                        const sid = r.current_status_id || r.status_id;
+                        return (sid === 4 || sid === 13 || sid === 5) && !viewed.has(r.report_id);
+                    }).length;
+                    setPendingRequestsCount(unviewed);
+                }
+            } catch (e) {
+                console.warn("Could not fetch brgy reports count", e);
+            }
+        };
+
+        fetchCounts();
+        const interval = setInterval(fetchCounts, 4000);
+
+        window.addEventListener('straysafe_brgy_viewed', fetchCounts);
+        window.addEventListener('storage', fetchCounts);
+
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('straysafe_brgy_viewed', fetchCounts);
+            window.removeEventListener('storage', fetchCounts);
+        };
+    }, []);
 
     const menuItems = [
         {
@@ -24,13 +57,13 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile }: BrgySidebarProps) => {
         {
             path: '/brgy/rescue-requests',
             label: 'Incident Reports',
+            badgeCount: pendingRequestsCount,
             icon: (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
             )
         },
-
         {
             path: '/brgy/holding-facility',
             label: 'Holding Facility',
@@ -85,6 +118,7 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile }: BrgySidebarProps) => {
             <nav className="space-y-1 flex-1 overflow-y-auto">
                 {menuItems.map((item) => {
                     const isActive = location.pathname === item.path;
+                    const hasBadge = !!(item.badgeCount && item.badgeCount > 0);
                     return (
                         <div key={item.path} className="relative group overflow-hidden">
                             {isActive && (
@@ -98,11 +132,25 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile }: BrgySidebarProps) => {
                                     : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
                                     } ${showFullText ? 'px-8' : 'justify-center px-0'}`}
                             >
-                                <span className="shrink-0">{item.icon}</span>
+                                <div className="relative shrink-0">
+                                    {item.icon}
+                                    {!showFullText && hasBadge && (
+                                        <span className="absolute -top-1.5 -right-2 bg-[#F97316] text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
+                                            {item.badgeCount! > 9 ? '9+' : item.badgeCount}
+                                        </span>
+                                    )}
+                                </div>
                                 {showFullText && (
-                                    <span className={`ml-4 whitespace-nowrap animate-in fade-in duration-300 ${item.label.length > 18 ? 'text-[9.5px]' : ''}`}>
-                                        {item.label}
-                                    </span>
+                                    <div className="ml-4 flex-1 flex items-center justify-between overflow-hidden">
+                                        <span className={`truncate ${item.label.length > 18 ? 'text-[9.5px]' : ''}`}>
+                                            {item.label}
+                                        </span>
+                                        {hasBadge && (
+                                            <span className="ml-2 shrink-0 bg-[#F97316] text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-sm animate-pulse">
+                                                {item.badgeCount}
+                                            </span>
+                                        )}
+                                    </div>
                                 )}
                             </Link>
                         </div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { type PetRecord } from './types';
+import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 
 interface PetDetailPanelProps {
     pet: PetRecord | null;
@@ -71,9 +72,10 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                     {/* Large Photo Overlay */}
                     <div className="lg:col-span-2 relative h-[380px] rounded-[2.5rem] overflow-hidden shadow-lg border border-gray-100 bg-gray-50">
                         <img 
-                            src={pet.avatar} 
+                            src={getPetPicture(pet.avatar)} 
                             alt={pet.name} 
                             className="w-full h-full object-cover" 
+                            onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent"></div>
                         <div className="absolute bottom-8 left-8 text-white">

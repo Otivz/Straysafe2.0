@@ -1,8 +1,16 @@
 import { useState, useEffect } from 'react';
 import Button from '../../components/Button';
 import LandingPageNavbar from '../../components/Navbars/LandingPageNavbar';
+import { useTheme } from '../../context/ThemeContext';
 
 const LandingPage = () => {
+    const { setTheme } = useTheme();
+
+    // Ensure light mode by default on landing page
+    useEffect(() => {
+        setTheme('light');
+    }, [setTheme]);
+
     // Reveal Hook Logic
     useEffect(() => {
         const els = document.querySelectorAll('.reveal');

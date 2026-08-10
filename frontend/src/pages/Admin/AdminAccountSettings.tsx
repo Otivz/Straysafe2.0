@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import Button from '../../components/Button';
@@ -132,13 +133,12 @@ const AdminAccountSettings = () => {
                                     {/* Profile Picture */}
                                     <div className="relative group">
                                         <div className="w-40 h-40 md:w-52 md:h-52 rounded-3xl overflow-hidden shadow-md border-4 border-white transition-all group-hover:shadow-xl">
-                                            {userData?.profile_picture ? (
-                                                <img src={userData.profile_picture} alt={userData.name} className="w-full h-full object-cover" />
-                                            ) : (
-                                                <div className="w-full h-full bg-[#FFF7ED] flex items-center justify-center text-[#F97316]">
-                                                    <span className="text-6xl font-black">{userData?.name.charAt(0)}</span>
-                                                </div>
-                                            )}
+                                            <img 
+                                                src={getProfilePicture(userData?.profile_picture)} 
+                                                alt={userData?.name || 'Admin'} 
+                                                className="w-full h-full object-cover" 
+                                                onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                            />
                                         </div>
                                     </div>
 

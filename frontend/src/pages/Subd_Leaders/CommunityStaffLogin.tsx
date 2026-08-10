@@ -2,9 +2,15 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../../components/Button';
 import { EyeIcon, EyeOffIcon } from '../../components/icon';
+import { useTheme } from '../../context/ThemeContext';
 
 const CommunityStaffLogin = () => {
     const navigate = useNavigate();
+    const { setTheme } = useTheme();
+
+    useEffect(() => {
+        setTheme('light');
+    }, [setTheme]);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [keepSignedIn, setKeepSignedIn] = useState(false);

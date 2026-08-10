@@ -1,5 +1,6 @@
 import React from 'react';
 import { type PetRecord } from './types';
+import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 
 // Backward compatibility fallback mock data
 const defaultMockPets: PetRecord[] = [
@@ -176,7 +177,12 @@ const PetTable: React.FC<PetTableProps> = ({
                                         <td className="px-6 py-4.5 pl-8">
                                             <div className="flex items-center gap-4">
                                                 <div className="relative rounded-xl overflow-hidden group-hover:shadow-md group-hover:shadow-[#B35D25]/10 transition-all duration-300 w-11 h-11 shrink-0 border border-gray-100">
-                                                    <img src={pet.avatar} alt={pet.name} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-110" />
+                                                    <img 
+                                                        src={getPetPicture(pet.avatar)} 
+                                                        alt={pet.name} 
+                                                        className="w-full h-full object-cover transition-all duration-500 group-hover:scale-110" 
+                                                        onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
+                                                    />
                                                     <div className="absolute inset-0 bg-[#B35D25]/0 group-hover:bg-[#B35D25]/20 transition-colors duration-500 mix-blend-overlay"></div>
                                                 </div>
                                                 <div>

@@ -314,11 +314,31 @@ const ResiViewReport = () => {
 
                             {/* Information Details Section */}
                             {(() => {
-                                const hasAIData = !!(report.ai_animal_type || report.ai_dominant_color || report.ai_estimated_size);
-                                const showBreed = !!(report.animal_breed && report.animal_breed.toLowerCase() !== 'unknown' && report.animal_breed.toLowerCase() !== 'not specified');
-                                const showColor = !!(report.animal_color && report.animal_color.toLowerCase() !== 'unknown' && (!report.ai_dominant_color || report.animal_color.toLowerCase() !== report.ai_dominant_color.toLowerCase()));
-                                const showSize = !!(report.estimated_size && (!report.ai_estimated_size || report.estimated_size.toLowerCase() !== report.ai_estimated_size.toLowerCase()));
-                                const showAnimalType = !(report.ai_animal_type && report.ai_animal_type.toLowerCase() === report.animal_type?.toLowerCase());
+                                const rawDesc = report.description || '';
+                                const parts = rawDesc.split('|').map(p => p.trim());
+                                let extractedPattern = '';
+                                let extractedConditions = '';
+                                let cleanNotes = '';
+
+                                parts.forEach(part => {
+                                    if (part.toLowerCase().startsWith('pattern:')) {
+                                        extractedPattern = part.replace(/^pattern:\s*/i, '');
+                                    } else if (part.toLowerCase().startsWith('observed conditions:')) {
+                                        extractedConditions = part.replace(/^observed conditions:\s*/i, '');
+                                    } else if (part.toLowerCase().startsWith('markings:')) {
+                                        if (!extractedPattern) extractedPattern = part.replace(/^markings:\s*/i, '');
+                                    } else if (part.toLowerCase().startsWith('notes:')) {
+                                        cleanNotes = part.replace(/^notes:\s*/i, '');
+                                    } else if (!extractedPattern && !extractedConditions && !cleanNotes) {
+                                        cleanNotes = part;
+                                    }
+                                });
+
+                                const displayType = report.animal_type || report.ai_animal_type || 'Unknown';
+                                const displayBreed = (report.animal_breed && report.animal_breed.toLowerCase() !== 'unknown') ? report.animal_breed : (report.ai_possible_breed || 'Unknown');
+                                const displayColor = report.animal_color || report.ai_dominant_color || 'Unknown';
+                                const displaySize = report.estimated_size || report.ai_estimated_size || 'Medium';
+
                                 return (
                                     <div className="space-y-6">
                                         {/* Rescue Status + Date row */}
@@ -335,67 +355,76 @@ const ResiViewReport = () => {
                                             </div>
                                         </div>
 
-                                        {/* AI Detection rows */}
-                                        <div className="pb-6 space-y-3 border-b border-gray-50">
-                                            {showAnimalType && report.animal_type && (
+                                        {/* Unified Animal Characteristics */}
+                                        <div className="pb-6 space-y-3.5 border-b border-gray-50">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Animal Type</span>
+                                                <span className="text-xs font-black text-[#1a1208] uppercase">{displayType}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Breed / Variety</span>
+                                                <span className="text-xs font-black text-gray-900 uppercase">{displayBreed}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Coat Color</span>
+                                                <span className="text-xs font-black text-gray-900 uppercase">{displayColor}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Estimated Size</span>
+                                                <span className="text-xs font-black text-gray-900 uppercase">{displaySize}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Animal Count</span>
+                                                <span className="text-xs font-black text-gray-900 uppercase">{report.animal_count || 1} Animal(s)</span>
+                                            </div>
+                                            {extractedPattern && (
                                                 <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Animal Type</span>
-                                                    <span className="text-xs font-black text-[#1a1208] uppercase">{report.animal_type}</span>
+                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Coat Pattern / Markings</span>
+                                                    <span className="text-xs font-black text-orange-600 uppercase">{extractedPattern}</span>
                                                 </div>
                                             )}
-                                            {report.ai_animal_type && (
+                                            {report.is_possible_owned !== undefined && (
                                                 <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Detected Animal Type</span>
-                                                    <span className="text-xs font-black text-[#1a1208] uppercase">{report.ai_animal_type}</span>
+                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ownership Indicator</span>
+                                                    <span className={`text-xs font-black uppercase ${report.is_possible_owned ? 'text-amber-600' : 'text-gray-600'}`}>
+                                                        {report.is_possible_owned ? 'Possible Owned Pet' : 'Uncollared Stray'}
+                                                    </span>
                                                 </div>
                                             )}
-                                            {report.ai_dominant_color && (
+                                            {report.landmark && (
                                                 <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Dominant Animal Color</span>
-                                                    <span className="text-xs font-black text-[#1a1208] uppercase">{report.ai_dominant_color}</span>
-                                                </div>
-                                            )}
-                                            {report.ai_estimated_size && (
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Estimated Animal Size</span>
-                                                    <span className="text-xs font-black text-[#1a1208] uppercase">{report.ai_estimated_size}</span>
+                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Landmark Location</span>
+                                                    <span className="text-xs font-black text-gray-900 uppercase">{report.landmark}</span>
                                                 </div>
                                             )}
                                         </div>
 
-                                        {/* Subject Identification rows */}
-                                        {(showBreed || showColor || showSize || !hasAIData) && (
-                                            <div className="pb-6 space-y-3 border-b border-gray-50">
-                                                {(!hasAIData || showBreed) && (
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Breed / Variety</span>
-                                                        <span className="text-xs font-black text-gray-900 uppercase">{report.animal_breed || 'Unknown'}</span>
-                                                    </div>
-                                                )}
-                                                {(!hasAIData || showColor) && (
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Coat Color</span>
-                                                        <span className="text-xs font-black text-gray-900 uppercase">{report.animal_color || 'Unknown'}</span>
-                                                    </div>
-                                                )}
-                                                {(!hasAIData || showSize) && (
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Estimated Size</span>
-                                                        <span className="text-xs font-black text-gray-900 uppercase">{report.estimated_size || 'Medium'}</span>
-                                                    </div>
-                                                )}
+                                        {/* Observed Conditions & Incident Details */}
+                                        {extractedConditions && (
+                                            <div className="pb-6 border-b border-gray-50">
+                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Observed Health & Behavior Conditions</p>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {extractedConditions.split(',').map((cond, i) => (
+                                                        <span key={i} className="px-3 py-1 bg-red-50 text-red-600 border border-red-100 rounded-full text-[10px] font-black uppercase tracking-wider">
+                                                            🚨 {cond.trim()}
+                                                        </span>
+                                                    ))}
+                                                </div>
                                             </div>
                                         )}
 
-                                        {/* Case Description row */}
-                                        {report.description && (
+                                        {/* Cleaned Case Notes */}
+                                        {cleanNotes && (
                                             <div>
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Case Description</p>
-                                                <p className="text-sm text-gray-750 leading-relaxed font-medium">
-                                                    "{report.description}"
+                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Case Description & Notes</p>
+                                                <p className="text-sm text-gray-750 leading-relaxed font-medium bg-stone-50/70 p-4 rounded-2xl border border-stone-100 italic">
+                                                    "{cleanNotes}"
                                                 </p>
                                             </div>
                                         )}
+                                    </div>
+                                );
+                            })()}
 
                                          {/* Endorsement Letter section */}
                                          {report.endorsement_letter && (
@@ -458,9 +487,6 @@ const ResiViewReport = () => {
                                                   </div>
                                               </div>
                                           )}
-                                    </div>
-                                );
-                            })()}
                         </div>
                     </div>
 

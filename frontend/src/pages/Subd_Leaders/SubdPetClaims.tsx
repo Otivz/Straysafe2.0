@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import MapComponent from '../../components/MapComponent';
@@ -223,6 +224,17 @@ const SubdPetClaims = () => {
             if (res.data?.length > 0) {
                 const transformed = res.data.map((bc: any) => transformClaim(bc));
                 setClaims(transformed);
+                
+                // Mark claims as viewed so sidebar notification count clears after viewing
+                try {
+                    const viewed = JSON.parse(localStorage.getItem('straysafe_viewed_subd_claims') || '[]');
+                    const claimIds = transformed.map((c: any) => c.claim_id);
+                    const updatedViewed = Array.from(new Set([...viewed, ...claimIds]));
+                    localStorage.setItem('straysafe_viewed_subd_claims', JSON.stringify(updatedViewed));
+                    window.dispatchEvent(new Event('straysafe_claims_viewed'));
+                } catch (e) {
+                    console.warn('Could not mark claims as viewed', e);
+                }
                 
                 // Keep selectedClaim in sync with fetched data if it was set
                 if (selectedClaim) {
@@ -475,7 +487,12 @@ const SubdPetClaims = () => {
                                                     <td className="py-4 px-5">
                                                         <div className="flex items-center gap-2.5">
                                                             <div className="w-9 h-9 rounded-xl overflow-hidden border border-gray-100 shrink-0 bg-gray-50">
-                                                                <img src={claim.pet?.photo_url || claim.sighting_photo} alt={claim.pet?.pet_name} className="w-full h-full object-cover" />
+                                                                <img 
+                                                                    src={getPetPicture(claim.pet?.photo_url || claim.sighting_photo)} 
+                                                                    alt={claim.pet?.pet_name} 
+                                                                    className="w-full h-full object-cover" 
+                                                                    onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
+                                                                />
                                                             </div>
                                                             <div>
                                                                 <p className="text-xs font-extrabold text-gray-800">{claim.pet?.pet_name}</p>
@@ -727,7 +744,8 @@ const SubdPetClaims = () => {
                                             (rReportedBreed && (pBreed === rReportedBreed || pBreed.includes(rReportedBreed) || rReportedBreed.includes(pBreed)))
                                         );
 
-                                        const rColors = (selectedClaim.report?.ai_dominant_color || "").toLowerCase().split(",").map((c: string) => c.trim());
+                                        const rColorRaw = selectedClaim.report?.animal_color || selectedClaim.report?.ai_dominant_color || "";
+                                        const rColors = rColorRaw.toLowerCase().split(/,| and |\/|\s+/).map((c: string) => c.trim()).filter(Boolean);
                                         const pPrimary = (selectedClaim.pet?.primary_color || "").toLowerCase().trim();
                                         const pSecondary = (selectedClaim.pet?.secondary_color || "").toLowerCase().trim();
                                         const colorMatches = (pPrimary && rColors.includes(pPrimary)) || (pSecondary && rColors.includes(pSecondary));

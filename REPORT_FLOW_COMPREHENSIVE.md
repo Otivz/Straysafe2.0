@@ -65,17 +65,48 @@ flowchart TD
 
 ## 🔄 Detailed Lifecycle Stages
 
-### Stage 1: Detection & Submission
+### Stage 1: Detection & Submission (10-Step Wizard)
 *   **Who Handles It:** **Citizen (Reporter)**
-*   **Action Taken:** 
-    *   Citizen fills out the report form on `/citizen/home` (`ResiHomePage.tsx`).
-    *   Uploads raw photos/videos of the stray animal.
-    *   Pins the exact location on the interactive Leaflet Map.
-    *   Selects a reporting category (*Injured Animal, Aggressive Stray, Possible Rabies Risk, Roaming Pack, Animal Rescue Needed*).
-*   **System Processing:**
-    *   **Geofence Verification:** Frontend checks if user location pin is inside `SELERA_POLYGON` boundary. If outside, submission is blocked.
-    *   **YOLOv8 Analysis:** Backend (`reports.py`) runs YOLOv8 on uploaded images to detect if there is a dog/cat present, estimate visual size ratio, and extract dominant colors.
-    *   **Gemini/Heuristic Copilot:** The AI suggestions module analyzes the photo metrics and user description to classify risk levels, suggest priority, and provide a conversational reason.
+*   **10-Step Submission Wizard:**
+    1.  **Step 1: Upload Media ⭐ Required**
+        *   Take Photo / Upload Photos (at least 1 required).
+        *   Upload Video (optional).
+    2.  **Step 2: Report Category ⭐ Required**
+        *   *Radio selection:* Injured Animal, Sick Animal, Aggressive Animal, Possible Rabies Risk, Roaming Animal, Animal Needs Rescue, Dead Animal, Other.
+    3.  **Step 3: AI Animal Analysis (Automated)**
+        *   Auto-runs immediately after media upload.
+        *   Extracts and displays editable AI suggestions (Type, Count, Estimated Size, Primary Color, Secondary Color, Coat Pattern, Possible Breed, Visible Collar, Visible QR Tag, Visible Injury).
+    4.  **Step 4: Confirm Animal Details**
+        *   Review/Edit AI Suggestions:
+            *   *Animal Type:* Dog, Cat, Unknown (Radio)
+            *   *Animal Count:* Number Input (Default: 1)
+            *   *Estimated Size:* Small, Medium, Large, Unknown (Radio)
+            *   *Primary Color:* Black, Brown, White, Gray, Tan, Golden, Cream, Orange, Mixed (Dropdown)
+            *   *Secondary Color:* None, Black, Brown, White, Gray, Tan, Golden, Cream, Orange (Dropdown)
+            *   *Coat Pattern:* Unknown, Solid, Bicolor, Tricolor, Spotted, Brindle, Merle, Tabby, Calico, Tortoiseshell, Mixed (Dropdown)
+            *   *Possible Breed (Optional):* Searchable Dropdown (Default: Unknown)
+            *   *Distinctive Markings (Optional):* Textbox (e.g. "White stripe on forehead", "Missing right eye", "Scar on leg")
+    5.  **Step 5: Observed Condition ⭐ Required**
+        *   *Checkboxes (Select all that apply):* Injured, Bleeding, Limping, Weak, Sick, Aggressive, Chasing People, Unable to Walk, Crying, Pregnant, With Puppies/Kittens, Wearing Collar, Wearing QR Tag, Dead, Trapped, Other.
+    6.  **Step 6: Location ⭐ Required**
+        *   GPS Location automatically detected.
+        *   Street Address auto-filled.
+        *   Landmark textbox (e.g., "Near Barangay Hall").
+        *   Map Pin confirmation via drag & drop on Leaflet Map.
+    7.  **Step 7: Additional Information (Optional)**
+        *   Description textarea for details to assist rescuers.
+    8.  **Step 8: Report Visibility**
+        *   *Radio selection:* Public vs Private.
+    9.  **Step 9: Review Report**
+        *   Summary display (Animal Type, Category, Location, AI Confidence) for citizen review before final submission.
+    10. **Step 10: Submit Report**
+        *   Final submission confirmation button.
+
+*   **Responsibility & Boundary Matrix:**
+    *   **🤖 AI Responsibilities:** Detecting animal type, counting animals, suggesting primary/secondary colors, coat pattern, breed, estimating size, detecting visible injuries, detecting collars or QR tags.
+    *   **👤 Citizen Responsibilities:** Uploading media, selecting report category, reviewing/confirming AI suggestions, selecting observed conditions, confirming GPS/map pin location, adding landmark & optional description, setting visibility.
+    *   **🔒 Hidden from Citizen (Generated Post-Submission by Backend):** Priority Level, Emergency Classification, AI Confidence Score, Duplicate Report Detection, Possible Pet Match, Risk Level, Status Workflow, Rescue Assignment, Auto-Escalation Decision.
+
 *   **Database Impact:** Creates a new row in the `reports` table. Sets `current_status_id = 1` (`Reported`).
 
 ---
