@@ -68,6 +68,25 @@ const ResiProfile = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    const getEffectivePriority = (rep: any): string => {
+        if (!rep) return 'Medium';
+        if (rep.ai_suggested_priority && rep.ai_suggested_priority.trim()) {
+            const raw = rep.ai_suggested_priority.trim();
+            if (raw.toLowerCase().includes('emergency')) return 'Emergency';
+            if (raw.toLowerCase().includes('high')) return 'High';
+            if (raw.toLowerCase().includes('medium') || raw.toLowerCase().includes('regular')) return 'Medium';
+            if (raw.toLowerCase().includes('low')) return 'Low';
+            return raw.replace(/priority/i, '').trim();
+        }
+        if (rep.ai_suggested_risk_level && rep.ai_suggested_risk_level.trim()) {
+            const raw = rep.ai_suggested_risk_level.trim();
+            if (raw.toLowerCase().includes('high')) return 'High';
+            if (raw.toLowerCase().includes('medium')) return 'Medium';
+            if (raw.toLowerCase().includes('low')) return 'Low';
+        }
+        return rep.priority_level || 'Medium';
+    };
+
     const userStr = localStorage.getItem('resident_user');
     const initialUser = userStr ? {
         latitude: null,
@@ -495,7 +514,9 @@ const ResiProfile = () => {
                                                 <div className="flex items-center justify-between pt-4 border-t border-gray-50">
                                                     <div className="flex flex-col">
                                                         <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Priority</span>
-                                                        <span className={`text-[11px] font-black uppercase ${report.priority_level === 'High' ? 'text-red-500' : 'text-orange-500'}`}>{report.priority_level}</span>
+                                                        <span className={`text-[11px] font-black uppercase ${getEffectivePriority(report).toLowerCase().includes('high') || getEffectivePriority(report).toLowerCase().includes('emergency') ? 'text-red-500' : getEffectivePriority(report).toLowerCase().includes('low') ? 'text-blue-500' : 'text-orange-500'}`}>
+                                                            {getEffectivePriority(report)}
+                                                        </span>
                                                     </div>
                                                     <div className="flex flex-col text-right">
                                                         <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Animals</span>
