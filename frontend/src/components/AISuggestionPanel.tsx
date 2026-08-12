@@ -92,29 +92,6 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
         };
     };
 
-    const getPriorityStyles = (prio?: string | null) => {
-        const val = (prio || '').toLowerCase();
-        if (val.includes('high')) {
-            return {
-                bg: 'bg-red-500/15 border-red-500/40 text-red-400 font-extrabold shadow-sm shadow-red-500/10',
-                dot: 'bg-red-500 animate-ping',
-                label: 'High Priority'
-            };
-        }
-        if (val.includes('regular') || val.includes('medium')) {
-            return {
-                bg: 'bg-orange-500/10 border-orange-500/30 text-orange-400',
-                dot: 'bg-orange-500',
-                label: 'Regular Priority'
-            };
-        }
-        return {
-            bg: 'bg-blue-500/10 border-blue-500/30 text-blue-400',
-            dot: 'bg-blue-500',
-            label: 'Low Priority'
-        };
-    };
-
     const getAnimalStyles = (type?: string | null) => {
         const val = (type || '').toLowerCase();
         if (val === 'dog') {
@@ -193,7 +170,6 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
     };
 
     const risk = getRiskStyles(suggestedRiskLevel);
-    const prio = getPriorityStyles(suggestedPriority);
     const animal = getAnimalStyles(animalType);
     const sizeStyle = getSizeStyles(estimatedSize);
 
@@ -254,23 +230,11 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
 
                 {/* Suggested Risk Level */}
                 <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Suggested Risk Level</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">AI Assessed Risk & Priority</span>
                     <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border ${risk.bg} w-fit`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${risk.dot}`} />
                         <span className="text-xs font-black uppercase tracking-wide">{risk.label}</span>
                     </div>
-                </div>
-            </div>
-
-            {/* Suggested Priority Banner */}
-            <div className="mt-4 bg-white/3 p-3.5 rounded-2xl border border-white/5 flex items-center justify-between transition-all hover:bg-white/5">
-                <div>
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Suggested Report Priority</span>
-                    <span className="text-xs font-bold text-slate-200">Recommended Dispatch Urgency</span>
-                </div>
-                <div className={`flex items-center gap-2.5 px-4 py-2 rounded-xl border ${prio.bg}`}>
-                    <span className={`w-2 h-2 rounded-full ${prio.dot}`} />
-                    <span className="text-xs font-black uppercase tracking-widest">{prio.label}</span>
                 </div>
             </div>
 

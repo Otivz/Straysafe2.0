@@ -364,6 +364,25 @@ const SubdViewReport = () => {
         }
     };
 
+    const getEffectivePriority = (rep: any): string => {
+        if (!rep) return 'Medium';
+        if (rep.ai_suggested_priority && rep.ai_suggested_priority.trim()) {
+            const raw = rep.ai_suggested_priority.trim();
+            if (raw.toLowerCase().includes('emergency')) return 'Emergency';
+            if (raw.toLowerCase().includes('high')) return 'High';
+            if (raw.toLowerCase().includes('medium') || raw.toLowerCase().includes('regular')) return 'Medium';
+            if (raw.toLowerCase().includes('low')) return 'Low';
+            return raw.replace(/priority/i, '').trim();
+        }
+        if (rep.ai_suggested_risk_level && rep.ai_suggested_risk_level.trim()) {
+            const raw = rep.ai_suggested_risk_level.trim();
+            if (raw.toLowerCase().includes('high')) return 'High';
+            if (raw.toLowerCase().includes('medium')) return 'Medium';
+            if (raw.toLowerCase().includes('low')) return 'Low';
+        }
+        return rep.priority_level || 'Medium';
+    };
+
     const getStatusColor = (status: string) => {
         switch (status.toLowerCase()) {
             case 'reported':
@@ -448,15 +467,12 @@ const SubdViewReport = () => {
                                         <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Category</span>
                                         <span className="text-sm font-semibold text-gray-900">{categoryMap[report.category_id] || 'Other'}</span>
                                     </div>
-                                    {!(report.ai_suggested_priority &&
-                                        ((p1, p2) => p1.toLowerCase().replace('priority', '').replace('level', '').trim() === p2.toLowerCase().replace('priority', '').replace('level', '').trim())(report.ai_suggested_priority, report.priority_level)) && (
-                                            <div>
-                                                <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Priority</span>
-                                                <span className={`text-sm font-bold ${getPriorityColor(report.priority_level).replace('bg-', 'text-').replace('-50', '-600')}`}>
-                                                    {report.priority_level}
-                                                </span>
-                                            </div>
-                                        )}
+                                    <div>
+                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Priority</span>
+                                        <span className={`text-sm font-bold ${getPriorityColor(getEffectivePriority(report)).replace('bg-', 'text-').replace('-50', '-600')}`}>
+                                            {getEffectivePriority(report)}
+                                        </span>
+                                    </div>
                                     <div>
                                         <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Rescue Status</span>
                                         <span className={`text-sm font-bold ${report.status_id >= 5 ? 'text-blue-600' : 'text-gray-400'}`}>
