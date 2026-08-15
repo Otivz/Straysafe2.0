@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.schemas.auth import LoginRequest, LoginResponse
-from app.utils.auth import verify_password
+from app.utils.auth import verify_password, create_access_token, get_current_user
 from app.utils.audit import log_activity
 
 router = APIRouter(
@@ -68,6 +68,14 @@ def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # Generate JWT token
+    token = create_access_token({
+        "sub": str(user.user_id),
+        "user_id": user.user_id,
+        "email": user.email,
+        "role_id": user.role_id
+    })
+
     # Successful login
     log_activity(
         db=db,
@@ -93,15 +101,42 @@ def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
         "longitude": user.longitude,
         "status": user.status,
         "is_verified": user.is_verified,
-        "created_at": user.created_at
+        "created_at": user.created_at,
+        "access_token": token,
+        "token_type": "bearer"
+    }
+
+@router.get("/verify-session")
+def verify_session(current_user: User = Depends(get_current_user)):
+    return {
+        "status": "valid",
+        "user_id": current_user.user_id,
+        "email": current_user.email,
+        "name": current_user.name,
+        "role_id": current_user.role_id,
+        "subdivision_id": current_user.subdivision_id,
+        "profile_picture": current_user.profile_picture,
+        "status_account": current_user.status
     }
 
 @router.get("/verify-session/{user_id}")
-def verify_session(user_id: int, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.user_id == user_id).first()
-    if not user:
+def verify_session_by_id(
+    user_id: int,
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.user_id != user_id and current_user.role_id != 4:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Session user mismatch"
         )
-    return {"status": "valid", "user_id": user.user_id}
+    return {
+        "status": "valid",
+        "user_id": current_user.user_id,
+        "email": current_user.email,
+        "name": current_user.name,
+        "role_id": current_user.role_id
+    }
+
+@router.get("/me")
+def get_me(current_user: User = Depends(get_current_user)):
+    return current_user

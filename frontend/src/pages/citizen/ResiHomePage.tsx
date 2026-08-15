@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import Button from '../../components/Button';
@@ -133,6 +133,92 @@ interface ReportFormData {
     aiSuggestions: any;
 }
 
+const FormattedReportDescription = ({ description }: { description: string }) => {
+    if (!description) {
+        return <p className="text-sm text-gray-400 italic">No detailed description provided.</p>;
+    }
+
+    // Check if this is a structured Lost Pet Report
+    if (description.includes('[LOST PET REPORT]')) {
+        const lines = description.split('\n').map(l => l.trim()).filter(Boolean);
+        const headerLine = lines.find(l => l.includes('[LOST PET REPORT]')) || '';
+        const bulletLines = lines.filter(l => l.startsWith('•') && !l.toLowerCase().includes('owner') && !l.toLowerCase().includes('contact'));
+        const closingLines = lines.filter(l => !l.includes('[LOST PET REPORT]') && !l.startsWith('•'));
+
+        return (
+            <div className="space-y-3.5 my-3">
+                {/* Header / Banner notice */}
+                <div className="flex items-center gap-2.5 p-3 px-4 bg-gradient-to-r from-red-50 to-orange-50 rounded-2xl border border-red-200/80 text-red-950 shadow-xs">
+                    <span className="text-lg animate-pulse shrink-0">🚨</span>
+                    <p className="text-xs sm:text-sm font-black uppercase tracking-tight">
+                        {headerLine.replace('[LOST PET REPORT]', '').trim() || 'Missing Registered Pet Alert'}
+                    </p>
+                </div>
+
+                {/* Structured Attributes Grid */}
+                {bulletLines.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-[#FAF9F6] p-4 rounded-3xl border border-stone-200/70 shadow-xs">
+                        {bulletLines.map((b, idx) => {
+                            const raw = b.replace(/^•\s*/, '');
+                            const colonIdx = raw.indexOf(':');
+                            if (colonIdx !== -1) {
+                                const key = raw.slice(0, colonIdx).trim();
+                                const val = raw.slice(colonIdx + 1).trim();
+                                const isWide = key.toLowerCase().includes('circumstances') || 
+                                               key.toLowerCase().includes('notes') || 
+                                               key.toLowerCase().includes('instructions') ||
+                                               key.toLowerCase().includes('last seen');
+                                return (
+                                    <div 
+                                        key={idx} 
+                                        className={`p-3 rounded-2xl bg-white border border-stone-100 shadow-2xs ${isWide ? 'sm:col-span-2' : ''}`}
+                                    >
+                                        <p className="text-[9px] font-black text-amber-800 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                            {key.toLowerCase().includes('last seen') && <span>📍</span>}
+                                            {key.toLowerCase().includes('breed') && <span>🐾</span>}
+                                            {key.toLowerCase().includes('color') && <span>🎨</span>}
+                                            {key.toLowerCase().includes('collar') && <span>🏷️</span>}
+                                            {key.toLowerCase().includes('owner') && <span>👤</span>}
+                                            {key.toLowerCase().includes('reward') && <span>🎁</span>}
+                                            {key.toLowerCase().includes('circumstances') && <span>📝</span>}
+                                            <span>{key}</span>
+                                        </p>
+                                        <p className="text-xs sm:text-[13px] font-bold text-gray-900 leading-snug">
+                                            {val}
+                                        </p>
+                                    </div>
+                                );
+                            }
+                            return (
+                                <div key={idx} className="sm:col-span-2 p-2.5 rounded-2xl bg-white border border-stone-100 text-xs font-semibold text-gray-800">
+                                    • {raw}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {/* Closing / Callout */}
+                {closingLines.length > 0 && (
+                    <div className="p-3.5 bg-amber-500/10 rounded-2xl border border-amber-300/60 text-xs font-bold text-amber-950 flex items-start gap-2.5 shadow-2xs">
+                        <span className="text-amber-600 text-base shrink-0">📢</span>
+                        <p className="leading-relaxed">
+                            {closingLines.join(' ')}
+                        </p>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // Default / Standard Report Description: clean typography with preserved linebreaks
+    return (
+        <div className="text-[13px] sm:text-[15px] font-medium text-[#2d2417] leading-relaxed whitespace-pre-line">
+            {description}
+        </div>
+    );
+};
+
 const INITIAL_FORM_DATA: ReportFormData = {
     category: 'Injured Animal',
     category_id: 1,
@@ -162,7 +248,6 @@ const ResiHomePage = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const [isAddReportModalOpen, setIsAddReportModalOpen] = useState(false);
-    const [originalData, setOriginalData] = useState<any>(null);
     const [isNavbarMenuOpen, setIsNavbarMenuOpen] = useState(false);
     const [returnUrl, setReturnUrl] = useState<string | null>(null);
 
@@ -205,17 +290,87 @@ const ResiHomePage = () => {
         user_estimated_size: string;
         user_possible_breed: string;
     } | null>(null);
-    const [revertAnimalType, setRevertAnimalType] = useState(false);
-    const [revertColors, setRevertColors] = useState(false);
-    const [revertSize, setRevertSize] = useState(false);
-    const [breeds, setBreeds] = useState<string[]>([]);
-    const [breedsData, setBreedsData] = useState<any[]>([]);
-    const [breedImageUrl, setBreedImageUrl] = useState<string | null>(null);
-    const [isFetchingBreedImage, setIsFetchingBreedImage] = useState(false);
+    const [revertAnimalType, setRevertAnimalType] = useState<boolean>(false);
+    const [revertColors, setRevertColors] = useState<boolean>(false);
+    const [revertSize, setRevertSize] = useState<boolean>(false);
+    const [activeQrModal, setActiveQrModal] = useState<{ url: string; petName?: string; hash?: string; ownerName?: string; ownerPhone?: string } | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
 
     const [reportStep, setReportStep] = useState<number>(1);
     const [formData, setFormData] = useState<ReportFormData>(INITIAL_FORM_DATA);
+    const [aiAnalysisResult, setAiAnalysisResult] = useState<{
+        animalType: string;
+        primaryColor: string;
+        secondaryColor: string;
+        coatPattern: string;
+        estimatedSize: string;
+        possibleBreed: string;
+        collarDetected: boolean;
+        qrTagDetected: boolean;
+    } | null>(null);
+    const [isAnalyzingMedia, setIsAnalyzingMedia] = useState(false);
+
+    const VALID_COAT_PATTERNS = ['Solid', 'Bicolor', 'Tricolor', 'Spotted', 'Striped', 'Patched', 'Brindle', 'Merle', 'Tabby', 'Calico', 'Tortoiseshell', 'Mixed', 'Unknown'];
+    const VALID_PRIMARY_COLORS = ['Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange', 'Mixed'];
+    const VALID_SECONDARY_COLORS = ['None', 'Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange'];
+
+    const normalizeOption = (val: string, options: string[], defaultVal: string) => {
+        if (!val) return defaultVal;
+        const clean = val.trim();
+        const found = options.find(o => o.toLowerCase() === clean.toLowerCase());
+        if (found) return found;
+        const partial = options.find(o => clean.toLowerCase().includes(o.toLowerCase()) || o.toLowerCase().includes(clean.toLowerCase()));
+        return partial || defaultVal;
+    };
+
+    const triggerMediaAnalysis = async (overrideFiles?: File[]) => {
+        const filesToUse = overrideFiles || formData.mediaFiles;
+        if (filesToUse && filesToUse.length > 0) {
+            setIsAnalyzingMedia(true);
+            try {
+                const mediaData = new FormData();
+                mediaData.append("file", filesToUse[0]);
+                const res = await axios.post('http://localhost:8000/reports/analyze-media', mediaData);
+                if (res.status === 200 && res.data) {
+                    const ai = res.data;
+                    const normType = ['Dog', 'Cat'].includes(ai.animal_type) ? ai.animal_type : (ai.animal_type?.toLowerCase().includes('dog') ? 'Dog' : 'Cat');
+                    const normPrimary = normalizeOption(ai.primary_color, VALID_PRIMARY_COLORS, 'Black');
+                    const normSecondary = normalizeOption(ai.secondary_color, VALID_SECONDARY_COLORS, 'None');
+                    const normPattern = normalizeOption(ai.coat_pattern, VALID_COAT_PATTERNS, 'Solid');
+                    const normSize = ['Small', 'Medium', 'Large'].includes(ai.estimated_size) ? ai.estimated_size : 'Medium';
+
+                    const resultObj = {
+                        animalType: normType,
+                        primaryColor: normPrimary,
+                        secondaryColor: normSecondary,
+                        coatPattern: normPattern,
+                        estimatedSize: normSize,
+                        possibleBreed: ai.possible_breed || 'Puspin',
+                        collarDetected: Boolean(ai.collar_detected),
+                        qrTagDetected: Boolean(ai.qr_tag_detected)
+                    };
+                    setAiAnalysisResult(resultObj);
+                    setFormData(prev => ({
+                        ...prev,
+                        animalType: resultObj.animalType,
+                        primaryColor: resultObj.primaryColor,
+                        secondaryColor: resultObj.secondaryColor,
+                        coatPattern: resultObj.coatPattern,
+                        estimatedSize: resultObj.estimatedSize,
+                        animalBreed: resultObj.possibleBreed
+                    }));
+                }
+            } catch (err) {
+                console.warn('AI media analysis error, using defaults:', err);
+            } finally {
+                setIsAnalyzingMedia(false);
+            }
+        }
+    };
+
+    const [breedsData, setBreedsData] = useState<any[]>([]);
+    const [breedImageUrl, setBreedImageUrl] = useState<string | null>(null);
+    const [isFetchingBreedImage, setIsFetchingBreedImage] = useState(false);
 
     const [resolvedAddress, setResolvedAddress] = useState('');
     const [isGeocoding, setIsGeocoding] = useState(false);
@@ -286,9 +441,9 @@ const ResiHomePage = () => {
         return () => clearTimeout(timer);
     }, [formData.latitude, formData.longitude, isAddReportModalOpen, isMapPickerOpen]);
 
-    const userStr = localStorage.getItem('resident_user');
+    const userStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
-    const currentUserId = currentUser ? currentUser.user_id : null;
+    const currentUserId = currentUser ? (currentUser.user_id || currentUser.id) : null;
 
     useEffect(() => {
         if (location.state?.from) {
@@ -350,9 +505,6 @@ const ResiHomePage = () => {
                     if (res.ok) {
                         const data = await res.json();
                         setBreedsData(data);
-                        const breedList = data.map((b: any) => b.name);
-                        const uniqueBreeds = Array.from(new Set(['Aspin', ...breedList]));
-                        setBreeds(uniqueBreeds);
                     } else {
                         throw new Error('API failed');
                     }
@@ -364,23 +516,14 @@ const ResiHomePage = () => {
                     if (res.ok) {
                         const data = await res.json();
                         setBreedsData(data);
-                        const breedList = data.map((b: any) => b.name);
-                        const uniqueBreeds = Array.from(new Set(['Puspin', ...breedList]));
-                        setBreeds(uniqueBreeds);
                     } else {
                         throw new Error('API failed');
                     }
                 } else {
-                    setBreeds([]);
                     setBreedsData([]);
                 }
             } catch (err) {
                 console.error("Failed to load breed images from API:", err);
-                if (formData.animalType === 'Dog') {
-                    setBreeds(['Aspin', 'Shih Tzu', 'Shihtzu', 'Pug', 'Golden Retriever', 'German Shepherd', 'Bulldog', 'Beagle', 'Poodle', 'Chihuahua', 'Labrador Retriever']);
-                } else if (formData.animalType === 'Cat') {
-                    setBreeds(['Puspin', 'Persian', 'Siamese', 'Maine Coon', 'Bengal', 'Ragdoll', 'British Shorthair', 'Sphynx']);
-                }
                 setBreedsData([]);
             }
         };
@@ -512,16 +655,9 @@ const ResiHomePage = () => {
         };
 
         setFormData(initialData);
-        setOriginalData(initialData);
         setEditingReportId(report.report_id);
         setIsAddReportModalOpen(true);
         setOpenMenuId(null);
-    };
-
-    const handleReset = () => {
-        if (originalData) {
-            setFormData(originalData);
-        }
     };
 
     const fetchReports = async () => {
@@ -693,8 +829,14 @@ const ResiHomePage = () => {
         }
     };
 
-    const handleDismissNotification = (id: number) => {
+    const handleDismissNotification = async (id: number) => {
         setDismissedNotificationIds(prev => new Set(prev).add(id));
+        try {
+            await axios.post(`http://localhost:8000/notifications/${id}/archive`);
+            fetchNotifications();
+        } catch (error) {
+            console.error('Failed to archive notification:', error);
+        }
     };
 
     const handleNotificationClick = (notif: any) => {
@@ -973,7 +1115,14 @@ const ResiHomePage = () => {
                 priority_level: formData.priorityLevel,
                 visibility: formData.visibility,
                 is_possible_owned: formData.isPossibleOwned,
-                status_id: 1 // Pending Verification
+                status_id: 1, // Pending Verification
+                ai_animal_type: aiAnalysisResult?.animalType || formData.animalType,
+                ai_dominant_color: aiAnalysisResult?.primaryColor || formData.primaryColor,
+                ai_coat_pattern: aiAnalysisResult?.coatPattern || formData.coatPattern,
+                ai_estimated_size: aiAnalysisResult?.estimatedSize || formData.estimatedSize,
+                ai_possible_breed: aiAnalysisResult?.possibleBreed || formData.animalBreed || 'Unknown',
+                ai_suggested_risk_level: 'Low Risk',
+                ai_suggested_priority: formData.priorityLevel
             };
 
             const isEditing = editingReportId !== null;
@@ -1110,12 +1259,12 @@ const ResiHomePage = () => {
                 onCloseSearch={() => setIsMobileSearchOpen(false)}
                 feedTab={feedTab}
                 onFeedTabChange={setFeedTab}
-                notifications={notifications.filter(n => !dismissedNotificationIds.has(n.notification_id)).slice(0, notificationsLimit)}
+                notifications={notifications.filter(n => !n.is_archived && !dismissedNotificationIds.has(n.notification_id)).slice(0, notificationsLimit)}
                 onMarkNotificationRead={handleMarkNotificationRead}
                 onDeleteNotification={handleDismissNotification}
                 onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
                 onNotificationClick={handleNotificationClick}
-                hasMoreNotifications={notifications.filter(n => !dismissedNotificationIds.has(n.notification_id)).length > notificationsLimit}
+                hasMoreNotifications={notifications.filter(n => !n.is_archived && !dismissedNotificationIds.has(n.notification_id)).length > notificationsLimit}
                 onLoadMoreNotifications={() => setNotificationsLimit(prev => prev + 10)}
             />
 
@@ -1325,56 +1474,68 @@ const ResiHomePage = () => {
                                 {/* STEP 3: AI Animal Analysis */}
                                 {reportStep === 3 && (
                                     <div className="space-y-6 animate-in fade-in duration-300">
-                                        <div className="p-5 bg-orange-50/60 border border-orange-200 rounded-3xl space-y-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-2xl bg-[#F97316] text-white flex items-center justify-center font-black text-lg shadow-md">
-                                                    🤖
-                                                </div>
+                                        {isAnalyzingMedia ? (
+                                            <div className="p-8 bg-orange-50/60 border border-orange-200 rounded-3xl flex flex-col items-center justify-center text-center space-y-3">
+                                                <div className="w-8 h-8 border-3 border-[#F97316] border-t-transparent rounded-full animate-spin" />
                                                 <div>
-                                                    <h4 className="text-xs font-black uppercase tracking-wider text-[#1a1208]">AI Analysis Suggestions</h4>
-                                                    <p className="text-[10px] font-bold text-gray-500">Automatically extracted from uploaded media</p>
+                                                    <h4 className="text-xs font-black uppercase tracking-wider text-[#1a1208]">Analyzing Media...</h4>
+                                                    <p className="text-[10px] font-bold text-gray-500 mt-1">Our AI is extracting animal characteristics from your uploaded photo</p>
                                                 </div>
                                             </div>
+                                        ) : (
+                                            <div className="p-5 bg-orange-50/60 border border-orange-200 rounded-3xl space-y-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-2xl bg-[#F97316] text-white flex items-center justify-center font-black text-lg shadow-md">
+                                                        🤖
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-xs font-black uppercase tracking-wider text-[#1a1208]">AI Analysis Suggestions</h4>
+                                                        <p className="text-[10px] font-bold text-gray-500">Automatically extracted from uploaded media</p>
+                                                    </div>
+                                                </div>
 
-                                            <div className="grid grid-cols-2 gap-3 text-xs font-bold text-[#1a1208] pt-2">
-                                                <div className="p-3 bg-white rounded-2xl border border-gray-100">
-                                                    <span className="text-[9px] font-black text-gray-400 block uppercase">Animal Type</span>
-                                                    <span className="text-[#F97316] font-black">{formData.animalType}</span>
+                                                <div className="grid grid-cols-2 gap-3 text-xs font-bold text-[#1a1208] pt-2">
+                                                    <div className="p-3 bg-white rounded-2xl border border-gray-100">
+                                                        <span className="text-[9px] font-black text-gray-400 block uppercase">Animal Type</span>
+                                                        <span className="text-[#F97316] font-black">{formData.animalType}</span>
+                                                    </div>
+                                                    <div className="p-3 bg-white rounded-2xl border border-gray-100">
+                                                        <span className="text-[9px] font-black text-gray-400 block uppercase">Animal Count</span>
+                                                        <span className="text-[#F97316] font-black">{formData.animalCount}</span>
+                                                    </div>
+                                                    <div className="p-3 bg-white rounded-2xl border border-gray-100">
+                                                        <span className="text-[9px] font-black text-gray-400 block uppercase">Primary Color</span>
+                                                        <span className="text-[#F97316] font-black">{formData.primaryColor}</span>
+                                                    </div>
+                                                    <div className="p-3 bg-white rounded-2xl border border-gray-100">
+                                                        <span className="text-[9px] font-black text-gray-400 block uppercase">Secondary Color</span>
+                                                        <span className="text-[#F97316] font-black">{formData.secondaryColor}</span>
+                                                    </div>
+                                                    <div className="p-3 bg-white rounded-2xl border border-gray-100">
+                                                        <span className="text-[9px] font-black text-gray-400 block uppercase">Coat Pattern</span>
+                                                        <span className="text-[#F97316] font-black">{formData.coatPattern}</span>
+                                                    </div>
+                                                    <div className="p-3 bg-white rounded-2xl border border-gray-100">
+                                                        <span className="text-[9px] font-black text-gray-400 block uppercase">Estimated Size</span>
+                                                        <span className="text-[#F97316] font-black">{formData.estimatedSize}</span>
+                                                    </div>
+                                                    <div className="p-3 bg-white rounded-2xl border border-gray-100">
+                                                        <span className="text-[9px] font-black text-gray-400 block uppercase">Possible Breed</span>
+                                                        <span className="text-[#F97316] font-black">{formData.animalBreed || 'Mixed Breed (61%)'}</span>
+                                                    </div>
+                                                    <div className="p-3 bg-white rounded-2xl border border-gray-100">
+                                                        <span className="text-[9px] font-black text-gray-400 block uppercase">Collar / Tag</span>
+                                                        <span className="text-gray-700 font-black">
+                                                            {aiAnalysisResult ? (aiAnalysisResult.collarDetected || aiAnalysisResult.qrTagDetected ? 'Detected' : 'None') : 'Detected'}
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                                <div className="p-3 bg-white rounded-2xl border border-gray-100">
-                                                    <span className="text-[9px] font-black text-gray-400 block uppercase">Animal Count</span>
-                                                    <span className="text-[#F97316] font-black">{formData.animalCount}</span>
-                                                </div>
-                                                <div className="p-3 bg-white rounded-2xl border border-gray-100">
-                                                    <span className="text-[9px] font-black text-gray-400 block uppercase">Primary Color</span>
-                                                    <span className="text-[#F97316] font-black">{formData.primaryColor}</span>
-                                                </div>
-                                                <div className="p-3 bg-white rounded-2xl border border-gray-100">
-                                                    <span className="text-[9px] font-black text-gray-400 block uppercase">Secondary Color</span>
-                                                    <span className="text-[#F97316] font-black">{formData.secondaryColor}</span>
-                                                </div>
-                                                <div className="p-3 bg-white rounded-2xl border border-gray-100">
-                                                    <span className="text-[9px] font-black text-gray-400 block uppercase">Coat Pattern</span>
-                                                    <span className="text-[#F97316] font-black">{formData.coatPattern}</span>
-                                                </div>
-                                                <div className="p-3 bg-white rounded-2xl border border-gray-100">
-                                                    <span className="text-[9px] font-black text-gray-400 block uppercase">Estimated Size</span>
-                                                    <span className="text-[#F97316] font-black">{formData.estimatedSize}</span>
-                                                </div>
-                                                <div className="p-3 bg-white rounded-2xl border border-gray-100">
-                                                    <span className="text-[9px] font-black text-gray-400 block uppercase">Possible Breed</span>
-                                                    <span className="text-[#F97316] font-black">{formData.animalBreed || 'Mixed Breed (61%)'}</span>
-                                                </div>
-                                                <div className="p-3 bg-white rounded-2xl border border-gray-100">
-                                                    <span className="text-[9px] font-black text-gray-400 block uppercase">Collar / Tag</span>
-                                                    <span className="text-gray-700 font-black">Detected</span>
-                                                </div>
+
+                                                <p className="text-[10px] font-bold text-gray-500 italic text-center">
+                                                    Citizens can review and edit all suggestions in the next step.
+                                                </p>
                                             </div>
-
-                                            <p className="text-[10px] font-bold text-gray-500 italic text-center">
-                                                Citizens can review and edit all suggestions in the next step.
-                                            </p>
-                                        </div>
+                                        )}
                                     </div>
                                 )}
 
@@ -1456,7 +1617,7 @@ const ResiHomePage = () => {
                                                     value={formData.coatPattern}
                                                     onChange={(e) => setFormData(prev => ({ ...prev, coatPattern: e.target.value }))}
                                                 >
-                                                    {['Unknown', 'Solid', 'Bicolor', 'Tricolor', 'Spotted', 'Brindle', 'Merle', 'Tabby', 'Calico', 'Tortoiseshell', 'Mixed'].map(p => (
+                                                    {VALID_COAT_PATTERNS.map(p => (
                                                         <option key={p} value={p}>{p}</option>
                                                     ))}
                                                 </select>
@@ -1470,6 +1631,41 @@ const ResiHomePage = () => {
                                                     value={formData.animalBreed}
                                                     onChange={(e) => setFormData(prev => ({ ...prev, animalBreed: e.target.value }))}
                                                 />
+                                                {(() => {
+                                                    const query = formData.animalBreed.trim().toLowerCase();
+                                                    if (!query) return null;
+                                                    const matchedBreed = breedsData.find((b) => {
+                                                        const breedName = b.name.toLowerCase();
+                                                        if (breedName === query) return true;
+                                                        if (query.length >= 3) {
+                                                            return breedName.includes(query) || query.includes(breedName);
+                                                        }
+                                                        return false;
+                                                    });
+
+                                                    if (matchedBreed && (breedImageUrl || isFetchingBreedImage)) {
+                                                        return (
+                                                            <div className="mt-3 flex items-center gap-3.5 bg-orange-50/40 border border-orange-100 rounded-2xl p-3.5 animate-in slide-in-from-top-2 duration-300">
+                                                                {isFetchingBreedImage ? (
+                                                                    <div className="w-12 h-12 rounded-xl border border-white bg-white/50 flex items-center justify-center shrink-0 shadow-sm">
+                                                                        <div className="w-4 h-4 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin" />
+                                                                    </div>
+                                                                ) : breedImageUrl ? (
+                                                                    <img 
+                                                                        src={breedImageUrl} 
+                                                                        alt="Breed Preview" 
+                                                                        className="w-12 h-12 object-cover rounded-xl shadow-sm border border-white shrink-0"
+                                                                    />
+                                                                ) : null}
+                                                                <div>
+                                                                    <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest leading-none">StraySafe Reference Photo</p>
+                                                                    <p className="text-[11px] font-black text-[#1a1208] mt-1">{matchedBreed.name} Standard Profile</p>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })()}
                                             </div>
                                         </div>
 
@@ -1550,7 +1746,7 @@ const ResiHomePage = () => {
                                             <input
                                                 type="text"
                                                 className="w-full h-12 bg-white border border-gray-200 rounded-2xl px-4 text-xs font-bold text-[#1a1208]"
-                                                value={resolvedAddress || 'Auto-filling street address...'}
+                                                value={isGeocoding ? 'Resolving street address...' : (resolvedAddress || 'Auto-filling street address...')}
                                                 readOnly
                                             />
                                         </div>
@@ -1656,6 +1852,9 @@ const ResiHomePage = () => {
                                             if (reportStep === 2 && !formData.category) {
                                                 alert('Please select a report category.');
                                                 return;
+                                            }
+                                            if (reportStep === 2) {
+                                                triggerMediaAnalysis();
                                             }
                                             if (reportStep === 5 && formData.observedConditions.length === 0) {
                                                 alert('Please select at least one observed condition.');
@@ -2318,11 +2517,71 @@ const ResiHomePage = () => {
                                                     </div>
                                                 </div>
 
+                                                {/* Lost Pet Owner Contact & QR Code Emergency Box */}
+                                                {(report.pet_id || report.owner_phone || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
+                                                    <div className="mb-5 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50/80 border-2 border-amber-200 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                                        <div className="flex items-start sm:items-center gap-3.5">
+                                                            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-600 to-orange-500 text-white flex items-center justify-center font-black text-xl shadow-md shrink-0">
+                                                                🐾
+                                                            </div>
+                                                            <div>
+                                                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                                    <span className="px-2 py-0.5 bg-amber-200/90 text-amber-900 rounded-md text-[9px] font-black uppercase tracking-wider">
+                                                                        Lost Registered Pet
+                                                                    </span>
+                                                                    {report.pet_name && (
+                                                                        <span className="text-xs font-black text-[#1a1208] uppercase">
+                                                                            {report.pet_name}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <p className="text-xs font-bold text-amber-950">
+                                                                    Owner: <span className="font-extrabold">{report.owner_name || report.reporter_name || 'Registered Resident'}</span>
+                                                                    {report.owner_phone && <span className="text-amber-800 font-bold ml-1.5">• 📞 {report.owner_phone}</span>}
+                                                                </p>
+                                                                {report.pet_qr_code_hash && (
+                                                                    <p className="text-[10px] font-bold text-amber-800/90 tracking-tight mt-1 flex items-center gap-1">
+                                                                        Pet QR Tag: <span className="font-mono bg-white/90 px-1.5 py-0.5 rounded border border-amber-300 font-bold text-amber-900">{report.pet_qr_code_hash}</span>
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                                                            {report.owner_phone && (
+                                                                <a
+                                                                    href={`tel:${report.owner_phone}`}
+                                                                    className="flex-1 sm:flex-initial px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center shadow-sm flex items-center justify-center gap-1.5"
+                                                                >
+                                                                    <span>📞</span>
+                                                                    <span>Contact Owner</span>
+                                                                </a>
+                                                            )}
+                                                            {report.pet_qr_code_url && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setActiveQrModal({
+                                                                        url: report.pet_qr_code_url,
+                                                                        petName: report.pet_name,
+                                                                        hash: report.pet_qr_code_hash,
+                                                                        ownerName: report.owner_name || report.reporter_name,
+                                                                        ownerPhone: report.owner_phone
+                                                                    })}
+                                                                    className="flex-1 sm:flex-initial px-3.5 py-2.5 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                                                                >
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                                                                    </svg>
+                                                                    <span>Pet QR Tag</span>
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 {/* Description */}
                                                 <div className="mb-4">
-                                                    <p className="text-[13px] sm:text-[15px] font-medium text-[#4a3b28] leading-relaxed">
-                                                        {report.description || 'No detailed description provided.'}
-                                                    </p>
+                                                    <FormattedReportDescription description={report.description} />
                                                 </div>
 
                                                 {/* Media Grid: The Focus */}
@@ -2583,29 +2842,43 @@ const ResiHomePage = () => {
                                             Notifications
                                         </h3>
                                         <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
-                                            {notifications.filter(n => !n.is_read).length} unread
+                                            {notifications.filter(n => !n.is_read && !n.is_archived).length} unread
                                         </p>
                                     </div>
                                 </div>
-                                {notifications.some(n => !n.is_read) && (
-                                    <button
-                                        onClick={handleMarkAllNotificationsRead}
-                                        className="text-[9px] font-black uppercase tracking-widest text-[#F97316] hover:text-orange-600 transition-colors"
+                                <div className="flex items-center gap-2">
+                                    {notifications.some(n => !n.is_read && !n.is_archived) && (
+                                        <button
+                                            onClick={handleMarkAllNotificationsRead}
+                                            className="text-[9px] font-black uppercase tracking-widest text-[#F97316] hover:text-orange-600 transition-colors"
+                                        >
+                                            Mark read
+                                        </button>
+                                    )}
+                                    <Link
+                                        to="/resident/settings?tab=notifications"
+                                        className="text-[9px] font-black uppercase tracking-widest text-gray-600 hover:text-[#F97316] transition-colors bg-gray-100 px-2 py-1 rounded-lg"
                                     >
-                                        Mark all read
-                                    </button>
-                                )}
+                                        📁 Archive
+                                    </Link>
+                                </div>
                             </div>
 
                             <div className="space-y-3 overflow-y-auto custom-scrollbar pr-1 flex-1">
-                                {notifications.length === 0 ? (
+                                {notifications.filter(n => !n.is_archived).length === 0 ? (
                                     <div className="text-center py-8">
                                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic">
-                                            No notifications yet
+                                            No active notifications
                                         </p>
+                                        <Link
+                                            to="/resident/settings?tab=notifications"
+                                            className="text-[10px] font-black text-[#F97316] hover:underline block mt-2"
+                                        >
+                                            View Archived Notifications →
+                                        </Link>
                                     </div>
                                 ) : (
-                                    notifications.filter(n => !dismissedNotificationIds.has(n.notification_id)).slice(0, notificationsLimit).map((notif) => {
+                                    notifications.filter(n => !n.is_archived && !dismissedNotificationIds.has(n.notification_id)).slice(0, notificationsLimit).map((notif) => {
                                         const typeStr = (notif.type || '').toLowerCase();
                                         const titleStr = (notif.title || '').toLowerCase();
                                         const msgStr = (notif.message || '').toLowerCase();
@@ -2616,6 +2889,7 @@ const ResiHomePage = () => {
                                             msgStr.includes('match') ||
                                             msgStr.includes('potential match') ||
                                             msgStr.includes('matches of your dog');
+                                        const isReportSubmitted = titleStr.includes('submitted');
                                         return (
                                             <div
                                                 key={notif.notification_id}
@@ -2652,7 +2926,7 @@ const ResiHomePage = () => {
                                                         </div>
 
                                                         <div className="flex items-center gap-1 shrink-0">
-                                                            {!notif.is_read && (
+                                                            {!notif.is_read && !isReportSubmitted && (
                                                                 <button
                                                                     onClick={(e) => { e.stopPropagation(); handleMarkNotificationRead(notif.notification_id); }}
                                                                     className="p-1 hover:bg-orange-50 rounded text-[#F97316]"
@@ -2921,7 +3195,7 @@ const ResiHomePage = () => {
                                         placeholder="Type or auto-detected landmark (e.g. PEL PHARMA SELERA)..."
                                     />
                                     <p className="text-[9px] font-semibold text-[#F97316] truncate mt-1">
-                                        📍 {resolvedAddress || 'Resolving address details...'}
+                                        📍 {isGeocoding ? 'Resolving address details...' : (resolvedAddress || 'No address detected')}
                                     </p>
                                 </div>
 
@@ -2945,6 +3219,61 @@ const ResiHomePage = () => {
                     </div>
                 </div>
             )}
+
+            {/* Lost Pet QR Code Lightbox Modal */}
+            {activeQrModal && (
+                <div 
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={() => setActiveQrModal(null)}
+                >
+                    <div 
+                        className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl border border-amber-100 animate-in zoom-in-95 duration-200 text-center relative"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <button
+                            onClick={() => setActiveQrModal(null)}
+                            className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-colors"
+                        >
+                            ✕
+                        </button>
+                        
+                        <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl font-black mx-auto mb-3">
+                            🐾
+                        </div>
+                        <h3 className="text-base font-black text-gray-900 uppercase tracking-tight mb-0.5">
+                            {activeQrModal.petName || 'Registered Pet'}
+                        </h3>
+                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-4">
+                            StraySafe Digital QR Tag
+                        </p>
+
+                        <div className="p-4 bg-amber-50/50 rounded-2xl border-2 border-dashed border-amber-200 inline-block mb-4">
+                            <img
+                                src={activeQrModal.url}
+                                alt="Pet QR Code"
+                                className="w-56 h-56 object-contain rounded-xl shadow-sm bg-white p-2 mx-auto"
+                            />
+                        </div>
+
+                        {activeQrModal.hash && (
+                            <p className="text-xs font-mono font-bold text-gray-600 mb-2">
+                                Tag ID: {activeQrModal.hash}
+                            </p>
+                        )}
+
+                        {activeQrModal.ownerPhone && (
+                            <div className="p-3 bg-amber-100/70 rounded-xl text-amber-950 text-xs font-bold mb-4">
+                                Owner Hotline: <span className="font-extrabold">{activeQrModal.ownerPhone}</span>
+                            </div>
+                        )}
+
+                        <p className="text-[10px] text-gray-400 font-medium">
+                            Scan this tag with the StraySafe Scanner to verify pet registry and instantly alert the owner.
+                        </p>
+                    </div>
+                </div>
+            )}
+
             <ResiMobileNav
                 isNavbarMenuOpen={isNavbarMenuOpen}
                 isSearchOpen={isMobileSearchOpen}

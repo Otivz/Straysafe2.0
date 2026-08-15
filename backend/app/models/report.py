@@ -52,6 +52,7 @@ class Report(Base):
     # AI Suggestions
     ai_animal_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     ai_dominant_color: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    ai_coat_pattern: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     ai_estimated_size: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     ai_possible_breed: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     ai_suggested_risk_level: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)

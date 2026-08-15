@@ -27,6 +27,7 @@ class PetClaim(Base):
     additional_photos_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     distinctive_markings: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    match_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

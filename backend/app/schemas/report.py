@@ -21,6 +21,14 @@ class ReportBase(BaseModel):
     priority_level: Optional[str] = 'Medium'
     visibility: Optional[str] = 'Public'
     is_possible_owned: Optional[bool] = False
+    ai_animal_type: Optional[str] = None
+    ai_dominant_color: Optional[str] = None
+    ai_coat_pattern: Optional[str] = None
+    ai_estimated_size: Optional[str] = None
+    ai_possible_breed: Optional[str] = None
+    ai_suggested_risk_level: Optional[str] = None
+    ai_suggested_priority: Optional[str] = None
+    ai_suggested_priority_reason: Optional[str] = None
     # Frontend sends "status_id"; we accept it here and map to current_status_id in the route
     status_id: Optional[int] = 1
 
@@ -123,6 +131,16 @@ class ReportResponse(ReportBase):
     ai_suggested_risk_level: Optional[str] = None
     ai_suggested_priority: Optional[str] = None
     ai_suggested_priority_reason: Optional[str] = None
+
+    # Owner & Pet Details (for Lost Pet Reports)
+    pet_name: Optional[str] = None
+    pet_qr_code_url: Optional[str] = None
+    pet_qr_code_hash: Optional[str] = None
+    owner_name: Optional[str] = None
+    owner_phone: Optional[str] = None
+    owner_email: Optional[str] = None
+    owner_address: Optional[str] = None
+    is_owner_report: Optional[bool] = False
 
     class Config:
         from_attributes = True

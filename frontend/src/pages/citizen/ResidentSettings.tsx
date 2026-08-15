@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
+import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
@@ -49,6 +50,7 @@ type SettingCategory = 'account' | 'my-pets' | 'notifications' | 'privacy' | 'lo
 
 const ResidentSettings = () => {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { theme: globalTheme, setTheme: setGlobalTheme } = useTheme();
     const [activeTab, setActiveTab] = useState<SettingCategory>('account');
     const [isNavbarMenuOpen, setIsNavbarMenuOpen] = useState(false);
@@ -60,24 +62,17 @@ const ResidentSettings = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Initial User Data
-    const userStr = localStorage.getItem('resident_user');
-    const initialUser = userStr ? {
+    const userStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
+    const parsedUserObj = userStr ? JSON.parse(userStr) : null;
+    const initialUser = parsedUserObj ? {
         latitude: null,
         longitude: null,
-        ...JSON.parse(userStr)
-    } : {
-        name: 'Resident User',
-        email: 'resident@straysafe.org',
-        phone: '',
-        address: 'San Roque, Tarlac',
-        latitude: 15.4802,
-        longitude: 120.5979,
-        user_id: 4,
-        created_at: new Date().toISOString()
-    };
+        ...parsedUserObj,
+        user_id: parsedUserObj.user_id || parsedUserObj.id
+    } : null;
 
     const [userData, setUserData] = useState<any>(initialUser);
-    const [editData, setEditData] = useState({ ...initialUser });
+    const [editData, setEditData] = useState<any>(initialUser || {});
 
     // Password State
     const [passwords, setPasswords] = useState({
@@ -101,6 +96,11 @@ const ResidentSettings = () => {
     const [emailNotif, setEmailNotif] = useState(true);
     const [pushNotif, setPushNotif] = useState(true);
 
+    // Archived Notifications State
+    const [notificationsList, setNotificationsList] = useState<any[]>([]);
+    const [notifFilterTab, setNotifFilterTab] = useState<'archived' | 'active' | 'all'>('archived');
+    const [notifSearch, setNotifSearch] = useState('');
+
     const [reportVisibility, setReportVisibility] = useState<'Public' | 'Private'>('Private');
     const [hideIdentity, setHideIdentity] = useState(false);
     const [allowContact, setAllowContact] = useState(true);
@@ -114,18 +114,154 @@ const ResidentSettings = () => {
     const [language, setLanguage] = useState('English');
 
     useEffect(() => {
+        const tabParam = searchParams.get('tab');
+        if (tabParam && ['account', 'my-pets', 'notifications', 'privacy', 'location', 'appearance', 'help', 'about'].includes(tabParam)) {
+            setActiveTab(tabParam as SettingCategory);
+        }
+    }, [searchParams]);
+
+    useEffect(() => {
         fetchUserProfile();
+        fetchUserNotifications();
     }, []);
 
+    const getUserId = () => {
+        const storedUser = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
+        if (storedUser) {
+            const parsed = JSON.parse(storedUser);
+            if (parsed.user_id || parsed.id) return parsed.user_id || parsed.id;
+        }
+        return userData?.user_id || userData?.id || initialUser?.user_id || 1;
+    };
+
+    const fetchUserNotifications = async () => {
+        const userId = getUserId();
+        if (!userId) return;
+        try {
+            const response = await axios.get(`http://localhost:8000/notifications/user/${userId}?include_archived=true`);
+            setNotificationsList(response.data);
+        } catch (error) {
+            console.error('Error fetching user notifications:', error);
+        }
+    };
+
+    const handleArchiveNotification = async (id: number) => {
+        try {
+            await axios.post(`http://localhost:8000/notifications/${id}/archive`);
+            fetchUserNotifications();
+            showNotification('Notification moved to archive');
+        } catch (error) {
+            console.error('Error archiving notification:', error);
+        }
+    };
+
+    const handleUnarchiveNotification = async (id: number) => {
+        try {
+            await axios.post(`http://localhost:8000/notifications/${id}/unarchive`);
+            fetchUserNotifications();
+            showNotification('Notification restored to active inbox');
+        } catch (error) {
+            console.error('Error restoring notification:', error);
+        }
+    };
+
+    const handleToggleRead = async (id: number, currentRead: boolean) => {
+        try {
+            await axios.patch(`http://localhost:8000/notifications/${id}`, { is_read: !currentRead });
+            fetchUserNotifications();
+        } catch (error) {
+            console.error('Error toggling read status:', error);
+        }
+    };
+
+    const handleDeleteNotification = async (id: number) => {
+        try {
+            await axios.delete(`http://localhost:8000/notifications/${id}`);
+            fetchUserNotifications();
+            showNotification('Notification permanently deleted');
+        } catch (error) {
+            console.error('Error deleting notification:', error);
+        }
+    };
+
+    const handleArchiveAll = async () => {
+        const userId = getUserId();
+        try {
+            await axios.post(`http://localhost:8000/notifications/archive-all/${userId}`);
+            fetchUserNotifications();
+            showNotification('All active notifications archived');
+        } catch (error) {
+            console.error('Error archiving all notifications:', error);
+        }
+    };
+
+    const handleClearArchived = async () => {
+        const userId = getUserId();
+        if (!window.confirm('Are you sure you want to permanently delete all archived notifications?')) return;
+        try {
+            await axios.delete(`http://localhost:8000/notifications/archived/clear/${userId}`);
+            fetchUserNotifications();
+            showNotification('Archived notifications cleared');
+        } catch (error) {
+            console.error('Error clearing archived notifications:', error);
+        }
+    };
+
+    const handleNotificationClick = (notif: any) => {
+        if (!notif.is_read) {
+            handleToggleRead(notif.notification_id, false);
+        }
+
+        const typeStr = (notif.type || '').toLowerCase();
+        const titleStr = (notif.title || '').toLowerCase();
+        const msgStr = (notif.message || '').toLowerCase();
+
+        const isMatch = typeStr === 'potential_match' ||
+            typeStr === 'match_review' ||
+            titleStr.includes('match') ||
+            titleStr.includes('sighting') ||
+            msgStr.includes('match') ||
+            msgStr.includes('potential match') ||
+            msgStr.includes('matches of your dog');
+
+        if (isMatch && notif.related_id) {
+            navigate(`/resident/reports/${notif.related_id}/match-review`);
+        } else if (notif.related_id) {
+            if (typeStr === 'alert' || titleStr.includes('scan')) {
+                navigate(`/resident/pet/${notif.related_id}/scan-history`);
+            } else {
+                navigate(`/resident/reports/${notif.related_id}`);
+            }
+        } else {
+            navigate('/resident/view-history');
+        }
+    };
+
+    const formatTimestamp = (dateStr: string) => {
+        if (!dateStr) return '';
+        const dt = new Date(dateStr);
+        return dt.toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+        });
+    };
+
     const fetchUserProfile = async () => {
-        const storedUser = localStorage.getItem('resident_user');
-        const userId = storedUser ? JSON.parse(storedUser).user_id : initialUser.user_id;
+        const userId = getUserId();
+        if (!userId) return;
 
         try {
-            const response = await axios.get(`http://localhost:8000/users/${userId}`);
+            const response = await api.get(`/users/${userId}`);
             setUserData(response.data);
             setEditData(response.data);
-            localStorage.setItem('resident_user', JSON.stringify(response.data));
+            if (localStorage.getItem('resident_user')) {
+                localStorage.setItem('resident_user', JSON.stringify(response.data));
+            } else {
+                sessionStorage.setItem('resident_user', JSON.stringify(response.data));
+            }
         } catch (error) {
             console.error('Error fetching user profile:', error);
         }
@@ -140,7 +276,7 @@ const ResidentSettings = () => {
         formData.append('file', file);
 
         try {
-            await axios.post(`http://localhost:8000/users/${userData.user_id}/profile-picture`, formData, {
+            await api.post(`/users/${userData.user_id}/profile-picture`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             fetchUserProfile();
@@ -165,7 +301,7 @@ const ResidentSettings = () => {
 
     const handleSaveChanges = async () => {
         try {
-            await axios.put(`http://localhost:8000/users/${userData.user_id}`, editData);
+            await api.put(`/users/${userData.user_id}`, editData);
             fetchUserProfile();
             showNotification('Settings saved successfully!');
         } catch (error) {
@@ -276,6 +412,15 @@ const ResidentSettings = () => {
                 searchValue={searchQuery}
                 isMobileSearchOpen={isMobileSearchOpen}
                 onCloseSearch={() => setIsMobileSearchOpen(false)}
+                notifications={notificationsList.filter(n => !n.is_archived)}
+                onMarkNotificationRead={(id) => handleToggleRead(id, false)}
+                onDeleteNotification={(id) => handleArchiveNotification(id)}
+                onMarkAllNotificationsRead={async () => {
+                    const storedUser = localStorage.getItem('resident_user');
+                    const userId = storedUser ? JSON.parse(storedUser).user_id : initialUser.user_id;
+                    await axios.post(`http://localhost:8000/notifications/mark-all-read/${userId}`);
+                    fetchUserNotifications();
+                }}
             />
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-32">
@@ -329,11 +474,10 @@ const ResidentSettings = () => {
                                     <button
                                         key={item.id}
                                         onClick={() => setActiveTab(item.id)}
-                                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all text-left ${
-                                            isActive
+                                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all text-left ${isActive
                                                 ? 'bg-[#F97316] text-white shadow-md shadow-orange-100 font-black'
                                                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                                        }`}
+                                            }`}
                                     >
                                         <span className={isActive ? 'text-white' : 'text-gray-400'}>{item.icon}</span>
                                         {item.label}
@@ -345,7 +489,7 @@ const ResidentSettings = () => {
 
                     {/* Right Panel Content */}
                     <div className="flex-1 bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 shadow-sm">
-                        
+
                         {/* 1. ACCOUNT CATEGORY */}
                         {activeTab === 'account' && (
                             <div className="space-y-8 animate-in fade-in duration-200">
@@ -602,9 +746,8 @@ const ResidentSettings = () => {
                                         </div>
                                         <button
                                             onClick={() => setEmailNotif(!emailNotif)}
-                                            className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all ${
-                                                emailNotif ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'
-                                            }`}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all ${emailNotif ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'
+                                                }`}
                                         >
                                             {emailNotif ? 'ON' : 'OFF'}
                                         </button>
@@ -617,13 +760,214 @@ const ResidentSettings = () => {
                                         </div>
                                         <button
                                             onClick={() => setPushNotif(!pushNotif)}
-                                            className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all ${
-                                                pushNotif ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'
-                                            }`}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all ${pushNotif ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'
+                                                }`}
                                         >
                                             {pushNotif ? 'ON' : 'OFF'}
                                         </button>
                                     </div>
+                                </div>
+
+                                {/* ARCHIVED & CLOSED NOTIFICATIONS SECTION */}
+                                <div className="pt-8 border-t border-gray-200 space-y-6">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                        <div>
+                                            <h3 className="text-base font-black text-[#1a1208] flex items-center gap-2">
+                                                <span className="p-2 bg-orange-100/70 text-[#F97316] rounded-xl text-sm">
+                                                    📁
+                                                </span>
+                                                Archived & Closed Notifications
+                                            </h3>
+                                            <p className="text-xs text-gray-500 font-semibold mt-1">
+                                                View, manage, restore, or clear notifications that were closed or archived
+                                            </p>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                                            {notificationsList.some(n => !n.is_archived) && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleArchiveAll}
+                                                    className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5"
+                                                >
+                                                    📥 Archive All Active
+                                                </button>
+                                            )}
+                                            {notificationsList.some(n => n.is_archived) && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleClearArchived}
+                                                    className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5"
+                                                >
+                                                    🗑️ Clear Archived
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Filter Pills & Search bar */}
+                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-gray-50/70 p-3 rounded-2xl border border-gray-100">
+                                        <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar pb-1 sm:pb-0">
+                                            <button
+                                                type="button"
+                                                onClick={() => setNotifFilterTab('archived')}
+                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all whitespace-nowrap ${notifFilterTab === 'archived'
+                                                        ? 'bg-[#F97316] text-white shadow-sm'
+                                                        : 'bg-white text-gray-600 hover:bg-gray-100'
+                                                    }`}
+                                            >
+                                                Archived / Closed ({notificationsList.filter(n => n.is_archived).length})
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setNotifFilterTab('active')}
+                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all whitespace-nowrap ${notifFilterTab === 'active'
+                                                        ? 'bg-[#F97316] text-white shadow-sm'
+                                                        : 'bg-white text-gray-600 hover:bg-gray-100'
+                                                    }`}
+                                            >
+                                                Active Inbox ({notificationsList.filter(n => !n.is_archived).length})
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setNotifFilterTab('all')}
+                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all whitespace-nowrap ${notifFilterTab === 'all'
+                                                        ? 'bg-[#F97316] text-white shadow-sm'
+                                                        : 'bg-white text-gray-600 hover:bg-gray-100'
+                                                    }`}
+                                            >
+                                                All History ({notificationsList.length})
+                                            </button>
+                                        </div>
+
+                                        <div className="relative flex-1 sm:max-w-xs">
+                                            <input
+                                                type="text"
+                                                placeholder="Search notifications..."
+                                                value={notifSearch}
+                                                onChange={(e) => setNotifSearch(e.target.value)}
+                                                className="w-full pl-9 pr-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-[#F97316]"
+                                            />
+                                            <svg className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                            </svg>
+                                        </div>
+                                    </div>
+
+                                    {/* Notifications List */}
+                                    {notificationsList.filter(n => {
+                                        if (notifFilterTab === 'archived' && !n.is_archived) return false;
+                                        if (notifFilterTab === 'active' && n.is_archived) return false;
+                                        if (notifSearch.trim()) {
+                                            const query = notifSearch.toLowerCase();
+                                            const titleMatch = (n.title || '').toLowerCase().includes(query);
+                                            const msgMatch = (n.message || '').toLowerCase().includes(query);
+                                            return titleMatch || msgMatch;
+                                        }
+                                        return true;
+                                    }).length === 0 ? (
+                                        <div className="text-center py-12 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200 p-6">
+                                            <div className="w-12 h-12 rounded-full bg-orange-50 text-[#F97316] mx-auto flex items-center justify-center text-xl mb-3">
+                                                📭
+                                            </div>
+                                            <h4 className="text-sm font-black text-[#1a1208]">No notifications found</h4>
+                                            <p className="text-xs text-gray-400 font-semibold mt-1">
+                                                {notifFilterTab === 'archived'
+                                                    ? 'Closed or archived notifications will appear here for viewing later.'
+                                                    : 'No notifications match your current filter or search criteria.'}
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar pr-1">
+                                            {notificationsList.filter(n => {
+                                                if (notifFilterTab === 'archived' && !n.is_archived) return false;
+                                                if (notifFilterTab === 'active' && n.is_archived) return false;
+                                                if (notifSearch.trim()) {
+                                                    const query = notifSearch.toLowerCase();
+                                                    const titleMatch = (n.title || '').toLowerCase().includes(query);
+                                                    const msgMatch = (n.message || '').toLowerCase().includes(query);
+                                                    return titleMatch || msgMatch;
+                                                }
+                                                return true;
+                                            }).map((notif) => (
+                                                <div
+                                                    key={notif.notification_id}
+                                                    onClick={() => handleNotificationClick(notif)}
+                                                    className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:border-orange-300 hover:shadow-sm ${notif.is_archived
+                                                            ? 'bg-gray-50/80 border-gray-200/80 text-gray-600'
+                                                            : notif.is_read
+                                                                ? 'bg-white border-gray-200'
+                                                                : 'bg-orange-50/30 border-orange-200'
+                                                        }`}
+                                                >
+                                                    <div className="flex items-start gap-3 flex-1">
+                                                        <div className={`p-2.5 rounded-xl text-lg shrink-0 ${notif.type === 'alert' ? 'bg-red-50 text-red-500' :
+                                                                notif.type === 'potential_match' ? 'bg-amber-50 text-amber-600' :
+                                                                    'bg-orange-50 text-[#F97316]'
+                                                            }`}>
+                                                            {notif.type === 'alert' ? '🚨' : notif.type === 'potential_match' ? '🔍' : '🔔'}
+                                                        </div>
+                                                        <div className="space-y-1 flex-1">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <h4 className="text-xs font-black text-[#1a1208]">{notif.title}</h4>
+                                                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${notif.is_archived ? 'bg-gray-200 text-gray-700' :
+                                                                        notif.is_read ? 'bg-gray-100 text-gray-500' : 'bg-orange-100 text-[#F97316]'
+                                                                    }`}>
+                                                                    {notif.is_archived ? 'Archived' : notif.is_read ? 'Read' : 'New'}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs text-gray-600 font-medium leading-relaxed">{notif.message}</p>
+                                                            <span className="text-[10px] text-gray-400 font-bold block pt-1">
+                                                                {formatTimestamp(notif.created_at)}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center border-t sm:border-t-0 pt-2 sm:pt-0 border-gray-100" onClick={(e) => e.stopPropagation()}>
+                                                        {notif.is_archived ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); handleUnarchiveNotification(notif.notification_id); }}
+                                                                className="px-3 py-1.5 bg-white hover:bg-orange-50 border border-gray-200 hover:border-orange-200 text-[#F97316] text-xs font-bold rounded-xl transition-all flex items-center gap-1 shadow-sm"
+                                                                title="Restore to Inbox"
+                                                            >
+                                                                📤 Restore
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); handleArchiveNotification(notif.notification_id); }}
+                                                                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1"
+                                                                title="Archive Notification"
+                                                            >
+                                                                📁 Archive
+                                                            </button>
+                                                        )}
+
+                                                        {!(notif.title || '').toLowerCase().includes('submitted') && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); handleToggleRead(notif.notification_id, notif.is_read); }}
+                                                                className="p-2 hover:bg-gray-100 rounded-xl text-gray-500 text-xs transition-colors"
+                                                                title={notif.is_read ? "Mark as Unread" : "Mark as Read"}
+                                                            >
+                                                                {notif.is_read ? '✉️' : '✔'}
+                                                            </button>
+                                                        )}
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => { e.stopPropagation(); handleDeleteNotification(notif.notification_id); }}
+                                                            className="p-2 hover:bg-red-50 rounded-xl text-red-500 text-xs transition-colors"
+                                                            title="Delete Permanently"
+                                                        >
+                                                            🗑️
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -643,11 +987,10 @@ const ResidentSettings = () => {
                                     <div className="grid grid-cols-2 gap-4 max-w-md">
                                         <button
                                             onClick={() => setReportVisibility('Public')}
-                                            className={`p-4 rounded-2xl border text-left transition-all ${
-                                                reportVisibility === 'Public'
+                                            className={`p-4 rounded-2xl border text-left transition-all ${reportVisibility === 'Public'
                                                     ? 'border-[#F97316] bg-orange-50/50 text-[#F97316] font-black shadow-sm'
                                                     : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                                            }`}
+                                                }`}
                                         >
                                             <span className="text-xs block">🌐 Public</span>
                                             <span className="text-[10px] text-gray-400 font-normal">Visible to community members</span>
@@ -655,11 +998,10 @@ const ResidentSettings = () => {
 
                                         <button
                                             onClick={() => setReportVisibility('Private')}
-                                            className={`p-4 rounded-2xl border text-left transition-all ${
-                                                reportVisibility === 'Private'
+                                            className={`p-4 rounded-2xl border text-left transition-all ${reportVisibility === 'Private'
                                                     ? 'border-[#F97316] bg-orange-50/50 text-[#F97316] font-black shadow-sm'
                                                     : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                                            }`}
+                                                }`}
                                         >
                                             <span className="text-xs block">🔒 Private</span>
                                             <span className="text-[10px] text-gray-400 font-normal">Visible to leaders & staff only</span>
@@ -794,11 +1136,10 @@ const ResidentSettings = () => {
                                     <div className="grid grid-cols-2 gap-4 max-w-md">
                                         <button
                                             onClick={() => setGlobalTheme('light')}
-                                            className={`p-4 rounded-2xl border text-left transition-all ${
-                                                globalTheme === 'light'
+                                            className={`p-4 rounded-2xl border text-left transition-all ${globalTheme === 'light'
                                                     ? 'border-[#F97316] bg-orange-50/50 dark:bg-orange-950/30 text-[#F97316] font-black shadow-sm'
                                                     : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
-                                            }`}
+                                                }`}
                                         >
                                             <span className="text-xs block font-bold">☀️ Light Mode</span>
                                             <span className="text-[10px] text-gray-400 font-normal">Clean bright interface</span>
@@ -806,11 +1147,10 @@ const ResidentSettings = () => {
 
                                         <button
                                             onClick={() => setGlobalTheme('dark')}
-                                            className={`p-4 rounded-2xl border text-left transition-all ${
-                                                globalTheme === 'dark'
+                                            className={`p-4 rounded-2xl border text-left transition-all ${globalTheme === 'dark'
                                                     ? 'border-[#F97316] bg-gray-900 dark:bg-gray-800 text-white font-black shadow-sm'
                                                     : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
-                                            }`}
+                                                }`}
                                         >
                                             <span className="text-xs block font-bold">🌙 Dark Mode</span>
                                             <span className="text-[10px] text-gray-400 font-normal">Sleek dark interface</span>
@@ -860,7 +1200,7 @@ const ResidentSettings = () => {
                                 {/* FAQ Section */}
                                 <div className="space-y-4">
                                     <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Frequently Asked Questions</h3>
-                                    
+
                                     <details className="bg-gray-50 border border-gray-150 rounded-2xl p-4 group">
                                         <summary className="font-bold text-xs text-gray-800 cursor-pointer flex justify-between items-center">
                                             How to report a stray animal?

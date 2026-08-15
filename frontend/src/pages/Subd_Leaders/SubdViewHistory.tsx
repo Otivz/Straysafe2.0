@@ -230,6 +230,10 @@ const SubdViewHistory = () => {
         switch (status?.toLowerCase()) {
             case 'resolved':
                 return 'bg-green-50 text-green-600 border-green-100';
+            case 'claimed by owner':
+                return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+            case 'released':
+                return 'bg-teal-50 text-teal-700 border-teal-200';
             case 'deceased':
                 return 'bg-gray-100 text-gray-600 border-gray-200';
             case 'rejected':
@@ -270,56 +274,69 @@ const SubdViewHistory = () => {
             return steps;
         }
 
-        // 2. Endorsed to Barangay
+        // 2. Report Verified
+        const verifiedHistory = report.history?.find((h: any) => h.report_status_id === 2);
+        const isVerified = !!verifiedHistory || report.status_id >= 2;
+        if (isVerified) {
+            steps.push({
+                label: 'Report Verified',
+                status: 'Resolved',
+                timestamp: verifiedHistory?.created_at ? new Date(verifiedHistory.created_at).toLocaleString() : '-',
+                note: verifiedHistory?.remarks || 'Incident report has been officially verified by the Subdivision Leader.'
+            });
+        }
+
+        // 3. Endorsed to Barangay (only if escalated or rescue exists)
         const escalatedHistory = report.history?.find((h: any) => h.report_status_id === 4);
         const isEscalated = !!escalatedHistory || (rescue && rescue.status_id >= 1);
-        steps.push({
-            label: 'Endorsed to Barangay',
-            status: isEscalated ? 'Resolved' : 'Not Started',
-            timestamp: escalatedHistory?.created_at ? new Date(escalatedHistory.created_at).toLocaleString() : '-',
-            note: isEscalated ? 'Official subdivision endorsement sent to Barangay.' : '-'
-        });
 
-        // 3. Rescue Team Assigned
-        const hasAssignment = rescue && (rescue.assigned_staff_name || (rescue.assignments && rescue.assignments.length > 0));
-        const assignedTimestamp = rescue?.assignments && rescue.assignments.length > 0 
-            ? new Date(rescue.assignments[0].assigned_at).toLocaleString() 
-            : '-';
-        steps.push({
-            label: 'Rescue Team Assigned',
-            status: hasAssignment ? 'Resolved' : 'Not Started',
-            timestamp: assignedTimestamp,
-            note: hasAssignment ? `Dispatched ${rescue.assigned_staff_name}.` : '-'
-        });
+        if (isEscalated) {
+            steps.push({
+                label: 'Endorsed to Barangay',
+                status: 'Resolved',
+                timestamp: escalatedHistory?.created_at ? new Date(escalatedHistory.created_at).toLocaleString() : '-',
+                note: escalatedHistory?.remarks || 'Official subdivision endorsement sent to Barangay.'
+            });
 
-        // 4. Rescue In Progress
-        const inProgressHistory = report.history?.find((h: any) => h.report_status_id === 5);
-        const isInProgress = !!inProgressHistory || (report.status_id >= 5 && report.status_id !== 13);
-        steps.push({
-            label: 'Rescue In Progress',
-            status: isInProgress ? 'Resolved' : 'Not Started',
-            timestamp: inProgressHistory?.created_at ? new Date(inProgressHistory.created_at).toLocaleString() : '-',
-            note: isInProgress ? `Barangay rescue squad dispatched and on-site at ${report.landmark || 'Subdivision Boundary'}.` : '-'
-        });
+            // 4. Rescue Team Assigned
+            const assignedHistory = report.history?.find((h: any) => h.report_status_id === 13);
+            const hasAssignment = !!assignedHistory || (rescue && (rescue.assigned_staff_name || (rescue.assignments && rescue.assignments.length > 0)));
+            steps.push({
+                label: 'Rescue Team Assigned',
+                status: hasAssignment ? 'Resolved' : 'Not Started',
+                timestamp: assignedHistory?.created_at ? new Date(assignedHistory.created_at).toLocaleString() : (rescue?.assignments?.[0]?.assigned_at ? new Date(rescue.assignments[0].assigned_at).toLocaleString() : '-'),
+                note: hasAssignment ? (assignedHistory?.remarks || `Dispatched ${rescue?.assigned_staff_name || 'Barangay Rescue Team'}.`) : '-'
+            });
 
-        // 5. Animal Picked Up
-        const pickedUpHistory = report.history?.find((h: any) => h.report_status_id === 6);
-        const isPickedUp = !!pickedUpHistory || (report.status_id >= 6 && report.status_id !== 13 && report.status_id !== 5);
-        steps.push({
-            label: 'Animal Picked Up',
-            status: isPickedUp ? 'Resolved' : 'Not Started',
-            timestamp: pickedUpHistory?.created_at ? new Date(pickedUpHistory.created_at).toLocaleString() : '-',
-            note: isPickedUp ? 'Animal safely secured by the rescue team.' : '-'
-        });
+            // 5. Rescue In Progress
+            const inProgressHistory = report.history?.find((h: any) => h.report_status_id === 5);
+            const isInProgress = !!inProgressHistory || (report.status_id >= 5 && report.status_id !== 13);
+            steps.push({
+                label: 'Rescue In Progress',
+                status: isInProgress ? 'Resolved' : 'Not Started',
+                timestamp: inProgressHistory?.created_at ? new Date(inProgressHistory.created_at).toLocaleString() : '-',
+                note: isInProgress ? (inProgressHistory?.remarks || `Barangay rescue squad dispatched and on-site at ${report.landmark || 'Subdivision Boundary'}.`) : '-'
+            });
 
-        // 6. Mission Resolved
-        const resolvedHistory = report.history?.find((h: any) => h.report_status_id === 11 || h.report_status_id === 12);
-        const isResolved = !!resolvedHistory || report.status_id === 11 || report.status_id === 12;
+            // 6. Animal Picked Up
+            const pickedUpHistory = report.history?.find((h: any) => h.report_status_id === 6);
+            const isPickedUp = !!pickedUpHistory || (report.status_id >= 6 && report.status_id !== 13 && report.status_id !== 5);
+            steps.push({
+                label: 'Animal Picked Up',
+                status: isPickedUp ? 'Resolved' : 'Not Started',
+                timestamp: pickedUpHistory?.created_at ? new Date(pickedUpHistory.created_at).toLocaleString() : '-',
+                note: isPickedUp ? (pickedUpHistory?.remarks || 'Animal safely secured by the rescue team.') : '-'
+            });
+        }
+
+        // 7. Mission Resolved
+        const resolvedHistory = report.history?.find((h: any) => [9, 10, 11, 12].includes(h.report_status_id));
+        const isResolved = !!resolvedHistory || [9, 10, 11, 12].includes(report.status_id);
         steps.push({
             label: 'Mission Resolved',
             status: isResolved ? 'Resolved' : 'Not Started',
             timestamp: resolvedHistory?.created_at ? new Date(resolvedHistory.created_at).toLocaleString() : '-',
-            note: isResolved ? 'Incident resolved successfully. Relocated to safety.' : '-'
+            note: isResolved ? (resolvedHistory?.remarks || 'Incident resolved successfully.') : '-'
         });
 
         return steps;
@@ -332,6 +349,8 @@ const SubdViewHistory = () => {
         let matchedHistory = null;
         if (stepLabel === 'Report Received') {
             matchedHistory = historyList.find((h: any) => h.report_status_id === 1);
+        } else if (stepLabel === 'Report Verified') {
+            matchedHistory = historyList.find((h: any) => h.report_status_id === 2);
         } else if (stepLabel === 'Report Rejected') {
             matchedHistory = historyList.find((h: any) => h.report_status_id === 3);
         } else if (stepLabel === 'Endorsed to Barangay') {
@@ -342,9 +361,9 @@ const SubdViewHistory = () => {
         } else if (stepLabel === 'Rescue In Progress') {
             matchedHistory = historyList.find((h: any) => h.report_status_id === 5);
         } else if (stepLabel === 'Animal Picked Up') {
-            matchedHistory = historyList.find((h: any) => h.report_status_id === 6 || h.report_status_id === 7 || h.report_status_id === 8 || h.report_status_id === 9 || h.report_status_id === 10);
+            matchedHistory = historyList.find((h: any) => h.report_status_id === 6 || h.report_status_id === 7 || h.report_status_id === 8);
         } else if (stepLabel === 'Mission Resolved') {
-            matchedHistory = historyList.find((h: any) => h.report_status_id === 11 || h.report_status_id === 12);
+            matchedHistory = historyList.find((h: any) => [9, 10, 11, 12].includes(h.report_status_id));
         }
 
         const getStepMedia = (statusIds: number[]) => {
@@ -357,13 +376,14 @@ const SubdViewHistory = () => {
         };
 
         let stepStatusIds: number[] = [];
-        if (stepLabel === 'Report Received') stepStatusIds = [1, 2];
+        if (stepLabel === 'Report Received') stepStatusIds = [1];
+        else if (stepLabel === 'Report Verified') stepStatusIds = [2];
         else if (stepLabel === 'Report Rejected') stepStatusIds = [3];
         else if (stepLabel === 'Endorsed to Barangay') stepStatusIds = [4];
         else if (stepLabel === 'Rescue Team Assigned') stepStatusIds = [13];
         else if (stepLabel === 'Rescue In Progress') stepStatusIds = [5];
-        else if (stepLabel === 'Animal Picked Up') stepStatusIds = [6, 7, 8, 9, 10];
-        else if (stepLabel === 'Mission Resolved') stepStatusIds = [11, 12];
+        else if (stepLabel === 'Animal Picked Up') stepStatusIds = [6, 7, 8];
+        else if (stepLabel === 'Mission Resolved') stepStatusIds = [9, 10, 11, 12];
 
         const stepMedia = getStepMedia(stepStatusIds);
 

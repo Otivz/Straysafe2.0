@@ -35,10 +35,11 @@ interface Report {
     comments?: any[];
     ai_animal_type?: string | null;
     ai_dominant_color?: string | null;
+    ai_coat_pattern?: string | null;
     ai_estimated_size?: string | null;
+    ai_possible_breed?: string | null;
     ai_suggested_risk_level?: string | null;
     ai_suggested_priority?: string | null;
-    ai_possible_breed?: string | null;
     ai_suggested_priority_reason?: string | null;
 }
 
@@ -539,8 +540,8 @@ const SubdReports = () => {
         const statName = statusMap[rep.status_id] || '';
         const matchesStatus = statusFilter === 'all' || statName.toLowerCase() === statusFilter.toLowerCase();
 
-        // Exclude resolved (11), deceased (12), and rejected (3) reports from the active list
-        const isActive = rep.status_id !== 11 && rep.status_id !== 12 && rep.status_id !== 3;
+        // Exclude resolved (11), deceased (12), rejected (3), claimed (9), and released (10) reports from the active ongoing list
+        const isActive = rep.status_id !== 11 && rep.status_id !== 12 && rep.status_id !== 3 && rep.status_id !== 9 && rep.status_id !== 10;
 
         return matchesSearch && matchesStatus && isActive;
     });
@@ -591,6 +592,10 @@ const SubdReports = () => {
                 return 'bg-orange-50 text-orange-600 border-orange-100';
             case 'resolved':
                 return 'bg-green-50 text-green-600 border-green-100';
+            case 'claimed by owner':
+                return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+            case 'released':
+                return 'bg-teal-50 text-teal-700 border-teal-200';
             default:
                 return 'bg-gray-50 text-gray-600 border-gray-100';
         }
@@ -1182,12 +1187,13 @@ const SubdReports = () => {
 
                                                 {/* AI Suggestion Panel */}
                                                 <AISuggestionPanel
-                                                    animalType={viewReport.animal_type || viewReport.ai_animal_type}
-                                                    dominantColor={(viewReport as any).animal_color || viewReport.ai_dominant_color}
-                                                    estimatedSize={(viewReport as any).estimated_size || viewReport.ai_estimated_size}
+                                                    animalType={viewReport.ai_animal_type || viewReport.animal_type}
+                                                    dominantColor={viewReport.ai_dominant_color || (viewReport as any).animal_color}
+                                                    coatPattern={viewReport.ai_coat_pattern}
+                                                    estimatedSize={viewReport.ai_estimated_size || (viewReport as any).estimated_size}
                                                     suggestedRiskLevel={viewReport.ai_suggested_risk_level}
                                                     suggestedPriority={viewReport.ai_suggested_priority}
-                                                    possibleBreed={(viewReport as any).animal_breed || viewReport.breed || viewReport.ai_possible_breed}
+                                                    possibleBreed={viewReport.ai_possible_breed || (viewReport as any).animal_breed || viewReport.breed}
                                                     description={viewReport.description}
                                                     categoryName={categoryMap[viewReport.category_id]}
                                                     suggestedPriorityReason={viewReport.ai_suggested_priority_reason}

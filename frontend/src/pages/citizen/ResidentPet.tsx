@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import api from '../../utils/api';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
@@ -213,6 +214,21 @@ const ResidentPet = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('All Pets');
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+    const [isReportLostModalOpen, setIsReportLostModalOpen] = useState(false);
+    const [reportingLostPet, setReportingLostPet] = useState<PetRecord | null>(null);
+    const [isSubmittingLostReport, setIsSubmittingLostReport] = useState(false);
+    const [lostPetForm, setLostPetForm] = useState({
+        lastSeenAt: '',
+        landmark: '',
+        latitude: 14.801313,
+        longitude: 121.003109,
+        collarDetails: '',
+        circumstances: '',
+        reward: '',
+        contactName: '',
+        contactPhone: '',
+        additionalNotes: ''
+    });
     const [breedsData, setBreedsData] = useState<any[]>([]);
     const [breedImageUrl, setBreedImageUrl] = useState<string | null>(null);
     const [isFetchingBreedImage, setIsFetchingBreedImage] = useState(false);
@@ -611,21 +627,125 @@ const ResidentPet = () => {
         setIsAddPetModalOpen(true);
     };
 
-    const handleReportLostFromProfile = async (petRecord: PetRecord) => {
+    const handleOpenReportLostForm = (petRecord: PetRecord) => {
         const petObj = petRecord.rawPetObj;
         if (!petObj) return;
-        if (window.confirm("Are you sure you want to mark this pet as LOST? This will alert subdivision leaders and notify your neighborhood.")) {
-            try {
-                setSelectedPet(null);
-                await axios.put(`http://localhost:8000/pets/${petObj.pet_id}`, {
-                    status: 'Lost'
-                });
-                fetchPets();
-                alert("Pet marked as LOST. Neighborhood alerts dispatched successfully.");
-            } catch (error) {
-                console.error("Failed to mark pet as lost:", error);
-                alert("Failed to update status.");
+
+        setSelectedPet(null);
+        setIsReportLostModalOpen(false);
+
+        const userStr = localStorage.getItem('resident_user');
+        const currentUser = userStr ? JSON.parse(userStr) : null;
+        
+        // Default to local datetime
+        const now = new Date();
+        const localDatetime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
+        setLostPetForm({
+            lastSeenAt: localDatetime,
+            landmark: petObj.registered_address || 'Selera Homes Phase 1',
+            latitude: petObj.registered_latitude ? Number(petObj.registered_latitude) : 14.801313,
+            longitude: petObj.registered_longitude ? Number(petObj.registered_longitude) : 121.003109,
+            collarDetails: petObj.distinctive_markings || petObj.color_markings || '',
+            circumstances: '',
+            reward: '',
+            contactName: currentUser?.name || petObj.owner_name || '',
+            contactPhone: currentUser?.phone || petObj.emergency_contact_phone || '',
+            additionalNotes: ''
+        });
+
+        setReportingLostPet(petRecord);
+    };
+
+    const handleReportLostFromProfile = handleOpenReportLostForm;
+
+    const handleSubmitLostPetReport = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!reportingLostPet || !reportingLostPet.rawPetObj) return;
+        const petObj = reportingLostPet.rawPetObj;
+
+        if (!lostPetForm.landmark.trim()) {
+            alert('Please specify the landmark or area where the pet was last seen.');
+            return;
+        }
+        if (!lostPetForm.contactPhone.trim()) {
+            alert('Please provide a contact phone number so finders can reach you.');
+            return;
+        }
+
+        setIsSubmittingLostReport(true);
+        try {
+            // 1. Update pet status in DB to 'Lost' with last seen location and time
+            await api.put(`/pets/${petObj.pet_id}`, {
+                status: 'Lost',
+                last_seen_lat: lostPetForm.latitude,
+                last_seen_lng: lostPetForm.longitude,
+                last_seen_at: lostPetForm.lastSeenAt ? new Date(lostPetForm.lastSeenAt).toISOString() : new Date().toISOString()
+            });
+
+            // 2. Build report payload with rich details
+            const storedUserId = localStorage.getItem('user_id');
+            const userStr = localStorage.getItem('resident_user');
+            const currentUser = userStr ? JSON.parse(userStr) : null;
+            const userId = storedUserId ? parseInt(storedUserId) : (petObj.owner_id || 1);
+            const storedSubdId = localStorage.getItem('subdivision_id');
+            const subdId = storedSubdId ? parseInt(storedSubdId) : (petObj.subdivision_id || 1);
+
+            const colorDesc = `${petObj.primary_color || ''}${petObj.secondary_color ? ' and ' + petObj.secondary_color : ''}`.trim() || 'Brown';
+            const ownerName = lostPetForm.contactName.trim() || petObj.owner_name || currentUser?.name || 'Registered Owner';
+            const ownerPhone = lostPetForm.contactPhone.trim() || petObj.owner_phone || currentUser?.phone || 'Available in StraySafe';
+            const qrInfo = petObj.qr_code_hash ? ` [QR Tag: ${petObj.qr_code_hash}]` : '';
+
+            let desc = `[LOST PET REPORT] Missing registered pet: ${reportingLostPet.name}${qrInfo}.\n\n` +
+                `• Species & Breed: ${petObj.pet_type || 'Pet'} - ${petObj.breed || 'Unknown'}\n` +
+                `• Color & Markings: ${colorDesc}` + (lostPetForm.collarDetails ? ` | ${lostPetForm.collarDetails}` : '') + `\n` +
+                `• Contact Person: ${ownerName} (${ownerPhone})\n` +
+                `• Last Seen: ${lostPetForm.lastSeenAt ? new Date(lostPetForm.lastSeenAt).toLocaleString() : 'Recently'} around ${lostPetForm.landmark}\n`;
+
+            if (lostPetForm.circumstances.trim()) {
+                desc += `• Loss Circumstances & Notes: ${lostPetForm.circumstances.trim()}\n`;
             }
+            if (lostPetForm.reward.trim()) {
+                desc += `• Reward: ${lostPetForm.reward.trim()}\n`;
+            }
+            if (lostPetForm.additionalNotes.trim()) {
+                desc += `• Additional Instructions: ${lostPetForm.additionalNotes.trim()}\n`;
+            }
+            desc += `\nIf you see this pet, please immediately call ${ownerName} at ${ownerPhone} or scan the pet's StraySafe QR tag!`;
+
+            const res = await api.post('/reports/', {
+                user_id: userId,
+                subdivision_id: subdId,
+                pet_id: petObj.pet_id,
+                category_id: 1,
+                animal_type: petObj.pet_type || 'Dog',
+                animal_breed: petObj.breed || '',
+                animal_color: colorDesc,
+                estimated_size: petObj.weight ? `${petObj.weight} kg` : 'Medium',
+                description: desc,
+                landmark: lostPetForm.landmark.trim() || 'Selera Homes',
+                latitude: lostPetForm.latitude || 14.801313,
+                longitude: lostPetForm.longitude || 121.003109,
+                priority_level: 'High',
+                visibility: 'Public',
+                is_possible_owned: true,
+                status_id: 1
+            });
+
+            const createdReportId = res.data?.report_id;
+            fetchPets();
+            setReportingLostPet(null);
+
+            if (createdReportId && window.confirm(`${reportingLostPet.name} has been marked as LOST and an alert was broadcasted to your neighborhood.\n\nWould you like to view the created report now?`)) {
+                navigate(`/resident/reports/${createdReportId}`);
+            } else {
+                alert(`${reportingLostPet.name} has been marked as LOST and an official report has been filed.`);
+            }
+        } catch (error) {
+            console.error("Failed to mark pet as lost and file report:", error);
+            alert("Failed to submit lost pet report. Please try again.");
+        } finally {
+            setIsSubmittingLostReport(false);
         }
     };
 
@@ -640,56 +760,73 @@ const ResidentPet = () => {
             />
 
             <main className="max-w-6xl mx-auto p-4 sm:p-8 pt-24 sm:pt-32">
-                {/* Title & Register Action Button */}
+                {/* Title & Action Buttons */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
                     <div>
                         <h1 className="text-4xl font-black text-[#1a1208] uppercase tracking-tighter">My Family <span className="text-[#F97316]">Pets</span></h1>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-2">Manage your pets' health and identification records</p>
                     </div>
-                    <Button
-                        variant="primary"
-                        onClick={() => {
-                            setEditingPetId(null);
-                            setFormData({
-                                name: '',
-                                species: 'Dog',
-                                breed: '',
-                                gender: 'Male',
-                                primaryColor: 'Brown',
-                                customPrimaryColor: '',
-                                secondaryColor: '',
-                                customSecondaryColor: '',
-                                color: '',
-                                age: '',
-                                status: 'Active',
-                                weight: '',
-                                mediaFiles: [],
-                                photoFrontFiles: [],
-                                photoLeftFiles: [],
-                                photoRightFiles: [],
-                                isVaccinated: true,
-                                vaccinationDate: '2026-05-10',
-                                isNeutered: true,
-                                healthNotes: '',
-                                vaccineCardFiles: [],
-                                temperament: 'Friendly',
-                                hasBiteHistory: null,
-                                chaseBehavior: null,
-                                existingVaccineCardUrl: null
-                            });
-                            setAiSuggestedSpecies(null);
-                            setAiSuggestedColor(null);
-                            setFormErrors({});
-                            setSubmitErrorMessage(null);
-                            setIsAddPetModalOpen(true);
-                        }}
-                        className="bg-[#F97316] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-200 hover:scale-105 transition-all flex items-center gap-3 cursor-pointer"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
-                        </svg>
-                        Register New Pet
-                    </Button>
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <Button
+                            onClick={() => {
+                                if (pets.length > 0) {
+                                    setIsReportLostModalOpen(true);
+                                } else {
+                                    navigate('/resident/report/new');
+                                }
+                            }}
+                            className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-sm hover:scale-105 transition-all flex items-center gap-2.5 cursor-pointer"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            Report Lost Pet
+                        </Button>
+                        <Button
+                            variant="primary"
+                            onClick={() => {
+                                setEditingPetId(null);
+                                setFormData({
+                                    name: '',
+                                    species: 'Dog',
+                                    breed: '',
+                                    gender: 'Male',
+                                    primaryColor: 'Brown',
+                                    customPrimaryColor: '',
+                                    secondaryColor: '',
+                                    customSecondaryColor: '',
+                                    color: '',
+                                    age: '',
+                                    status: 'Active',
+                                    weight: '',
+                                    mediaFiles: [],
+                                    photoFrontFiles: [],
+                                    photoLeftFiles: [],
+                                    photoRightFiles: [],
+                                    isVaccinated: true,
+                                    vaccinationDate: '2026-05-10',
+                                    isNeutered: true,
+                                    healthNotes: '',
+                                    vaccineCardFiles: [],
+                                    temperament: 'Friendly',
+                                    hasBiteHistory: null,
+                                    chaseBehavior: null,
+                                    existingVaccineCardUrl: null
+                                });
+                                setAiSuggestedSpecies(null);
+                                setAiSuggestedColor(null);
+                                setFormErrors({});
+                                setSubmitErrorMessage(null);
+                                setIsAddPetModalOpen(true);
+                            }}
+                            className="bg-[#F97316] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-200 hover:scale-105 transition-all flex items-center gap-3 cursor-pointer"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
+                            </svg>
+                            Register New Pet
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Premium Custom Search & Status Filter Bar */}
@@ -800,16 +937,28 @@ const ResidentPet = () => {
                                             <p className="text-xs font-black text-[#1a1208] uppercase">{pet.gender}</p>
                                         </div>
                                     </div>
-                                    <div className="pt-4 flex gap-3 border-t border-gray-50">
+                                    <div className="pt-4 flex gap-2 border-t border-gray-50">
                                         <button 
                                             onClick={() => setSelectedPet(transformToPetRecord(pet))}
-                                            className="flex-1 py-3.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer text-center"
+                                            className="flex-1 py-3 bg-orange-50 hover:bg-orange-100 text-[#F97316] text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer text-center"
                                         >
                                             View Profile
                                         </button>
+                                        {pet.status?.toLowerCase() !== 'lost' && (
+                                            <button 
+                                                onClick={() => handleReportLostFromProfile(transformToPetRecord(pet))}
+                                                className="px-3.5 py-3 bg-red-50 hover:bg-red-100 text-red-600 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border border-red-100 shadow-2xs"
+                                                title="Report Lost Pet"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                </svg>
+                                                Report Lost
+                                            </button>
+                                        )}
                                         <button 
                                             onClick={() => handleDeletePet(pet.pet_id)}
-                                            className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors cursor-pointer"
+                                            className="p-3 bg-gray-50 text-gray-400 hover:text-red-500 rounded-xl hover:bg-red-50 transition-colors cursor-pointer"
                                             title="Remove Pet"
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1554,6 +1703,318 @@ const ResidentPet = () => {
                             onEditClick={handleEditPetFromProfile}
                             onReportLostClick={handleReportLostFromProfile}
                         />
+                    </div>
+                </div>
+            )}
+
+            {/* Report Lost Pet Modal */}
+            {isReportLostModalOpen && (
+                <div className="fixed inset-0 z-[450] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="relative w-full max-w-xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden p-6 sm:p-8 animate-in zoom-in-95 duration-300 flex flex-col space-y-6 max-h-[85vh]">
+                        {/* Header */}
+                        <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center border border-red-100 shadow-xs">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight">Report Lost Pet</h3>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Broadcast missing pet alert to your community</p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => setIsReportLostModalOpen(false)}
+                                className="w-9 h-9 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#1a1208] hover:bg-gray-50 transition-all cursor-pointer"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Pet Selection List */}
+                        <div className="space-y-3 overflow-y-auto flex-1 pr-1 custom-scrollbar">
+                            <p className="text-xs font-bold text-gray-500">
+                                Select a registered pet to mark as <span className="text-red-600 font-black">LOST</span> and dispatch alerts:
+                            </p>
+                            {pets.map((pet) => {
+                                const isAlreadyLost = pet.status?.toLowerCase() === 'lost';
+                                return (
+                                    <div key={pet.pet_id} className="flex items-center justify-between p-4 rounded-2xl border border-gray-100 bg-[#FAFAF9] hover:bg-white hover:border-gray-200 transition-all">
+                                        <div className="flex items-center gap-3.5">
+                                            <img 
+                                                src={getPetPicture(pet.photo_url)} 
+                                                alt={pet.pet_name} 
+                                                className="w-12 h-12 rounded-xl object-cover border border-gray-200"
+                                                onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
+                                            />
+                                            <div>
+                                                <h4 className="text-sm font-black text-[#1a1208] uppercase">{pet.pet_name}</h4>
+                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{pet.breed || pet.pet_type} • {pet.gender}</p>
+                                            </div>
+                                        </div>
+
+                                        {isAlreadyLost ? (
+                                            <span className="px-3.5 py-1.5 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-red-100">
+                                                Already Lost
+                                            </span>
+                                        ) : (
+                                            <button
+                                                onClick={() => handleReportLostFromProfile(transformToPetRecord(pet))}
+                                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-sm hover:scale-105"
+                                            >
+                                                Report Lost
+                                            </button>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Footer Action to General Report */}
+                        <div className="pt-3 border-t border-gray-100 flex flex-col gap-2">
+                            <button
+                                onClick={() => {
+                                    setIsReportLostModalOpen(false);
+                                    navigate('/resident/report/new');
+                                    }}
+                                className="w-full py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer text-center"
+                            >
+                                File a New Stray / Lost Animal Report Form →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Lost Pet Additional Details & Broadcast Modal */}
+            {reportingLostPet && (
+                <div className="fixed inset-0 z-[500] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="relative w-full max-w-2xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden p-6 sm:p-8 animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
+                        {/* Modal Header */}
+                        <div className="flex items-start justify-between pb-4 border-b border-gray-100 shrink-0">
+                            <div className="flex items-center gap-3.5">
+                                <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center border border-red-100 shadow-xs text-xl">
+                                    📢
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="text-lg sm:text-xl font-black text-[#1a1208] uppercase tracking-tight">
+                                            Report Lost Pet Alert
+                                        </h3>
+                                        <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-[9px] font-black uppercase tracking-wider animate-pulse">
+                                            Live Broadcast
+                                        </span>
+                                    </div>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                                        Add sighting details and circumstances before alerting the community
+                                    </p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => !isSubmittingLostReport && setReportingLostPet(null)}
+                                disabled={isSubmittingLostReport}
+                                className="w-9 h-9 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#1a1208] hover:bg-gray-50 transition-all cursor-pointer disabled:opacity-50"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Pet Summary Card */}
+                        <div className="mt-4 p-3.5 bg-red-50/50 rounded-2xl border border-red-100 flex items-center justify-between gap-3 shrink-0">
+                            <div className="flex items-center gap-3">
+                                <img 
+                                    src={reportingLostPet.avatar || DEFAULT_PET_AVATAR} 
+                                    alt={reportingLostPet.name}
+                                    className="w-12 h-12 rounded-xl object-cover border border-red-200 shadow-xs"
+                                    onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
+                                />
+                                <div>
+                                    <h4 className="text-sm font-black text-[#1a1208] uppercase">{reportingLostPet.name}</h4>
+                                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                        {reportingLostPet.breed || reportingLostPet.species} • {reportingLostPet.primaryColor || 'Mixed'} • {reportingLostPet.gender}
+                                    </p>
+                                </div>
+                            </div>
+                            {reportingLostPet.rawPetObj?.qr_code_hash && (
+                                <div className="text-right">
+                                    <span className="text-[8px] font-black text-amber-700 uppercase tracking-widest block">QR Tag ID</span>
+                                    <span className="font-mono text-[10px] font-extrabold text-amber-900 bg-amber-100 px-2 py-0.5 rounded-lg border border-amber-200">
+                                        {reportingLostPet.rawPetObj.qr_code_hash}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Form Body */}
+                        <form onSubmit={handleSubmitLostPetReport} className="mt-4 space-y-4 overflow-y-auto pr-1 flex-1 custom-scrollbar">
+                            {/* Time & Location Grid */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest flex items-center gap-1.5">
+                                        <span>⏰</span> When was {reportingLostPet.name} last seen? *
+                                    </label>
+                                    <input 
+                                        type="datetime-local" 
+                                        required
+                                        className="w-full bg-[#FAFAF9] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#1a1208] focus:outline-none focus:border-red-400 transition-all shadow-inner"
+                                        value={lostPetForm.lastSeenAt}
+                                        onChange={(e) => setLostPetForm({ ...lostPetForm, lastSeenAt: e.target.value })}
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest flex items-center gap-1.5">
+                                        <span>📍</span> Last Seen Landmark / Area *
+                                    </label>
+                                    <input 
+                                        type="text" 
+                                        required
+                                        placeholder="e.g. Near Selera Clubhouse, Block 5, Phase 1 Gate..."
+                                        className="w-full bg-[#FAFAF9] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#1a1208] focus:outline-none focus:border-red-400 transition-all shadow-inner"
+                                        value={lostPetForm.landmark}
+                                        onChange={(e) => setLostPetForm({ ...lostPetForm, landmark: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Quick Landmark Chips */}
+                            <div className="space-y-1.5">
+                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                                    Quick Area Suggestions:
+                                </span>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {[
+                                        'Selera Clubhouse', 
+                                        'Phase 1 Gate', 
+                                        'Phase 2 Playground', 
+                                        'Basketball Court', 
+                                        'Selera Main Boulevard', 
+                                        'Near Resident Home'
+                                    ].map((spot) => (
+                                        <button
+                                            type="button"
+                                            key={spot}
+                                            onClick={() => setLostPetForm({ ...lostPetForm, landmark: spot })}
+                                            className="px-2.5 py-1 bg-gray-100 hover:bg-red-50 hover:text-red-700 text-gray-600 rounded-lg text-[9px] font-bold transition-colors cursor-pointer border border-transparent hover:border-red-200"
+                                        >
+                                            + {spot}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Collar & Distinguishing Marks */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest flex items-center gap-1.5">
+                                    <span>🏷️</span> Collar, Accessories & Identifying Marks
+                                </label>
+                                <input 
+                                    type="text" 
+                                    placeholder="e.g. Wearing blue collar with bell, white patch on left chest, cropped tail"
+                                    className="w-full bg-[#FAFAF9] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#1a1208] focus:outline-none focus:border-red-400 transition-all shadow-inner"
+                                    value={lostPetForm.collarDetails}
+                                    onChange={(e) => setLostPetForm({ ...lostPetForm, collarDetails: e.target.value })}
+                                />
+                            </div>
+
+                            {/* Circumstances & Story */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest flex items-center gap-1.5">
+                                    <span>📝</span> Circumstances of Loss & Pet Behavior Notes
+                                </label>
+                                <textarea 
+                                    rows={3}
+                                    placeholder="e.g. Slipped past the front gate during delivery. Timid with strangers but very gentle, answers to 'Coco'. Please do not chase; approach slowly with treats..."
+                                    className="w-full bg-[#FAFAF9] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-medium text-[#1a1208] focus:outline-none focus:border-red-400 transition-all shadow-inner leading-relaxed"
+                                    value={lostPetForm.circumstances}
+                                    onChange={(e) => setLostPetForm({ ...lostPetForm, circumstances: e.target.value })}
+                                />
+                            </div>
+
+                            {/* Contact & Reward Grid */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest">
+                                        Contact Person
+                                    </label>
+                                    <input 
+                                        type="text" 
+                                        required
+                                        placeholder="Owner Name"
+                                        className="w-full bg-[#FAFAF9] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#1a1208] focus:outline-none focus:border-red-400 transition-all shadow-inner"
+                                        value={lostPetForm.contactName}
+                                        onChange={(e) => setLostPetForm({ ...lostPetForm, contactName: e.target.value })}
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest">
+                                        Emergency Phone *
+                                    </label>
+                                    <input 
+                                        type="tel" 
+                                        required
+                                        placeholder="0912 345 6789"
+                                        className="w-full bg-[#FAFAF9] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#1a1208] focus:outline-none focus:border-red-400 transition-all shadow-inner"
+                                        value={lostPetForm.contactPhone}
+                                        onChange={(e) => setLostPetForm({ ...lostPetForm, contactPhone: e.target.value })}
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest">
+                                        Reward (Optional)
+                                    </label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="e.g. ₱1,000 Reward"
+                                        className="w-full bg-[#FAFAF9] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-amber-900 bg-amber-50/50 border-amber-200 rounded-xl focus:outline-none focus:border-amber-400 transition-all shadow-inner"
+                                        value={lostPetForm.reward}
+                                        onChange={(e) => setLostPetForm({ ...lostPetForm, reward: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Information Notice */}
+                            <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-[10px] text-amber-900 font-medium leading-relaxed flex items-start gap-2">
+                                <span className="text-amber-600 text-sm">💡</span>
+                                <span>
+                                    Submitting this report will mark <strong>{reportingLostPet.name}</strong> as <span className="text-red-700 font-bold">LOST</span>, broadcast an urgent missing pet alert to your subdivision feed, and enable instant QR-scan notifications for any neighbor who finds your pet.
+                                </span>
+                            </div>
+
+                            {/* Modal Footer Actions */}
+                            <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-3 shrink-0">
+                                <button
+                                    type="button"
+                                    disabled={isSubmittingLostReport}
+                                    onClick={() => setReportingLostPet(null)}
+                                    className="px-5 py-3 rounded-2xl border border-gray-200 text-gray-600 font-black text-xs uppercase tracking-widest hover:bg-gray-50 transition-all cursor-pointer disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmittingLostReport}
+                                    className="px-7 py-3.5 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-red-200 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                                >
+                                    {isSubmittingLostReport ? (
+                                        <>
+                                            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                            Broadcasting Alert...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span>📢</span>
+                                            Broadcast Lost Pet Report
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

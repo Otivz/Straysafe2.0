@@ -92,6 +92,8 @@ const BrgyHistoryReports = () => {
 
     const historyReports = reports.filter(rep => 
         rep.status_id === 11 || 
+        rep.status_id === 9 ||
+        rep.status_id === 10 ||
         rep.status_id === 12 || 
         (rep.status_id === 3 && rep.history?.some((h: any) => h.report_status_id === 4))
     );
@@ -112,7 +114,7 @@ const BrgyHistoryReports = () => {
     });
 
     const totalHistory = historyReports.length;
-    const resolvedCount = historyReports.filter(r => r.status_id === 11).length;
+    const resolvedCount = historyReports.filter(r => r.status_id === 11 || r.status_id === 9 || r.status_id === 10).length;
     const deceasedCount = historyReports.filter(r => r.status_id === 12).length;
     const rejectedCount = historyReports.filter(r => r.status_id === 3).length;
 
@@ -130,6 +132,8 @@ const BrgyHistoryReports = () => {
     const getStatusColor = (status: string) => {
         switch ((status || '').toLowerCase()) {
             case 'resolved': return 'bg-green-50 text-green-600 border-green-100';
+            case 'claimed by owner': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+            case 'released': return 'bg-teal-50 text-teal-700 border-teal-200';
             case 'deceased': return 'bg-gray-100 text-gray-600 border-gray-200';
             case 'rejected': return 'bg-red-50 text-red-600 border-red-100';
             default: return 'bg-gray-50 text-gray-600 border-gray-100';
@@ -137,7 +141,7 @@ const BrgyHistoryReports = () => {
     };
 
     const getStatusIcon = (statusId: number) => {
-        if (statusId === 11) return (
+        if (statusId === 11 || statusId === 9 || statusId === 10) return (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
             </svg>
@@ -329,7 +333,7 @@ const BrgyHistoryReports = () => {
                                     key: "status",
                                     render: (rep) => (
                                         <div className="flex items-center gap-2">
-                                            <span className={`${rep.status_id === 11 ? 'text-green-500' : rep.status_id === 12 ? 'text-gray-500' : 'text-red-500'}`}>
+                                            <span className={`${[11, 9, 10].includes(rep.status_id) ? 'text-green-500' : rep.status_id === 12 ? 'text-gray-500' : 'text-red-500'}`}>
                                                 {getStatusIcon(rep.status_id)}
                                             </span>
                                             <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || '')}`}>

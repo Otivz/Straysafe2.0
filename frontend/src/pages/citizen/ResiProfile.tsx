@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
@@ -87,51 +87,49 @@ const ResiProfile = () => {
         return rep.priority_level || 'Medium';
     };
 
-    const userStr = localStorage.getItem('resident_user');
+    const userStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
     const initialUser = userStr ? {
         latitude: null,
         longitude: null,
         ...JSON.parse(userStr)
-    } : {
-        name: 'Guest User',
-        email: 'guest@straysafe.org',
-        phone: '',
-        address: '',
-        latitude: null,
-        longitude: null,
-        user_id: 4, // Defaulting to 4 as per your current test case, but ideally should come from login
-        created_at: new Date().toISOString()
-    };
+    } : null;
 
     const [userData, setUserData] = useState<any>(initialUser);
-    const [editData, setEditData] = useState({ ...initialUser });
+    const [editData, setEditData] = useState<any>(initialUser || {});
 
     useEffect(() => {
-        fetchUserProfile();
-        fetchUserReports();
+        if (initialUser?.user_id) {
+            fetchUserProfile();
+            fetchUserReports();
+        }
     }, []);
 
     const fetchUserProfile = async () => {
-        const storedUser = localStorage.getItem('resident_user');
-        const userId = storedUser ? JSON.parse(storedUser).user_id : initialUser.user_id;
+        const storedUserStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
+        if (!storedUserStr) return;
+        const storedUser = JSON.parse(storedUserStr);
+        const userId = storedUser.user_id;
 
         try {
-            const response = await axios.get(`http://localhost:8000/users/${userId}`);
+            const response = await api.get(`/users/${userId}`);
             setUserData(response.data);
             setEditData(response.data);
-            // Keep local storage in sync with DB
-            localStorage.setItem('resident_user', JSON.stringify(response.data));
+            if (localStorage.getItem('resident_user')) {
+                localStorage.setItem('resident_user', JSON.stringify({ ...storedUser, ...response.data }));
+            }
         } catch (error) {
             console.error('Error fetching user profile:', error);
         }
     };
 
     const fetchUserReports = async () => {
-        const storedUser = localStorage.getItem('resident_user');
-        const userId = storedUser ? JSON.parse(storedUser).user_id : initialUser.user_id;
+        const storedUserStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
+        if (!storedUserStr) return;
+        const storedUser = JSON.parse(storedUserStr);
+        const userId = storedUser.user_id;
 
         try {
-            const response = await axios.get('http://localhost:8000/reports/');
+            const response = await api.get('/reports/');
             const userReports = response.data.filter((r: any) => r.user_id === userId);
             setReports(userReports);
         } catch (error) {
@@ -150,7 +148,7 @@ const ResiProfile = () => {
         formData.append('file', file);
 
         try {
-            await axios.post(`http://localhost:8000/users/${userData.user_id}/profile-picture`, formData, {
+            await api.post(`/users/${userData.user_id}/profile-picture`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             fetchUserProfile();
@@ -199,7 +197,7 @@ const ResiProfile = () => {
     const handleSaveProfile = async () => {
         try {
             // Update in DB
-            await axios.put(`http://localhost:8000/users/${userData.user_id}`, editData);
+            await api.put(`/users/${userData.user_id}`, editData);
             // Refresh local data
             fetchUserProfile();
             setIsEditModalOpen(false);

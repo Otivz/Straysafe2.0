@@ -37,6 +37,15 @@ interface Report {
     ai_suggested_priority?: string | null;
     ai_possible_breed?: string | null;
     ai_suggested_priority_reason?: string | null;
+    pet_id?: number | null;
+    pet_name?: string | null;
+    pet_qr_code_url?: string | null;
+    pet_qr_code_hash?: string | null;
+    owner_name?: string | null;
+    owner_phone?: string | null;
+    owner_email?: string | null;
+    owner_address?: string | null;
+    is_owner_report?: boolean;
 }
 
 const statusMap: Record<number, string> = {
@@ -98,6 +107,7 @@ const SubdViewReport = () => {
     // Navigation state
     const [isNavigating, setIsNavigating] = useState(false);
     const [navSource, setNavSource] = useState<'brgy' | 'current'>('brgy');
+    const [selectedQrPreview, setSelectedQrPreview] = useState<{ url: string; petName?: string; hash?: string; ownerName?: string; ownerPhone?: string } | null>(null);
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
     const BRGY_OFFICE: [number, number] = [14.8069, 121.0039]; // R243+QH Santa Maria, Bulacan
 
@@ -326,8 +336,11 @@ const SubdViewReport = () => {
             setResolveCondition('Healthy');
             setResolveMediaFiles([]);
             setShowSuccess(true);
-            fetchReportDetails();
-            setTimeout(() => setShowSuccess(false), 3000);
+            await fetchReportDetails();
+            setTimeout(() => {
+                setShowSuccess(false);
+                navigate('/subd/history');
+            }, 1200);
         } catch (error) {
             console.error('Error resolving report:', error);
             alert('Failed to resolve report. Please try again.');
@@ -399,6 +412,10 @@ const SubdViewReport = () => {
                 return 'bg-orange-50 text-orange-600 border-orange-100';
             case 'resolved':
                 return 'bg-green-50 text-green-600 border-green-100';
+            case 'claimed by owner':
+                return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+            case 'released':
+                return 'bg-teal-50 text-teal-700 border-teal-200';
             default:
                 return 'bg-gray-50 text-gray-600 border-gray-100';
         }
@@ -504,6 +521,94 @@ const SubdViewReport = () => {
                                         </span>
                                     </div>
                                 </div>
+
+                                {/* Lost Pet Owner Contact & Digital QR Tag Panel */}
+                                {(report.pet_id || report.owner_phone || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
+                                    <div className="p-6 rounded-3xl bg-gradient-to-br from-amber-50/90 to-orange-50/70 border-2 border-amber-200 shadow-sm space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2.5">
+                                                <span className="px-3 py-1 bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
+                                                    <span>🐾</span>
+                                                    <span>Registered Lost Pet Case</span>
+                                                </span>
+                                                {report.pet_name && (
+                                                    <span className="text-sm font-black text-amber-950 uppercase">
+                                                        {report.pet_name}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {report.pet_qr_code_hash && (
+                                                <span className="text-[10px] font-mono font-bold text-amber-900 bg-white/90 px-2.5 py-1 rounded-lg border border-amber-200 shadow-xs">
+                                                    Tag: {report.pet_qr_code_hash}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                                            <div className="bg-white/90 p-4 rounded-2xl border border-amber-100 shadow-xs">
+                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Registered Owner</p>
+                                                <p className="text-sm font-black text-gray-900">{report.owner_name || report.reporter_name || 'Registered Resident'}</p>
+                                                {report.owner_address && (
+                                                    <p className="text-xs text-gray-500 font-medium mt-1">{report.owner_address}</p>
+                                                )}
+                                                {report.owner_email && (
+                                                    <p className="text-[11px] text-amber-800 font-semibold mt-0.5">{report.owner_email}</p>
+                                                )}
+                                            </div>
+
+                                            <div className="bg-white/90 p-4 rounded-2xl border border-amber-100 shadow-xs flex flex-col justify-between">
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Owner Contact Hotline</p>
+                                                    <p className="text-sm font-black text-amber-900">{report.owner_phone || 'Available in StraySafe'}</p>
+                                                </div>
+                                                {report.owner_phone && (
+                                                    <a
+                                                        href={`tel:${report.owner_phone}`}
+                                                        className="mt-3 inline-flex items-center justify-center gap-2 w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm"
+                                                    >
+                                                        📞 Call Pet Owner
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {report.pet_qr_code_url && (
+                                            <div className="pt-2 flex items-center justify-between bg-white p-4 rounded-2xl border border-amber-200 gap-4 shadow-xs">
+                                                <div className="flex items-center gap-3.5">
+                                                    <img 
+                                                        src={report.pet_qr_code_url} 
+                                                        alt="Pet QR Tag" 
+                                                        className="w-14 h-14 rounded-xl object-contain bg-white border border-gray-200 p-1 cursor-pointer hover:scale-105 transition-transform"
+                                                        onClick={() => setSelectedQrPreview({
+                                                            url: report.pet_qr_code_url!,
+                                                            petName: report.pet_name || undefined,
+                                                            hash: report.pet_qr_code_hash || undefined,
+                                                            ownerName: report.owner_name || report.reporter_name,
+                                                            ownerPhone: report.owner_phone || undefined
+                                                        })}
+                                                    />
+                                                    <div>
+                                                        <p className="text-xs font-black text-gray-900 uppercase">Pet StraySafe QR Tag</p>
+                                                        <p className="text-[11px] text-gray-500 font-medium">Click or scan tag to verify animal registration</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedQrPreview({
+                                                        url: report.pet_qr_code_url!,
+                                                        petName: report.pet_name || undefined,
+                                                        hash: report.pet_qr_code_hash || undefined,
+                                                        ownerName: report.owner_name || report.reporter_name,
+                                                        ownerPhone: report.owner_phone || undefined
+                                                    })}
+                                                    className="px-4 py-2 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer"
+                                                >
+                                                    View Tag ↗
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
                                 {/* AI Suggestion Panel */}
                                 <AISuggestionPanel
@@ -973,6 +1078,33 @@ const SubdViewReport = () => {
                                             </div>
                                         )}
 
+                                        {/* RESOLVED / HISTORY STATE */}
+                                        {report.status_id === 11 && (
+                                            <div className="w-full p-5 bg-green-50 border border-green-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in duration-300">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-full bg-green-100 text-green-700 flex items-center justify-center font-black text-sm shrink-0">
+                                                        ✓
+                                                    </div>
+                                                    <div>
+                                                        <h5 className="text-xs font-black text-green-800 uppercase tracking-wide">Incident Resolved</h5>
+                                                        <p className="text-[10px] font-bold text-green-600 uppercase tracking-wider">This report is archived and visible in History Reports</p>
+                                                    </div>
+                                                </div>
+                                                <Link 
+                                                    to="/subd/history" 
+                                                    className="px-5 py-2.5 bg-green-700 hover:bg-green-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer shadow-sm hover:scale-105"
+                                                >
+                                                    View History Reports →
+                                                </Link>
+                                            </div>
+                                        )}
+
+                                        {report.status_id === 12 && (
+                                            <div className="w-full py-4 bg-gray-100 text-gray-600 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border border-gray-200">
+                                                Status: Deceased — Archived in History Reports
+                                            </div>
+                                        )}
+
                                         {(report.status_id === 1 || report.status_id === 2) && (
                                             <button
                                                 onClick={() => setIsResolveModalOpen(true)}
@@ -982,12 +1114,14 @@ const SubdViewReport = () => {
                                             </button>
                                         )}
 
-                                        <button
-                                            onClick={handleReject}
-                                            className="w-full py-3 border border-gray-100 rounded-2xl text-[10px] font-bold text-gray-400 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all uppercase tracking-widest"
-                                        >
-                                            Reject Report
-                                        </button>
+                                        {(report.status_id === 1 || report.status_id === 2) && (
+                                            <button
+                                                onClick={handleReject}
+                                                className="w-full py-3 border border-gray-100 rounded-2xl text-[10px] font-bold text-gray-400 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all uppercase tracking-widest cursor-pointer"
+                                            >
+                                                Reject Report
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -1283,6 +1417,60 @@ const SubdViewReport = () => {
                                 }}
                             />
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Lost Pet QR Code Lightbox Modal */}
+            {selectedQrPreview && (
+                <div 
+                    className="fixed inset-0 z-[10002] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={() => setSelectedQrPreview(null)}
+                >
+                    <div 
+                        className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl border border-amber-100 animate-in zoom-in-95 duration-200 text-center relative"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <button
+                            onClick={() => setSelectedQrPreview(null)}
+                            className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-colors"
+                        >
+                            ✕
+                        </button>
+                        
+                        <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl font-black mx-auto mb-3">
+                            🐾
+                        </div>
+                        <h3 className="text-base font-black text-gray-900 uppercase tracking-tight mb-0.5">
+                            {selectedQrPreview.petName || 'Registered Pet'}
+                        </h3>
+                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-4">
+                            StraySafe Digital QR Tag
+                        </p>
+
+                        <div className="p-4 bg-amber-50/50 rounded-2xl border-2 border-dashed border-amber-200 inline-block mb-4">
+                            <img
+                                src={selectedQrPreview.url}
+                                alt="Pet QR Code"
+                                className="w-56 h-56 object-contain rounded-xl shadow-sm bg-white p-2 mx-auto"
+                            />
+                        </div>
+
+                        {selectedQrPreview.hash && (
+                            <p className="text-xs font-mono font-bold text-gray-600 mb-2">
+                                Tag ID: {selectedQrPreview.hash}
+                            </p>
+                        )}
+
+                        {selectedQrPreview.ownerPhone && (
+                            <div className="p-3 bg-amber-100/70 rounded-xl text-amber-950 text-xs font-bold mb-4">
+                                Owner Hotline: <span className="font-extrabold">{selectedQrPreview.ownerPhone}</span>
+                            </div>
+                        )}
+
+                        <p className="text-[10px] text-gray-400 font-medium">
+                            Scan this tag with the StraySafe Scanner to verify pet registry and contact the registered owner.
+                        </p>
                     </div>
                 </div>
             )}

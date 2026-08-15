@@ -73,6 +73,9 @@ const ResidentsLogin = () => {
             }
 
             // Store session info
+            if (data.access_token) {
+                localStorage.setItem('access_token', data.access_token);
+            }
             localStorage.setItem('resident_user', JSON.stringify(data));
             navigate('/resident-home');
         } catch (err) {
