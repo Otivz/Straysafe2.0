@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
@@ -24,11 +24,11 @@ const BrgyProfile = () => {
     const rawUser = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const initialUserObj = rawUser ? JSON.parse(rawUser) : null;
 
-    const [user, setUser] = useState<UserProfile | null>(null);
-    const [name, setName] = useState('');
-    const [phone, setPhone] = useState('');
-    const [address, setAddress] = useState('');
-    const [loading, setLoading] = useState(true);
+    const [user, setUser] = useState<UserProfile | null>(initialUserObj);
+    const [name, setName] = useState(initialUserObj?.name || '');
+    const [phone, setPhone] = useState(initialUserObj?.phone || '');
+    const [address, setAddress] = useState(initialUserObj?.address || '');
+    const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [uploadingPic, setUploadingPic] = useState(false);
     const [successMsg, setSuccessMsg] = useState('');
@@ -43,7 +43,7 @@ const BrgyProfile = () => {
 
         try {
             setLoading(true);
-            const response = await axios.get(`http://localhost:8000/users/${initialUserObj.user_id}`);
+            const response = await api.get(`/users/${initialUserObj.user_id}`);
             if (response.data) {
                 const userData = response.data;
                 setUser(userData);
@@ -64,20 +64,18 @@ const BrgyProfile = () => {
     }, []);
 
     // Update local storage helper so navbar reflects change instantly
-    const updateLocalStorageUser = (updatedData: Partial<UserProfile>) => {
-        const activeKey = localStorage.getItem('staff_user') ? 'staff_user' : (sessionStorage.getItem('staff_user') ? 'staff_user' : null);
-        
-        if (activeKey) {
-            const currentStr = localStorage.getItem(activeKey) || sessionStorage.getItem(activeKey);
-            if (currentStr) {
-                const currentObj = JSON.parse(currentStr);
-                const merged = { ...currentObj, ...updatedData };
-                if (localStorage.getItem(activeKey)) {
-                    localStorage.setItem(activeKey, JSON.stringify(merged));
-                } else {
-                    sessionStorage.setItem(activeKey, JSON.stringify(merged));
-                }
-            }
+    const updateLocalStorageUser = (updatedFields: Partial<UserProfile>) => {
+        const storedUser = localStorage.getItem('staff_user');
+        const sessionStoredUser = sessionStorage.getItem('staff_user');
+
+        if (storedUser) {
+            const parsed = JSON.parse(storedUser);
+            const updated = { ...parsed, ...updatedFields };
+            localStorage.setItem('staff_user', JSON.stringify(updated));
+        } else if (sessionStoredUser) {
+            const parsed = JSON.parse(sessionStoredUser);
+            const updated = { ...parsed, ...updatedFields };
+            sessionStorage.setItem('staff_user', JSON.stringify(updated));
         }
     };
 
@@ -96,7 +94,7 @@ const BrgyProfile = () => {
                 address: address || null
             };
 
-            const response = await axios.put(`http://localhost:8000/users/${user.user_id}`, payload);
+            const response = await api.put(`/users/${user.user_id}`, payload);
             if (response.data) {
                 setUser(response.data);
                 updateLocalStorageUser({
@@ -128,7 +126,7 @@ const BrgyProfile = () => {
         setErrorMsg('');
 
         try {
-            const response = await axios.post(`http://localhost:8000/users/${user.user_id}/profile-picture`, formData, {
+            const response = await api.post(`/users/${user.user_id}/profile-picture`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 }

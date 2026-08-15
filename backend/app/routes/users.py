@@ -7,7 +7,7 @@ from typing import List, Optional
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
-from app.utils.auth import get_password_hash
+from app.utils.auth import get_password_hash, get_current_user
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.audit import log_activity
 
@@ -20,6 +20,7 @@ router = APIRouter(
 def get_users(
     role_id: Optional[int] = None,
     position_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     query = db.query(User)
@@ -30,7 +31,16 @@ def get_users(
     return query.all()
 
 @router.get("/{user_id}", response_model=UserResponse)
-def get_user(user_id: int, db: Session = Depends(get_db)):
+def get_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if current_user.user_id != user_id and current_user.role_id not in [2, 3, 4]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Cannot access another resident's account data"
+        )
     user = db.query(User).filter(User.user_id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -74,7 +84,18 @@ def create_user(user_in: UserCreate, req: Request, db: Session = Depends(get_db)
         )
 
 @router.put("/{user_id}", response_model=UserResponse)
-def update_user(user_id: int, user_in: UserUpdate, req: Request, db: Session = Depends(get_db)):
+def update_user(
+    user_id: int,
+    user_in: UserUpdate,
+    req: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if current_user.user_id != user_id and current_user.role_id != 4:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Cannot modify another user's profile"
+        )
     db_user = db.query(User).filter(User.user_id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")

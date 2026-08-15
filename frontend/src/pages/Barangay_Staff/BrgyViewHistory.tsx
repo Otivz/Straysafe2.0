@@ -230,6 +230,10 @@ const BrgyViewHistory = () => {
         switch (status?.toLowerCase()) {
             case 'resolved':
                 return 'bg-green-50 text-green-600 border-green-100';
+            case 'claimed by owner':
+                return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+            case 'released':
+                return 'bg-teal-50 text-teal-700 border-teal-200';
             case 'deceased':
                 return 'bg-gray-100 text-gray-600 border-gray-200';
             case 'rejected':

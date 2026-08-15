@@ -1,5 +1,4 @@
 import { Link, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 
 interface ResiMobileNavProps {

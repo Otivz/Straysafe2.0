@@ -52,6 +52,87 @@ const categoryMap: Record<number, string> = {
     5: 'Animal Rescue Needed'
 };
 
+const FormattedReportDescription = ({ description }: { description: string }) => {
+    if (!description) {
+        return <p className="text-sm text-gray-400 italic">No detailed description provided.</p>;
+    }
+
+    if (description.includes('[LOST PET REPORT]')) {
+        const lines = description.split('\n').map(l => l.trim()).filter(Boolean);
+        const headerLine = lines.find(l => l.includes('[LOST PET REPORT]')) || '';
+        const bulletLines = lines.filter(l => l.startsWith('•') && !l.toLowerCase().includes('owner') && !l.toLowerCase().includes('contact'));
+        const closingLines = lines.filter(l => !l.includes('[LOST PET REPORT]') && !l.startsWith('•'));
+
+        return (
+            <div className="space-y-3.5 my-2">
+                <div className="flex items-center gap-2.5 p-3 px-4 bg-gradient-to-r from-red-50 to-orange-50 rounded-2xl border border-red-200/80 text-red-950 shadow-xs">
+                    <span className="text-lg animate-pulse shrink-0">🚨</span>
+                    <p className="text-xs sm:text-sm font-black uppercase tracking-tight">
+                        {headerLine.replace('[LOST PET REPORT]', '').trim() || 'Missing Registered Pet Alert'}
+                    </p>
+                </div>
+
+                {bulletLines.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-[#FAF9F6] p-4 rounded-3xl border border-stone-200/70 shadow-xs">
+                        {bulletLines.map((b, idx) => {
+                            const raw = b.replace(/^•\s*/, '');
+                            const colonIdx = raw.indexOf(':');
+                            if (colonIdx !== -1) {
+                                const key = raw.slice(0, colonIdx).trim();
+                                const val = raw.slice(colonIdx + 1).trim();
+                                const isWide = key.toLowerCase().includes('circumstances') || 
+                                               key.toLowerCase().includes('notes') || 
+                                               key.toLowerCase().includes('instructions') ||
+                                               key.toLowerCase().includes('last seen');
+                                return (
+                                    <div 
+                                        key={idx} 
+                                        className={`p-3 rounded-2xl bg-white border border-stone-100 shadow-2xs ${isWide ? 'sm:col-span-2' : ''}`}
+                                    >
+                                        <p className="text-[9px] font-black text-amber-800 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                            {key.toLowerCase().includes('last seen') && <span>📍</span>}
+                                            {key.toLowerCase().includes('breed') && <span>🐾</span>}
+                                            {key.toLowerCase().includes('color') && <span>🎨</span>}
+                                            {key.toLowerCase().includes('collar') && <span>🏷️</span>}
+                                            {key.toLowerCase().includes('owner') && <span>👤</span>}
+                                            {key.toLowerCase().includes('reward') && <span>🎁</span>}
+                                            {key.toLowerCase().includes('circumstances') && <span>📝</span>}
+                                            <span>{key}</span>
+                                        </p>
+                                        <p className="text-xs sm:text-[13px] font-bold text-gray-900 leading-snug">
+                                            {val}
+                                        </p>
+                                    </div>
+                                );
+                            }
+                            return (
+                                <div key={idx} className="sm:col-span-2 p-2.5 rounded-2xl bg-white border border-stone-100 text-xs font-semibold text-gray-800">
+                                    • {raw}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {closingLines.length > 0 && (
+                    <div className="p-3.5 bg-amber-500/10 rounded-2xl border border-amber-300/60 text-xs font-bold text-amber-950 flex items-start gap-2.5 shadow-2xs">
+                        <span className="text-amber-600 text-base shrink-0">📢</span>
+                        <p className="leading-relaxed">
+                            {closingLines.join(' ')}
+                        </p>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <p className="text-sm text-gray-800 leading-relaxed font-medium bg-stone-50/70 p-4 rounded-2xl border border-stone-100 whitespace-pre-line">
+            {description}
+        </p>
+    );
+};
+
 const ResiViewReport = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -62,6 +143,7 @@ const ResiViewReport = () => {
     const [isNavbarMenuOpen, setIsNavbarMenuOpen] = useState(false);
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
     const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
+    const [selectedQrPreview, setSelectedQrPreview] = useState<{ url: string; petName?: string; hash?: string; ownerName?: string; ownerPhone?: string } | null>(null);
 
     // Geocoding address
     const [resolvedAddress, setResolvedAddress] = useState('');
@@ -355,6 +437,91 @@ const ResiViewReport = () => {
                                             </div>
                                         </div>
 
+                                        {/* Lost Pet Owner Contact & Digital QR Tag Card */}
+                                        {(report.pet_id || report.owner_phone || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
+                                            <div className="p-5 rounded-3xl bg-gradient-to-br from-amber-50/90 to-orange-50/70 border-2 border-amber-200/80 shadow-sm space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2.5">
+                                                        <span className="px-2.5 py-1 bg-amber-500 text-white rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
+                                                            <span>🐾</span>
+                                                            <span>Registered Lost Pet</span>
+                                                        </span>
+                                                        {report.pet_name && (
+                                                            <span className="text-xs font-black text-amber-950 uppercase">
+                                                                {report.pet_name}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {report.pet_qr_code_hash && (
+                                                        <span className="text-[9px] font-mono font-bold text-amber-900 bg-white/80 px-2 py-0.5 rounded-md border border-amber-200">
+                                                            {report.pet_qr_code_hash}
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                                                    <div className="bg-white/80 p-3 rounded-2xl border border-amber-100">
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Pet Owner</p>
+                                                        <p className="text-xs font-black text-gray-900">{report.owner_name || report.reporter_name || 'Registered Resident'}</p>
+                                                        {report.owner_address && (
+                                                            <p className="text-[10px] text-gray-500 font-medium mt-0.5">{report.owner_address}</p>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="bg-white/80 p-3 rounded-2xl border border-amber-100 flex flex-col justify-between">
+                                                        <div>
+                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Owner Contact</p>
+                                                            <p className="text-xs font-black text-amber-900">{report.owner_phone || 'Available via StraySafe'}</p>
+                                                        </div>
+                                                        {report.owner_phone && (
+                                                            <a
+                                                                href={`tel:${report.owner_phone}`}
+                                                                className="mt-2 inline-flex items-center justify-center gap-1.5 w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
+                                                            >
+                                                                📞 Call Owner
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {report.pet_qr_code_url && (
+                                                    <div className="pt-2 flex items-center justify-between bg-white/90 p-3.5 rounded-2xl border border-amber-200 gap-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <img 
+                                                                src={report.pet_qr_code_url} 
+                                                                alt="Pet QR Code" 
+                                                                className="w-12 h-12 rounded-xl object-contain bg-white border border-gray-100 p-1 cursor-pointer hover:scale-105 transition-transform"
+                                                                onClick={() => setSelectedQrPreview({
+                                                                    url: report.pet_qr_code_url,
+                                                                    petName: report.pet_name,
+                                                                    hash: report.pet_qr_code_hash,
+                                                                    ownerName: report.owner_name || report.reporter_name,
+                                                                    ownerPhone: report.owner_phone
+                                                                })}
+                                                            />
+                                                            <div>
+                                                                <p className="text-xs font-black text-gray-900 uppercase">Pet Digital QR Tag</p>
+                                                                <p className="text-[10px] text-gray-500 font-medium">Scan with camera to verify pet ownership</p>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSelectedQrPreview({
+                                                                url: report.pet_qr_code_url,
+                                                                petName: report.pet_name,
+                                                                hash: report.pet_qr_code_hash,
+                                                                ownerName: report.owner_name || report.reporter_name,
+                                                                ownerPhone: report.owner_phone
+                                                            })}
+                                                            className="px-3.5 py-2 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer"
+                                                        >
+                                                            Expand QR ↗
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
                                         {/* Unified Animal Characteristics */}
                                         <div className="pb-6 space-y-3.5 border-b border-gray-50">
                                             <div className="flex justify-between items-center">
@@ -417,9 +584,7 @@ const ResiViewReport = () => {
                                         {cleanNotes && (
                                             <div>
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Case Description & Notes</p>
-                                                <p className="text-sm text-gray-750 leading-relaxed font-medium bg-stone-50/70 p-4 rounded-2xl border border-stone-100 italic">
-                                                    "{cleanNotes}"
-                                                </p>
+                                                <FormattedReportDescription description={cleanNotes} />
                                             </div>
                                         )}
                                     </div>
@@ -662,6 +827,59 @@ const ResiViewReport = () => {
                                 Media {activeGallery.index + 1} of {activeGallery.media.length} • StraySafe Surveillance
                             </p>
                         </div>
+                    </div>
+                </div>
+            )}
+            {/* Lost Pet QR Code Lightbox Modal */}
+            {selectedQrPreview && (
+                <div 
+                    className="fixed inset-0 z-[10002] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={() => setSelectedQrPreview(null)}
+                >
+                    <div 
+                        className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl border border-amber-100 animate-in zoom-in-95 duration-200 text-center relative"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <button
+                            onClick={() => setSelectedQrPreview(null)}
+                            className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-colors"
+                        >
+                            ✕
+                        </button>
+                        
+                        <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl font-black mx-auto mb-3">
+                            🐾
+                        </div>
+                        <h3 className="text-base font-black text-gray-900 uppercase tracking-tight mb-0.5">
+                            {selectedQrPreview.petName || 'Registered Pet'}
+                        </h3>
+                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-4">
+                            StraySafe Digital QR Tag
+                        </p>
+
+                        <div className="p-4 bg-amber-50/50 rounded-2xl border-2 border-dashed border-amber-200 inline-block mb-4">
+                            <img
+                                src={selectedQrPreview.url}
+                                alt="Pet QR Code"
+                                className="w-56 h-56 object-contain rounded-xl shadow-sm bg-white p-2 mx-auto"
+                            />
+                        </div>
+
+                        {selectedQrPreview.hash && (
+                            <p className="text-xs font-mono font-bold text-gray-600 mb-2">
+                                Tag ID: {selectedQrPreview.hash}
+                            </p>
+                        )}
+
+                        {selectedQrPreview.ownerPhone && (
+                            <div className="p-3 bg-amber-100/70 rounded-xl text-amber-950 text-xs font-bold mb-4">
+                                Owner Hotline: <span className="font-extrabold">{selectedQrPreview.ownerPhone}</span>
+                            </div>
+                        )}
+
+                        <p className="text-[10px] text-gray-400 font-medium">
+                            Scan this tag with the StraySafe Scanner to verify pet registry and instantly alert the owner.
+                        </p>
                     </div>
                 </div>
             )}

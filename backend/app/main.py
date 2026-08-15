@@ -467,9 +467,20 @@ ensure_pet_claims_status_enum()
 ensure_pet_side_photos_columns()
 ensure_user_default_address_columns()
 ensure_endorsement_letters_columns()
+def ensure_notification_archived_column():
+    with engine.begin() as conn:
+        result = conn.execute(text(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'notifications' "
+            "AND COLUMN_NAME = 'is_archived'"
+        ))
+        if result.scalar() == 0:
+            conn.execute(text("ALTER TABLE notifications ADD COLUMN is_archived TINYINT(1) DEFAULT 0"))
+
 ensure_announcement_tables_columns()
 ensure_rescue_tables_columns()
 ensure_report_verifications_columns()
+ensure_notification_archived_column()
 
 app = FastAPI(title="StraySafe API")
 

@@ -399,6 +399,8 @@ const AdminReport = () => {
             case 'ongoing':
             case 'rescue in progress': return 'bg-blue-50 text-blue-600 border-blue-100';
             case 'resolved': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
+            case 'claimed by owner': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+            case 'released': return 'bg-teal-50 text-teal-700 border-teal-200';
             default: return 'bg-gray-50 text-gray-600 border-gray-100';
         }
     };

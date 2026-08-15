@@ -11,6 +11,7 @@ class Notification(Base):
     message = Column(String(1000), nullable=False)
     type = Column(String(50), default="status_update") # 'status_update', 'system', 'alert'
     is_read = Column(Boolean, default=False)
+    is_archived = Column(Boolean, default=False)
     created_at = Column(DateTime, server_default=func.now())
     related_id = Column(Integer, nullable=True) # e.g., report_id or rescue_id
 

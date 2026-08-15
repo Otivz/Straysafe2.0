@@ -8,6 +8,7 @@ class PetClaimBase(BaseModel):
     report_id: int
     pet_id: int
     remarks: Optional[str] = None
+    match_score: Optional[int] = None
     status: Optional[str] = "Potential Owner Match"
     evidence_url: Optional[str] = None
     vaccine_card_url: Optional[str] = None

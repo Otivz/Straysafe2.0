@@ -8,6 +8,7 @@ from app.models.report import Report, ReportMedia, Comment, StatusHistory, Repor
 from app.models.user import User, Subdivision
 from app.models.notification import Notification
 from app.models.pet import Pet
+from app.models.pet_qr import PetQRCode
 from app.schemas.report import ReportCreate, ReportResponse, ReportStatusUpdate, ReportUpdate, ReportMediaResponse, CommentCreate, CommentResponse
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.color_detection import extract_dominant_colors
@@ -18,6 +19,34 @@ router = APIRouter(
     tags=["reports"]
 )
 
+
+def populate_pet_and_owner_info(rep_data: ReportResponse, rep: Report, db: Session):
+    """Populate linked pet details, QR code, and owner contact information for lost pet reports."""
+    try:
+        target_pet_id = rep.pet_id or rep_data.pet_id
+        if target_pet_id:
+            linked_pet = db.query(Pet).filter(Pet.pet_id == target_pet_id).first()
+            if linked_pet:
+                rep_data.pet_name = getattr(linked_pet, "pet_name", None) or getattr(linked_pet, "name", None)
+                qr = db.query(PetQRCode).filter(PetQRCode.pet_id == linked_pet.pet_id).first()
+                if qr:
+                    rep_data.pet_qr_code_url = qr.qr_image_url
+                    rep_data.pet_qr_code_hash = qr.qr_token
+                pet_owner = db.query(User).filter(User.user_id == linked_pet.owner_id).first()
+                if pet_owner:
+                    rep_data.owner_name = pet_owner.name
+                    rep_data.owner_phone = pet_owner.phone
+                    rep_data.owner_email = pet_owner.email
+                    rep_data.owner_address = pet_owner.address
+                    rep_data.is_owner_report = (rep.user_id == pet_owner.user_id)
+        elif rep.is_possible_owned and rep.reporter:
+            # Fallback to reporter contact info if possible owned
+            rep_data.owner_name = rep.reporter.name
+            rep_data.owner_phone = rep.reporter.phone
+            rep_data.owner_email = rep.reporter.email
+            rep_data.owner_address = rep.reporter.address
+    except Exception as err:
+        print(f"Failed to populate pet/owner info for report {rep.report_id}: {err}")
 
 
 @router.get("/", response_model=List[ReportResponse])
@@ -109,6 +138,10 @@ def get_reports(subdivision_id: Optional[int] = None, db: Session = Depends(get_
                     if rep_data.comments and i < len(rep_data.comments):
                         rep_data.comments[i].user_name = comment.user.name if comment.user else "Unknown User"
                         rep_data.comments[i].user_photo = comment.user.profile_picture if comment.user else None
+
+            # Populate pet & owner contact info for lost pet reports
+            populate_pet_and_owner_info(rep_data, rep, db)
+
             results.append(rep_data)
         except Exception as e:
             print(f"Error validating or backfilling report {rep.report_id}: {e}")
@@ -510,6 +543,7 @@ def trigger_looks_matching(report: Report, db: Session):
                     report_id=report.report_id,
                     pet_id=pet.pet_id,
                     status="Potential Owner Match",
+                    match_score=final_score,
                     remarks=f"AI detected a {final_score}% potential match. {gemini_explanation}"
                 )
                 db.add(new_claim)
@@ -575,7 +609,7 @@ async def analyze_report_media(
                 1. "animal_type": "Dog", "Cat", or "Unknown"
                 2. "primary_color": Dominant fur color (e.g. "Black", "White", "Brown", "Orange", "Gray", "Calico", "Cream", "Golden")
                 3. "secondary_color": Secondary color or "None"
-                4. "coat_pattern": "Solid", "Spotted", "Striped", "Patched", or "Unknown"
+                4. "coat_pattern": "Solid", "Bicolor", "Tricolor", "Spotted", "Striped", "Patched", "Brindle", "Merle", "Tabby", "Calico", "Tortoiseshell", "Mixed", or "Unknown"
                 5. "estimated_size": "Small", "Medium", or "Large". (Default "Small" for cats).
                 6. "possible_breed": Likely breed name (e.g., "Puspin" for domestic cats, "Aspin" for local dogs, "Siamese", "Persian", "Golden Retriever", etc.)
                 7. "collar_detected": true ONLY if a collar or harness is clearly visible around the neck, otherwise false.
@@ -891,16 +925,27 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
         )
         db.add(initial_history)
         
-        # Create Notification for Resident
-        new_notif = Notification(
-            user_id=db_report.user_id,
-            title="Report Submitted Successfully",
-            message="Your community incident report was successfully submitted. You will receive updates once the report has been reviewed and verified.",
-            type="status_update",
-            related_id=db_report.report_id
-        )
-        db.add(new_notif)
-        
+        # If pet_id is linked and the pet has a photo, automatically create ReportMedia so the lost pet's photo is visible in all report feeds
+        if db_report.pet_id:
+            linked_pet = db.query(Pet).filter(Pet.pet_id == db_report.pet_id).first()
+            if linked_pet and linked_pet.photo_url:
+                p_type = 'Unknown'
+                if linked_pet.pet_type:
+                    if linked_pet.pet_type.lower() == 'dog':
+                        p_type = 'Dog'
+                    elif linked_pet.pet_type.lower() == 'cat':
+                        p_type = 'Cat'
+
+                pet_media = ReportMedia(
+                    report_id=db_report.report_id,
+                    file_url=linked_pet.photo_url,
+                    media_type='Image',
+                    animal_type=p_type,
+                    dominant_color=linked_pet.primary_color or 'Brown',
+                    is_evidence=False
+                )
+                db.add(pet_media)
+
         db.commit()
         db.refresh(db_report)
         try:
@@ -933,6 +978,10 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
             new_values={"animal_type": str(db_report.animal_type), "priority_level": str(db_report.priority_level), "subdivision_id": db_report.subdivision_id},
             request=req
         )
+
+        # Populate pet & owner contact info for lost pet reports
+        populate_pet_and_owner_info(rep_data, db_report, db)
+
         return rep_data
     except Exception as e:
         db.rollback()
@@ -1017,6 +1066,9 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
                     rep_data.comments[i].user_name = comment.user.name if comment.user else "Unknown User"
                     rep_data.comments[i].user_photo = comment.user.profile_picture if comment.user else None
 
+        # Populate pet & owner contact info for lost pet reports
+        populate_pet_and_owner_info(rep_data, report, db)
+
         return rep_data
     except Exception as e:
         db.rollback()
@@ -1066,6 +1118,10 @@ def update_report(report_id: int, report_update: ReportUpdate, db: Session = Dep
     rep_data = ReportResponse.model_validate(db_report)
     rep_data.status_id = db_report.current_status_id  # type: ignore[assignment]
     rep_data.reporter_name = db_report.reporter.name if db_report.reporter else "Unknown User"
+
+    # Populate pet & owner contact info for lost pet reports
+    populate_pet_and_owner_info(rep_data, db_report, db)
+
     return rep_data
 
 

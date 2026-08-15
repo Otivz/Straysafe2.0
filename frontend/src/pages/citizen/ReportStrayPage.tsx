@@ -170,14 +170,21 @@ export default function ReportStrayPage() {
         visibleInjuryDetected: false
     });
 
+    const [aiAnalysisResult, setAiAnalysisResult] = useState<{
+        animalType: string;
+        primaryColor: string;
+        secondaryColor: string;
+        coatPattern: string;
+        estimatedSize: string;
+        possibleBreed: string;
+        collarDetected: boolean;
+        qrTagDetected: boolean;
+    } | null>(null);
+
     const userStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
-    const currentUserId = (currentUser && (currentUser.user_id || currentUser.id) && Number(currentUser.user_id || currentUser.id) > 0)
-        ? Number(currentUser.user_id || currentUser.id)
-        : 1;
-    const currentSubdivisionId = (currentUser && currentUser.subdivision_id && Number(currentUser.subdivision_id) > 0)
-        ? Number(currentUser.subdivision_id)
-        : 1;
+    const currentUserId = currentUser ? Number(currentUser.user_id || currentUser.id) : null;
+    const currentSubdivisionId = currentUser ? Number(currentUser.subdivision_id || 1) : 1;
 
     // Auto Reverse Geocode Location
     useEffect(() => {
@@ -235,6 +242,19 @@ export default function ReportStrayPage() {
     };
 
     // Step 3 Real AI Processing via backend API
+    const VALID_COAT_PATTERNS = ['Solid', 'Bicolor', 'Tricolor', 'Spotted', 'Striped', 'Patched', 'Brindle', 'Merle', 'Tabby', 'Calico', 'Tortoiseshell', 'Mixed', 'Unknown'];
+    const VALID_PRIMARY_COLORS = ['Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange', 'Mixed'];
+    const VALID_SECONDARY_COLORS = ['None', 'Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange'];
+
+    const normalizeOption = (val: string, options: string[], defaultVal: string) => {
+        if (!val) return defaultVal;
+        const clean = val.trim();
+        const found = options.find(o => o.toLowerCase() === clean.toLowerCase());
+        if (found) return found;
+        const partial = options.find(o => clean.toLowerCase().includes(o.toLowerCase()) || o.toLowerCase().includes(clean.toLowerCase()));
+        return partial || defaultVal;
+    };
+
     const triggerAiAnalysis = async () => {
         setIsAiProcessing(true);
         if (formData.mediaFiles && formData.mediaFiles.length > 0) {
@@ -244,16 +264,33 @@ export default function ReportStrayPage() {
                 const res = await axios.post('http://localhost:8000/reports/analyze-media', mediaData);
                 if (res.status === 200 && res.data) {
                     const ai = res.data;
-                    setFormData(prev => ({
-                        ...prev,
-                        animalType: ai.animal_type || prev.animalType,
-                        primaryColor: ai.primary_color || prev.primaryColor,
-                        secondaryColor: ai.secondary_color || prev.secondaryColor,
-                        coatPattern: ai.coat_pattern || prev.coatPattern,
-                        estimatedSize: ai.estimated_size || prev.estimatedSize,
-                        animalBreed: ai.possible_breed || prev.animalBreed,
+                    const normType = ['Dog', 'Cat'].includes(ai.animal_type) ? ai.animal_type : (ai.animal_type?.toLowerCase().includes('dog') ? 'Dog' : 'Cat');
+                    const normPrimary = normalizeOption(ai.primary_color, VALID_PRIMARY_COLORS, 'Black');
+                    const normSecondary = normalizeOption(ai.secondary_color, VALID_SECONDARY_COLORS, 'None');
+                    const normPattern = normalizeOption(ai.coat_pattern, VALID_COAT_PATTERNS, 'Solid');
+                    const normSize = ['Small', 'Medium', 'Large'].includes(ai.estimated_size) ? ai.estimated_size : 'Medium';
+
+                    const resultObj = {
+                        animalType: normType,
+                        primaryColor: normPrimary,
+                        secondaryColor: normSecondary,
+                        coatPattern: normPattern,
+                        estimatedSize: normSize,
+                        possibleBreed: ai.possible_breed || 'Puspin',
                         collarDetected: Boolean(ai.collar_detected),
                         qrTagDetected: Boolean(ai.qr_tag_detected)
+                    };
+                    setAiAnalysisResult(resultObj);
+                    setFormData(prev => ({
+                        ...prev,
+                        animalType: resultObj.animalType,
+                        primaryColor: resultObj.primaryColor,
+                        secondaryColor: resultObj.secondaryColor,
+                        coatPattern: resultObj.coatPattern,
+                        estimatedSize: resultObj.estimatedSize,
+                        animalBreed: resultObj.possibleBreed,
+                        collarDetected: resultObj.collarDetected,
+                        qrTagDetected: resultObj.qrTagDetected
                     }));
                 }
             } catch (err) {
@@ -347,7 +384,14 @@ export default function ReportStrayPage() {
                 priority_level: formData.priorityLevel,
                 visibility: formData.visibility,
                 is_possible_owned: formData.isPossibleOwned,
-                status_id: 1
+                status_id: 1,
+                ai_animal_type: aiAnalysisResult?.animalType || formData.animalType,
+                ai_dominant_color: aiAnalysisResult?.primaryColor || formData.primaryColor,
+                ai_coat_pattern: aiAnalysisResult?.coatPattern || formData.coatPattern,
+                ai_estimated_size: aiAnalysisResult?.estimatedSize || formData.estimatedSize,
+                ai_possible_breed: aiAnalysisResult?.possibleBreed || formData.animalBreed || 'Unknown',
+                ai_suggested_risk_level: 'Low Risk',
+                ai_suggested_priority: formData.priorityLevel
             };
 
             const response = await axios.post('http://localhost:8000/reports/', payload);
@@ -775,7 +819,7 @@ export default function ReportStrayPage() {
                                         value={formData.coatPattern}
                                         onChange={(e) => setFormData(prev => ({ ...prev, coatPattern: e.target.value }))}
                                     >
-                                        {['Unknown', 'Solid', 'Bicolor', 'Tricolor', 'Spotted', 'Brindle', 'Merle', 'Tabby', 'Calico', 'Tortoiseshell', 'Mixed'].map(p => (
+                                        {VALID_COAT_PATTERNS.map(p => (
                                             <option key={p} value={p}>{p}</option>
                                         ))}
                                     </select>

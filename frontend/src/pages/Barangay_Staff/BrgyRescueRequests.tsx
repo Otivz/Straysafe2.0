@@ -17,6 +17,7 @@ interface RescueRequest {
     description: string;
     status_id: number;
     created_at: string;
+    notes?: string;
     report?: {
         category_id: number;
         animal_type: string;
@@ -41,6 +42,14 @@ interface RescueRequest {
         ai_suggested_risk_level?: string | null;
         ai_suggested_priority?: string | null;
         ai_suggested_priority_reason?: string | null;
+        endorsement_letter?: {
+            title?: string;
+            letter_content?: string;
+            leader_name?: string;
+            leader_position?: string;
+            issued_at?: string;
+            file_url?: string;
+        };
     };
     leader_name?: string;
     leader_position?: string;

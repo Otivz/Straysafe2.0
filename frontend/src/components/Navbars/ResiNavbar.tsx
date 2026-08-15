@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
+import api, { clearAuthStorage } from '../../utils/api';
 import { useTheme } from '../../context/ThemeContext';
 
 interface ResiNavbarProps {
@@ -52,7 +52,7 @@ const ResiNavbar = ({
         const fetchLatestProfile = async () => {
             if (!initialUser?.user_id) return;
             try {
-                const res = await axios.get(`http://localhost:8000/users/${initialUser.user_id}`);
+                const res = await api.get(`/users/${initialUser.user_id}`);
                 localStorage.setItem('resident_user', JSON.stringify(res.data));
                 setUser(res.data);
             } catch (err) {
@@ -67,7 +67,7 @@ const ResiNavbar = ({
             if (onMarkNotificationRead) {
                 onMarkNotificationRead(notif.notification_id);
             } else {
-                axios.patch(`http://localhost:8000/notifications/${notif.notification_id}`, { is_read: true })
+                api.patch(`/notifications/${notif.notification_id}`, { is_read: true })
                     .catch(err => console.error("Failed to mark notification read", err));
             }
         }
@@ -108,8 +108,7 @@ const ResiNavbar = ({
     const unreadCount = (notifications || []).filter((n: any) => !n.is_read).length;
 
     const handleLogout = () => {
-        localStorage.removeItem('resident_user');
-        sessionStorage.removeItem('resident_user');
+        clearAuthStorage();
         navigate('/login');
     };
 
@@ -584,6 +583,7 @@ const ResiNavbar = ({
                                                 msgStr.includes('match') ||
                                                 msgStr.includes('potential match') ||
                                                 msgStr.includes('matches of your dog');
+                                const isReportSubmitted = titleStr.includes('submitted');
                                 return (
                                     <div
                                         key={notif.notification_id}
@@ -619,7 +619,7 @@ const ResiNavbar = ({
                                                 </div>
 
                                                 <div className="flex items-center gap-2 shrink-0">
-                                                    {!notif.is_read && onMarkNotificationRead && (
+                                                    {!notif.is_read && onMarkNotificationRead && !isReportSubmitted && (
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); onMarkNotificationRead(notif.notification_id); }}
                                                             className="p-1.5 bg-orange-50 rounded-xl text-[#F97316] active:scale-90 transition-transform"
@@ -656,6 +656,13 @@ const ResiNavbar = ({
                                 Load More
                             </button>
                         )}
+                        <Link
+                            to="/resident/settings?tab=notifications"
+                            onClick={() => setIsMobileNotificationsOpen(false)}
+                            className="w-full py-3 bg-gray-50 hover:bg-orange-50 text-gray-700 hover:text-[#F97316] border border-gray-200 hover:border-orange-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-center transition-all active:scale-[0.98] mt-3 flex items-center justify-center gap-2 shadow-sm"
+                        >
+                            📁 View Archived & Closed Notifications
+                        </Link>
                     </div>
                 </div>
             </div>

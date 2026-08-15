@@ -3,6 +3,7 @@ import React from 'react';
 interface AISuggestionPanelProps {
     animalType?: string | null;
     dominantColor?: string | null;
+    coatPattern?: string | null;
     estimatedSize?: string | null;
     suggestedRiskLevel?: string | null;
     suggestedPriority?: string | null;
@@ -41,6 +42,7 @@ const getSwatchStyle = (colorStr?: string | null): string => {
 export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
     animalType,
     dominantColor,
+    coatPattern,
     estimatedSize,
     suggestedRiskLevel,
     suggestedPriority,
@@ -50,7 +52,7 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
     suggestedPriorityReason
 }) => {
     // If no suggestions exist yet, display a premium loading state
-    const hasData = animalType || dominantColor || estimatedSize || suggestedRiskLevel || suggestedPriority || possibleBreed;
+    const hasData = animalType || dominantColor || coatPattern || estimatedSize || suggestedRiskLevel || suggestedPriority || possibleBreed;
 
     if (!hasData) {
         return (
@@ -198,7 +200,7 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
             </div>
 
             {/* Grid Container */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {/* Animal Type */}
                 <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Detected Animal Type</span>
@@ -210,7 +212,7 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
 
                 {/* Dominant Color */}
                 <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Dominant Animal Color</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Dominant Color</span>
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border bg-slate-500/10 border-slate-500/20 text-slate-200 w-fit">
                         {/* Elegant mini color swatch indicator */}
                         <div className="w-2.5 h-2.5 rounded-full border border-white/20 shadow-sm" style={{ 
@@ -220,17 +222,33 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                     </div>
                 </div>
 
+                {/* Coat Pattern */}
+                <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Coat Pattern</span>
+                    <div className="px-3 py-1.5 rounded-xl border bg-indigo-500/10 border-indigo-500/20 text-indigo-200 w-fit">
+                        <span className="text-xs font-extrabold uppercase tracking-wide">{coatPattern || 'Solid'}</span>
+                    </div>
+                </div>
+
                 {/* Estimated Size */}
                 <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Estimated Animal Size</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Estimated Size</span>
                     <div className={`px-3 py-1.5 rounded-xl border ${sizeStyle} w-fit`}>
                         <span className="text-xs font-extrabold uppercase tracking-wide">{estimatedSize || 'Medium'}</span>
                     </div>
                 </div>
 
+                {/* Possible Breed */}
+                <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Possible Breed</span>
+                    <div className="px-3 py-1.5 rounded-xl border bg-amber-500/10 border-amber-500/20 text-amber-200 w-fit">
+                        <span className="text-xs font-extrabold uppercase tracking-wide">{possibleBreed || 'Unknown'}</span>
+                    </div>
+                </div>
+
                 {/* Suggested Risk Level */}
                 <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">AI Assessed Risk & Priority</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">AI Assessed Risk</span>
                     <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border ${risk.bg} w-fit`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${risk.dot}`} />
                         <span className="text-xs font-black uppercase tracking-wide">{risk.label}</span>

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { type PetRecord } from './types';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
+import api from '../../utils/api';
 
 interface PetDetailPanelProps {
     pet: PetRecord | null;
@@ -22,6 +23,57 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
     const [activeTab, setActiveTab] = useState<'info' | 'health' | 'behavior' | 'incident'>('info');
     const [isQrOpen, setIsQrOpen] = useState(false);
     const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
+    const [incidentClaims, setIncidentClaims] = useState<any[]>([]);
+    const [incidentReports, setIncidentReports] = useState<any[]>([]);
+    const [isLoadingIncidents, setIsLoadingIncidents] = useState<boolean>(false);
+
+    useEffect(() => {
+        if (!pet) return;
+
+        let isMounted = true;
+        const fetchPetIncidents = async () => {
+            setIsLoadingIncidents(true);
+            try {
+                const petId = Number(pet.id);
+                const ownerId = pet.rawPetObj?.owner_id;
+
+                const claimsRes = await api.get(ownerId ? `/claims/?owner_id=${ownerId}` : '/claims/');
+                const allClaims = Array.isArray(claimsRes.data) ? claimsRes.data : [];
+                
+                // Strictly filter claims for THIS specific pet ID only
+                const petClaims = allClaims.filter((c: any) => {
+                    const cPetId = c.pet_id || (c.pet && c.pet.pet_id);
+                    return Number(cPetId) === petId;
+                });
+
+                const reportsRes = await api.get('/reports/');
+                const allReports = Array.isArray(reportsRes.data) ? reportsRes.data : [];
+                const claimReportIds = new Set(petClaims.map((c: any) => c.report_id));
+
+                // Strictly filter reports for THIS specific pet only
+                const matchedReports = allReports.filter((r: any) => {
+                    if (r.pet_id && Number(r.pet_id) === petId) return true;
+                    if (claimReportIds.has(r.report_id)) return true;
+                    return false;
+                });
+
+                if (isMounted) {
+                    setIncidentClaims(petClaims);
+                    setIncidentReports(matchedReports);
+                }
+            } catch (err) {
+                console.error("Error loading pet incident history:", err);
+            } finally {
+                if (isMounted) setIsLoadingIncidents(false);
+            }
+        };
+
+        fetchPetIncidents();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [pet?.id, activeTab]);
 
     if (!pet) return null;
 
@@ -198,7 +250,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                             { id: 'info', label: 'Pet Information' },
                             { id: 'health', label: 'Health Information' },
                             { id: 'behavior', label: 'Behavior Information' },
-                            { id: 'incident', label: 'Incident History' }
+                            { id: 'incident', label: 'Pet History' }
                         ].map((tab) => (
                             <button 
                                 key={tab.id}
@@ -431,40 +483,154 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                         {/* Tab 4: Incident History */}
                         {activeTab === 'incident' && (
                             <div className="space-y-8 animate-in fade-in duration-300">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    {/* Aggressive incidents */}
-                                    <div className="bg-[#FAFAF9] p-6 rounded-2xl border border-gray-100 flex flex-col justify-between">
-                                        <div>
-                                            <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Aggressive Incidents</h5>
-                                            <p className="text-[11px] text-gray-500 font-semibold leading-relaxed">No community-logged aggressive events in the database.</p>
-                                        </div>
-                                        <div className="mt-4 flex items-center gap-1.5 text-[9px] font-black text-green-600 uppercase tracking-wider bg-green-50 px-2.5 py-1 rounded-md w-max">
-                                            <span>✓</span> Clear Record
-                                        </div>
+                                {isLoadingIncidents ? (
+                                    <div className="py-12 flex flex-col items-center justify-center gap-3">
+                                        <div className="w-8 h-8 border-3 border-[#F97316] border-t-transparent rounded-full animate-spin"></div>
+                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Loading incident & claim records...</p>
                                     </div>
+                                ) : incidentClaims.length > 0 || incidentReports.length > 0 ? (
+                                    <div className="space-y-6">
+                                        <div className="flex items-center justify-between flex-wrap gap-4 border-b border-gray-100 pb-4">
+                                            <div>
+                                                <h4 className="text-sm font-black text-[#1a1208] uppercase tracking-wider">Pet History & Report Summary</h4>
+                                                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Reports and claim records strictly for {pet.name}</p>
+                                            </div>
+                                            <span className="px-3.5 py-1.5 bg-orange-50 text-[#F97316] rounded-full text-[10px] font-black uppercase tracking-widest border border-orange-100">
+                                                {Math.max(incidentClaims.length, incidentReports.length)} Event(s) Recorded
+                                            </span>
+                                        </div>
 
-                                    {/* Reports */}
-                                    <div className="bg-[#FAFAF9] p-6 rounded-2xl border border-gray-100 flex flex-col justify-between">
-                                        <div>
-                                            <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Sighting Reports</h5>
-                                            <p className="text-[11px] text-gray-500 font-semibold leading-relaxed">No citizen-logged stray sightings linked to this identity.</p>
-                                        </div>
-                                        <div className="mt-4 flex items-center gap-1.5 text-[9px] font-black text-green-600 uppercase tracking-wider bg-green-50 px-2.5 py-1 rounded-md w-max">
-                                            <span>✓</span> Clear Record
-                                        </div>
-                                    </div>
+                                        <div className="space-y-6">
+                                            {incidentReports.map((report: any) => {
+                                                const matchingClaim = incidentClaims.find((c: any) => c.report_id === report.report_id);
+                                                const mediaPhoto = (report.media && report.media.length > 0) ? report.media[0].file_url : null;
+                                                const claimStatus = matchingClaim ? matchingClaim.status : (report.status?.status_name || 'Reported');
+                                                const isApproved = claimStatus?.toLowerCase() === 'approved' || report.current_status_id === 9;
 
-                                    {/* Rescue history */}
-                                    <div className="bg-[#FAFAF9] p-6 rounded-2xl border border-gray-100 flex flex-col justify-between">
-                                        <div>
-                                            <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Rescue Dispatches</h5>
-                                            <p className="text-[11px] text-gray-500 font-semibold leading-relaxed">No subdivision or barangay rescue dispatches recorded.</p>
-                                        </div>
-                                        <div className="mt-4 flex items-center gap-1.5 text-[9px] font-black text-green-600 uppercase tracking-wider bg-green-50 px-2.5 py-1 rounded-md w-max">
-                                            <span>✓</span> Clear Record
+                                                return (
+                                                    <div key={report.report_id} className="bg-[#FAFAF9] rounded-3xl p-6 border border-gray-100 shadow-sm space-y-6">
+                                                        {/* Header Bar */}
+                                                        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200/60 pb-4">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] font-black text-xs flex items-center justify-center border border-orange-100 shadow-sm">
+                                                                    #{report.report_id}
+                                                                </span>
+                                                                <div>
+                                                                    <h5 className="text-xs font-black text-[#1a1208] uppercase">Reported Stray / Lost Sighting for {pet.name}</h5>
+                                                                    <p className="text-[10px] text-gray-400 font-bold uppercase">
+                                                                        Date: {new Date(report.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="flex items-center gap-3">
+                                                                <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm ${
+                                                                    isApproved ? 'bg-green-50 text-green-600 border-green-100' :
+                                                                    claimStatus?.toLowerCase() === 'pending review' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                                                                    'bg-blue-50 text-blue-600 border-blue-100'
+                                                                }`}>
+                                                                    {isApproved ? '✓ Claimed & Approved' : `Claim State: ${claimStatus}`}
+                                                                </span>
+                                                                <button
+                                                                    onClick={() => navigate(`/resident/reports/${report.report_id}`)}
+                                                                    className="px-4 py-2.5 bg-[#1a1208] hover:bg-[#2c2010] text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center gap-1.5 shadow-sm hover:scale-[1.02]"
+                                                                >
+                                                                    View Report
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                                                    </svg>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Body Content */}
+                                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                            {/* Media preview if available */}
+                                                            {mediaPhoto ? (
+                                                                <div className="w-full h-44 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 shadow-sm relative group">
+                                                                    <img src={mediaPhoto} alt="Report Evidence" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                                                    <span className="absolute bottom-2 left-2 px-2.5 py-1 bg-black/60 backdrop-blur-sm text-white rounded-lg text-[9px] font-bold uppercase tracking-wider">Sighting Media</span>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="w-full h-44 rounded-2xl bg-gray-100 border border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 text-xs font-bold uppercase gap-2">
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                                    </svg>
+                                                                    <span>No Photo Attached</span>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Report Details */}
+                                                            <div className="md:col-span-2 space-y-4">
+                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
+                                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Sighting Location</span>
+                                                                        <span className="text-xs font-black text-[#1a1208] uppercase truncate block">{report.landmark || 'Selera Homes'}</span>
+                                                                    </div>
+                                                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
+                                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Condition / Priority</span>
+                                                                        <span className="text-xs font-black text-[#F97316] uppercase truncate block">{report.condition || report.priority_level || 'Medium'}</span>
+                                                                    </div>
+                                                                </div>
+
+                                                                {report.description && (
+                                                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
+                                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Incident Report Notes</span>
+                                                                        <p className="text-xs font-semibold text-gray-700 leading-relaxed line-clamp-2">{report.description}</p>
+                                                                    </div>
+                                                                )}
+
+                                                                {matchingClaim && (
+                                                                    <div className="bg-orange-50/70 p-4 rounded-2xl border border-orange-100/80 shadow-xs space-y-1">
+                                                                        <span className="text-[9px] font-black text-[#F97316] uppercase tracking-widest block">Claim Resolution & Remarks</span>
+                                                                        <p className="text-xs font-bold text-[#1a1208]">
+                                                                            {matchingClaim.remarks || "Claim verified and confirmed by authorized subdivision and barangay personnel."}
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
-                                </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {/* Aggressive incidents */}
+                                        <div className="bg-[#FAFAF9] p-6 rounded-2xl border border-gray-100 flex flex-col justify-between">
+                                            <div>
+                                                <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Aggressive Incidents</h5>
+                                                <p className="text-[11px] text-gray-500 font-semibold leading-relaxed">No community-logged aggressive events for {pet.name}.</p>
+                                            </div>
+                                            <div className="mt-4 flex items-center gap-1.5 text-[9px] font-black text-green-600 uppercase tracking-wider bg-green-50 px-2.5 py-1 rounded-md w-max">
+                                                <span>✓</span> Clear Record
+                                            </div>
+                                        </div>
+
+                                        {/* Reports */}
+                                        <div className="bg-[#FAFAF9] p-6 rounded-2xl border border-gray-100 flex flex-col justify-between">
+                                            <div>
+                                                <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Sighting Reports</h5>
+                                                <p className="text-[11px] text-gray-500 font-semibold leading-relaxed">No citizen-logged stray sightings linked to {pet.name}.</p>
+                                            </div>
+                                            <div className="mt-4 flex items-center gap-1.5 text-[9px] font-black text-green-600 uppercase tracking-wider bg-green-50 px-2.5 py-1 rounded-md w-max">
+                                                <span>✓</span> Clear Record
+                                            </div>
+                                        </div>
+
+                                        {/* Rescue history */}
+                                        <div className="bg-[#FAFAF9] p-6 rounded-2xl border border-gray-100 flex flex-col justify-between">
+                                            <div>
+                                                <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Rescue Dispatches</h5>
+                                                <p className="text-[11px] text-gray-500 font-semibold leading-relaxed">No subdivision or barangay rescue dispatches recorded for {pet.name}.</p>
+                                            </div>
+                                            <div className="mt-4 flex items-center gap-1.5 text-[9px] font-black text-green-600 uppercase tracking-wider bg-green-50 px-2.5 py-1 rounded-md w-max">
+                                                <span>✓</span> Clear Record
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 

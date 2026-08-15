@@ -62,6 +62,9 @@ const AdminLogin = () => {
 
             // Store session info
             const storage = keepSignedIn ? localStorage : sessionStorage;
+            if (data.access_token) {
+                storage.setItem('access_token', data.access_token);
+            }
             storage.setItem('admin_user', JSON.stringify(data));
 
             navigate('/admin/dashboard');

@@ -20,6 +20,8 @@ class LoginResponse(BaseModel):
     status: Optional[str] = None
     is_verified: Optional[bool] = False
     created_at: Optional[datetime] = None
+    access_token: Optional[str] = None
+    token_type: Optional[str] = "bearer"
 
     model_config = {
         "from_attributes": True
