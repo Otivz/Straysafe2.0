@@ -8,6 +8,7 @@ import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import { type PetRecord } from '../../components/PetRecords/types';
+import ResolveLostPetModal from '../../components/Modals/ResolveLostPetModal';
 
 // Real client-side image color analyzer using HTML5 Canvas
 const analyzeImageColors = (file: File): Promise<string> => {
@@ -119,6 +120,7 @@ interface PetFormData {
     species: string;
     breed: string;
     gender: string;
+    sizeCategory: string;
     primaryColor: string;
     customPrimaryColor: string;
     secondaryColor: string;
@@ -188,6 +190,7 @@ const ResidentPet = () => {
         species: 'Dog',
         breed: '',
         gender: 'Male',
+        sizeCategory: 'Medium',
         primaryColor: 'Brown',
         customPrimaryColor: '',
         secondaryColor: '',
@@ -214,8 +217,8 @@ const ResidentPet = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('All Pets');
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
-    const [isReportLostModalOpen, setIsReportLostModalOpen] = useState(false);
     const [reportingLostPet, setReportingLostPet] = useState<PetRecord | null>(null);
+    const [resolvingLostPet, setResolvingLostPet] = useState<any | null>(null);
     const [isSubmittingLostReport, setIsSubmittingLostReport] = useState(false);
     const [lostPetForm, setLostPetForm] = useState({
         lastSeenAt: '',
@@ -464,6 +467,7 @@ const ResidentPet = () => {
                 pet_type: formData.species,
                 breed: formData.breed,
                 gender: formData.gender,
+                size_category: formData.sizeCategory || 'Medium',
                 primary_color: effectivePrimary,
                 secondary_color: effectiveSecondary || null,
                 color_markings: formData.color.trim() || null,
@@ -542,6 +546,7 @@ const ResidentPet = () => {
                 species: 'Dog',
                 breed: '',
                 gender: 'Male',
+                sizeCategory: 'Medium',
                 primaryColor: 'Brown',
                 customPrimaryColor: '',
                 secondaryColor: '',
@@ -596,6 +601,7 @@ const ResidentPet = () => {
             species: petObj.pet_type || 'Dog',
             breed: petObj.breed || '',
             gender: petObj.gender || 'Male',
+            sizeCategory: petObj.size_category || 'Medium',
             primaryColor: isPrimaryPreset ? rawPrimary : 'Other',
             customPrimaryColor: isPrimaryPreset ? '' : rawPrimary,
             secondaryColor: isSecondaryPreset ? rawSecondary : (rawSecondary ? 'Other' : ''),
@@ -632,7 +638,6 @@ const ResidentPet = () => {
         if (!petObj) return;
 
         setSelectedPet(null);
-        setIsReportLostModalOpen(false);
 
         const userStr = localStorage.getItem('resident_user');
         const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -717,11 +722,11 @@ const ResidentPet = () => {
                 user_id: userId,
                 subdivision_id: subdId,
                 pet_id: petObj.pet_id,
-                category_id: 1,
+                category_id: 6,
                 animal_type: petObj.pet_type || 'Dog',
                 animal_breed: petObj.breed || '',
                 animal_color: colorDesc,
-                estimated_size: petObj.weight ? `${petObj.weight} kg` : 'Medium',
+                estimated_size: petObj.size_category || (petObj.weight ? `${petObj.weight} kg` : 'Medium'),
                 description: desc,
                 landmark: lostPetForm.landmark.trim() || 'Selera Homes',
                 latitude: lostPetForm.latitude || 14.801313,
@@ -741,11 +746,42 @@ const ResidentPet = () => {
             } else {
                 alert(`${reportingLostPet.name} has been marked as LOST and an official report has been filed.`);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Failed to mark pet as lost and file report:", error);
-            alert("Failed to submit lost pet report. Please try again.");
+            const errDetail = error.response?.data?.detail;
+            alert(errDetail || "Failed to submit lost pet report. Please try again.");
         } finally {
             setIsSubmittingLostReport(false);
+        }
+    };
+
+    const handleReuniteAndSetActive = async (petObj: any) => {
+        const confirmed = window.confirm(`Has ${petObj.pet_name} safely returned home? This will set ${petObj.pet_name}'s status back to ACTIVE and resolve any open search reports.`);
+        if (!confirmed) return;
+
+        try {
+            await api.put(`/pets/${petObj.pet_id}`, { status: 'Active' });
+            
+            // If there's an active report for this pet, mark as Claimed by Owner (9)
+            try {
+                const res = await api.get('/reports/', { params: { limit: 50 } });
+                const reports = res.data?.reports || res.data || [];
+                const matched = reports.find((r: any) => r.pet_id === petObj.pet_id && ![9, 10, 11, 12].includes(r.status_id));
+                if (matched) {
+                    await api.patch(`/reports/${matched.report_id}/status`, {
+                        status_id: 9,
+                        remarks: `${petObj.pet_name} has safely returned home and owner confirmed reunion. Pet status updated to Active.`
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to sync report status:", err);
+            }
+
+            fetchPets();
+            alert(`🎉 Wonderful news! ${petObj.pet_name} is now marked as ACTIVE.`);
+        } catch (err) {
+            console.error("Error setting pet to active:", err);
+            alert("Failed to update pet status. Please check your connection and try again.");
         }
     };
 
@@ -761,27 +797,16 @@ const ResidentPet = () => {
 
             <main className="max-w-6xl mx-auto p-4 sm:p-8 pt-24 sm:pt-32">
                 {/* Title & Action Buttons */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-                    <div>
-                        <h1 className="text-4xl font-black text-[#1a1208] uppercase tracking-tighter">My Family <span className="text-[#F97316]">Pets</span></h1>
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-2">Manage your pets' health and identification records</p>
+                <div className="flex flex-row justify-between items-center mb-6 sm:mb-8 gap-3 sm:gap-4">
+                    <div className="min-w-0 flex-1">
+                        <h1 className="text-2xl sm:text-4xl font-black text-[#1a1208] uppercase tracking-tight sm:tracking-tighter leading-tight">
+                            My Family <span className="text-[#F97316]">Pets</span>
+                        </h1>
+                        <p className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider sm:tracking-widest mt-0.5 sm:mt-2 line-clamp-1 sm:line-clamp-none">
+                            Manage your pets' health and identification records
+                        </p>
                     </div>
-                    <div className="flex items-center gap-3 flex-wrap">
-                        <Button
-                            onClick={() => {
-                                if (pets.length > 0) {
-                                    setIsReportLostModalOpen(true);
-                                } else {
-                                    navigate('/resident/report/new');
-                                }
-                            }}
-                            className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-sm hover:scale-105 transition-all flex items-center gap-2.5 cursor-pointer"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                            Report Lost Pet
-                        </Button>
+                    <div className="flex items-center shrink-0">
                         <Button
                             variant="primary"
                             onClick={() => {
@@ -791,6 +816,7 @@ const ResidentPet = () => {
                                     species: 'Dog',
                                     breed: '',
                                     gender: 'Male',
+                                    sizeCategory: 'Medium',
                                     primaryColor: 'Brown',
                                     customPrimaryColor: '',
                                     secondaryColor: '',
@@ -819,12 +845,13 @@ const ResidentPet = () => {
                                 setSubmitErrorMessage(null);
                                 setIsAddPetModalOpen(true);
                             }}
-                            className="bg-[#F97316] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-200 hover:scale-105 transition-all flex items-center gap-3 cursor-pointer"
+                            className="bg-[#F97316] text-white px-3.5 py-2.5 sm:px-8 sm:py-4 rounded-xl sm:rounded-2xl font-black uppercase tracking-wider sm:tracking-widest text-[10px] sm:text-xs shadow-md sm:shadow-lg shadow-orange-200 hover:scale-105 transition-all flex items-center gap-1.5 sm:gap-3 cursor-pointer whitespace-nowrap"
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
                             </svg>
-                            Register New Pet
+                            <span className="sm:hidden">Register Pet</span>
+                            <span className="hidden sm:inline">Register New Pet</span>
                         </Button>
                     </div>
                 </div>
@@ -914,9 +941,12 @@ const ResidentPet = () => {
                                     />
                                     <div className="absolute top-4 right-4 flex gap-2">
                                         <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm border ${
-                                            pet.status === 'Healthy' || pet.status === 'Active' ? 'bg-green-50 text-green-600 border-green-100' :
-                                            pet.status === 'Under Treatment' || pet.status === 'Lost' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                                            'bg-red-50 text-red-600 border-red-100'
+                                            pet.status === 'Active' || pet.status === 'Healthy' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                            pet.status === 'Found' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                            pet.status === 'Rescued' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                            pet.status === 'Lost' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                            pet.status === 'Deceased' ? 'bg-stone-100 text-stone-600 border-stone-200' :
+                                            'bg-gray-50 text-gray-600 border-gray-200'
                                         }`}>
                                             {pet.status}
                                         </span>
@@ -927,14 +957,18 @@ const ResidentPet = () => {
                                     </div>
                                 </div>
                                 <div className="p-6 space-y-4">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-gray-50 rounded-2xl p-3 text-center">
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <div className="bg-gray-50 rounded-2xl p-2.5 text-center">
                                             <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Breed</p>
                                             <p className="text-xs font-black text-[#1a1208] uppercase truncate">{pet.breed || pet.pet_type}</p>
                                         </div>
-                                        <div className="bg-gray-50 rounded-2xl p-3 text-center">
+                                        <div className="bg-gray-50 rounded-2xl p-2.5 text-center">
                                             <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Sex</p>
-                                            <p className="text-xs font-black text-[#1a1208] uppercase">{pet.gender}</p>
+                                            <p className="text-xs font-black text-[#1a1208] uppercase">{pet.gender || 'Unknown'}</p>
+                                        </div>
+                                        <div className="bg-gray-50 rounded-2xl p-2.5 text-center">
+                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Size</p>
+                                            <p className="text-xs font-black text-[#1a1208] uppercase">{pet.size_category || 'Medium'}</p>
                                         </div>
                                     </div>
                                     <div className="pt-4 flex gap-2 border-t border-gray-50">
@@ -944,7 +978,30 @@ const ResidentPet = () => {
                                         >
                                             View Profile
                                         </button>
-                                        {pet.status?.toLowerCase() !== 'lost' && (
+                                        {pet.status?.toLowerCase() === 'deceased' ? (
+                                            <span className="px-3.5 py-3 bg-stone-100 text-stone-500 text-[10px] font-black uppercase tracking-widest rounded-xl flex items-center gap-1.5 border border-stone-200" title="Deceased pet record is archived">
+                                                <span>🕊️</span>
+                                                Archived
+                                            </span>
+                                        ) : pet.status?.toLowerCase() === 'lost' ? (
+                                            <button 
+                                                onClick={() => setResolvingLostPet(pet)}
+                                                className="px-3.5 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border border-emerald-200 shadow-2xs"
+                                                title="Resolve Lost Pet Case"
+                                            >
+                                                <span>🏠</span>
+                                                Resolve Case
+                                            </button>
+                                        ) : (pet.status?.toLowerCase() === 'found' || pet.status?.toLowerCase() === 'rescued') ? (
+                                            <button 
+                                                onClick={() => handleReuniteAndSetActive(pet)}
+                                                className="px-3.5 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border border-blue-200 shadow-2xs"
+                                                title="Confirm Reunion & Set Status Back to Active"
+                                            >
+                                                <span>🏠</span>
+                                                Set as Active
+                                            </button>
+                                        ) : (
                                             <button 
                                                 onClick={() => handleReportLostFromProfile(transformToPetRecord(pet))}
                                                 className="px-3.5 py-3 bg-red-50 hover:bg-red-100 text-red-600 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border border-red-100 shadow-2xs"
@@ -1038,7 +1095,14 @@ const ResidentPet = () => {
                                             <button 
                                                 key={type}
                                                 type="button"
-                                                onClick={() => setFormData({...formData, species: type})}
+                                                onClick={() => {
+                                                    const newSpecies = type;
+                                                    setFormData((prev) => ({
+                                                        ...prev,
+                                                        species: newSpecies,
+                                                        sizeCategory: newSpecies === 'Cat' ? 'Small' : (prev.sizeCategory === 'Small' && newSpecies === 'Dog' ? 'Medium' : prev.sizeCategory)
+                                                    }));
+                                                }}
                                                 className={`flex-1 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${
                                                     formData.species === type ? 'bg-[#F97316] text-white border-[#F97316] shadow-lg shadow-orange-100' : 'bg-white text-gray-400 border-gray-100'
                                                 }`}
@@ -1056,7 +1120,7 @@ const ResidentPet = () => {
                                         className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${
                                             formErrors.breed 
                                             ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10' 
-                                            : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
+                                             : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
                                         }`}
                                         placeholder="e.g. Aspin / Mixed"
                                         value={formData.breed}
@@ -1175,6 +1239,31 @@ const ResidentPet = () => {
                                             if (formErrors.age) setFormErrors({...formErrors, age: false});
                                         }}
                                     />
+                                </div>
+
+                                <div className="space-y-4">
+                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest flex items-center justify-between">
+                                        <span>Pet Size <span className="text-red-500">*</span></span>
+                                        <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">
+                                            {formData.sizeCategory === 'Small' ? 'Small (< 10kg)' : formData.sizeCategory === 'Large' ? 'Large (> 25kg)' : 'Medium (10-25kg)'}
+                                        </span>
+                                    </label>
+                                    <div className="grid grid-cols-3 gap-2 h-14">
+                                        {['Small', 'Medium', 'Large'].map((sz) => (
+                                            <button 
+                                                key={sz}
+                                                type="button"
+                                                onClick={() => setFormData({...formData, sizeCategory: sz})}
+                                                className={`rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all cursor-pointer flex items-center justify-center ${
+                                                    formData.sizeCategory === sz 
+                                                        ? 'bg-[#F97316] text-white border-[#F97316] shadow-lg shadow-orange-100' 
+                                                        : 'bg-white text-gray-400 border-gray-100 hover:border-gray-200 hover:text-gray-700'
+                                                }`}
+                                            >
+                                                {sz}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
 
                                 <div className="space-y-4">
@@ -1335,9 +1424,11 @@ const ResidentPet = () => {
                                         <button
                                             type="button"
                                             onClick={() => {
+                                                const isCat = (aiSuggestedSpecies || 'Dog') === 'Cat';
                                                 setFormData({
                                                     ...formData,
-                                                    species: aiSuggestedSpecies || 'Dog'
+                                                    species: aiSuggestedSpecies || 'Dog',
+                                                    sizeCategory: isCat ? 'Small' : formData.sizeCategory
                                                 });
                                                 setAiSuggestedSpecies(null);
                                             }}
@@ -1707,88 +1798,6 @@ const ResidentPet = () => {
                 </div>
             )}
 
-            {/* Report Lost Pet Modal */}
-            {isReportLostModalOpen && (
-                <div className="fixed inset-0 z-[450] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
-                    <div className="relative w-full max-w-xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden p-6 sm:p-8 animate-in zoom-in-95 duration-300 flex flex-col space-y-6 max-h-[85vh]">
-                        {/* Header */}
-                        <div className="flex items-center justify-between pb-4 border-b border-gray-100">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center border border-red-100 shadow-xs">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight">Report Lost Pet</h3>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Broadcast missing pet alert to your community</p>
-                                </div>
-                            </div>
-                            <button 
-                                onClick={() => setIsReportLostModalOpen(false)}
-                                className="w-9 h-9 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#1a1208] hover:bg-gray-50 transition-all cursor-pointer"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-
-                        {/* Pet Selection List */}
-                        <div className="space-y-3 overflow-y-auto flex-1 pr-1 custom-scrollbar">
-                            <p className="text-xs font-bold text-gray-500">
-                                Select a registered pet to mark as <span className="text-red-600 font-black">LOST</span> and dispatch alerts:
-                            </p>
-                            {pets.map((pet) => {
-                                const isAlreadyLost = pet.status?.toLowerCase() === 'lost';
-                                return (
-                                    <div key={pet.pet_id} className="flex items-center justify-between p-4 rounded-2xl border border-gray-100 bg-[#FAFAF9] hover:bg-white hover:border-gray-200 transition-all">
-                                        <div className="flex items-center gap-3.5">
-                                            <img 
-                                                src={getPetPicture(pet.photo_url)} 
-                                                alt={pet.pet_name} 
-                                                className="w-12 h-12 rounded-xl object-cover border border-gray-200"
-                                                onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
-                                            />
-                                            <div>
-                                                <h4 className="text-sm font-black text-[#1a1208] uppercase">{pet.pet_name}</h4>
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{pet.breed || pet.pet_type} • {pet.gender}</p>
-                                            </div>
-                                        </div>
-
-                                        {isAlreadyLost ? (
-                                            <span className="px-3.5 py-1.5 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-red-100">
-                                                Already Lost
-                                            </span>
-                                        ) : (
-                                            <button
-                                                onClick={() => handleReportLostFromProfile(transformToPetRecord(pet))}
-                                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-sm hover:scale-105"
-                                            >
-                                                Report Lost
-                                            </button>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-
-                        {/* Footer Action to General Report */}
-                        <div className="pt-3 border-t border-gray-100 flex flex-col gap-2">
-                            <button
-                                onClick={() => {
-                                    setIsReportLostModalOpen(false);
-                                    navigate('/resident/report/new');
-                                    }}
-                                className="w-full py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer text-center"
-                            >
-                                File a New Stray / Lost Animal Report Form →
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* Lost Pet Additional Details & Broadcast Modal */}
             {reportingLostPet && (
                 <div className="fixed inset-0 z-[500] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
@@ -2017,6 +2026,25 @@ const ResidentPet = () => {
                         </form>
                     </div>
                 </div>
+            )}
+
+            {/* Resolve Lost Pet Report Modal */}
+            {resolvingLostPet && (
+                <ResolveLostPetModal
+                    isOpen={!!resolvingLostPet}
+                    pet={{
+                        pet_id: resolvingLostPet.pet_id,
+                        pet_name: resolvingLostPet.pet_name,
+                        photo_url: resolvingLostPet.photo_url,
+                        breed: resolvingLostPet.breed,
+                        species: resolvingLostPet.pet_type
+                    }}
+                    onClose={() => setResolvingLostPet(null)}
+                    onSuccess={() => {
+                        fetchPets();
+                        setResolvingLostPet(null);
+                    }}
+                />
             )}
         </div>
     );

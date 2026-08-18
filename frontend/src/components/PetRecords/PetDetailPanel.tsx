@@ -137,7 +137,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     {pet.status}
                                 </span>
                             </div>
-                            <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">{pet.breed} • {pet.species}</p>
+                            <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">{pet.breed} • {pet.species} • {pet.sizeCategory || 'Medium'} Size</p>
                         </div>
                     </div>
 

@@ -33,8 +33,8 @@ const ResiNavbar = ({
     onMarkNotificationRead,
     onDeleteNotification,
     onMarkAllNotificationsRead,
-    hasMoreNotifications = false,
-    onLoadMoreNotifications,
+    hasMoreNotifications: _hasMoreNotifications = false,
+    onLoadMoreNotifications: _onLoadMoreNotifications,
     onNotificationClick
 }: ResiNavbarProps) => {
     const navigate = useNavigate();
@@ -43,6 +43,8 @@ const ResiNavbar = ({
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isMobileHamburgerOpen, setIsMobileHamburgerOpen] = useState(false);
     const [isMobileNotificationsOpen, setIsMobileNotificationsOpen] = useState(false);
+    const [drawerNotifLimit, setDrawerNotifLimit] = useState(5);
+    const [hasClickedViewAllDrawer, setHasClickedViewAllDrawer] = useState(false);
 
     const userStr = localStorage.getItem('resident_user');
     const initialUser = userStr ? JSON.parse(userStr) : null;
@@ -61,6 +63,19 @@ const ResiNavbar = ({
         };
         fetchLatestProfile();
     }, [initialUser?.user_id]);
+
+    const unreadCount = (notifications || []).filter((n: any) => !n.is_read).length;
+
+    useEffect(() => {
+        if (isMobileNotificationsOpen && unreadCount > 0) {
+            if (onMarkAllNotificationsRead) {
+                onMarkAllNotificationsRead();
+            } else if (user?.user_id) {
+                api.post(`/notifications/mark-all-read/${user.user_id}`)
+                    .catch(err => console.error("Failed to mark notifications read", err));
+            }
+        }
+    }, [isMobileNotificationsOpen, unreadCount, onMarkAllNotificationsRead, user?.user_id]);
 
     const handleNotificationClick = (notif: any) => {
         if (!notif.is_read) {
@@ -105,7 +120,6 @@ const ResiNavbar = ({
 
 
     const profilePic = getProfilePicture(user?.profile_picture);
-    const unreadCount = (notifications || []).filter((n: any) => !n.is_read).length;
 
     const handleLogout = () => {
         clearAuthStorage();
@@ -544,14 +558,6 @@ const ResiNavbar = ({
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">{unreadCount} unread</p>
                         </div>
                         <div className="flex items-center gap-3">
-                            {unreadCount > 0 && onMarkAllNotificationsRead && (
-                                <button
-                                    onClick={onMarkAllNotificationsRead}
-                                    className="text-[10px] font-black uppercase tracking-wider text-[#F97316] mr-2"
-                                >
-                                    Mark all read
-                                </button>
-                            )}
                             <button
                                 onClick={() => setIsMobileNotificationsOpen(false)}
                                 className="p-2 text-gray-400 hover:text-[#EF4444] rounded-full hover:bg-red-50/50 transition-all active:scale-90"
@@ -565,14 +571,19 @@ const ResiNavbar = ({
 
                     {/* Content */}
                     <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4 custom-scrollbar">
-                        {(!notifications || notifications.length === 0) ? (
-                            <div className="text-center py-20">
-                                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest italic">
-                                    No notifications yet
-                                </p>
-                            </div>
-                        ) : (
-                            notifications.map((notif) => {
+                        {(() => {
+                            const drawerNotifications = (notifications || []).slice(0, drawerNotifLimit);
+                            if (!drawerNotifications || drawerNotifications.length === 0) {
+                                return (
+                                    <div className="text-center py-20">
+                                        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest italic">
+                                            No notifications yet
+                                        </p>
+                                    </div>
+                                );
+                            }
+
+                            return drawerNotifications.map((notif) => {
                                 const typeStr = (notif.type || '').toLowerCase();
                                 const titleStr = (notif.title || '').toLowerCase();
                                 const msgStr = (notif.message || '').toLowerCase();
@@ -583,7 +594,6 @@ const ResiNavbar = ({
                                                 msgStr.includes('match') ||
                                                 msgStr.includes('potential match') ||
                                                 msgStr.includes('matches of your dog');
-                                const isReportSubmitted = titleStr.includes('submitted');
                                 return (
                                     <div
                                         key={notif.notification_id}
@@ -618,19 +628,8 @@ const ResiNavbar = ({
                                                     </div>
                                                 </div>
 
-                                                <div className="flex items-center gap-2 shrink-0">
-                                                    {!notif.is_read && onMarkNotificationRead && !isReportSubmitted && (
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); onMarkNotificationRead(notif.notification_id); }}
-                                                            className="p-1.5 bg-orange-50 rounded-xl text-[#F97316] active:scale-90 transition-transform"
-                                                            title="Mark as read"
-                                                        >
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                                            </svg>
-                                                        </button>
-                                                    )}
-                                                    {onDeleteNotification && (
+                                                {onDeleteNotification && (
+                                                    <div className="flex items-center gap-2 shrink-0">
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); onDeleteNotification(notif.notification_id); }}
                                                             className="p-1.5 bg-gray-100 rounded-xl text-gray-500 active:scale-90 transition-transform hover:bg-gray-200"
@@ -640,29 +639,39 @@ const ResiNavbar = ({
                                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                                             </svg>
                                                         </button>
-                                                    )}
-                                                </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
                                 );
-                            })
-                        )}
-                        {hasMoreNotifications && onLoadMoreNotifications && (
+                            });
+                        })()}
+                    </div>
+
+                    {/* Drawer Footer: Mark All Read & View All Notifications */}
+                    <div className="px-6 py-4 border-t border-gray-100 bg-white flex items-center justify-between shrink-0">
+                        {onMarkAllNotificationsRead ? (
                             <button
-                                onClick={onLoadMoreNotifications}
-                                className="w-full py-3.5 bg-orange-50/50 hover:bg-orange-50 text-[#F97316] border border-orange-100 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98] mt-2 shadow-sm"
+                                onClick={onMarkAllNotificationsRead}
+                                className="text-xs font-semibold text-gray-500 hover:text-gray-900 underline underline-offset-2 transition-colors cursor-pointer"
                             >
-                                Load More
+                                Mark All Read
+                            </button>
+                        ) : (
+                            <span />
+                        )}
+                        {drawerNotifLimit < (notifications || []).length && (
+                            <button
+                                onClick={() => {
+                                    setDrawerNotifLimit(prev => prev + 10);
+                                    setHasClickedViewAllDrawer(true);
+                                }}
+                                className="text-xs font-bold text-[#F97316] hover:text-orange-600 transition-colors flex items-center gap-1 ml-auto cursor-pointer"
+                            >
+                                {hasClickedViewAllDrawer ? 'View More Notifications →' : 'View All Notifications →'}
                             </button>
                         )}
-                        <Link
-                            to="/resident/settings?tab=notifications"
-                            onClick={() => setIsMobileNotificationsOpen(false)}
-                            className="w-full py-3 bg-gray-50 hover:bg-orange-50 text-gray-700 hover:text-[#F97316] border border-gray-200 hover:border-orange-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-center transition-all active:scale-[0.98] mt-3 flex items-center justify-center gap-2 shadow-sm"
-                        >
-                            📁 View Archived & Closed Notifications
-                        </Link>
                     </div>
                 </div>
             </div>

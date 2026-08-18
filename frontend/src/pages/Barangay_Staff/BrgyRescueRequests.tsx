@@ -87,7 +87,8 @@ const categoryMap: Record<number, string> = {
     2: 'Aggressive Stray',
     3: 'Possible Rabies Risk',
     4: 'Roaming Pack',
-    5: 'Animal Rescue Needed'
+    5: 'Animal Rescue Needed',
+    6: 'Lost Pet'
 };
 
 const BrgyRescueRequests = () => {
@@ -194,11 +195,13 @@ const BrgyRescueRequests = () => {
             const response = await axios.get('http://localhost:8000/rescue-requests/');
             // Sort by rescue_id descending to show new requests at the top
             const sortedData = (response.data || []).sort((a: any, b: any) => b.rescue_id - a.rescue_id);
-            // ONLY show reports that are active (not status 11, 12, or 3)
+            // ONLY show reports that are active and escalated (not status 1, 2, 3, 11, or 12)
             const activeRequests = sortedData.filter((req: any) => 
                 req.report?.status_id !== 11 && 
                 req.report?.status_id !== 12 && 
-                req.report?.status_id !== 3
+                req.report?.status_id !== 3 &&
+                req.report?.status_id !== 1 &&
+                req.report?.status_id !== 2
             );
             setRequests(activeRequests);
 

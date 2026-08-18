@@ -121,6 +121,17 @@ const ResidentSettings = () => {
     }, [searchParams]);
 
     useEffect(() => {
+        if (activeTab === 'notifications') {
+            const userId = getUserId();
+            if (userId) {
+                axios.post(`http://localhost:8000/notifications/mark-all-read/${userId}`)
+                    .then(() => fetchUserNotifications())
+                    .catch(err => console.error('Failed to auto mark notifications read:', err));
+            }
+        }
+    }, [activeTab]);
+
+    useEffect(() => {
         fetchUserProfile();
         fetchUserNotifications();
     }, []);
@@ -944,16 +955,7 @@ const ResidentSettings = () => {
                                                             </button>
                                                         )}
 
-                                                        {!(notif.title || '').toLowerCase().includes('submitted') && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => { e.stopPropagation(); handleToggleRead(notif.notification_id, notif.is_read); }}
-                                                                className="p-2 hover:bg-gray-100 rounded-xl text-gray-500 text-xs transition-colors"
-                                                                title={notif.is_read ? "Mark as Unread" : "Mark as Read"}
-                                                            >
-                                                                {notif.is_read ? '✉️' : '✔'}
-                                                            </button>
-                                                        )}
+
 
                                                         <button
                                                             type="button"

@@ -77,7 +77,8 @@ const categoryMap: Record<number, string> = {
     2: 'Aggressive Stray',
     3: 'Possible Rabies Risk',
     4: 'Roaming Pack',
-    5: 'Animal Rescue Needed'
+    5: 'Animal Rescue Needed',
+    6: 'Lost Pet'
 };
 
 const BrgyViewHistory = () => {
@@ -373,6 +374,15 @@ const BrgyViewHistory = () => {
         hour12: true
     }) : (report?.history?.find((h: any) => h.report_status_id === 4)?.created_at ? new Date(report.history.find((h: any) => h.report_status_id === 4).created_at).toLocaleString() : 'N/A');
 
+    const isReportEscalated = (rep: any) => {
+        if (!rep) return false;
+        if ([4, 5, 6, 7, 8, 9, 10, 13].includes(rep.status_id)) return true;
+        if (rep.endorsement_letter) return true;
+        if (rep.rescue_id || (rep.rescues && rep.rescues.length > 0)) return true;
+        if (rep.history?.some((h: any) => h.report_status_id === 4 || h.rescue_id)) return true;
+        return false;
+    };
+
     return (
         <div className="flex h-screen bg-[#F8FAFC]">
             <BrgySidebar />
@@ -403,9 +413,18 @@ const BrgyViewHistory = () => {
                             </div>
                         ) : !report ? (
                             <div className="bg-white rounded-[2.5rem] border border-gray-100 p-20 text-center shadow-sm">
-                                <span className="text-5xl block mb-4">âš ï¸</span>
+                                <span className="text-5xl block mb-4">⚠️</span>
                                 <h3 className="text-gray-900 font-black uppercase text-sm tracking-wider">Report Not Found</h3>
                                 <p className="text-gray-400 text-xs mt-1.5 leading-relaxed">The archived report ID you are trying to view does not exist or was deleted.</p>
+                                <Link to="/brgy/history" className="inline-block mt-6 px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-md">
+                                    Go Back to History
+                                </Link>
+                            </div>
+                        ) : !isReportEscalated(report) ? (
+                            <div className="bg-white rounded-[2.5rem] border border-gray-100 p-20 text-center shadow-sm">
+                                <span className="text-5xl block mb-4">🛡️</span>
+                                <h3 className="text-gray-900 font-black uppercase text-sm tracking-wider">Report Not Accessible</h3>
+                                <p className="text-gray-400 text-xs mt-1.5 leading-relaxed">This report was handled directly within the subdivision and was never escalated to the Barangay.</p>
                                 <Link to="/brgy/history" className="inline-block mt-6 px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-md">
                                     Go Back to History
                                 </Link>

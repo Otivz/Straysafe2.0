@@ -17,7 +17,7 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile }: BrgySidebarProps) => {
         const fetchCounts = async () => {
             try {
                 const viewed = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_brgy_requests') || '[]'));
-                const res = await axios.get('http://localhost:8000/reports/');
+                const res = await axios.get('http://localhost:8000/reports/?escalated_only=true');
                 if (Array.isArray(res.data)) {
                     // Escalated (4), Approved (13), or Rescue In Progress (5) that have not been viewed yet
                     const unviewed = res.data.filter((r: any) => {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import Button from '../../components/Button';
@@ -133,9 +133,64 @@ interface ReportFormData {
     aiSuggestions: any;
 }
 
+const categoryMap: Record<number, string> = {
+    1: 'Injured Animal',
+    2: 'Aggressive Stray',
+    3: 'Possible Rabies Risk',
+    4: 'Roaming Pack',
+    5: 'Animal Rescue Needed',
+    6: 'Lost Pet'
+};
+
+const reportStatusMap: Record<number, string> = {
+    1: 'Reported',
+    2: 'Verified',
+    3: 'Rejected',
+    4: 'Escalated to Barangay',
+    5: 'Rescue In Progress',
+    6: 'Picked Up',
+    7: 'Under Observation',
+    8: 'Impounded',
+    9: 'Claimed by Owner',
+    10: 'Released',
+    11: 'Resolved',
+    12: 'Deceased',
+    13: 'Approved'
+};
+
+const parseReportDescription = (description: string) => {
+    if (!description) return { cleanNotes: '', pattern: '', conditions: '', markings: '' };
+    
+    if (description.includes('|') || description.toLowerCase().includes('pattern:') || description.toLowerCase().includes('observed conditions:') || description.toLowerCase().includes('notes:')) {
+        const parts = description.split('|').map((p: string) => p.trim());
+        let pattern = '';
+        let conditions = '';
+        let markings = '';
+        let cleanNotes = '';
+
+        parts.forEach((part: string) => {
+            if (part.toLowerCase().startsWith('pattern:')) {
+                pattern = part.replace(/^pattern:\s*/i, '').trim();
+            } else if (part.toLowerCase().startsWith('observed conditions:')) {
+                conditions = part.replace(/^observed conditions:\s*/i, '').trim();
+            } else if (part.toLowerCase().startsWith('markings:')) {
+                markings = part.replace(/^markings:\s*/i, '').trim();
+            } else if (part.toLowerCase().startsWith('notes:')) {
+                cleanNotes = part.replace(/^notes:\s*/i, '').trim();
+            } else if (!pattern && !conditions && !markings && !cleanNotes) {
+                cleanNotes = part.trim();
+            }
+        });
+
+        return { cleanNotes, pattern, conditions, markings };
+    }
+
+    return { cleanNotes: description.trim(), pattern: '', conditions: '', markings: '' };
+};
+
 const FormattedReportDescription = ({ description }: { description: string }) => {
     if (!description) {
-        return <p className="text-sm text-gray-400 italic">No detailed description provided.</p>;
+        return null;
     }
 
     // Check if this is a structured Lost Pet Report
@@ -211,10 +266,16 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
         );
     }
 
+    const { cleanNotes } = parseReportDescription(description);
+
+    if (!cleanNotes || cleanNotes === 'No additional details provided.') {
+        return null;
+    }
+
     // Default / Standard Report Description: clean typography with preserved linebreaks
     return (
-        <div className="text-[13px] sm:text-[15px] font-medium text-[#2d2417] leading-relaxed whitespace-pre-line">
-            {description}
+        <div className="text-[13px] sm:text-[14px] font-medium text-[#2d2417] leading-relaxed whitespace-pre-line">
+            {cleanNotes}
         </div>
     );
 };
@@ -261,7 +322,8 @@ const ResiHomePage = () => {
     const [announcements, setAnnouncements] = useState<any[]>([]);
     const [notifications, setNotifications] = useState<any[]>([]);
     const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Set<number>>(new Set());
-    const [notificationsLimit, setNotificationsLimit] = useState(10);
+    const [visibleNotifLimit, setVisibleNotifLimit] = useState(5);
+    const [hasClickedViewAll, setHasClickedViewAll] = useState(false);
     const [announcementsLimit, setAnnouncementsLimit] = useState(10);
     const [annCommentInputs, setAnnCommentInputs] = useState<Record<number, string>>({});
     const [annReplyingTo, setAnnReplyingTo] = useState<Record<number, { commentId: number, userName: string } | null>>({});
@@ -618,7 +680,7 @@ const ResiHomePage = () => {
     const handleEditClick = (report: any) => {
         const categoryMap: Record<number, string> = {
             1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
-            4: 'Roaming Pack', 5: 'Animal Rescue Needed'
+            4: 'Roaming Pack', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
         };
 
         let primaryColor = report.primary_color;
@@ -1226,7 +1288,7 @@ const ResiHomePage = () => {
         const q = searchQuery.toLowerCase();
         const categoryMap: Record<number, string> = {
             1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
-            4: 'Roaming Pack', 5: 'Animal Rescue Needed'
+            4: 'Roaming Pack', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
         };
         const categoryName = categoryMap[r.category_id] || '';
         return (r.description && r.description.toLowerCase().includes(q)) ||
@@ -1249,6 +1311,10 @@ const ResiHomePage = () => {
     // Show all reports in the feed; the endorsement letter photo is hidden via is_evidence=true
     const currentTabReports = filteredReports;
 
+    const activeNotifications = notifications.filter(
+        (n) => !n.is_archived && !dismissedNotificationIds.has(n.notification_id)
+    );
+
     return (
         <div className="min-h-screen bg-[#F7F7F7] dark:bg-[#121212] font-sans pb-24 text-[#1a1208] dark:text-gray-100 transition-colors duration-200">
             <ResiNavbar
@@ -1259,13 +1325,11 @@ const ResiHomePage = () => {
                 onCloseSearch={() => setIsMobileSearchOpen(false)}
                 feedTab={feedTab}
                 onFeedTabChange={setFeedTab}
-                notifications={notifications.filter(n => !n.is_archived && !dismissedNotificationIds.has(n.notification_id)).slice(0, notificationsLimit)}
+                notifications={activeNotifications}
                 onMarkNotificationRead={handleMarkNotificationRead}
                 onDeleteNotification={handleDismissNotification}
                 onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
                 onNotificationClick={handleNotificationClick}
-                hasMoreNotifications={notifications.filter(n => !n.is_archived && !dismissedNotificationIds.has(n.notification_id)).length > notificationsLimit}
-                onLoadMoreNotifications={() => setNotificationsLimit(prev => prev + 10)}
             />
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-32 pb-24 md:pb-8">
@@ -2480,8 +2544,8 @@ const ResiHomePage = () => {
 
                                             {/* Content Section */}
                                             <div className="px-4 sm:px-8 pt-6 pb-6">
-                                                {/* Profile & Visibility Row */}
-                                                <div className="mb-6 flex items-center justify-between">
+                                                {/* Profile & Category Header Row */}
+                                                <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
                                                     <div className="flex items-center gap-3">
                                                         {report.reporter_photo ? (
                                                             <img
@@ -2515,7 +2579,98 @@ const ResiHomePage = () => {
                                                             </div>
                                                         </div>
                                                     </div>
+
+                                                    {/* Category & Status Badges */}
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className="px-3 py-1 bg-orange-50 border border-orange-200 text-[#F97316] rounded-full text-[10px] font-black uppercase tracking-wider shadow-2xs">
+                                                            {categoryMap[report.category_id] || 'Incident Report'}
+                                                        </span>
+                                                        {report.status_id && (
+                                                            <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-2xs ${
+                                                                report.status_id === 2 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                                report.status_id === 5 ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                                'bg-gray-100 text-gray-700 border-gray-200'
+                                                            }`}>
+                                                                {reportStatusMap[report.status_id] || 'Reported'}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
+
+                                                {/* Animal Characteristics & Details Overview Chips */}
+                                                {(() => {
+                                                    const rawDesc = report.description || '';
+                                                    const isLostPet = report.pet_id || (rawDesc && rawDesc.includes('[LOST PET REPORT]'));
+                                                    if (isLostPet) return null;
+
+                                                    const { pattern: parsedPattern, conditions: parsedConditions } = parseReportDescription(rawDesc);
+                                                    const displayType = report.animal_type || report.ai_animal_type || 'Animal';
+                                                    const displayBreed = (report.animal_breed && report.animal_breed.toLowerCase() !== 'unknown') ? report.animal_breed : (report.ai_possible_breed && report.ai_possible_breed.toLowerCase() !== 'unknown' ? report.ai_possible_breed : null);
+                                                    const displayColor = (report.animal_color && report.animal_color.toLowerCase() !== 'unknown') ? report.animal_color : (report.ai_dominant_color || null);
+                                                    const displaySize = (report.estimated_size && report.estimated_size.toLowerCase() !== 'unknown') ? report.estimated_size : (report.ai_estimated_size || null);
+                                                    const displayPattern = parsedPattern || (report.coat_pattern && report.coat_pattern.toLowerCase() !== 'unknown' ? report.coat_pattern : (report.ai_coat_pattern && report.ai_coat_pattern.toLowerCase() !== 'unknown' ? report.ai_coat_pattern : null));
+                                                    const displayConditions = parsedConditions || report.condition || '';
+
+                                                    return (
+                                                        <div className="mb-3.5 flex flex-wrap items-center gap-1.5">
+                                                            {/* Animal Type & Breed */}
+                                                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-stone-100/90 border border-stone-200/80 rounded-xl text-stone-800 text-[11px] font-bold shadow-2xs">
+                                                                <span>{displayType.toLowerCase() === 'cat' ? '🐱' : '🐕'}</span>
+                                                                <span className="font-extrabold text-[#1a1208]">{displayType}</span>
+                                                                {displayBreed && (
+                                                                    <>
+                                                                        <span className="text-stone-400">•</span>
+                                                                        <span>{displayBreed}</span>
+                                                                    </>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Color */}
+                                                            {displayColor && (
+                                                                <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-stone-50 border border-stone-200/60 rounded-xl text-stone-700 text-[11px] font-bold shadow-2xs">
+                                                                    <span>🎨</span>
+                                                                    <span>{displayColor}</span>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Pattern */}
+                                                            {displayPattern && displayPattern.toLowerCase() !== 'unknown' && (
+                                                                <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-stone-50 border border-stone-200/60 rounded-xl text-stone-700 text-[11px] font-bold shadow-2xs">
+                                                                    <span>✨</span>
+                                                                    <span>{displayPattern}</span>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Size */}
+                                                            {displaySize && (
+                                                                <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-stone-50 border border-stone-200/60 rounded-xl text-stone-700 text-[11px] font-bold shadow-2xs">
+                                                                    <span>📏</span>
+                                                                    <span>{displaySize}</span>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Observed Conditions */}
+                                                            {displayConditions && displayConditions.split(',').map((cond: string, i: number) => {
+                                                                const trimmed = cond.trim();
+                                                                if (!trimmed || trimmed.toLowerCase() === 'none' || trimmed.toLowerCase() === 'none specified') return null;
+                                                                return (
+                                                                    <div key={i} className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 border border-amber-200/80 text-amber-800 rounded-xl text-[11px] font-bold shadow-2xs">
+                                                                        <span>🩹</span>
+                                                                        <span>{trimmed}</span>
+                                                                    </div>
+                                                                );
+                                                            })}
+
+                                                            {/* Landmark */}
+                                                            {report.landmark && (
+                                                                <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 border border-blue-200/70 text-blue-800 rounded-xl text-[11px] font-bold shadow-2xs">
+                                                                    <span>📍</span>
+                                                                    <span className="truncate max-w-[200px]">{report.landmark}</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
 
                                                 {/* Lost Pet Owner Contact & QR Code Emergency Box */}
                                                 {(report.pet_id || report.owner_phone || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
@@ -2842,43 +2997,27 @@ const ResiHomePage = () => {
                                             Notifications
                                         </h3>
                                         <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
-                                            {notifications.filter(n => !n.is_read && !n.is_archived).length} unread
+                                            {activeNotifications.filter(n => !n.is_read).length} unread
                                         </p>
                                     </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    {notifications.some(n => !n.is_read && !n.is_archived) && (
-                                        <button
-                                            onClick={handleMarkAllNotificationsRead}
-                                            className="text-[9px] font-black uppercase tracking-widest text-[#F97316] hover:text-orange-600 transition-colors"
-                                        >
-                                            Mark read
-                                        </button>
-                                    )}
-                                    <Link
-                                        to="/resident/settings?tab=notifications"
-                                        className="text-[9px] font-black uppercase tracking-widest text-gray-600 hover:text-[#F97316] transition-colors bg-gray-100 px-2 py-1 rounded-lg"
-                                    >
-                                        📁 Archive
-                                    </Link>
                                 </div>
                             </div>
 
                             <div className="space-y-3 overflow-y-auto custom-scrollbar pr-1 flex-1">
-                                {notifications.filter(n => !n.is_archived).length === 0 ? (
-                                    <div className="text-center py-8">
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic">
-                                            No active notifications
-                                        </p>
-                                        <Link
-                                            to="/resident/settings?tab=notifications"
-                                            className="text-[10px] font-black text-[#F97316] hover:underline block mt-2"
-                                        >
-                                            View Archived Notifications →
-                                        </Link>
-                                    </div>
-                                ) : (
-                                    notifications.filter(n => !n.is_archived && !dismissedNotificationIds.has(n.notification_id)).slice(0, notificationsLimit).map((notif) => {
+                                {(() => {
+                                    const displayedNotifications = activeNotifications.slice(0, visibleNotifLimit);
+
+                                    if (displayedNotifications.length === 0) {
+                                        return (
+                                            <div className="text-center py-8">
+                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic">
+                                                    No notifications
+                                                </p>
+                                            </div>
+                                        );
+                                    }
+
+                                    return displayedNotifications.map((notif) => {
                                         const typeStr = (notif.type || '').toLowerCase();
                                         const titleStr = (notif.title || '').toLowerCase();
                                         const msgStr = (notif.message || '').toLowerCase();
@@ -2889,7 +3028,6 @@ const ResiHomePage = () => {
                                             msgStr.includes('match') ||
                                             msgStr.includes('potential match') ||
                                             msgStr.includes('matches of your dog');
-                                        const isReportSubmitted = titleStr.includes('submitted');
                                         return (
                                             <div
                                                 key={notif.notification_id}
@@ -2926,17 +3064,6 @@ const ResiHomePage = () => {
                                                         </div>
 
                                                         <div className="flex items-center gap-1 shrink-0">
-                                                            {!notif.is_read && !isReportSubmitted && (
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); handleMarkNotificationRead(notif.notification_id); }}
-                                                                    className="p-1 hover:bg-orange-50 rounded text-[#F97316]"
-                                                                    title="Mark as read"
-                                                                >
-                                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                                                    </svg>
-                                                                </button>
-                                                            )}
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleDismissNotification(notif.notification_id); }}
                                                                 className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
@@ -2951,14 +3078,27 @@ const ResiHomePage = () => {
                                                 </div>
                                             </div>
                                         );
-                                    })
-                                )}
-                                {notifications.filter(n => !dismissedNotificationIds.has(n.notification_id)).length > notificationsLimit && (
+                                    });
+                                })()}
+                            </div>
+
+                            {/* Bottom Footer: Mark All Read & View All / View More Notifications */}
+                            <div className="pt-3.5 mt-2 border-t border-gray-100/80 flex items-center justify-between shrink-0">
+                                <button
+                                    onClick={handleMarkAllNotificationsRead}
+                                    className="text-xs font-semibold text-gray-500 hover:text-gray-900 underline underline-offset-2 transition-colors cursor-pointer"
+                                >
+                                    Mark All Read
+                                </button>
+                                {visibleNotifLimit < activeNotifications.length && (
                                     <button
-                                        onClick={() => setNotificationsLimit(prev => prev + 10)}
-                                        className="w-full py-2.5 bg-orange-50/50 hover:bg-orange-50 text-[#F97316] border border-orange-100 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-[0.98] mt-2 shadow-sm"
+                                        onClick={() => {
+                                            setVisibleNotifLimit(prev => prev + 10);
+                                            setHasClickedViewAll(true);
+                                        }}
+                                        className="text-xs font-bold text-[#F97316] hover:text-orange-600 transition-colors flex items-center gap-1 font-sans cursor-pointer"
                                     >
-                                        Load More
+                                        {hasClickedViewAll ? 'View More Notifications →' : 'View All Notifications →'}
                                     </button>
                                 )}
                             </div>

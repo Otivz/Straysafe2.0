@@ -3,8 +3,9 @@ import os
 import uuid
 from sqlalchemy.orm import Session, joinedload, selectinload
 from typing import List, Optional
+from sqlalchemy import or_
 from app.database import get_db
-from app.models.report import Report, ReportMedia, Comment, StatusHistory, ReportCategory, EndorsementLetter, ReportStatus
+from app.models.report import Report, ReportMedia, Comment, StatusHistory, ReportCategory, EndorsementLetter, ReportStatus, Rescue
 from app.models.user import User, Subdivision
 from app.models.notification import Notification
 from app.models.pet import Pet
@@ -31,7 +32,7 @@ def populate_pet_and_owner_info(rep_data: ReportResponse, rep: Report, db: Sessi
                 qr = db.query(PetQRCode).filter(PetQRCode.pet_id == linked_pet.pet_id).first()
                 if qr:
                     rep_data.pet_qr_code_url = qr.qr_image_url
-                    rep_data.pet_qr_code_hash = qr.qr_token
+                    rep_data.pet_qr_token = qr.qr_token
                 pet_owner = db.query(User).filter(User.user_id == linked_pet.owner_id).first()
                 if pet_owner:
                     rep_data.owner_name = pet_owner.name
@@ -50,10 +51,24 @@ def populate_pet_and_owner_info(rep_data: ReportResponse, rep: Report, db: Sessi
 
 
 @router.get("/", response_model=List[ReportResponse])
-def get_reports(subdivision_id: Optional[int] = None, db: Session = Depends(get_db)):
+def get_reports(
+    subdivision_id: Optional[int] = None,
+    escalated_only: Optional[bool] = None,
+    db: Session = Depends(get_db)
+):
     query = db.query(Report)
     if subdivision_id is not None:
         query = query.filter(Report.subdivision_id == subdivision_id)
+
+    if escalated_only:
+        query = query.filter(
+            or_(
+                Report.current_status_id.in_([4, 5, 6, 7, 8, 9, 10, 13]),
+                Report.endorsement_letter.has(),
+                Report.rescues.any(),
+                Report.history.any(StatusHistory.report_status_id == 4)
+            )
+        )
 
     reports = query.options(
         joinedload(Report.reporter),
@@ -247,10 +262,11 @@ def trigger_looks_matching(report: Report, db: Session):
     r_img_url = report.media[0].file_url if (report.media and len(report.media) > 0) else None
     stray_img = load_image(str(r_img_url)) if r_img_url else None
 
-    # Fetch registered pets of other owners that are active or lost
+    # Fetch registered pets of other owners that are eligible (Active, Lost, Found, Rescued). Strictly exclude Deceased pets.
     all_pets = db.query(Pet).filter(
         Pet.owner_id != report.user_id,
-        Pet.status.in_(["Active", "Lost"])
+        Pet.status.in_(["Active", "Lost", "Found", "Rescued"]),
+        Pet.status != "Deceased"
     ).all()
 
     # Pre-filter candidate pets according to system rules:
@@ -261,6 +277,9 @@ def trigger_looks_matching(report: Report, db: Session):
     # 5. Similar breed
     pets = []
     for pet in all_pets:
+        if not pet.status or pet.status.lower() == "deceased":
+            continue
+
         # Same animal type
         same_type = pet.pet_type.lower() == (report.animal_type or report.ai_animal_type or "").lower()
         if not same_type:
@@ -862,6 +881,20 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
 
         report_data = report_in.model_dump()
 
+        # Hard validation: Prevent deceased pets from being reported as Lost or linked to lost reports
+        if report_data.get("pet_id"):
+            pet_to_check = db.query(Pet).filter(Pet.pet_id == report_data["pet_id"]).first()
+            if not pet_to_check:
+                raise HTTPException(status_code=404, detail="Selected pet not found.")
+            if pet_to_check.status and pet_to_check.status.lower() == "deceased":
+                raise HTTPException(
+                    status_code=400,
+                    detail="This pet is marked as deceased and cannot be reported as lost."
+                )
+            # Mark the pet status as 'Lost' if creating a lost pet report
+            if report_data.get("category_id") == 6:
+                pet_to_check.status = "Lost"
+
         # Map frontend "status_id" → DB "current_status_id"
         raw_status_id = report_data.pop("status_id", 1) or 1
         status_obj = db.query(ReportStatus).filter(ReportStatus.status_id == raw_status_id).first()
@@ -983,6 +1016,9 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
         populate_pet_and_owner_info(rep_data, db_report, db)
 
         return rep_data
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
@@ -1333,6 +1369,8 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
+    prev_status_id = report.current_status_id
+
     # Update current_status_id (DB column name)
     report.current_status_id = status_update.status_id
 
@@ -1360,14 +1398,26 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
         }
         final_remarks = friendly_defaults.get(status_update.status_id, "Status updated.")
 
-    # Create status history entry using DB column names
-    db_history = StatusHistory(
-        report_id=report_id,
-        report_status_id=status_update.status_id,
-        updated_by=status_update.user_id,  # Link the update to the user
-        remarks=final_remarks
+    # Avoid adding duplicate StatusHistory entries if status hasn't changed
+    last_history = db.query(StatusHistory).filter(
+        StatusHistory.report_id == report_id
+    ).order_by(StatusHistory.history_id.desc()).first()
+
+    is_duplicate = (
+        last_history is not None
+        and last_history.report_status_id == status_update.status_id
+        and prev_status_id == status_update.status_id
     )
-    db.add(db_history)
+
+    if not is_duplicate:
+        # Create status history entry using DB column names
+        db_history = StatusHistory(
+            report_id=report_id,
+            report_status_id=status_update.status_id,
+            updated_by=status_update.user_id,  # Link the update to the user
+            remarks=final_remarks
+        )
+        db.add(db_history)
     
     # Create Notification for Resident
     if report.user_id:

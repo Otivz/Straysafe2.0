@@ -68,15 +68,31 @@ def create_pet(pet: PetCreate, req: Request, db: Session = Depends(get_db)):
 
 @router.put("/{pet_id}", response_model=PetResponse)
 def update_pet(pet_id: int, pet_update: PetUpdate, req: Request, db: Session = Depends(get_db)):
+    from app.models.pet_claim import PetClaim
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
+    
+    # Validation: Prevent marking a deceased pet as Lost
+    if pet_update.status and pet_update.status.lower() == "lost":
+        if db_pet.status and db_pet.status.lower() == "deceased":
+            raise HTTPException(
+                status_code=400,
+                detail="This pet is marked as deceased and cannot be reported as lost."
+            )
     
     old_snapshot = {"pet_name": db_pet.pet_name, "pet_type": db_pet.pet_type, "status": db_pet.status}
     update_data = pet_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_pet, key, value)
     
+    # If pet status is updated to 'Deceased', immediately invalidate/remove any active AI match claims
+    if update_data.get("status") == "Deceased":
+        db.query(PetClaim).filter(
+            PetClaim.pet_id == pet_id,
+            PetClaim.status.in_(["Potential Owner Match", "Possible Match Found", "Pending Review"])
+        ).delete(synchronize_session=False)
+
     db.commit()
     db.refresh(db_pet)
 

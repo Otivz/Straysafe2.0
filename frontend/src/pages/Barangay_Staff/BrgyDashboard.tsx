@@ -55,7 +55,7 @@ const BrgyDashboard = () => {
                 const [requestsRes, personnelRes, reportsRes] = await Promise.allSettled([
                     axios.get('http://localhost:8000/rescue-requests/'),
                     axios.get('http://localhost:8000/users/?role_id=3'),
-                    axios.get('http://localhost:8000/reports/')
+                    axios.get('http://localhost:8000/reports/?escalated_only=true')
                 ]);
 
                 if (requestsRes.status === 'fulfilled') {
@@ -145,12 +145,22 @@ const BrgyDashboard = () => {
         return 'red';
     };
 
-    // Derived stats for full command center map
-    const activeReports = reports.filter(r => [1, 2, 4, 5, 7, 8, 9, 13].includes(r.status_id));
+    const isReportEscalated = (rep: any) => {
+        if (!rep) return false;
+        // Status 4+ (Escalated to Barangay, Approved, Dispatched, Picked Up, Under Observation, Impounded, etc.)
+        if ([4, 5, 6, 7, 8, 9, 10, 13].includes(rep.status_id)) return true;
+        if (rep.endorsement_letter) return true;
+        if (rep.rescue_id || (rep.rescues && rep.rescues.length > 0)) return true;
+        if (rep.history?.some((h: any) => h.report_status_id === 4 || h.rescue_id)) return true;
+        return false;
+    };
+
+    // Derived stats for full command center map - only show escalated reports
+    const activeReports = reports.filter(r => isReportEscalated(r) && [4, 5, 7, 8, 9, 13].includes(r.status_id));
     const assignedReportsCount = requests.filter(req => req.staff_id && [1, 2, 4, 5].includes(req.status_id)).length;
     const inProgressReportsCount = requests.filter(req => req.status_id === 4).length;
-    const pickedUpReportsCount = reports.filter(r => [7, 8, 9].includes(r.status_id)).length;
-    const resolvedReportsCount = reports.filter(r => [6, 11].includes(r.status_id)).length;
+    const pickedUpReportsCount = reports.filter(r => isReportEscalated(r) && [7, 8, 9].includes(r.status_id)).length;
+    const resolvedReportsCount = reports.filter(r => isReportEscalated(r) && [6, 11].includes(r.status_id)).length;
 
     // Derived state for dynamic insights
     const resolvedTodayCount = requests.filter(r => {
@@ -192,7 +202,7 @@ const BrgyDashboard = () => {
     };
 
     const heatmapPoints: [number, number, number][] = reports
-        .filter(r => r.latitude && r.longitude)
+        .filter(r => isReportEscalated(r) && r.latitude && r.longitude)
         .map((r: any) => [
             parseFloat(r.latitude),
             parseFloat(r.longitude),

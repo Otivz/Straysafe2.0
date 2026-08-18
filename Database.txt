@@ -140,6 +140,7 @@ INSERT INTO `report_categories` (`category_id`, `category_name`, `description`) 
 INSERT INTO `report_categories` (`category_id`, `category_name`, `description`) VALUES (3, 'Rabies Risk', 'Animals exhibiting signs of rabies infection');
 INSERT INTO `report_categories` (`category_id`, `category_name`, `description`) VALUES (4, 'Roaming', 'Group of stray animals roaming together');
 INSERT INTO `report_categories` (`category_id`, `category_name`, `description`) VALUES (5, 'Rescue Needed', 'General stray animal capture and rescue requests');
+INSERT INTO `report_categories` (`category_id`, `category_name`, `description`) VALUES (6, 'Lost Pet', 'Report of a missing or lost registered domestic pet');
 
 -- =========================================
 -- TABLE: REPORT_STATUS

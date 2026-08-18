@@ -13,8 +13,8 @@ import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import RescueTimeline from '../../components/RescueTimeline';
-
 import ReturnToSeleraButton from '../../components/MapControls/ReturnToSeleraButton';
+import ResolveLostPetModal from '../../components/Modals/ResolveLostPetModal';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -49,7 +49,8 @@ const categoryMap: Record<number, string> = {
     2: 'Aggressive Stray',
     3: 'Possible Rabies Risk',
     4: 'Roaming Pack',
-    5: 'Animal Rescue Needed'
+    5: 'Animal Rescue Needed',
+    6: 'Lost Pet'
 };
 
 const FormattedReportDescription = ({ description }: { description: string }) => {
@@ -148,6 +149,7 @@ const ResiViewReport = () => {
     // Geocoding address
     const [resolvedAddress, setResolvedAddress] = useState('');
     const [isGeocoding, setIsGeocoding] = useState(false);
+    const [isResolveLostModalOpen, setIsResolveLostModalOpen] = useState(false);
 
     const userStr = localStorage.getItem('resident_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -196,39 +198,40 @@ const ResiViewReport = () => {
         if (!report) return;
 
         const fetchAddress = async () => {
+            if (report.landmark && report.landmark.trim()) {
+                setResolvedAddress(report.landmark.trim());
+            }
+
             setIsGeocoding(true);
             try {
-                const response = await axios.get('https://nominatim.openstreetmap.org/reverse', {
-                    params: {
-                        format: 'jsonv2',
-                        lat: report.latitude,
-                        lon: report.longitude,
-                        addressdetails: 1
-                    },
-                    headers: {
-                        'Accept-Language': 'en'
-                    }
-                });
-                if (response.data && response.data.address) {
-                    const addr = response.data.address;
-                    const parts = [];
-                    const road = addr.road || addr.pedestrian || addr.path || '';
-                    if (road) parts.push(road);
-                    const neighbourhood = addr.neighbourhood || addr.village || addr.suburb || '';
-                    if (neighbourhood && neighbourhood !== road) {
-                        parts.push(neighbourhood);
-                    }
-                    const city = addr.city || addr.town || addr.municipality || '';
-                    if (city) parts.push(city);
+                const response = await fetch(
+                    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${report.latitude}&lon=${report.longitude}&addressdetails=1&accept-language=en`
+                );
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.address) {
+                        const addr = data.address;
+                        const parts = [];
+                        const road = addr.road || addr.pedestrian || addr.path || '';
+                        if (road) parts.push(road);
+                        const neighbourhood = addr.neighbourhood || addr.village || addr.suburb || '';
+                        if (neighbourhood && neighbourhood !== road) {
+                            parts.push(neighbourhood);
+                        }
+                        const city = addr.city || addr.town || addr.municipality || '';
+                        if (city) parts.push(city);
 
-                    const addressStr = parts.join(', ') || response.data.display_name;
-                    setResolvedAddress(addressStr);
-                } else {
-                    setResolvedAddress(`${parseFloat(report.latitude.toString()).toFixed(6)}, ${parseFloat(report.longitude.toString()).toFixed(6)}`);
+                        const addressStr = parts.join(', ') || data.display_name;
+                        if (addressStr) {
+                            setResolvedAddress(addressStr);
+                        }
+                    }
                 }
             } catch (err) {
-                console.error('Error fetching address from Nominatim:', err);
-                setResolvedAddress(`${parseFloat(report.latitude.toString()).toFixed(6)}, ${parseFloat(report.longitude.toString()).toFixed(6)}`);
+                // Silently fallback to coordinates or existing landmark
+                if (!report.landmark) {
+                    setResolvedAddress(`${parseFloat(report.latitude.toString()).toFixed(6)}, ${parseFloat(report.longitude.toString()).toFixed(6)}`);
+                }
             } finally {
                 setIsGeocoding(false);
             }
@@ -324,27 +327,41 @@ const ResiViewReport = () => {
                             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                         </div>
                         <div>
-                            <h1 className="text-xl sm:text-3xl font-black text-gray-900 uppercase tracking-tight">Rescue Case Intelligence</h1>
+                            <h1 className="text-xl sm:text-3xl font-black text-gray-900 uppercase tracking-tight">
+                                {(report.category_id === 6 || report.pet_id || (report.description && report.description.includes('[LOST PET REPORT]'))) ? 'Lost Pet Recovery Case' : 'Rescue Case Intelligence'}
+                            </h1>
                             <div className="flex items-center gap-3 mt-1.5">
                                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Report ID: #STR-{(report.report_id || 0).toString().padStart(4, '0')}</span>
                                 <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
-                                <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest">{categoryMap[report.category_id] || 'Incident Report'}</span>
+                                <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest">
+                                    {(report.category_id === 6 || report.pet_id || (report.description && report.description.includes('[LOST PET REPORT]'))) ? 'Lost Pet' : (categoryMap[report.category_id] || 'Incident Report')}
+                                </span>
                             </div>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3 bg-[#FAFAF9] border border-gray-100 rounded-2xl p-4 w-fit">
-                        <div className="flex items-center gap-2">
-                            {report.visibility === 'Private' ? (
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                </svg>
-                            ) : (
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                </svg>
-                            )}
-                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{report.visibility} Sighting</span>
+                    <div className="flex items-center gap-3 flex-wrap">
+                        {((report.category_id === 6 || report.pet_id || (report.description && report.description.includes('[LOST PET REPORT]'))) && ![9, 10, 11, 12].includes(report.status_id)) && (
+                            <button
+                                onClick={() => setIsResolveLostModalOpen(true)}
+                                className="px-5 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-emerald-600/20 hover:scale-105 active:scale-95 flex items-center gap-2"
+                            >
+                                <span>🏠</span> Resolve Lost Case
+                            </button>
+                        )}
+                        <div className="flex items-center gap-3 bg-[#FAFAF9] border border-gray-100 rounded-2xl p-4 w-fit">
+                            <div className="flex items-center gap-2">
+                                {report.visibility === 'Private' ? (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                    </svg>
+                                ) : (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                )}
+                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{report.visibility} Sighting</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -882,6 +899,26 @@ const ResiViewReport = () => {
                         </p>
                     </div>
                 </div>
+            )}
+
+            {/* Resolve Lost Pet Report Modal */}
+            {isResolveLostModalOpen && report && (
+                <ResolveLostPetModal
+                    isOpen={isResolveLostModalOpen}
+                    pet={{
+                        pet_id: report.pet_id || 0,
+                        pet_name: report.pet_name || 'Pet',
+                        photo_url: report.pet_photo_url || (report.media && report.media[0]?.file_url),
+                        breed: report.pet_breed || report.animal_breed,
+                        species: report.pet_type || report.animal_type
+                    }}
+                    reportId={report.report_id}
+                    onClose={() => setIsResolveLostModalOpen(false)}
+                    onSuccess={() => {
+                        fetchReportDetails();
+                        setIsResolveLostModalOpen(false);
+                    }}
+                />
             )}
         </div>
     );
