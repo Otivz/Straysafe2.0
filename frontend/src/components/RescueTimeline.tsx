@@ -113,11 +113,20 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({ history, currentStatusI
     const [filter, setFilter] = useState<number | 'all'>('all');
     const [activeMedia, setActiveMedia] = useState<Media | null>(null);
 
-    const filteredHistory = filter === 'all'
-        ? history
-        : history.filter(entry => entry.report_status_id === filter);
+    // Deduplicate consecutive identical status updates so only single stage updates appear
+    const cleanHistory = (history || []).filter((entry, idx, arr) => {
+        if (idx === 0) return true;
+        const prev = arr[idx - 1];
+        const sameStatus = entry.report_status_id === prev.report_status_id;
+        const hasNewMedia = entry.media && entry.media.length > 0 && (!prev.media || prev.media.length === 0);
+        return !sameStatus || hasNewMedia;
+    });
 
-    const uniqueStages = Array.from(new Set(history.map(e => e.report_status_id)));
+    const filteredHistory = filter === 'all'
+        ? cleanHistory
+        : cleanHistory.filter(entry => entry.report_status_id === filter);
+
+    const uniqueStages = Array.from(new Set(cleanHistory.map(e => e.report_status_id)));
 
     return (
         <div className="space-y-8">

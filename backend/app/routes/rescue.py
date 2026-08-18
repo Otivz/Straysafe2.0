@@ -36,11 +36,11 @@ def _populate_rescue_fields(rescue: Optional[Rescue], db: Session) -> Optional[R
     # Determine the name of the Subdivision Leader who sent the request
     if rescue.leader:
         rescue.leader_name = rescue.leader.name
-        rescue.leader_position = rescue.leader.position.name if rescue.leader.position else "Subdivision Leader"
+        rescue.leader_position = rescue.leader.position.position_name if rescue.leader.position else "Subdivision Leader"
     elif rescue.report and rescue.report.reporter and rescue.report.reporter.role_id == 2:
         # Fallback 1: Report creator if they are a Subdivision Leader
         rescue.leader_name = rescue.report.reporter.name
-        rescue.leader_position = rescue.report.reporter.position.name if rescue.report.reporter.position else "Subdivision Leader"
+        rescue.leader_position = rescue.report.reporter.position.position_name if rescue.report.reporter.position else "Subdivision Leader"
     elif rescue.report and rescue.report.history:
         # Fallback 2: Look for the person who escalated the report (Status 4) or ANY official who touched it
         official_actions = [h for h in rescue.report.history if h.updater and h.updater.role_id == 2]
@@ -48,7 +48,7 @@ def _populate_rescue_fields(rescue: Optional[Rescue], db: Session) -> Optional[R
             # Use the most recent official action
             latest_official = sorted(official_actions, key=lambda x: x.created_at, reverse=True)[0].updater
             rescue.leader_name = latest_official.name
-            rescue.leader_position = latest_official.position.name if latest_official.position else "Subdivision Leader"
+            rescue.leader_position = latest_official.position.position_name if latest_official.position else "Subdivision Leader"
         else:
             rescue.leader_name = "Subdivision Leader"
             rescue.leader_position = "Official"
@@ -64,14 +64,25 @@ def _populate_rescue_fields(rescue: Optional[Rescue], db: Session) -> Optional[R
     elif rescue.assignments:
         # Fallback to history
         latest = sorted(rescue.assignments, key=lambda x: x.assigned_at, reverse=True)[0]  # type: ignore[arg-type]
-        assigned_staff = db.query(User).filter(User.user_id == latest.staff_id).first()
-        rescue.assigned_staff_name = assigned_staff.name if assigned_staff else None
+        if latest.staff:
+            rescue.assigned_staff_name = latest.staff.name
+        else:
+            staff_user_id = getattr(latest, "staff_id", None) or getattr(latest, "user_id", None)
+            if staff_user_id:
+                assigned_staff = db.query(User).filter(User.user_id == staff_user_id).first()
+                rescue.assigned_staff_name = assigned_staff.name if assigned_staff else None
         
     # Populate staff_name for each assignment
     if rescue.assignments:
         for asgn in rescue.assignments:
+            if not getattr(asgn, "staff_id", None) and getattr(asgn, "user_id", None):
+                asgn.staff_id = asgn.user_id
             if asgn.staff:
                 asgn.staff_name = asgn.staff.name  # type: ignore[attr-defined]
+            elif getattr(asgn, "user_id", None) or getattr(asgn, "staff_id", None):
+                uid = getattr(asgn, "user_id", None) or getattr(asgn, "staff_id", None)
+                u = db.query(User).filter(User.user_id == uid).first()
+                asgn.staff_name = u.name if u else None
 
     # Populate request_id for frontend compatibility
     rescue.request_id = rescue.rescue_id  # type: ignore[assignment]
@@ -87,15 +98,24 @@ def _populate_rescue_fields(rescue: Optional[Rescue], db: Session) -> Optional[R
 @router.post("/", response_model=RescueRequestResponse)
 def create_rescue_request(request_in: RescueRequestCreate, db: Session = Depends(get_db)):
     try:
-        rescue_data = {
-            "report_id": request_in.report_id,
-            "staff_id": request_in.barangay_staff_id if hasattr(request_in, 'barangay_staff_id') else None,
-            "leader_id": request_in.leader_id if hasattr(request_in, 'leader_id') else None,
-            "status_id": request_in.status_id,
-            "notes": request_in.description
-        }
-        db_rescue = Rescue(**{k: v for k, v in rescue_data.items() if v is not None or k == "report_id"})
-        db.add(db_rescue)
+        # Check if a Rescue record already exists for this report
+        existing_rescue = db.query(Rescue).filter(Rescue.report_id == request_in.report_id).first()
+        if existing_rescue:
+            db_rescue = existing_rescue
+            if request_in.leader_id:
+                db_rescue.leader_id = request_in.leader_id
+            if request_in.description:
+                db_rescue.notes = request_in.description
+        else:
+            rescue_data = {
+                "report_id": request_in.report_id,
+                "staff_id": request_in.barangay_staff_id if hasattr(request_in, 'barangay_staff_id') else None,
+                "leader_id": request_in.leader_id if hasattr(request_in, 'leader_id') else None,
+                "status_id": request_in.status_id,
+                "notes": request_in.description
+            }
+            db_rescue = Rescue(**{k: v for k, v in rescue_data.items() if v is not None or k == "report_id"})
+            db.add(db_rescue)
         
         # Create or update EndorsementLetter record if escalated by subdivision leader (leader_id is set)
         if request_in.leader_id:
@@ -155,8 +175,12 @@ def create_rescue_request(request_in: RescueRequestCreate, db: Session = Depends
 
 
 @router.get("/", response_model=List[RescueRequestResponse])
-def get_rescue_requests(db: Session = Depends(get_db)):
-    rescues = db.query(Rescue).join(Rescue.report).filter(Report.subdivision_id == 1).options(
+def get_rescue_requests(subdivision_id: Optional[int] = None, db: Session = Depends(get_db)):
+    query = db.query(Rescue).join(Rescue.report)
+    if subdivision_id is not None:
+        query = query.filter(Report.subdivision_id == subdivision_id)
+
+    rescues = query.options(
         joinedload(Rescue.report).joinedload(Report.media),
         joinedload(Rescue.report).joinedload(Report.reporter),
         joinedload(Rescue.report).joinedload(Report.history).joinedload(StatusHistory.updater),
@@ -221,6 +245,7 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
             # Also create record in assignment history
             new_assignment = RescueAssignment(
                 rescue_id=rescue_id,
+                user_id=assigned_id,
                 staff_id=assigned_id,
                 assigned_by=staff_id_for_history or original_staff_id or assigned_id,
                 remarks=remarks
@@ -281,16 +306,28 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                     12: "Resolved (animal deceased).",
                     13: "Approved by Barangay. Rescue operation is being planned."
                 }
-                history_remarks = friendly_defaults.get(report_status_id, "Status updated.")
-            db_history = StatusHistory(
-                rescue_id=rescue_id,
-                report_id=db_rescue.report_id,
-                report_status_id=report_status_id,
-                rescue_status_id=rescue_status_id,
-                updated_by=staff_id_for_history,
-                remarks=history_remarks
+            # Avoid duplicate StatusHistory if already recorded
+            last_history = db.query(StatusHistory).filter(
+                StatusHistory.report_id == db_rescue.report_id
+            ).order_by(StatusHistory.history_id.desc()).first()
+
+            is_duplicate = (
+                last_history is not None
+                and last_history.report_status_id == report_status_id
+                and db_rescue.report is not None
+                and db_rescue.report.current_status_id == report_status_id
             )
-            db.add(db_history)
+
+            if not is_duplicate:
+                db_history = StatusHistory(
+                    rescue_id=rescue_id,
+                    report_id=db_rescue.report_id,
+                    report_status_id=report_status_id,
+                    rescue_status_id=rescue_status_id,
+                    updated_by=staff_id_for_history,
+                    remarks=history_remarks
+                )
+                db.add(db_history)
 
             # Update the associated Report's current status and condition
             if db_rescue.report_id:

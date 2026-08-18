@@ -8,6 +8,7 @@ import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SuccessModal from '../../components/Modals/SuccessModal';
 import MapComponent from '../../components/MapComponent';
 import AISuggestionPanel from '../../components/AISuggestionPanel';
+import ResolveLostPetModal from '../../components/Modals/ResolveLostPetModal';
 
 interface Report {
     report_id: number;
@@ -66,7 +67,7 @@ const statusMap: Record<number, string> = {
 
 const categoryMap: Record<number, string> = {
     1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
-    4: 'Roaming Pack', 5: 'Animal Rescue Needed'
+    4: 'Roaming Pack', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
 };
 
 const SubdViewReport = () => {
@@ -87,6 +88,7 @@ const SubdViewReport = () => {
     
     // Resolve Modal state
     const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
+    const [isResolveLostModalOpen, setIsResolveLostModalOpen] = useState(false);
     const [resolveRemarks, setResolveRemarks] = useState('');
     const [resolveCondition, setResolveCondition] = useState('Healthy');
     const [resolveMediaFiles, setResolveMediaFiles] = useState<File[]>([]);
@@ -1105,12 +1107,20 @@ const SubdViewReport = () => {
                                             </div>
                                         )}
 
-                                        {(report.status_id === 1 || report.status_id === 2) && (
+                                        {(report.status_id === 1 || report.status_id === 2 || report.status_id === 4 || report.status_id === 7) && (
                                             <button
-                                                onClick={() => setIsResolveModalOpen(true)}
-                                                className="w-full py-3 border border-gray-100 rounded-2xl text-[10px] font-bold text-gray-400 hover:bg-green-50 hover:text-green-600 hover:border-green-100 transition-all uppercase tracking-widest cursor-pointer"
+                                                onClick={() => {
+                                                    const isLostPet = report.category_id === 6 || !!report.pet_id || (!!report.description && report.description.includes('[LOST PET REPORT]'));
+                                                    if (isLostPet) {
+                                                        setIsResolveLostModalOpen(true);
+                                                    } else {
+                                                        setIsResolveModalOpen(true);
+                                                    }
+                                                }}
+                                                className="w-full py-3.5 border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100 text-emerald-700 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
                                             >
-                                                Mark as Resolved
+                                                <span>{(report.category_id === 6 || !!report.pet_id || (!!report.description && report.description.includes('[LOST PET REPORT]'))) ? '🏠' : '✅'}</span>
+                                                {(report.category_id === 6 || !!report.pet_id || (!!report.description && report.description.includes('[LOST PET REPORT]'))) ? 'Resolve Lost Pet Report' : 'Mark as Resolved'}
                                             </button>
                                         )}
 
@@ -1473,6 +1483,25 @@ const SubdViewReport = () => {
                         </p>
                     </div>
                 </div>
+            )}
+
+            {/* Resolve Lost Pet Report Modal */}
+            {isResolveLostModalOpen && report && (
+                <ResolveLostPetModal
+                    isOpen={isResolveLostModalOpen}
+                    pet={{
+                        pet_id: report.pet_id || 0,
+                        pet_name: report.pet_name || 'Pet',
+                        photo_url: report.pet_photo_url || (report.media && report.media[0]?.file_url),
+                        breed: report.pet_breed || report.breed || report.animal_breed,
+                        species: report.pet_type || report.animal_type
+                    }}
+                    reportId={report.report_id}
+                    onClose={() => setIsResolveLostModalOpen(false)}
+                    onSuccess={() => {
+                        window.location.reload();
+                    }}
+                />
             )}
 
             {/* Success Modal */}

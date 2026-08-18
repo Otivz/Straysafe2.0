@@ -197,15 +197,20 @@ const PetTable: React.FC<PetTableProps> = ({
                                             <p className="text-xs font-black text-gray-800 uppercase tracking-wide">{pet.breed || 'Unknown Breed'}</p>
                                         </td>
 
-                                        {/* Type (Dog / Cat) */}
+                                        {/* Type (Dog / Cat) & Size */}
                                         <td className="px-6 py-4.5">
-                                            <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border ${
-                                                (pet.species || 'Dog').toLowerCase() === 'dog' 
-                                                ? 'bg-indigo-50/50 text-indigo-600 border-indigo-100/50' 
-                                                : 'bg-teal-50/50 text-teal-600 border-teal-100/50'
-                                            }`}>
-                                                {pet.species || 'Dog'}
-                                            </span>
+                                            <div className="flex flex-col gap-1 items-start">
+                                                <span className={`px-2.5 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border ${
+                                                    (pet.species || 'Dog').toLowerCase() === 'dog' 
+                                                    ? 'bg-indigo-50/50 text-indigo-600 border-indigo-100/50' 
+                                                    : 'bg-teal-50/50 text-teal-600 border-teal-100/50'
+                                                }`}>
+                                                    {pet.species || 'Dog'}
+                                                </span>
+                                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider pl-0.5">
+                                                    {pet.sizeCategory || 'Medium'} Size
+                                                </span>
+                                            </div>
                                         </td>
 
                                         {/* Owner (formatted name with email) */}

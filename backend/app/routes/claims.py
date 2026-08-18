@@ -24,10 +24,12 @@ def get_claims(
     query = db.query(PetClaim).options(
         joinedload(PetClaim.pet).joinedload(Pet.owner),
         joinedload(PetClaim.report).joinedload(Report.media)
+    ).join(Pet, PetClaim.pet_id == Pet.pet_id).filter(
+        Pet.status != "Deceased"
     )
 
     if owner_id is not None:
-        query = query.join(Pet).filter(Pet.owner_id == owner_id)
+        query = query.filter(Pet.owner_id == owner_id)
         
     if subdivision_id is not None:
         # Avoid ambiguous join by specifying join condition or matching Report table
@@ -42,8 +44,8 @@ def get_claim(claim_id: int, db: Session = Depends(get_db)):
         joinedload(PetClaim.report).joinedload(Report.media)
     ).filter(PetClaim.claim_id == claim_id).first()
 
-    if not claim:
-        raise HTTPException(status_code=404, detail="Claim not found")
+    if not claim or (claim.pet and claim.pet.status == "Deceased"):
+        raise HTTPException(status_code=404, detail="Claim not found or pet is deceased.")
     return claim
 
 @router.post("/", response_model=PetClaimResponse)
@@ -54,6 +56,12 @@ def create_or_update_claim(claim_in: PetClaimCreate, db: Session = Depends(get_d
     
     if not report or not pet:
         raise HTTPException(status_code=404, detail="Report or Pet not found")
+
+    if pet.status and pet.status.lower() == "deceased":
+        raise HTTPException(
+            status_code=400,
+            detail="This pet is marked as deceased and cannot be claimed or matched."
+        )
 
     # Check if a claim record already exists (e.g. from automatic matching)
     db_claim = db.query(PetClaim).filter(

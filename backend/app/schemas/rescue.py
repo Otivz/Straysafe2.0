@@ -18,11 +18,12 @@ class RescueStatusResponse(RescueStatusBase):
 
 class RescueAssignmentResponse(BaseModel):
     assignment_id: int
-    staff_id: int
+    staff_id: Optional[int] = None
+    user_id: Optional[int] = None
     staff_name: Optional[str] = None
-    assigned_by: int
-    assigned_at: datetime
-    assignment_status: str
+    assigned_by: Optional[int] = None
+    assigned_at: Optional[datetime] = None
+    assignment_status: Optional[str] = "Assigned"
     remarks: Optional[str] = None
 
     class Config:

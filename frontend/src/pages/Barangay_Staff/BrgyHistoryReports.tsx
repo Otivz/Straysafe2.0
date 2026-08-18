@@ -45,6 +45,7 @@ const categoryMap: Record<number, string> = {
     3: 'Possible Rabies Risk',
     4: 'Roaming Pack',
     5: 'Animal Rescue Needed',
+    6: 'Lost Pet',
 };
 
 const BrgyHistoryReports = () => {
@@ -75,7 +76,7 @@ const BrgyHistoryReports = () => {
     const fetchReports = async () => {
         try {
             setLoading(true);
-            const response = await axios.get('http://localhost:8000/reports/');
+            const response = await axios.get('http://localhost:8000/reports/?escalated_only=true');
             const sorted = (response.data || []).sort((a: any, b: any) => b.report_id - a.report_id);
             setReports(sorted);
         } catch (error) {
@@ -90,12 +91,23 @@ const BrgyHistoryReports = () => {
         fetchReports();
     }, []);
 
+    const isReportEscalated = (rep: any) => {
+        if (!rep) return false;
+        if ([4, 5, 6, 7, 8, 9, 10, 13].includes(rep.status_id)) return true;
+        if (rep.endorsement_letter) return true;
+        if (rep.rescue_id || (rep.rescues && rep.rescues.length > 0)) return true;
+        if (rep.history?.some((h: any) => h.report_status_id === 4 || h.rescue_id)) return true;
+        return false;
+    };
+
     const historyReports = reports.filter(rep => 
-        rep.status_id === 11 || 
-        rep.status_id === 9 ||
-        rep.status_id === 10 ||
-        rep.status_id === 12 || 
-        (rep.status_id === 3 && rep.history?.some((h: any) => h.report_status_id === 4))
+        isReportEscalated(rep) && (
+            rep.status_id === 11 || 
+            rep.status_id === 9 ||
+            rep.status_id === 10 ||
+            rep.status_id === 12 || 
+            (rep.status_id === 3 && rep.history?.some((h: any) => h.report_status_id === 4))
+        )
     );
 
     const filteredReports = historyReports.filter(rep => {

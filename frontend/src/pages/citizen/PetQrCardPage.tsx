@@ -19,6 +19,7 @@ interface PetDetails {
     breed: string;
     gender: string;
     estimated_age: string;
+    size_category?: string;
     photo_url: string;
     emergency_contact_name: string | null;
     emergency_contact_phone: string | null;
@@ -267,7 +268,7 @@ const PetQrCardPage = () => {
                             {/* Pet details */}
                             <div className="space-y-1 mb-6">
                                 <h2 className="text-3xl font-black text-[#1a1208] uppercase tracking-tight">{pet.pet_name}</h2>
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{pet.breed || pet.pet_type} • {pet.gender} • {pet.estimated_age}</p>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{pet.breed || pet.pet_type} • {pet.gender} • {pet.estimated_age} • {pet.size_category || 'Medium'}</p>
                             </div>
 
                             {/* Real QR Code Container */}

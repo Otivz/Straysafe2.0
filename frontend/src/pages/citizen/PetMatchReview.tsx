@@ -66,9 +66,9 @@ const PetMatchReview = () => {
 
             setReport(repData);
 
-            // 2. Fetch Owner's pets
+            // 2. Fetch Owner's pets (Strictly exclude Deceased pets)
             const petsRes = await axios.get(`http://localhost:8000/pets/owner/${currentUser.user_id}`);
-            const activePets = petsRes.data.filter((p: any) => p.status === 'Active' || p.status === 'Lost');
+            const activePets = petsRes.data.filter((p: any) => p.status && p.status.toLowerCase() !== 'deceased');
             setMyPets(activePets);
             if (activePets.length > 0) {
                 setSelectedPetId(activePets[0].pet_id);
@@ -78,7 +78,7 @@ const PetMatchReview = () => {
             let matchingClaim = null;
             try {
                 const claimsRes = await axios.get(`http://localhost:8000/claims/?owner_id=${currentUser.user_id}`);
-                matchingClaim = claimsRes.data.find((c: any) => c.report_id === parseInt(reportId || '0'));
+                matchingClaim = claimsRes.data.find((c: any) => c.report_id === parseInt(reportId || '0') && c.pet?.status?.toLowerCase() !== 'deceased');
             } catch (e) {
                 console.warn("Could not load backend claims", e);
             }
@@ -88,7 +88,7 @@ const PetMatchReview = () => {
                 const localClaimsStr = localStorage.getItem('straysafe_claims_submitted');
                 if (localClaimsStr) {
                     const localClaims = JSON.parse(localClaimsStr);
-                    matchingClaim = localClaims.find((c: any) => c.report_id === parseInt(reportId || '0') && c.pet.owner?.email === currentUser?.email);
+                    matchingClaim = localClaims.find((c: any) => c.report_id === parseInt(reportId || '0') && c.pet.owner?.email === currentUser?.email && c.pet?.status?.toLowerCase() !== 'deceased');
                 }
             }
 

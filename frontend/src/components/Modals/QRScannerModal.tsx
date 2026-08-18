@@ -589,6 +589,10 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                                 <span className="text-gray-800">{pet.estimated_age || 'Not Registered'}</span>
                                             </div>
                                             <div>
+                                                <span className="text-[10px] font-extrabold text-gray-400 uppercase block tracking-wider">Size Category</span>
+                                                <span className="text-gray-800 uppercase">{pet.size_category || 'Medium'}</span>
+                                            </div>
+                                            <div>
                                                 <span className="text-[10px] font-extrabold text-gray-400 uppercase block tracking-wider">Temperament</span>
                                                 <span className={`text-gray-800 font-bold ${pet.temperament === 'Aggressive' ? 'text-red-500' : 'text-green-600'}`}>{pet.temperament || 'Friendly'}</span>
                                             </div>

@@ -223,10 +223,13 @@ class StatusHistory(Base):
 
 class RescueAssignment(Base):
     __tablename__ = "rescue_assignments"
+    __allow_unmapped__ = True
 
     assignment_id = Column(Integer, primary_key=True, index=True)
     rescue_id = Column(Integer, ForeignKey("rescues.rescue_id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    staff_id = Column(Integer, nullable=True)
+    assigned_by = Column(Integer, nullable=True)
     assigned_at = Column(DateTime, server_default=func.now())
     
     # DB ENUM: 'Assigned', 'In Transit', 'On Site', 'Completed', 'Cancelled'
@@ -236,6 +239,9 @@ class RescueAssignment(Base):
     # Relationships
     rescue = relationship("Rescue", back_populates="assignments")
     staff = relationship("User", foreign_keys=[user_id])
+
+    # Transient fields
+    staff_name: Optional[str] = None
 
 
 # ─── Holding Facility Models ───────────────────────────────────────────────────
