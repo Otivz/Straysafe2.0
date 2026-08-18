@@ -171,6 +171,7 @@ export default function ReportStrayPage() {
     });
 
     const [aiAnalysisResult, setAiAnalysisResult] = useState<{
+        animalDetected: boolean;
         animalType: string;
         primaryColor: string;
         secondaryColor: string;
@@ -179,6 +180,7 @@ export default function ReportStrayPage() {
         possibleBreed: string;
         collarDetected: boolean;
         qrTagDetected: boolean;
+        message?: string;
     } | null>(null);
 
     const userStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
@@ -264,37 +266,68 @@ export default function ReportStrayPage() {
                 const res = await axios.post('http://localhost:8000/reports/analyze-media', mediaData);
                 if (res.status === 200 && res.data) {
                     const ai = res.data;
-                    const normType = ['Dog', 'Cat'].includes(ai.animal_type) ? ai.animal_type : (ai.animal_type?.toLowerCase().includes('dog') ? 'Dog' : 'Cat');
-                    const normPrimary = normalizeOption(ai.primary_color, VALID_PRIMARY_COLORS, 'Black');
-                    const normSecondary = normalizeOption(ai.secondary_color, VALID_SECONDARY_COLORS, 'None');
-                    const normPattern = normalizeOption(ai.coat_pattern, VALID_COAT_PATTERNS, 'Solid');
-                    const normSize = ['Small', 'Medium', 'Large'].includes(ai.estimated_size) ? ai.estimated_size : 'Medium';
+                    const isDetected = ai.animal_detected !== false && !['unknown', 'none', ''].includes((ai.animal_type || '').toLowerCase());
+                    
+                    if (!isDetected) {
+                        setAiAnalysisResult({
+                            animalDetected: false,
+                            animalType: 'Unknown',
+                            primaryColor: 'Unknown',
+                            secondaryColor: 'None',
+                            coatPattern: 'Unknown',
+                            estimatedSize: 'Unknown',
+                            possibleBreed: 'Unknown',
+                            collarDetected: false,
+                            qrTagDetected: false,
+                            message: ai.message || 'No cat or dog was detected in the uploaded image. Please ensure your photo clearly shows the stray animal.'
+                        });
+                    } else {
+                        const normType = ['Dog', 'Cat'].includes(ai.animal_type) ? ai.animal_type : (ai.animal_type?.toLowerCase().includes('dog') ? 'Dog' : 'Cat');
+                        const normPrimary = normalizeOption(ai.primary_color, VALID_PRIMARY_COLORS, 'Black');
+                        const normSecondary = normalizeOption(ai.secondary_color, VALID_SECONDARY_COLORS, 'None');
+                        const normPattern = normalizeOption(ai.coat_pattern, VALID_COAT_PATTERNS, 'Solid');
+                        const normSize = ['Small', 'Medium', 'Large'].includes(ai.estimated_size) ? ai.estimated_size : 'Medium';
 
-                    const resultObj = {
-                        animalType: normType,
-                        primaryColor: normPrimary,
-                        secondaryColor: normSecondary,
-                        coatPattern: normPattern,
-                        estimatedSize: normSize,
-                        possibleBreed: ai.possible_breed || 'Puspin',
-                        collarDetected: Boolean(ai.collar_detected),
-                        qrTagDetected: Boolean(ai.qr_tag_detected)
-                    };
-                    setAiAnalysisResult(resultObj);
-                    setFormData(prev => ({
-                        ...prev,
-                        animalType: resultObj.animalType,
-                        primaryColor: resultObj.primaryColor,
-                        secondaryColor: resultObj.secondaryColor,
-                        coatPattern: resultObj.coatPattern,
-                        estimatedSize: resultObj.estimatedSize,
-                        animalBreed: resultObj.possibleBreed,
-                        collarDetected: resultObj.collarDetected,
-                        qrTagDetected: resultObj.qrTagDetected
-                    }));
+                        const resultObj = {
+                            animalDetected: true,
+                            animalType: normType,
+                            primaryColor: normPrimary,
+                            secondaryColor: normSecondary,
+                            coatPattern: normPattern,
+                            estimatedSize: normSize,
+                            possibleBreed: ai.possible_breed || (normType === 'Cat' ? 'Puspin' : 'Aspin'),
+                            collarDetected: Boolean(ai.collar_detected),
+                            qrTagDetected: Boolean(ai.qr_tag_detected),
+                            message: ai.message || 'Animal detected successfully.'
+                        };
+                        setAiAnalysisResult(resultObj);
+                        setFormData(prev => ({
+                            ...prev,
+                            animalType: resultObj.animalType,
+                            primaryColor: resultObj.primaryColor,
+                            secondaryColor: resultObj.secondaryColor,
+                            coatPattern: resultObj.coatPattern,
+                            estimatedSize: resultObj.estimatedSize,
+                            animalBreed: resultObj.possibleBreed,
+                            collarDetected: resultObj.collarDetected,
+                            qrTagDetected: resultObj.qrTagDetected
+                        }));
+                    }
                 }
             } catch (err) {
-                console.warn('AI media analysis error, using defaults:', err);
+                console.warn('AI media analysis error:', err);
+                setAiAnalysisResult({
+                    animalDetected: false,
+                    animalType: 'Unknown',
+                    primaryColor: 'Unknown',
+                    secondaryColor: 'None',
+                    coatPattern: 'Unknown',
+                    estimatedSize: 'Unknown',
+                    possibleBreed: 'Unknown',
+                    collarDetected: false,
+                    qrTagDetected: false,
+                    message: 'Unable to analyze image. Please ensure a clear photo of a dog or cat.'
+                });
             }
         }
         setIsAiProcessing(false);
@@ -675,13 +708,62 @@ export default function ReportStrayPage() {
                                         <p className="text-xs font-bold text-gray-400 mt-1">Extracting features, colors, breed likelihood, and collar metrics</p>
                                     </div>
                                 </div>
+                            ) : aiAnalysisResult && !aiAnalysisResult.animalDetected ? (
+                                <div className="p-8 bg-red-50/80 border-2 border-red-200 rounded-3xl space-y-5 text-center animate-in fade-in">
+                                    <div className="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto text-2xl shadow-sm border border-red-200">
+                                        ⚠️
+                                    </div>
+                                    <div>
+                                        <h3 className="text-base font-black uppercase tracking-wider text-red-900">
+                                            No Animal Detected in Image
+                                        </h3>
+                                        <p className="text-xs font-bold text-red-700 mt-1.5 leading-relaxed max-w-lg mx-auto">
+                                            {aiAnalysisResult.message || "No dog or cat was detected in your uploaded media. Please upload a clear photo showing the animal."}
+                                        </p>
+                                    </div>
+
+                                    <div className="p-4 bg-white rounded-2xl border border-red-100 text-left text-xs space-y-2 max-w-lg mx-auto shadow-xs">
+                                        <p className="font-black text-red-800 flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
+                                            <span>📷</span> Recommendations:
+                                        </p>
+                                        <ul className="list-disc list-inside space-y-1 text-gray-600 text-[11px] font-bold pl-1">
+                                            <li>Make sure the stray dog or cat is centered and clearly visible.</li>
+                                            <li>Check that the lighting is sufficient and the camera is in focus.</li>
+                                            <li>Avoid uploading images of non-animal objects or surroundings only.</li>
+                                        </ul>
+                                    </div>
+
+                                    <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
+                                        <button
+                                            type="button"
+                                            onClick={() => setCurrentStep(1)}
+                                            className="px-6 py-3.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md active:scale-95"
+                                        >
+                                            ← Replace Photo (Go to Step 1)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCurrentStep(4)}
+                                            className="px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-black text-xs uppercase tracking-wider rounded-2xl transition-all"
+                                        >
+                                            Continue Manually →
+                                        </button>
+                                    </div>
+                                </div>
                             ) : (
                                 <div className="space-y-6 animate-in fade-in duration-300">
-                                    <div>
-                                        <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
-                                            <span>🤖 AI Suggestions</span>
-                                        </h2>
-                                        <p className="text-xs font-bold text-gray-400 mt-1">Review the AI animal analysis predictions generated from your media.</p>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
+                                                <span>🤖 AI Suggestions</span>
+                                            </h2>
+                                            <p className="text-xs font-bold text-gray-400 mt-1">Review the AI animal analysis predictions generated from your media.</p>
+                                        </div>
+                                        {formData.animalType && (
+                                            <span className="px-3.5 py-1.5 bg-emerald-100 text-emerald-700 font-black text-[10px] uppercase tracking-wider rounded-full flex items-center gap-1 border border-emerald-200">
+                                                ✓ {formData.animalType} Detected
+                                            </span>
+                                        )}
                                     </div>
 
                                     {/* Alert Info */}
