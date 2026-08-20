@@ -38,15 +38,15 @@ def rgb_to_color_name(rgb: Tuple[int, int, int]) -> str:
             return "Brown"
             
     elif g > r and g > b:
-        # Green dominance
+        # Green dominance (background grass/foliage)
         if r > 100 and b < 100:
             return "Yellow"
         else:
-            return "Green"
+            return "Mixed Color"  # Do not classify animal coat as Green
             
     elif b > r and b > g:
-        # Blue dominance
-        return "Blue"
+        # Blue dominance (sky/background)
+        return "Mixed Color"  # Do not classify animal coat as Blue
         
     elif r > 150 and g > 120 and b < 100:
         return "Golden"

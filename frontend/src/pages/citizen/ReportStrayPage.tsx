@@ -157,6 +157,7 @@ export default function ReportStrayPage() {
         animalBreed: 'Puspin',
         primaryColor: 'Black',
         secondaryColor: 'None',
+        tertiaryColor: 'None',
         coatPattern: 'Solid',
         distinctiveMarkings: '',
         observedConditions: [] as string[],
@@ -175,6 +176,7 @@ export default function ReportStrayPage() {
         animalType: string;
         primaryColor: string;
         secondaryColor: string;
+        tertiaryColor: string;
         coatPattern: string;
         estimatedSize: string;
         possibleBreed: string;
@@ -247,6 +249,7 @@ export default function ReportStrayPage() {
     const VALID_COAT_PATTERNS = ['Solid', 'Bicolor', 'Tricolor', 'Spotted', 'Striped', 'Patched', 'Brindle', 'Merle', 'Tabby', 'Calico', 'Tortoiseshell', 'Mixed', 'Unknown'];
     const VALID_PRIMARY_COLORS = ['Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange', 'Mixed'];
     const VALID_SECONDARY_COLORS = ['None', 'Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange'];
+    const VALID_TERTIARY_COLORS = ['None', 'Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange'];
 
     const normalizeOption = (val: string, options: string[], defaultVal: string) => {
         if (!val) return defaultVal;
@@ -274,6 +277,7 @@ export default function ReportStrayPage() {
                             animalType: 'Unknown',
                             primaryColor: 'Unknown',
                             secondaryColor: 'None',
+                            tertiaryColor: 'None',
                             coatPattern: 'Unknown',
                             estimatedSize: 'Unknown',
                             possibleBreed: 'Unknown',
@@ -285,6 +289,7 @@ export default function ReportStrayPage() {
                         const normType = ['Dog', 'Cat'].includes(ai.animal_type) ? ai.animal_type : (ai.animal_type?.toLowerCase().includes('dog') ? 'Dog' : 'Cat');
                         const normPrimary = normalizeOption(ai.primary_color, VALID_PRIMARY_COLORS, 'Black');
                         const normSecondary = normalizeOption(ai.secondary_color, VALID_SECONDARY_COLORS, 'None');
+                        const normTertiary = normalizeOption(ai.tertiary_color, VALID_TERTIARY_COLORS, 'None');
                         const normPattern = normalizeOption(ai.coat_pattern, VALID_COAT_PATTERNS, 'Solid');
                         const normSize = ['Small', 'Medium', 'Large'].includes(ai.estimated_size) ? ai.estimated_size : 'Medium';
 
@@ -293,6 +298,7 @@ export default function ReportStrayPage() {
                             animalType: normType,
                             primaryColor: normPrimary,
                             secondaryColor: normSecondary,
+                            tertiaryColor: normTertiary,
                             coatPattern: normPattern,
                             estimatedSize: normSize,
                             possibleBreed: ai.possible_breed || (normType === 'Cat' ? 'Puspin' : 'Aspin'),
@@ -306,6 +312,7 @@ export default function ReportStrayPage() {
                             animalType: resultObj.animalType,
                             primaryColor: resultObj.primaryColor,
                             secondaryColor: resultObj.secondaryColor,
+                            tertiaryColor: resultObj.tertiaryColor,
                             coatPattern: resultObj.coatPattern,
                             estimatedSize: resultObj.estimatedSize,
                             animalBreed: resultObj.possibleBreed,
@@ -321,6 +328,7 @@ export default function ReportStrayPage() {
                     animalType: 'Unknown',
                     primaryColor: 'Unknown',
                     secondaryColor: 'None',
+                    tertiaryColor: 'None',
                     coatPattern: 'Unknown',
                     estimatedSize: 'Unknown',
                     possibleBreed: 'Unknown',
@@ -390,9 +398,13 @@ export default function ReportStrayPage() {
 
         setIsSubmitting(true);
         try {
-            const compiledColor = formData.secondaryColor !== 'None'
-                ? `${formData.primaryColor} and ${formData.secondaryColor}`
-                : formData.primaryColor;
+            let compiledColor = formData.primaryColor;
+            if (formData.secondaryColor && formData.secondaryColor !== 'None') {
+                compiledColor += ` and ${formData.secondaryColor}`;
+            }
+            if (formData.tertiaryColor && formData.tertiaryColor !== 'None') {
+                compiledColor += ` and ${formData.tertiaryColor}`;
+            }
 
             const extraDetails = [
                 formData.coatPattern !== 'Unknown' ? `Pattern: ${formData.coatPattern}` : null,
@@ -400,6 +412,12 @@ export default function ReportStrayPage() {
                 formData.observedConditions.length > 0 ? `Observed Conditions: ${formData.observedConditions.join(', ')}` : null,
                 formData.description ? `Notes: ${formData.description}` : null
             ].filter(Boolean).join(' | ');
+
+            const aiDominantColorStr = [
+                aiAnalysisResult?.primaryColor || formData.primaryColor,
+                aiAnalysisResult?.secondaryColor && aiAnalysisResult.secondaryColor !== 'None' ? aiAnalysisResult.secondaryColor : null,
+                aiAnalysisResult?.tertiaryColor && aiAnalysisResult.tertiaryColor !== 'None' ? aiAnalysisResult.tertiaryColor : null
+            ].filter(Boolean).join(', ');
 
             const payload = {
                 user_id: currentUserId,
@@ -419,7 +437,7 @@ export default function ReportStrayPage() {
                 is_possible_owned: formData.isPossibleOwned,
                 status_id: 1,
                 ai_animal_type: aiAnalysisResult?.animalType || formData.animalType,
-                ai_dominant_color: aiAnalysisResult?.primaryColor || formData.primaryColor,
+                ai_dominant_color: aiDominantColorStr,
                 ai_coat_pattern: aiAnalysisResult?.coatPattern || formData.coatPattern,
                 ai_estimated_size: aiAnalysisResult?.estimatedSize || formData.estimatedSize,
                 ai_possible_breed: aiAnalysisResult?.possibleBreed || formData.animalBreed || 'Unknown',
@@ -774,7 +792,7 @@ export default function ReportStrayPage() {
 
                                     {/* Editable AI Suggestions Table */}
                                     <div className="p-6 bg-[#FAFAF9] border border-gray-100 rounded-3xl space-y-4">
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                             <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
                                                 <span className="text-[10px] font-black text-gray-400 block uppercase">Animal Type</span>
                                                 <span className="text-xs font-black text-[#F97316]">{formData.animalType}</span>
@@ -794,6 +812,10 @@ export default function ReportStrayPage() {
                                             <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
                                                 <span className="text-[10px] font-black text-gray-400 block uppercase">Secondary Color</span>
                                                 <span className="text-xs font-black text-[#F97316]">{formData.secondaryColor}</span>
+                                            </div>
+                                            <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
+                                                <span className="text-[10px] font-black text-gray-400 block uppercase">Third Color</span>
+                                                <span className="text-xs font-black text-[#F97316]">{formData.tertiaryColor || 'None'}</span>
                                             </div>
                                             <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
                                                 <span className="text-[10px] font-black text-gray-400 block uppercase">Coat Pattern</span>
@@ -865,7 +887,7 @@ export default function ReportStrayPage() {
                             </div>
 
                             {/* Colors */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <div>
                                     <label className="text-xs font-black text-[#1a1208] uppercase tracking-wider mb-2 block">Primary Color</label>
                                     <select
@@ -873,7 +895,7 @@ export default function ReportStrayPage() {
                                         value={formData.primaryColor}
                                         onChange={(e) => setFormData(prev => ({ ...prev, primaryColor: e.target.value }))}
                                     >
-                                        {['Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange', 'Mixed'].map(c => (
+                                        {VALID_PRIMARY_COLORS.map(c => (
                                             <option key={c} value={c}>{c}</option>
                                         ))}
                                     </select>
@@ -885,7 +907,19 @@ export default function ReportStrayPage() {
                                         value={formData.secondaryColor}
                                         onChange={(e) => setFormData(prev => ({ ...prev, secondaryColor: e.target.value }))}
                                     >
-                                        {['None', 'Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange'].map(c => (
+                                        {VALID_SECONDARY_COLORS.map(c => (
+                                            <option key={c} value={c}>{c}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-black text-[#1a1208] uppercase tracking-wider mb-2 block">Third Color (Tertiary)</label>
+                                    <select
+                                        className="w-full h-12 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-4 text-xs font-bold text-[#1a1208]"
+                                        value={formData.tertiaryColor}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, tertiaryColor: e.target.value }))}
+                                    >
+                                        {VALID_TERTIARY_COLORS.map(c => (
                                             <option key={c} value={c}>{c}</option>
                                         ))}
                                     </select>

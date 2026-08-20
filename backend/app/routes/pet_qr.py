@@ -139,11 +139,22 @@ def submit_pet_scan(token: str, scan_data: QRScanSubmit, db: Session = Depends(g
     if not pet:
         raise HTTPException(status_code=404, detail="Associated pet record not found")
         
+    # Validate scanned_by user exists if provided to prevent FK constraint failure
+    valid_scanned_by = None
+    if scan_data.scanned_by:
+        user_exists = db.query(User).filter(User.user_id == scan_data.scanned_by).first()
+        if user_exists:
+            valid_scanned_by = scan_data.scanned_by
+
+    # Validate location_type enum value
+    valid_loc_types = ["Found Location", "Barangay Hall", "Temporary Shelter"]
+    loc_type = scan_data.location_type if scan_data.location_type in valid_loc_types else "Found Location"
+
     # Create Scan History entry
     db_scan = PetQRScan(
         qr_id=db_qr.qr_id,
         pet_id=db_qr.pet_id,
-        scanned_by=scan_data.scanned_by,
+        scanned_by=valid_scanned_by,
         finder_name=scan_data.finder_name,
         finder_contact=scan_data.finder_contact,
         scan_lat=scan_data.scan_lat,
@@ -152,27 +163,31 @@ def submit_pet_scan(token: str, scan_data: QRScanSubmit, db: Session = Depends(g
         barangay=scan_data.barangay,
         city=scan_data.city,
         landmark=scan_data.landmark,
-        location_type=scan_data.location_type,
+        location_type=loc_type,
         notes=scan_data.notes
     )
     db.add(db_scan)
     
-    # Update QR stats
-    db_qr.scan_count += 1
+    # Update QR stats safely
+    db_qr.scan_count = (db_qr.scan_count or 0) + 1
     db_qr.last_scanned_at = func.now()
     
-    # Notify Owner immediately
-    location_desc = scan_data.landmark or scan_data.barangay or scan_data.street_address or "a location"
-    notif_msg = f"Your pet {pet.pet_name} was scanned near {location_desc}."
-    
-    owner_notification = Notification(
-        user_id=pet.owner_id,
-        title="Pet Tag Scanned",
-        message=notif_msg,
-        type="alert",
-        related_id=pet.pet_id
-    )
-    db.add(owner_notification)
+    # Notify Owner immediately if owner_id exists
+    if pet.owner_id:
+        location_desc = scan_data.landmark or scan_data.barangay or scan_data.street_address or "a location"
+        notif_msg = f"Your pet {pet.pet_name} was scanned near {location_desc}."
+        
+        try:
+            owner_notification = Notification(
+                user_id=pet.owner_id,
+                title="Pet Tag Scanned",
+                message=notif_msg,
+                type="alert",
+                related_id=pet.pet_id
+            )
+            db.add(owner_notification)
+        except Exception as notif_err:
+            print(f"Notice: Failed to create notification for pet owner: {notif_err}")
     
     db.commit()
     db.refresh(db_scan)

@@ -36,6 +36,7 @@ class PetBase(BaseModel):
     emergency_contact_phone: Optional[str] = None
     primary_color: Optional[str] = None
     secondary_color: Optional[str] = None
+    tertiary_color: Optional[str] = None
     distinctive_markings: Optional[str] = None
     registered_address: Optional[str] = None
     registered_latitude: Optional[Decimal] = None
@@ -77,6 +78,7 @@ class PetUpdate(BaseModel):
     emergency_contact_phone: Optional[str] = None
     primary_color: Optional[str] = None
     secondary_color: Optional[str] = None
+    tertiary_color: Optional[str] = None
     distinctive_markings: Optional[str] = None
     registered_address: Optional[str] = None
     registered_latitude: Optional[Decimal] = None

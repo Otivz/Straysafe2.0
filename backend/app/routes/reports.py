@@ -641,16 +641,18 @@ async def analyze_report_media(
                 Provide predictions in a valid JSON object with the following fields:
                 1. "animal_detected": true ONLY if a real dog or cat is clearly visible in the image. Set to false if the image shows inanimate objects, landscapes, food, people without a pet, documents, or non-dog/cat animals.
                 2. "animal_type": "Dog", "Cat", or "Unknown" (if animal_detected is false, must be "Unknown").
-                3. "primary_color": Dominant fur color (e.g. "Black", "White", "Brown", "Orange", "Gray", "Calico", "Cream", "Golden", or "Unknown").
-                4. "secondary_color": Secondary color or "None".
-                5. "coat_pattern": "Solid", "Bicolor", "Tricolor", "Spotted", "Striped", "Patched", "Brindle", "Merle", "Tabby", "Calico", "Tortoiseshell", "Mixed", or "Unknown".
-                6. "estimated_size": "Small", "Medium", "Large", or "Unknown". (Default "Small" for cats).
-                7. "possible_breed": Likely breed name (e.g., "Puspin" for domestic cats, "Aspin" for local dogs, "Siamese", "Persian", "Golden Retriever", or "Unknown").
-                8. "collar_detected": true ONLY if a collar or harness is clearly visible around the neck, otherwise false.
-                9. "qr_tag_detected": true ONLY if a QR tag or ID tag is attached, otherwise false.
-                10. "message": If animal_detected is false, provide a short friendly message: "No animal detected in the uploaded image. Please ensure a cat or dog is clearly visible in your photo." If detected, provide "Animal detected successfully."
+                3. "primary_color": Dominant primary fur color (e.g. "Black", "White", "Brown", "Orange", "Gray", "Calico", "Cream", "Golden", or "Unknown").
+                4. "secondary_color": Secondary fur color or "None".
+                5. "tertiary_color": Third fur color (e.g. "Black", "White", "Brown", "Tan", "Gray", "Orange", "Cream", "Golden") or "None" if there is no third color (common for tricolor, calico, tortie, or multi-colored animals).
+                6. "coat_pattern": "Solid", "Bicolor", "Tricolor", "Spotted", "Striped", "Patched", "Brindle", "Merle", "Tabby", "Calico", "Tortoiseshell", "Mixed", or "Unknown".
+                7. "estimated_size": "Small", "Medium", "Large", or "Unknown". (Default "Small" for cats).
+                8. "possible_breed": Likely breed name (e.g., "Puspin" for domestic cats, "Aspin" for local dogs, "Siamese", "Persian", "Golden Retriever", "Beagle", or "Unknown").
+                9. "collar_detected": true ONLY if a collar or harness is clearly visible around the neck, otherwise false.
+                10. "qr_tag_detected": true ONLY if a QR tag or ID tag is attached, otherwise false.
+                11. "message": If animal_detected is false, provide a short friendly message: "No animal detected in the uploaded image. Please ensure a cat or dog is clearly visible in your photo." If detected, provide "Animal detected successfully."
 
-                Be extremely accurate. Respond ONLY with a valid JSON block.
+                Be extremely accurate. If the animal has 3 distinct colors (e.g. a tricolor Beagle with Brown, White, and Black, or a Calico cat with Orange, Black, and White), specify all three in primary_color, secondary_color, and tertiary_color.
+                Respond ONLY with a valid JSON block.
                 """
 
                 res = model.generate_content(
@@ -686,6 +688,7 @@ async def analyze_report_media(
                         "animal_type": "Unknown",
                         "primary_color": "Unknown",
                         "secondary_color": "None",
+                        "tertiary_color": "None",
                         "coat_pattern": "Unknown",
                         "estimated_size": "Unknown",
                         "possible_breed": "Unknown",
@@ -699,6 +702,7 @@ async def analyze_report_media(
                     "animal_type": animal_type if animal_type in ["Dog", "Cat"] else ("Dog" if "dog" in animal_type.lower() else "Cat"),
                     "primary_color": str(data.get("primary_color", "Black")),
                     "secondary_color": str(data.get("secondary_color", "None")),
+                    "tertiary_color": str(data.get("tertiary_color", "None")),
                     "coat_pattern": str(data.get("coat_pattern", "Solid")),
                     "estimated_size": str(data.get("estimated_size", "Small")),
                     "possible_breed": str(data.get("possible_breed", "Puspin" if animal_type == "Cat" else "Aspin")),
@@ -716,6 +720,7 @@ async def analyze_report_media(
                 "animal_type": "Unknown",
                 "primary_color": "Unknown",
                 "secondary_color": "None",
+                "tertiary_color": "None",
                 "coat_pattern": "Unknown",
                 "estimated_size": "Unknown",
                 "possible_breed": "Unknown",
@@ -745,6 +750,7 @@ async def analyze_report_media(
             "animal_type": detected_type,
             "primary_color": color,
             "secondary_color": "None",
+            "tertiary_color": "None",
             "coat_pattern": "Solid",
             "estimated_size": "Small" if detected_type == "Cat" else "Medium",
             "possible_breed": "Puspin" if detected_type == "Cat" else "Aspin",
@@ -759,6 +765,7 @@ async def analyze_report_media(
             "animal_type": "Unknown",
             "primary_color": "Unknown",
             "secondary_color": "None",
+            "tertiary_color": "None",
             "coat_pattern": "Unknown",
             "estimated_size": "Unknown",
             "possible_breed": "Unknown",

@@ -312,6 +312,12 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                 <span className="text-xs font-black text-[#1a1208] uppercase">{pet.secondaryColor}</span>
                                             </div>
                                         )}
+                                        {pet.tertiaryColor && pet.tertiaryColor !== 'None' && (
+                                            <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                                <span className="text-xs font-bold text-gray-500">Third Color (Tertiary)</span>
+                                                <span className="text-xs font-black text-[#1a1208] uppercase">{pet.tertiaryColor}</span>
+                                            </div>
+                                        )}
                                         <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
                                             <span className="text-xs font-bold text-gray-500">Color Markings</span>
                                             <span className="text-xs font-black text-[#1a1208] uppercase truncate max-w-[200px]">{pet.colorMarkings || 'None'}</span>

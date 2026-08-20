@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import api from '../../utils/api';
-import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
+import { DEFAULT_AVATAR, getProfilePicture, getPetPicture } from '../../utils/avatar';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
@@ -101,6 +101,22 @@ const ResidentSettings = () => {
     const [notifFilterTab, setNotifFilterTab] = useState<'archived' | 'active' | 'all'>('archived');
     const [notifSearch, setNotifSearch] = useState('');
 
+    // Pet History State (Created, Removed, Activity)
+    const [petHistoryData, setPetHistoryData] = useState<{
+        current_pets: any[];
+        removed_pets: any[];
+        created_pets_history: any[];
+        all_logs: any[];
+    }>({
+        current_pets: [],
+        removed_pets: [],
+        created_pets_history: [],
+        all_logs: []
+    });
+    const [isPetHistoryLoading, setIsPetHistoryLoading] = useState(false);
+    const [petHistorySubTab, setPetHistorySubTab] = useState<'all-created' | 'removed' | 'activity'>('all-created');
+    const [petHistorySearch, setPetHistorySearch] = useState('');
+
     const [reportVisibility, setReportVisibility] = useState<'Public' | 'Private'>('Private');
     const [hideIdentity, setHideIdentity] = useState(false);
     const [allowContact, setAllowContact] = useState(true);
@@ -128,12 +144,15 @@ const ResidentSettings = () => {
                     .then(() => fetchUserNotifications())
                     .catch(err => console.error('Failed to auto mark notifications read:', err));
             }
+        } else if (activeTab === 'my-pets') {
+            fetchPetHistory();
         }
     }, [activeTab]);
 
     useEffect(() => {
         fetchUserProfile();
         fetchUserNotifications();
+        fetchPetHistory();
     }, []);
 
     const getUserId = () => {
@@ -153,6 +172,54 @@ const ResidentSettings = () => {
             setNotificationsList(response.data);
         } catch (error) {
             console.error('Error fetching user notifications:', error);
+        }
+    };
+
+    const fetchPetHistory = async () => {
+        const userId = getUserId();
+        if (!userId) return;
+        setIsPetHistoryLoading(true);
+        try {
+            const response = await axios.get(`http://localhost:8000/pets/owner/${userId}/history`);
+            if (response.data) {
+                setPetHistoryData(response.data);
+            }
+        } catch (error) {
+            console.error('Error fetching pet history:', error);
+        } finally {
+            setIsPetHistoryLoading(false);
+        }
+    };
+
+    const [restoringPetId, setRestoringPetId] = useState<number | string | null>(null);
+    const [selectedHistoryPet, setSelectedHistoryPet] = useState<any | null>(null);
+
+    const handleRestorePet = async (pet: any) => {
+        const confirm = window.confirm(`Restore "${pet.pet_name}" back to your active registered pets?`);
+        if (!confirm) return;
+
+        const targetKey = pet.pet_id || pet.log_id || pet.pet_name;
+        setRestoringPetId(targetKey);
+        try {
+            const userId = getUserId();
+            await axios.post('http://localhost:8000/pets/restore', {
+                pet_id: pet.pet_id,
+                log_id: pet.log_id,
+                pet_name: pet.pet_name,
+                pet_type: pet.pet_type || 'Dog',
+                breed: pet.breed || 'Unknown',
+                gender: pet.gender || 'Unknown',
+                primary_color: pet.primary_color || 'Brown',
+                photo_url: pet.photo_url,
+                owner_id: userId
+            });
+            showNotification(`Successfully restored "${pet.pet_name}" to your registered pets!`);
+            fetchPetHistory();
+        } catch (err) {
+            console.error('Failed to restore pet:', err);
+            showNotification('Failed to restore pet. Please try again.', true);
+        } finally {
+            setRestoringPetId(null);
         }
     };
 
@@ -634,16 +701,16 @@ const ResidentSettings = () => {
                             <div className="space-y-8 animate-in fade-in duration-200">
                                 <div>
                                     <h2 className="text-lg font-black text-[#1a1208] flex items-center gap-2">
-                                        🐾 Pet Preferences
+                                        🐾 Pet Preferences & Records History
                                     </h2>
-                                    <p className="text-xs text-gray-500 font-semibold mt-1">Manage pet-related settings, QR codes, and automated reminders</p>
+                                    <p className="text-xs text-gray-500 font-semibold mt-1">Manage pet preferences, QR settings, and view all created & removed pet records</p>
                                 </div>
 
                                 {/* Pet Management Shortcut Card */}
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-5 bg-orange-50/60 border border-orange-100 rounded-2xl">
                                     <div>
-                                        <span className="text-xs font-black text-[#1a1208] block">Registered Pets</span>
-                                        <p className="text-xs text-gray-500 font-semibold mt-0.5">Manage your pet records and generate QR tags</p>
+                                        <span className="text-xs font-black text-[#1a1208] block">Registered Pets Workspace</span>
+                                        <p className="text-xs text-gray-500 font-semibold mt-0.5">Manage live records, update photos, and generate QR tag cards</p>
                                     </div>
                                     <Button
                                         variant="primary"
@@ -651,12 +718,347 @@ const ResidentSettings = () => {
                                         className="py-2.5 px-5 text-xs font-black uppercase tracking-widest gap-2"
                                     >
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                        View My Pets
+                                        View My Pets Page
                                     </Button>
                                 </div>
 
+                                {/* Quick Stats Counters */}
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-black text-lg">
+                                            🐾
+                                        </div>
+                                        <div>
+                                            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Created</div>
+                                            <div className="text-base font-black text-gray-900">
+                                                {petHistoryData.created_pets_history.length || petHistoryData.current_pets.length} Pets
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="p-4 bg-emerald-50/60 border border-emerald-100 rounded-2xl flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-black text-lg">
+                                            ✅
+                                        </div>
+                                        <div>
+                                            <div className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Currently Active</div>
+                                            <div className="text-base font-black text-emerald-950">
+                                                {petHistoryData.current_pets.length} Registered
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="p-4 bg-rose-50/60 border border-rose-100 rounded-2xl flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center font-black text-lg">
+                                            🗑️
+                                        </div>
+                                        <div>
+                                            <div className="text-[10px] font-black text-rose-600 uppercase tracking-widest">Removed Pets</div>
+                                            <div className="text-base font-black text-rose-950">
+                                                {petHistoryData.removed_pets.length} Archived
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Pet History & Removed Pets Section */}
+                                <div className="pt-2 border-t border-gray-100 space-y-4">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                        <div>
+                                            <h3 className="text-sm font-black text-gray-900 flex items-center gap-2">
+                                                📜 Pet Records History & Archives
+                                            </h3>
+                                            <p className="text-xs text-gray-500 font-medium mt-0.5">
+                                                All pets ever registered or removed under your account
+                                            </p>
+                                        </div>
+                                        
+                                        {/* Refresh Button */}
+                                        <button
+                                            onClick={fetchPetHistory}
+                                            disabled={isPetHistoryLoading}
+                                            className="self-start sm:self-auto px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
+                                        >
+                                            <svg className={`w-3.5 h-3.5 ${isPetHistoryLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                            </svg>
+                                            Refresh
+                                        </button>
+                                    </div>
+
+                                    {/* Sub-tabs & Search */}
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50 p-2 rounded-2xl border border-gray-150">
+                                        <div className="flex items-center gap-1 overflow-x-auto">
+                                            <button
+                                                type="button"
+                                                onClick={() => setPetHistorySubTab('all-created')}
+                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                                                    petHistorySubTab === 'all-created'
+                                                        ? 'bg-white text-gray-900 shadow-sm'
+                                                        : 'text-gray-500 hover:text-gray-900'
+                                                }`}
+                                            >
+                                                🐾 All Created Pets
+                                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${petHistorySubTab === 'all-created' ? 'bg-orange-100 text-orange-700' : 'bg-gray-200 text-gray-600'}`}>
+                                                    {petHistoryData.created_pets_history.length || petHistoryData.current_pets.length}
+                                                </span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setPetHistorySubTab('removed')}
+                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                                                    petHistorySubTab === 'removed'
+                                                        ? 'bg-white text-rose-700 shadow-sm'
+                                                        : 'text-gray-500 hover:text-gray-900'
+                                                }`}
+                                            >
+                                                🗑️ Removed Pets
+                                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${petHistorySubTab === 'removed' ? 'bg-rose-100 text-rose-700' : 'bg-gray-200 text-gray-600'}`}>
+                                                    {petHistoryData.removed_pets.length}
+                                                </span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setPetHistorySubTab('activity')}
+                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                                                    petHistorySubTab === 'activity'
+                                                        ? 'bg-white text-gray-900 shadow-sm'
+                                                        : 'text-gray-500 hover:text-gray-900'
+                                                }`}
+                                            >
+                                                ⏱️ Activity Timeline
+                                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${petHistorySubTab === 'activity' ? 'bg-orange-100 text-orange-700' : 'bg-gray-200 text-gray-600'}`}>
+                                                    {petHistoryData.all_logs.length}
+                                                </span>
+                                            </button>
+                                        </div>
+
+                                        {/* Search Filter */}
+                                        <div className="relative min-w-[180px]">
+                                            <input
+                                                type="text"
+                                                value={petHistorySearch}
+                                                onChange={(e) => setPetHistorySearch(e.target.value)}
+                                                placeholder="Filter records..."
+                                                className="w-full h-8 pl-8 pr-3 text-xs font-semibold bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#F97316]"
+                                            />
+                                            <svg className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                            </svg>
+                                        </div>
+                                    </div>
+
+                                    {/* History Content Display */}
+                                    {isPetHistoryLoading ? (
+                                        <div className="p-8 text-center bg-gray-50 rounded-2xl border border-gray-100 animate-pulse">
+                                            <div className="text-2xl mb-2">🐾</div>
+                                            <p className="text-xs font-bold text-gray-500">Loading pet history records...</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {/* 1. ALL CREATED PETS SUBTAB */}
+                                            {petHistorySubTab === 'all-created' && (
+                                                <>
+                                                    {petHistoryData.created_pets_history.length === 0 && petHistoryData.current_pets.length === 0 ? (
+                                                        <div className="p-8 text-center bg-gray-50 rounded-2xl border border-gray-100">
+                                                            <span className="text-2xl block mb-2">🐾</span>
+                                                            <p className="text-xs font-bold text-gray-700">No pet registration records found</p>
+                                                            <p className="text-[11px] text-gray-400 mt-1">When you register pets, their creation log will appear here.</p>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="grid grid-cols-1 gap-3">
+                                                            {/* Combine and filter created pets */}
+                                                            {(petHistoryData.created_pets_history.length > 0 ? petHistoryData.created_pets_history : petHistoryData.current_pets)
+                                                                .filter(p => {
+                                                                    const q = petHistorySearch.toLowerCase();
+                                                                    return !q || (p.pet_name || '').toLowerCase().includes(q) || (p.pet_type || '').toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q);
+                                                                })
+                                                                .map((p, idx) => {
+                                                                    const isCurrentlyActive = petHistoryData.current_pets.some(cp => cp.pet_id === p.pet_id);
+                                                                    return (
+                                                                        <div
+                                                                            key={p.log_id || p.pet_id || idx}
+                                                                            onClick={() => setSelectedHistoryPet(p)}
+                                                                            className="p-4 bg-white border border-gray-150 hover:border-orange-300 rounded-2xl hover:shadow-md transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm cursor-pointer hover:scale-[1.005]"
+                                                                        >
+                                                                            <div className="flex items-center gap-3">
+                                                                                <div className="w-11 h-11 rounded-2xl bg-orange-100 flex items-center justify-center text-xl shrink-0">
+                                                                                    {p.pet_type === 'Cat' ? '🐱' : '🐶'}
+                                                                                </div>
+                                                                                <div>
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <h4 className="text-sm font-black text-gray-900">{p.pet_name || 'Unnamed Pet'}</h4>
+                                                                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-orange-50 text-orange-700 border border-orange-200">
+                                                                                            {p.pet_type || 'Dog'}
+                                                                                        </span>
+                                                                                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                                                                                            isCurrentlyActive
+                                                                                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                                                                : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                                                                        }`}>
+                                                                                            {isCurrentlyActive ? 'Active' : 'Removed'}
+                                                                                        </span>
+                                                                                        {p.pet_id && (
+                                                                                            <span className="text-[10px] font-bold text-gray-400">
+                                                                                                ID #{p.pet_id}
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <p className="text-xs text-gray-500 mt-0.5 font-medium">
+                                                                                        {p.description || `Registered new ${p.pet_type || 'pet'}: ${p.pet_name}`}
+                                                                                    </p>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                                                                <div className="text-right">
+                                                                                    <span className="text-[10px] font-bold text-gray-400 block uppercase tracking-wider">Registered On</span>
+                                                                                    <span className="text-xs font-black text-gray-800">
+                                                                                        {p.created_at || 'Recorded in system'}
+                                                                                    </span>
+                                                                                </div>
+                                                                                {!isCurrentlyActive && (
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        disabled={restoringPetId === (p.pet_id || p.log_id || p.pet_name)}
+                                                                                        onClick={() => handleRestorePet(p)}
+                                                                                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                                                                    >
+                                                                                        {restoringPetId === (p.pet_id || p.log_id || p.pet_name) ? 'Restoring...' : 'Restore'}
+                                                                                    </button>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+
+                                            {/* 2. REMOVED PETS SUBTAB */}
+                                            {petHistorySubTab === 'removed' && (
+                                                <>
+                                                    {petHistoryData.removed_pets.length === 0 ? (
+                                                        <div className="p-8 text-center bg-gray-50 rounded-2xl border border-gray-100">
+                                                            <span className="text-2xl block mb-2">✨</span>
+                                                            <p className="text-xs font-bold text-gray-700">No removed pets</p>
+                                                            <p className="text-[11px] text-gray-400 mt-1">You haven't removed any pets from your account.</p>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="grid grid-cols-1 gap-3">
+                                                            {petHistoryData.removed_pets
+                                                                .filter(p => {
+                                                                    const q = petHistorySearch.toLowerCase();
+                                                                    return !q || (p.pet_name || '').toLowerCase().includes(q) || (p.pet_type || '').toLowerCase().includes(q) || (p.breed || '').toLowerCase().includes(q);
+                                                                })
+                                                                .map((p, idx) => (
+                                                                    <div
+                                                                        key={p.log_id || idx}
+                                                                        onClick={() => setSelectedHistoryPet(p)}
+                                                                        className="p-4 bg-rose-50/40 hover:bg-rose-50/70 border border-rose-150 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm cursor-pointer transition-all hover:scale-[1.005]"
+                                                                    >
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className="w-11 h-11 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center text-xl shrink-0">
+                                                                                {p.photo_url ? (
+                                                                                    <img src={getPetPicture(p.photo_url)} alt={p.pet_name} className="w-full h-full object-cover rounded-2xl" />
+                                                                                ) : (
+                                                                                    <span>🗑️</span>
+                                                                                )}
+                                                                            </div>
+                                                                            <div>
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <h4 className="text-sm font-black text-gray-900 line-through decoration-rose-400">{p.pet_name}</h4>
+                                                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-700 border border-rose-200">
+                                                                                        Removed
+                                                                                    </span>
+                                                                                    <span className="text-[10px] font-bold text-gray-500">
+                                                                                        {p.pet_type} {p.breed && p.breed !== 'Unknown Breed' && `• ${p.breed}`}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <p className="text-xs text-gray-500 mt-0.5 font-medium">
+                                                                                    {p.description || `Deleted pet record: ${p.pet_name}`}
+                                                                                </p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                                                            <div className="text-right">
+                                                                                <span className="text-[10px] font-bold text-rose-500 block uppercase tracking-wider">Removal Date</span>
+                                                                                <span className="text-xs font-black text-gray-800">
+                                                                                    {p.removed_at || 'Past deletion'}
+                                                                                </span>
+                                                                            </div>
+                                                                            <button
+                                                                                type="button"
+                                                                                disabled={restoringPetId === (p.pet_id || p.log_id || p.pet_name)}
+                                                                                onClick={() => handleRestorePet(p)}
+                                                                                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-sm shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
+                                                                            >
+                                                                                {restoringPetId === (p.pet_id || p.log_id || p.pet_name) ? (
+                                                                                    <>
+                                                                                        <svg className="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                                                        </svg>
+                                                                                        Restoring...
+                                                                                    </>
+                                                                                ) : (
+                                                                                    <>
+                                                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                                                        </svg>
+                                                                                        Restore Pet
+                                                                                    </>
+                                                                                )}
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+
+                                            {/* 3. ACTIVITY TIMELINE SUBTAB */}
+                                            {petHistorySubTab === 'activity' && (
+                                                <>
+                                                    {petHistoryData.all_logs.length === 0 ? (
+                                                        <div className="p-8 text-center bg-gray-50 rounded-2xl border border-gray-100">
+                                                            <span className="text-2xl block mb-2">📋</span>
+                                                            <p className="text-xs font-bold text-gray-700">No activity logs recorded yet</p>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="space-y-2">
+                                                            {petHistoryData.all_logs
+                                                                .filter(l => {
+                                                                    const q = petHistorySearch.toLowerCase();
+                                                                    return !q || (l.description || '').toLowerCase().includes(q) || (l.action || '').toLowerCase().includes(q);
+                                                                })
+                                                                .map((log, idx) => (
+                                                                    <div key={log.log_id || idx} className="p-3.5 bg-white border border-gray-100 rounded-xl flex items-center justify-between gap-3 text-xs shadow-2xs">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider shrink-0 ${
+                                                                                log.action === 'CREATE_PET'
+                                                                                    ? 'bg-emerald-100 text-emerald-700'
+                                                                                    : log.action === 'DELETE_PET'
+                                                                                    ? 'bg-rose-100 text-rose-700'
+                                                                                    : 'bg-blue-100 text-blue-700'
+                                                                            }`}>
+                                                                                {log.action?.replace('_PET', '') || 'ACTION'}
+                                                                            </span>
+                                                                            <span className="font-bold text-gray-800">{log.description}</span>
+                                                                        </div>
+                                                                        <span className="text-[11px] font-semibold text-gray-400 shrink-0 whitespace-nowrap">
+                                                                            {log.timestamp}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
                                 {/* QR Preferences */}
-                                <div>
+                                <div className="pt-6 border-t border-gray-100">
                                     <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Default QR Card Download Options</h3>
                                     <div className="space-y-3">
                                         <label className="flex items-center gap-3 cursor-pointer">
@@ -1317,6 +1719,176 @@ const ResidentSettings = () => {
                     </div>
                 </div>
             </main>
+
+            {/* REMOVED / HISTORY PET DETAIL MODAL */}
+            {selectedHistoryPet && (
+                <div 
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={() => setSelectedHistoryPet(null)}
+                >
+                    <div 
+                        className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-hidden shadow-2xl border border-gray-100 flex flex-col animate-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Modal Header */}
+                        <div className="p-6 bg-gradient-to-br from-orange-50/80 via-white to-gray-50 border-b border-gray-150 relative">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedHistoryPet(null)}
+                                className="absolute right-5 top-5 w-8 h-8 rounded-full bg-white/80 hover:bg-white text-gray-400 hover:text-gray-700 flex items-center justify-center shadow-xs transition-all cursor-pointer font-bold"
+                            >
+                                ✕
+                            </button>
+                            <div className="flex items-center gap-4">
+                                <div className="w-16 h-16 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center text-3xl shrink-0 shadow-inner overflow-hidden border-2 border-white">
+                                    {selectedHistoryPet.photo_url ? (
+                                        <img src={getPetPicture(selectedHistoryPet.photo_url)} alt={selectedHistoryPet.pet_name} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <span>{selectedHistoryPet.pet_type === 'Cat' ? '🐱' : '🐶'}</span>
+                                    )}
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="text-xl font-black text-gray-900">{selectedHistoryPet.pet_name}</h3>
+                                        <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                                            selectedHistoryPet.status === 'Removed'
+                                                ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                                                : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                        }`}>
+                                            {selectedHistoryPet.status || 'Archived'}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 font-bold mt-1">
+                                        {selectedHistoryPet.pet_type || 'Dog'} • {selectedHistoryPet.breed || 'Unknown Breed'} {selectedHistoryPet.pet_id ? `(ID #${selectedHistoryPet.pet_id})` : ''}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="p-6 overflow-y-auto space-y-5 custom-scrollbar text-xs">
+                            {/* Details Grid */}
+                            <div>
+                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Pet Profile Overview</h4>
+                                <div className="grid grid-cols-2 gap-2.5">
+                                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                        <span className="text-[10px] font-bold text-gray-400 block uppercase">Species</span>
+                                        <span className="font-bold text-gray-800 text-xs">{selectedHistoryPet.pet_type || 'Dog'}</span>
+                                    </div>
+                                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                        <span className="text-[10px] font-bold text-gray-400 block uppercase">Breed</span>
+                                        <span className="font-bold text-gray-800 text-xs">{selectedHistoryPet.breed || 'Unknown'}</span>
+                                    </div>
+                                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                        <span className="text-[10px] font-bold text-gray-400 block uppercase">Gender</span>
+                                        <span className="font-bold text-gray-800 text-xs">{selectedHistoryPet.gender || 'Unknown'}</span>
+                                    </div>
+                                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                        <span className="text-[10px] font-bold text-gray-400 block uppercase">Colors</span>
+                                        <span className="font-bold text-gray-800 text-xs">
+                                            {selectedHistoryPet.primary_color || 'Standard'}
+                                            {selectedHistoryPet.secondary_color && selectedHistoryPet.secondary_color !== 'None' ? ` & ${selectedHistoryPet.secondary_color}` : ''}
+                                            {selectedHistoryPet.tertiary_color && selectedHistoryPet.tertiary_color !== 'None' ? ` & ${selectedHistoryPet.tertiary_color}` : ''}
+                                        </span>
+                                    </div>
+                                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                        <span className="text-[10px] font-bold text-gray-400 block uppercase">Size Category</span>
+                                        <span className="font-bold text-gray-800 text-xs">{selectedHistoryPet.size_category || 'Medium'} {selectedHistoryPet.weight ? `(${selectedHistoryPet.weight} kg)` : ''}</span>
+                                    </div>
+                                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                        <span className="text-[10px] font-bold text-gray-400 block uppercase">Vaccination</span>
+                                        <span className="font-bold text-gray-800 text-xs">{selectedHistoryPet.is_vaccinated ? '✅ Vaccinated' : '⚠️ Not Vaccinated'}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Audit & Removal Info */}
+                            <div>
+                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Record Information</h4>
+                                <div className="p-3.5 bg-orange-50/50 rounded-2xl border border-orange-100 space-y-2">
+                                    {selectedHistoryPet.removed_at && (
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="text-gray-500 font-semibold">Removal Date:</span>
+                                            <span className="font-bold text-rose-600">{selectedHistoryPet.removed_at}</span>
+                                        </div>
+                                    )}
+                                    {selectedHistoryPet.created_at && (
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="text-gray-500 font-semibold">Creation Date:</span>
+                                            <span className="font-bold text-gray-800">{selectedHistoryPet.created_at}</span>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-gray-500 font-semibold">Log Description:</span>
+                                        <span className="font-bold text-gray-800">{selectedHistoryPet.description || 'Pet record'}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Historical Timeline if available */}
+                            {selectedHistoryPet.timeline && selectedHistoryPet.timeline.length > 0 && (
+                                <div>
+                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Activity Timeline</h4>
+                                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                                        {selectedHistoryPet.timeline.map((log: any, idx: number) => (
+                                            <div key={idx} className="p-2.5 bg-gray-50 rounded-xl border border-gray-150 flex items-center justify-between text-[11px]">
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                                                        log.action === 'CREATE_PET' ? 'bg-emerald-100 text-emerald-700' :
+                                                        log.action === 'DELETE_PET' ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'
+                                                    }`}>
+                                                        {log.action?.replace('_PET', '')}
+                                                    </span>
+                                                    <span className="font-bold text-gray-700">{log.description}</span>
+                                                </div>
+                                                <span className="text-gray-400 font-semibold shrink-0 ml-2">{log.timestamp}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-4 bg-gray-50 border-t border-gray-150 flex items-center justify-between gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedHistoryPet(null)}
+                                className="px-4 py-2.5 bg-white hover:bg-gray-100 border border-gray-200 text-gray-700 font-bold rounded-xl text-xs transition-all cursor-pointer"
+                            >
+                                Close
+                            </button>
+                            {(selectedHistoryPet.status === 'Removed' || !petHistoryData.current_pets.some(cp => cp.pet_id === selectedHistoryPet.pet_id)) && (
+                                <button
+                                    type="button"
+                                    disabled={restoringPetId === (selectedHistoryPet.pet_id || selectedHistoryPet.log_id || selectedHistoryPet.pet_name)}
+                                    onClick={async () => {
+                                        await handleRestorePet(selectedHistoryPet);
+                                        setSelectedHistoryPet(null);
+                                    }}
+                                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black rounded-xl text-xs transition-all flex items-center gap-2 shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
+                                >
+                                    {restoringPetId === (selectedHistoryPet.pet_id || selectedHistoryPet.log_id || selectedHistoryPet.pet_name) ? (
+                                        <>
+                                            <svg className="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                            </svg>
+                                            Restoring Pet...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                            </svg>
+                                            Restore Pet
+                                        </>
+                                    )}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <ResiMobileNav
                 isNavbarMenuOpen={isNavbarMenuOpen}
