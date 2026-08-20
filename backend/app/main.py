@@ -332,6 +332,30 @@ def ensure_qr_tables_exist():
                 FOREIGN KEY(scanned_by) REFERENCES users(user_id) ON DELETE SET NULL
             )
         """))
+        
+        # Ensure all columns in pet_qr_scans exist for backward compatibility
+        scan_columns = [
+            ("pet_id", "INT NOT NULL"),
+            ("scanned_by", "INT NULL"),
+            ("finder_name", "VARCHAR(100) NULL"),
+            ("finder_contact", "VARCHAR(20) NULL"),
+            ("street_address", "VARCHAR(255) NULL"),
+            ("barangay", "VARCHAR(100) NULL"),
+            ("city", "VARCHAR(100) NULL"),
+            ("landmark", "VARCHAR(255) NULL"),
+            ("location_type", "ENUM('Found Location', 'Barangay Hall', 'Temporary Shelter') DEFAULT 'Found Location'"),
+        ]
+        for col_name, col_def in scan_columns:
+            res = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pet_qr_scans' "
+                f"AND COLUMN_NAME = '{col_name}'"
+            ))
+            if res.scalar() == 0:
+                try:
+                    conn.execute(text(f"ALTER TABLE pet_qr_scans ADD COLUMN {col_name} {col_def}"))
+                except Exception as e:
+                    print(f"Error adding {col_name} to pet_qr_scans: {e}")
 
 def ensure_announcement_tables_columns():
     with engine.begin() as conn:

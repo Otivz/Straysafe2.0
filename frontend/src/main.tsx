@@ -8,6 +8,19 @@ import App from './App.tsx'
 // so the backend can link audit log entries to the correct actor.
 axios.interceptors.request.use((config) => {
   try {
+    const url = config.url || '';
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+    const isExternal =
+      /^https?:\/\//i.test(url) &&
+      !url.startsWith(apiBase) &&
+      !url.includes('localhost:8000') &&
+      !url.includes('127.0.0.1:8000');
+
+    // Do not attach custom headers to external third-party requests (e.g. Nominatim OpenStreetMap)
+    if (isExternal) {
+      return config;
+    }
+
     const adminRaw =
       localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user');
     const staffRaw =

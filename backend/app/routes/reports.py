@@ -593,27 +593,39 @@ def trigger_looks_matching(report: Report, db: Session):
 async def analyze_report_media(
     file: UploadFile = File(...)
 ):
-    """Analyze uploaded stray animal image and return AI predictions."""
+    """Analyze uploaded stray animal image and return AI predictions or indicate if no animal was detected."""
     try:
         content = await file.read()
         from PIL import Image
         import io
         import os
         import json
+        import tempfile
 
         img = Image.open(io.BytesIO(content)).convert("RGB")
 
-        # Default fallback
-        result = {
-            "animal_type": "Cat",
-            "primary_color": "Black",
-            "secondary_color": "None",
-            "coat_pattern": "Solid",
-            "estimated_size": "Small",
-            "possible_breed": "Puspin",
-            "collar_detected": False,
-            "qr_tag_detected": False
-        }
+        # Run YOLOv8 detection first to check for cats/dogs
+        yolo_count = 0
+        detected_yolo_labels = []
+        try:
+            from ultralytics import YOLO
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+            try:
+                yolo_model = YOLO('yolov8n.pt')
+                results = yolo_model(tmp_path)
+                for r in results:
+                    for c in r.boxes.cls:
+                        label = r.names[int(c)]
+                        if label.lower() in ['dog', 'cat']:
+                            yolo_count += 1
+                            detected_yolo_labels.append(label.capitalize())
+            finally:
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+        except Exception as yerr:
+            print("YOLO check in analyze-media error:", yerr)
 
         api_key = os.getenv("GEMINI_API_KEY")
         if api_key:
@@ -624,17 +636,22 @@ async def analyze_report_media(
 
                 prompt = """
                 You are an expert AI animal inspector for a stray pet safety system.
-                Inspect the attached animal photo and provide visual attribute predictions in JSON:
-                1. "animal_type": "Dog", "Cat", or "Unknown"
-                2. "primary_color": Dominant fur color (e.g. "Black", "White", "Brown", "Orange", "Gray", "Calico", "Cream", "Golden")
-                3. "secondary_color": Secondary color or "None"
-                4. "coat_pattern": "Solid", "Bicolor", "Tricolor", "Spotted", "Striped", "Patched", "Brindle", "Merle", "Tabby", "Calico", "Tortoiseshell", "Mixed", or "Unknown"
-                5. "estimated_size": "Small", "Medium", or "Large". (Default "Small" for cats).
-                6. "possible_breed": Likely breed name (e.g., "Puspin" for domestic cats, "Aspin" for local dogs, "Siamese", "Persian", "Golden Retriever", etc.)
-                7. "collar_detected": true ONLY if a collar or harness is clearly visible around the neck, otherwise false.
-                8. "qr_tag_detected": true ONLY if a QR tag or ID tag is attached, otherwise false.
+                Inspect the attached photo and determine whether a real, live stray dog or cat is clearly visible.
 
-                Be extremely accurate. If the animal is a black cat, primary_color MUST be "Black" and animal_type MUST be "Cat".
+                Provide predictions in a valid JSON object with the following fields:
+                1. "animal_detected": true ONLY if a real dog or cat is clearly visible in the image. Set to false if the image shows inanimate objects, landscapes, food, people without a pet, documents, or non-dog/cat animals.
+                2. "animal_type": "Dog", "Cat", or "Unknown" (if animal_detected is false, must be "Unknown").
+                3. "primary_color": Dominant primary fur color (e.g. "Black", "White", "Brown", "Orange", "Gray", "Calico", "Cream", "Golden", or "Unknown").
+                4. "secondary_color": Secondary fur color or "None".
+                5. "tertiary_color": Third fur color (e.g. "Black", "White", "Brown", "Tan", "Gray", "Orange", "Cream", "Golden") or "None" if there is no third color (common for tricolor, calico, tortie, or multi-colored animals).
+                6. "coat_pattern": "Solid", "Bicolor", "Tricolor", "Spotted", "Striped", "Patched", "Brindle", "Merle", "Tabby", "Calico", "Tortoiseshell", "Mixed", or "Unknown".
+                7. "estimated_size": "Small", "Medium", "Large", or "Unknown". (Default "Small" for cats).
+                8. "possible_breed": Likely breed name (e.g., "Puspin" for domestic cats, "Aspin" for local dogs, "Siamese", "Persian", "Golden Retriever", "Beagle", or "Unknown").
+                9. "collar_detected": true ONLY if a collar or harness is clearly visible around the neck, otherwise false.
+                10. "qr_tag_detected": true ONLY if a QR tag or ID tag is attached, otherwise false.
+                11. "message": If animal_detected is false, provide a short friendly message: "No animal detected in the uploaded image. Please ensure a cat or dog is clearly visible in your photo." If detected, provide "Animal detected successfully."
+
+                Be extremely accurate. If the animal has 3 distinct colors (e.g. a tricolor Beagle with Brown, White, and Black, or a Calico cat with Orange, Black, and White), specify all three in primary_color, secondary_color, and tertiary_color.
                 Respond ONLY with a valid JSON block.
                 """
 
@@ -652,46 +669,109 @@ async def analyze_report_media(
                         text_resp = "\n".join(lines[1:-1])
 
                 data = json.loads(text_resp)
+                gemini_detected = bool(data.get("animal_detected", False))
+                animal_type = str(data.get("animal_type", "Unknown"))
+
+                # Combine YOLO & Gemini validation
+                is_detected = gemini_detected or (yolo_count > 0)
+                if not is_detected or animal_type.lower() in ["unknown", "none", "null"]:
+                    if yolo_count > 0:
+                        is_detected = True
+                        animal_type = detected_yolo_labels[0] if detected_yolo_labels else "Dog"
+                    else:
+                        is_detected = False
+                        animal_type = "Unknown"
+
+                if not is_detected:
+                    return {
+                        "animal_detected": False,
+                        "animal_type": "Unknown",
+                        "primary_color": "Unknown",
+                        "secondary_color": "None",
+                        "tertiary_color": "None",
+                        "coat_pattern": "Unknown",
+                        "estimated_size": "Unknown",
+                        "possible_breed": "Unknown",
+                        "collar_detected": False,
+                        "qr_tag_detected": False,
+                        "message": "No animal detected in the uploaded image. Please ensure a cat or dog is clearly visible."
+                    }
+
                 return {
-                    "animal_type": str(data.get("animal_type", "Cat")),
+                    "animal_detected": True,
+                    "animal_type": animal_type if animal_type in ["Dog", "Cat"] else ("Dog" if "dog" in animal_type.lower() else "Cat"),
                     "primary_color": str(data.get("primary_color", "Black")),
                     "secondary_color": str(data.get("secondary_color", "None")),
+                    "tertiary_color": str(data.get("tertiary_color", "None")),
                     "coat_pattern": str(data.get("coat_pattern", "Solid")),
                     "estimated_size": str(data.get("estimated_size", "Small")),
-                    "possible_breed": str(data.get("possible_breed", "Puspin")),
+                    "possible_breed": str(data.get("possible_breed", "Puspin" if animal_type == "Cat" else "Aspin")),
                     "collar_detected": bool(data.get("collar_detected", False)),
-                    "qr_tag_detected": bool(data.get("qr_tag_detected", False))
+                    "qr_tag_detected": bool(data.get("qr_tag_detected", False)),
+                    "message": "Animal detected successfully."
                 }
             except Exception as gem_err:
                 print("Gemini Vision analysis error:", gem_err)
 
-        # Basic local RGB analysis fallback if Gemini key unavailable
+        # Fallback if Gemini is not available: use YOLO detection result
+        if yolo_count == 0:
+            return {
+                "animal_detected": False,
+                "animal_type": "Unknown",
+                "primary_color": "Unknown",
+                "secondary_color": "None",
+                "tertiary_color": "None",
+                "coat_pattern": "Unknown",
+                "estimated_size": "Unknown",
+                "possible_breed": "Unknown",
+                "collar_detected": False,
+                "qr_tag_detected": False,
+                "message": "No animal detected in the uploaded image. Please ensure a cat or dog is clearly visible."
+            }
+
+        # YOLO found an animal; extract local colors
+        detected_type = detected_yolo_labels[0] if detected_yolo_labels else "Dog"
         import numpy as np
         arr = np.array(img)
         avg_r, avg_g, avg_b = arr.mean(axis=(0,1))
         brightness = (avg_r + avg_g + avg_b) / 3.0
 
         if brightness < 80:
-            result["primary_color"] = "Black"
+            color = "Black"
         elif brightness > 190:
-            result["primary_color"] = "White"
+            color = "White"
         elif avg_r > avg_g and avg_r > avg_b:
-            result["primary_color"] = "Orange" if avg_r > 150 else "Brown"
+            color = "Orange" if avg_r > 150 else "Brown"
         else:
-            result["primary_color"] = "Gray"
+            color = "Gray"
 
-        return result
+        return {
+            "animal_detected": True,
+            "animal_type": detected_type,
+            "primary_color": color,
+            "secondary_color": "None",
+            "tertiary_color": "None",
+            "coat_pattern": "Solid",
+            "estimated_size": "Small" if detected_type == "Cat" else "Medium",
+            "possible_breed": "Puspin" if detected_type == "Cat" else "Aspin",
+            "collar_detected": False,
+            "qr_tag_detected": False,
+            "message": "Animal detected successfully."
+        }
     except Exception as e:
         print("Media analysis error:", e)
         return {
-            "animal_type": "Cat",
-            "primary_color": "Black",
+            "animal_detected": False,
+            "animal_type": "Unknown",
+            "primary_color": "Unknown",
             "secondary_color": "None",
-            "coat_pattern": "Solid",
-            "estimated_size": "Small",
-            "possible_breed": "Puspin",
+            "tertiary_color": "None",
+            "coat_pattern": "Unknown",
+            "estimated_size": "Unknown",
+            "possible_breed": "Unknown",
             "collar_detected": False,
-            "qr_tag_detected": False
+            "qr_tag_detected": False,
+            "message": "Unable to verify animal in image. Please ensure a clear photo of a dog or cat."
         }
 
 
@@ -713,8 +793,9 @@ async def validate_report_images(
 
     valid_images = []
     pil_images = []
+    api_key = os.getenv("GEMINI_API_KEY")
 
-    # First, validate each uploaded image using YOLOv8
+    # Validate each uploaded image
     for file in files:
         filename = file.filename or ""
         ext = os.path.splitext(filename)[1].lower()
@@ -732,7 +813,7 @@ async def validate_report_images(
                 img = Image.open(io.BytesIO(content))
                 img.verify()
                 # Re-open because verify() closes/invalidates the image object
-                img = Image.open(io.BytesIO(content))
+                img = Image.open(io.BytesIO(content)).convert("RGB")
             except Exception:
                 return {
                     "valid": False,
@@ -745,11 +826,11 @@ async def validate_report_images(
                 tmp.write(content)
                 tmp_path = tmp.name
 
+            animal_count = 0
             try:
                 model = YOLO('yolov8n.pt')
                 results = model(tmp_path)
                 
-                animal_count = 0
                 for r in results:
                     for c in r.boxes.cls:
                         label = r.names[int(c)]
@@ -759,11 +840,34 @@ async def validate_report_images(
                 if os.path.exists(tmp_path):
                     os.unlink(tmp_path)
 
+            # If YOLO detected 0 animals, double-check with Gemini Vision to prevent false negatives
+            if animal_count == 0 and api_key:
+                try:
+                    genai.configure(api_key=api_key)
+                    g_model = genai.GenerativeModel("gemini-2.5-flash")
+                    check_prompt = """
+                    Is there a real live dog or cat visible in this photo?
+                    Respond ONLY with a JSON object: {"animal_detected": true/false, "count": number}
+                    """
+                    g_res = g_model.generate_content(
+                        [check_prompt, img],
+                        generation_config={"response_mime_type": "application/json"}
+                    )
+                    g_text = g_res.text.strip()
+                    if g_text.startswith("```"):
+                        lines = g_text.split("\n")
+                        g_text = "\n".join(lines[1:-1] if lines[0].startswith("```") else lines)
+                    g_data = json.loads(g_text)
+                    if g_data.get("animal_detected"):
+                        animal_count = max(1, int(g_data.get("count", 1)))
+                except Exception as gem_check_err:
+                    print(f"Gemini fallback validation error for {filename}:", gem_check_err)
+
             if animal_count == 0:
                 return {
                     "valid": False,
                     "error_type": "no_animal",
-                    "message": "No animal was detected in one or more uploaded images. Please upload a valid animal image."
+                    "message": "No animal was detected in the uploaded image. Please upload a clear photo of a dog or cat."
                 }
             elif animal_count > 1:
                 return {
@@ -786,7 +890,6 @@ async def validate_report_images(
 
     # If multiple images, run visual similarity analysis
     if len(pil_images) > 1:
-        api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             return {
                 "valid": False,

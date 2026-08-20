@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
+import { getPetPicture } from '../../utils/avatar';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import StatCard from '../../components/PetRecords/StatCard';
@@ -37,7 +37,10 @@ const SubdPetRecords = () => {
                 status: pet.status || 'Active',
                 avatar: getPetPicture(pet.photo_url),
                 weight: pet.weight ? `${pet.weight}kg` : 'Unknown',
-                colorMarkings: pet.color_markings || 'Unknown',
+                primaryColor: pet.primary_color || 'Brown',
+                secondaryColor: pet.secondary_color || '',
+                tertiaryColor: pet.tertiary_color || '',
+                colorMarkings: pet.color_markings || pet.distinctive_markings || 'None',
                 sizeCategory: pet.size_category || 'Medium',
                 isVaccinated: pet.is_vaccinated || false,
                 vaccinationDate: pet.vaccination_date || null,

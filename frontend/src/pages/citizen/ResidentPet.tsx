@@ -125,6 +125,8 @@ interface PetFormData {
     customPrimaryColor: string;
     secondaryColor: string;
     customSecondaryColor: string;
+    tertiaryColor: string;
+    customTertiaryColor: string;
     color: string;
     age: string;
     status: string;
@@ -143,6 +145,64 @@ interface PetFormData {
     chaseBehavior: boolean | null;
     existingVaccineCardUrl: string | null;
 }
+
+const INITIAL_PET_FORM_DATA: PetFormData = {
+    name: '',
+    species: 'Dog',
+    breed: '',
+    gender: 'Male',
+    sizeCategory: 'Medium',
+    primaryColor: 'Brown',
+    customPrimaryColor: '',
+    secondaryColor: '',
+    customSecondaryColor: '',
+    tertiaryColor: '',
+    customTertiaryColor: '',
+    color: '',
+    age: '',
+    status: 'Active',
+    weight: '',
+    mediaFiles: [],
+    photoFrontFiles: [],
+    photoLeftFiles: [],
+    photoRightFiles: [],
+    isVaccinated: true,
+    vaccinationDate: '2026-05-10',
+    isNeutered: true,
+    healthNotes: '',
+    vaccineCardFiles: [],
+    temperament: 'Friendly',
+    hasBiteHistory: null,
+    chaseBehavior: null,
+    existingVaccineCardUrl: null
+};
+
+interface AiAnalysisSummary {
+    species: string;
+    breed: string;
+    colors: string[];
+    primaryColor: string;
+    secondaryColor: string;
+    tertiaryColor: string;
+    pattern?: string;
+    size?: string;
+    message?: string;
+}
+
+const PRESET_PRIMARY_COLORS = ['Brown', 'Black', 'White', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream', 'Red'];
+const PRESET_SECONDARY_COLORS = ['White', 'Black', 'Brown', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream'];
+const PRESET_TERTIARY_COLORS = ['White', 'Black', 'Brown', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream'];
+
+const matchColorOption = (raw: string, presets: string[]): { selected: string; custom: string } => {
+    if (!raw || ['none', 'unknown', 'null', ''].includes(raw.toLowerCase())) {
+        return { selected: '', custom: '' };
+    }
+    const matched = presets.find(p => p.toLowerCase() === raw.toLowerCase());
+    if (matched) {
+        return { selected: matched, custom: '' };
+    }
+    return { selected: 'Other', custom: raw };
+};
 
 const ResidentPet = () => {
     const navigate = useNavigate();
@@ -170,6 +230,7 @@ const ResidentPet = () => {
             weight: pet.weight ? `${pet.weight}kg` : 'Unknown',
             primaryColor: pet.primary_color || 'Brown',
             secondaryColor: pet.secondary_color || '',
+            tertiaryColor: pet.tertiary_color || '',
             colorMarkings: pet.color_markings || pet.distinctive_markings || 'None',
             sizeCategory: pet.size_category || 'Medium',
             isVaccinated: pet.is_vaccinated || false,
@@ -185,34 +246,7 @@ const ResidentPet = () => {
         };
     };
 
-    const [formData, setFormData] = useState<PetFormData>({
-        name: '',
-        species: 'Dog',
-        breed: '',
-        gender: 'Male',
-        sizeCategory: 'Medium',
-        primaryColor: 'Brown',
-        customPrimaryColor: '',
-        secondaryColor: '',
-        customSecondaryColor: '',
-        color: '',
-        age: '',
-        status: 'Active',
-        weight: '',
-        mediaFiles: [],
-        photoFrontFiles: [],
-        photoLeftFiles: [],
-        photoRightFiles: [],
-        isVaccinated: true,
-        vaccinationDate: '2026-05-10',
-        isNeutered: true,
-        healthNotes: '',
-        vaccineCardFiles: [],
-        temperament: 'Friendly',
-        hasBiteHistory: null,
-        chaseBehavior: null,
-        existingVaccineCardUrl: null
-    });
+    const [formData, setFormData] = useState<PetFormData>(INITIAL_PET_FORM_DATA);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('All Pets');
@@ -236,50 +270,137 @@ const ResidentPet = () => {
     const [breedImageUrl, setBreedImageUrl] = useState<string | null>(null);
     const [isFetchingBreedImage, setIsFetchingBreedImage] = useState(false);
 
-    const [aiSuggestedSpecies, setAiSuggestedSpecies] = useState<string | null>(null);
-    const [aiSuggestedColor, setAiSuggestedColor] = useState<string | null>(null);
+    const [aiAnalysisSummary, setAiAnalysisSummary] = useState<AiAnalysisSummary | null>(null);
     const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
     const [formErrors, setFormErrors] = useState<Record<string, boolean>>({});
     const [submitErrorMessage, setSubmitErrorMessage] = useState<string | null>(null);
 
     const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files ? Array.from(e.target.files) : [];
-        setFormData({ ...formData, mediaFiles: files });
-        setFormErrors({ ...formErrors, photo: false });
+        setFormData((prev) => ({ ...prev, mediaFiles: files }));
+        setFormErrors((prev) => ({ ...prev, photo: false }));
         
         if (files.length > 0) {
             setIsAnalyzingPhoto(true);
-            setAiSuggestedSpecies(null);
-            setAiSuggestedColor(null);
+            setAiAnalysisSummary(null);
             
             const file = files[0];
-            const fileName = file.name.toLowerCase();
-            
-            // Basic species detection from filename
-            let suggestedSpecies = 'Dog';
-            if (fileName.includes('cat') || fileName.includes('kitten') || fileName.includes('meow') || fileName.includes('siamese') || fileName.includes('puspin')) {
-                suggestedSpecies = 'Cat';
-            } else {
-                suggestedSpecies = 'Dog';
-            }
             
             try {
-                // Perform REAL image pixel color analysis using HTML5 canvas
-                const suggestedColor = await analyzeImageColors(file);
+                const mediaData = new FormData();
+                mediaData.append("file", file);
+                const res = await axios.post('http://localhost:8000/reports/analyze-media', mediaData);
                 
-                // Retain visual interactive analysis delay for enhanced UX
-                setTimeout(() => {
-                    setAiSuggestedSpecies(suggestedSpecies);
-                    setAiSuggestedColor(suggestedColor);
-                    setIsAnalyzingPhoto(false);
-                }, 850);
+                if (res.status === 200 && res.data) {
+                    const ai = res.data;
+                    const isDetected = ai.animal_detected !== false && !['unknown', 'none', ''].includes((ai.animal_type || '').toLowerCase());
+                    
+                    if (isDetected) {
+                        const normSpecies = ['Dog', 'Cat'].includes(ai.animal_type)
+                            ? ai.animal_type 
+                            : (ai.animal_type?.toLowerCase().includes('cat') ? 'Cat' : 'Dog');
+                            
+                        const p1Match = matchColorOption(ai.primary_color, PRESET_PRIMARY_COLORS);
+                        const finalPrimary = p1Match.selected || 'Brown';
+                        const finalCustomPrimary = finalPrimary === 'Other' ? (p1Match.custom || ai.primary_color) : '';
+                        
+                        const p2Match = matchColorOption(ai.secondary_color, PRESET_SECONDARY_COLORS);
+                        const p3Match = matchColorOption(ai.tertiary_color, PRESET_TERTIARY_COLORS);
+                        
+                        const detectedBreed = ai.possible_breed && ai.possible_breed !== 'Unknown' 
+                            ? ai.possible_breed 
+                            : (normSpecies === 'Cat' ? 'Puspin' : 'Aspin');
+                            
+                        const detectedSize = ['Small', 'Medium', 'Large'].includes(ai.estimated_size)
+                            ? ai.estimated_size
+                            : (normSpecies === 'Cat' ? 'Small' : 'Medium');
+
+                        const colorSummaryList: string[] = [];
+                        if (ai.primary_color && ai.primary_color !== 'Unknown') colorSummaryList.push(ai.primary_color);
+                        if (ai.secondary_color && !['none', 'unknown', ''].includes(ai.secondary_color.toLowerCase())) colorSummaryList.push(ai.secondary_color);
+                        if (ai.tertiary_color && !['none', 'unknown', ''].includes(ai.tertiary_color.toLowerCase())) colorSummaryList.push(ai.tertiary_color);
+
+                        setFormData(prev => ({
+                            ...prev,
+                            species: normSpecies,
+                            breed: detectedBreed,
+                            sizeCategory: detectedSize,
+                            primaryColor: finalPrimary,
+                            customPrimaryColor: finalCustomPrimary,
+                            secondaryColor: p2Match.selected,
+                            customSecondaryColor: p2Match.custom,
+                            tertiaryColor: p3Match.selected,
+                            customTertiaryColor: p3Match.custom,
+                            color: ai.coat_pattern && ai.coat_pattern !== 'Solid' && ai.coat_pattern !== 'Unknown' ? `${ai.coat_pattern} coat` : prev.color
+                        }));
+
+                        setAiAnalysisSummary({
+                            species: normSpecies,
+                            breed: detectedBreed,
+                            colors: colorSummaryList.length > 0 ? colorSummaryList : [finalPrimary],
+                            primaryColor: finalPrimary === 'Other' ? finalCustomPrimary : finalPrimary,
+                            secondaryColor: p2Match.selected === 'Other' ? p2Match.custom : p2Match.selected,
+                            tertiaryColor: p3Match.selected === 'Other' ? p3Match.custom : p3Match.selected,
+                            pattern: ai.coat_pattern || '',
+                            size: detectedSize,
+                            message: ai.message
+                        });
+                    } else {
+                        // Fallback to client-side color analyzer
+                        const suggestedColor = await analyzeImageColors(file);
+                        const p1Match = matchColorOption(suggestedColor, PRESET_PRIMARY_COLORS);
+                        const finalPrimary = p1Match.selected || 'Brown';
+                        const finalCustomPrimary = finalPrimary === 'Other' ? (p1Match.custom || suggestedColor) : '';
+                        
+                        setFormData(prev => ({
+                            ...prev,
+                            primaryColor: finalPrimary,
+                            customPrimaryColor: finalCustomPrimary
+                        }));
+
+                        setAiAnalysisSummary({
+                            species: formData.species || 'Dog',
+                            breed: formData.species === 'Cat' ? 'Puspin' : 'Aspin',
+                            colors: [suggestedColor],
+                            primaryColor: finalPrimary === 'Other' ? finalCustomPrimary : finalPrimary,
+                            secondaryColor: '',
+                            tertiaryColor: '',
+                            pattern: '',
+                            size: formData.sizeCategory || 'Medium',
+                            message: 'Color detected from photo.'
+                        });
+                    }
+                }
             } catch (err) {
-                console.error("Failed to analyze uploaded photo:", err);
-                setTimeout(() => {
-                    setAiSuggestedSpecies(suggestedSpecies);
-                    setAiSuggestedColor("Brown");
-                    setIsAnalyzingPhoto(false);
-                }, 850);
+                console.warn("Backend AI media analysis error, falling back to client-side analyzer:", err);
+                try {
+                    const suggestedColor = await analyzeImageColors(file);
+                    const p1Match = matchColorOption(suggestedColor, PRESET_PRIMARY_COLORS);
+                    const finalPrimary = p1Match.selected || 'Brown';
+                    const finalCustomPrimary = finalPrimary === 'Other' ? (p1Match.custom || suggestedColor) : '';
+                    
+                    setFormData(prev => ({
+                        ...prev,
+                        primaryColor: finalPrimary,
+                        customPrimaryColor: finalCustomPrimary
+                    }));
+
+                    setAiAnalysisSummary({
+                        species: formData.species || 'Dog',
+                        breed: formData.species === 'Cat' ? 'Puspin' : 'Aspin',
+                        colors: [suggestedColor],
+                        primaryColor: finalPrimary === 'Other' ? finalCustomPrimary : finalPrimary,
+                        secondaryColor: '',
+                        tertiaryColor: '',
+                        pattern: '',
+                        size: formData.sizeCategory || 'Medium',
+                        message: 'Color detected from photo.'
+                    });
+                } catch (fallbackErr) {
+                    console.error("Failed to analyze uploaded photo:", fallbackErr);
+                }
+            } finally {
+                setIsAnalyzingPhoto(false);
             }
         }
     };
@@ -462,6 +583,10 @@ const ResidentPet = () => {
                 ? (formData.customSecondaryColor.trim() || 'Other')
                 : formData.secondaryColor;
 
+            const effectiveTertiary = formData.tertiaryColor === 'Other'
+                ? (formData.customTertiaryColor.trim() || 'Other')
+                : formData.tertiaryColor;
+
             const petData = {
                 pet_name: formData.name,
                 pet_type: formData.species,
@@ -470,6 +595,7 @@ const ResidentPet = () => {
                 size_category: formData.sizeCategory || 'Medium',
                 primary_color: effectivePrimary,
                 secondary_color: effectiveSecondary || null,
+                tertiary_color: effectiveTertiary || null,
                 color_markings: formData.color.trim() || null,
                 distinctive_markings: formData.color.trim() || null,
                 estimated_age: formData.age,
@@ -541,36 +667,8 @@ const ResidentPet = () => {
             fetchPets();
             setIsAddPetModalOpen(false);
             setEditingPetId(null);
-            setFormData({
-                name: '',
-                species: 'Dog',
-                breed: '',
-                gender: 'Male',
-                sizeCategory: 'Medium',
-                primaryColor: 'Brown',
-                customPrimaryColor: '',
-                secondaryColor: '',
-                customSecondaryColor: '',
-                color: '',
-                age: '',
-                status: 'Active',
-                weight: '',
-                mediaFiles: [],
-                photoFrontFiles: [],
-                photoLeftFiles: [],
-                photoRightFiles: [],
-                isVaccinated: true,
-                vaccinationDate: '2026-05-10',
-                isNeutered: true,
-                healthNotes: '',
-                vaccineCardFiles: [],
-                temperament: 'Friendly',
-                hasBiteHistory: null,
-                chaseBehavior: null,
-                existingVaccineCardUrl: null
-            });
-            setAiSuggestedSpecies(null);
-            setAiSuggestedColor(null);
+            setFormData(INITIAL_PET_FORM_DATA);
+            setAiAnalysisSummary(null);
             setFormErrors({});
             setSubmitErrorMessage(null);
         } catch (error) {
@@ -594,6 +692,10 @@ const ResidentPet = () => {
         const presetSecondary = ['White', 'Black', 'Brown', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream'];
         const rawSecondary = petObj.secondary_color || '';
         const isSecondaryPreset = !rawSecondary || presetSecondary.includes(rawSecondary);
+
+        const presetTertiary = ['White', 'Black', 'Brown', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream'];
+        const rawTertiary = petObj.tertiary_color || '';
+        const isTertiaryPreset = !rawTertiary || rawTertiary === 'None' || presetTertiary.includes(rawTertiary);
         
         setEditingPetId(petObj.pet_id);
         setFormData({
@@ -606,6 +708,8 @@ const ResidentPet = () => {
             customPrimaryColor: isPrimaryPreset ? '' : rawPrimary,
             secondaryColor: isSecondaryPreset ? rawSecondary : (rawSecondary ? 'Other' : ''),
             customSecondaryColor: isSecondaryPreset ? '' : rawSecondary,
+            tertiaryColor: isTertiaryPreset ? (rawTertiary === 'None' ? '' : rawTertiary) : (rawTertiary ? 'Other' : ''),
+            customTertiaryColor: isTertiaryPreset ? '' : rawTertiary,
             color: petObj.color_markings || petObj.distinctive_markings || '',
             age: petObj.estimated_age || '',
             status: petObj.status || 'Active',
@@ -625,8 +729,7 @@ const ResidentPet = () => {
             existingVaccineCardUrl: petObj.vaccine_card_url || null
         });
         
-        setAiSuggestedSpecies(null);
-        setAiSuggestedColor(null);
+        setAiAnalysisSummary(null);
         setFormErrors({});
         setSubmitErrorMessage(null);
         
@@ -696,7 +799,7 @@ const ResidentPet = () => {
             const storedSubdId = localStorage.getItem('subdivision_id');
             const subdId = storedSubdId ? parseInt(storedSubdId) : (petObj.subdivision_id || 1);
 
-            const colorDesc = `${petObj.primary_color || ''}${petObj.secondary_color ? ' and ' + petObj.secondary_color : ''}`.trim() || 'Brown';
+            const colorDesc = `${petObj.primary_color || ''}${petObj.secondary_color ? ' and ' + petObj.secondary_color : ''}${petObj.tertiary_color ? ' and ' + petObj.tertiary_color : ''}`.trim() || 'Brown';
             const ownerName = lostPetForm.contactName.trim() || petObj.owner_name || currentUser?.name || 'Registered Owner';
             const ownerPhone = lostPetForm.contactPhone.trim() || petObj.owner_phone || currentUser?.phone || 'Available in StraySafe';
             const qrInfo = petObj.qr_code_hash ? ` [QR Tag: ${petObj.qr_code_hash}]` : '';
@@ -811,36 +914,8 @@ const ResidentPet = () => {
                             variant="primary"
                             onClick={() => {
                                 setEditingPetId(null);
-                                setFormData({
-                                    name: '',
-                                    species: 'Dog',
-                                    breed: '',
-                                    gender: 'Male',
-                                    sizeCategory: 'Medium',
-                                    primaryColor: 'Brown',
-                                    customPrimaryColor: '',
-                                    secondaryColor: '',
-                                    customSecondaryColor: '',
-                                    color: '',
-                                    age: '',
-                                    status: 'Active',
-                                    weight: '',
-                                    mediaFiles: [],
-                                    photoFrontFiles: [],
-                                    photoLeftFiles: [],
-                                    photoRightFiles: [],
-                                    isVaccinated: true,
-                                    vaccinationDate: '2026-05-10',
-                                    isNeutered: true,
-                                    healthNotes: '',
-                                    vaccineCardFiles: [],
-                                    temperament: 'Friendly',
-                                    hasBiteHistory: null,
-                                    chaseBehavior: null,
-                                    existingVaccineCardUrl: null
-                                });
-                                setAiSuggestedSpecies(null);
-                                setAiSuggestedColor(null);
+                                setFormData(INITIAL_PET_FORM_DATA);
+                                setAiAnalysisSummary(null);
                                 setFormErrors({});
                                 setSubmitErrorMessage(null);
                                 setIsAddPetModalOpen(true);
@@ -1069,489 +1144,561 @@ const ResidentPet = () => {
                                 </div>
                             )}
 
-                            {/* Section 1: Core Information */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-4">
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Pet Name <span className="text-red-500">*</span></label>
-                                    <input 
-                                        type="text" 
-                                        className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${
-                                            formErrors.name 
-                                            ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10' 
-                                            : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
-                                        }`}
-                                        placeholder="e.g. Bruno"
-                                        value={formData.name}
-                                        onChange={(e) => {
-                                            setFormData({...formData, name: e.target.value});
-                                            if (formErrors.name) setFormErrors({...formErrors, name: false});
-                                        }}
-                                    />
-                                </div>
-                                <div className="space-y-4">
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Species <span className="text-red-500">*</span></label>
-                                    <div className="flex gap-4 h-14">
-                                        {['Dog', 'Cat'].map((type) => (
-                                            <button 
-                                                key={type}
-                                                type="button"
-                                                onClick={() => {
-                                                    const newSpecies = type;
-                                                    setFormData((prev) => ({
-                                                        ...prev,
-                                                        species: newSpecies,
-                                                        sizeCategory: newSpecies === 'Cat' ? 'Small' : (prev.sizeCategory === 'Small' && newSpecies === 'Dog' ? 'Medium' : prev.sizeCategory)
-                                                    }));
-                                                }}
-                                                className={`flex-1 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${
-                                                    formData.species === type ? 'bg-[#F97316] text-white border-[#F97316] shadow-lg shadow-orange-100' : 'bg-white text-gray-400 border-gray-100'
-                                                }`}
-                                            >
-                                                {type}
-                                            </button>
-                                        ))}
+                            {/* Section 1: Pet Photos & AI Recognition */}
+                            <div className="space-y-6">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="h-6 w-1 bg-[#F97316] rounded-full"></span>
+                                        <h3 className="text-xs font-black text-[#1a1208] uppercase tracking-widest">Pet Photos</h3>
+                                        <span className="text-[9px] font-black text-[#F97316] bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full uppercase tracking-wider">AI Powered</span>
                                     </div>
-                                </div>
-                                <div className="space-y-4">
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Breed <span className="text-red-500">*</span></label>
-                                    <input 
-                                        type="text" 
-                                        list="pet-breed-suggestions"
-                                        className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${
-                                            formErrors.breed 
-                                            ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10' 
-                                             : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
-                                        }`}
-                                        placeholder="e.g. Aspin / Mixed"
-                                        value={formData.breed}
-                                        onChange={(e) => {
-                                            setFormData({...formData, breed: e.target.value});
-                                            if (formErrors.breed) setFormErrors({...formErrors, breed: false});
-                                        }}
-                                    />
-                                    <datalist id="pet-breed-suggestions">
-                                        {formData.species === 'Dog' ? (
-                                            <>
-                                                <option value="Aspin" />
-                                                {breedsData.length > 0 ? (
-                                                    breedsData.map((b: any) => (
-                                                        <option key={b.id || b.name} value={b.name} />
-                                                    ))
-                                                ) : (
-                                                    <>
-                                                        <option value="Shih Tzu" />
-                                                        <option value="Shihtzu" />
-                                                        <option value="Chihuahua" />
-                                                        <option value="Golden Retriever" />
-                                                        <option value="Siberian Husky" />
-                                                        <option value="Bulldog" />
-                                                        <option value="Poodle" />
-                                                        <option value="German Shepherd" />
-                                                        <option value="Terrier" />
-                                                        <option value="Pug" />
-                                                    </>
-                                                )}
-                                                <option value="Mixed Breed" />
-                                            </>
-                                        ) : (
-                                            <>
-                                                <option value="Puspin" />
-                                                {breedsData.length > 0 ? (
-                                                    breedsData.map((b: any) => (
-                                                        <option key={b.id || b.name} value={b.name} />
-                                                    ))
-                                                ) : (
-                                                    <>
-                                                        <option value="Siamese" />
-                                                        <option value="Persian" />
-                                                        <option value="Maine Coon" />
-                                                        <option value="Bengal" />
-                                                        <option value="Ragdoll" />
-                                                        <option value="Sphynx" />
-                                                        <option value="British Shorthair" />
-                                                    </>
-                                                )}
-                                                <option value="Mixed Breed" />
-                                            </>
-                                        )}
-                                    </datalist>
-
-                                    {/* Dynamic Breed Thumbnail Preview */}
-                                    {(() => {
-                                        const query = formData.breed.trim().toLowerCase();
-                                        if (!query) return null;
-
-                                        // Standardize common phonetic typos and shortcuts
-                                        const normalizedQuery = query
-                                            .replace('dalmation', 'dalmatian')
-                                            .replace('shihtzu', 'shih tzu')
-                                            .replace('shepard', 'shepherd')
-                                            .replace('coly', 'collie');
-
-                                        const matchedBreed = breedsData.find((b) => {
-                                            const breedName = b.name.toLowerCase();
-                                            if (breedName === normalizedQuery) return true;
-                                            
-                                            // Handle smart partial matching when typing is at least 3 characters
-                                            if (normalizedQuery.length >= 3) {
-                                                return breedName.includes(normalizedQuery) || normalizedQuery.includes(breedName);
-                                            }
-                                            return false;
-                                        });
-
-                                        if (matchedBreed && (breedImageUrl || isFetchingBreedImage)) {
-                                            return (
-                                                <div className="mt-3 flex items-center gap-3.5 bg-orange-50/40 border border-orange-100 rounded-2xl p-3.5 animate-in slide-in-from-top-2 duration-300">
-                                                    {isFetchingBreedImage ? (
-                                                        <div className="w-12 h-12 rounded-xl border border-white bg-white/50 flex items-center justify-center shrink-0 shadow-sm">
-                                                            <div className="w-4 h-4 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin" />
-                                                        </div>
-                                                    ) : breedImageUrl ? (
-                                                        <img 
-                                                            src={breedImageUrl} 
-                                                            alt="Breed Preview" 
-                                                            className="w-12 h-12 object-cover rounded-xl shadow-sm border border-white shrink-0"
-                                                        />
-                                                    ) : null}
-                                                    <div>
-                                                        <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest leading-none">StraySafe Reference Photo</p>
-                                                        <p className="text-[11px] font-black text-[#1a1208] mt-1">{matchedBreed.name} Standard Profile</p>
-                                                    </div>
-                                                </div>
-                                            );
-                                        }
-                                        return null;
-                                    })()}
-                                </div>
-                                <div className="space-y-4">
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Age (Estimated Age) <span className="text-red-500">*</span></label>
-                                    <input 
-                                        type="text" 
-                                        className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${
-                                            formErrors.age 
-                                            ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10' 
-                                            : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
-                                        }`}
-                                        placeholder="e.g. 2 years / Puppy"
-                                        value={formData.age}
-                                        onChange={(e) => {
-                                            setFormData({...formData, age: e.target.value});
-                                            if (formErrors.age) setFormErrors({...formErrors, age: false});
-                                        }}
-                                    />
+                                    <span className="text-[10px] font-bold text-gray-400">Photo auto-fills details</span>
                                 </div>
 
                                 <div className="space-y-4">
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest flex items-center justify-between">
-                                        <span>Pet Size <span className="text-red-500">*</span></span>
-                                        <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">
-                                            {formData.sizeCategory === 'Small' ? 'Small (< 10kg)' : formData.sizeCategory === 'Large' ? 'Large (> 25kg)' : 'Medium (10-25kg)'}
-                                        </span>
-                                    </label>
-                                    <div className="grid grid-cols-3 gap-2 h-14">
-                                        {['Small', 'Medium', 'Large'].map((sz) => (
-                                            <button 
-                                                key={sz}
-                                                type="button"
-                                                onClick={() => setFormData({...formData, sizeCategory: sz})}
-                                                className={`rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all cursor-pointer flex items-center justify-center ${
-                                                    formData.sizeCategory === sz 
-                                                        ? 'bg-[#F97316] text-white border-[#F97316] shadow-lg shadow-orange-100' 
-                                                        : 'bg-white text-gray-400 border-gray-100 hover:border-gray-200 hover:text-gray-700'
-                                                }`}
-                                            >
-                                                {sz}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Current Status <span className="text-red-500">*</span></label>
-                                    <select 
-                                        className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
-                                        value={formData.status}
-                                        onChange={(e) => setFormData({...formData, status: e.target.value})}
-                                    >
-                                        <option value="Active">Active</option>
-                                        <option value="Lost">Lost</option>
-                                        <option value="Found">Found</option>
-                                        <option value="Rescued">Rescued</option>
-                                        <option value="Deceased">Deceased</option>
-                                    </select>
-                                </div>
-                                <div className="space-y-4">
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Gender <span className="text-red-500">*</span></label>
-                                    <select
-                                        className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
-                                        value={formData.gender}
-                                        onChange={(e) => setFormData({...formData, gender: e.target.value})}
-                                    >
-                                        <option value="Male">Male</option>
-                                        <option value="Female">Female</option>
-                                        <option value="Unknown">Unknown</option>
-                                    </select>
-                                </div>
-                                <div className="space-y-4">
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Primary Color <span className="text-red-500">*</span></label>
-                                    <select
-                                        className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
-                                        value={formData.primaryColor}
-                                        onChange={(e) => setFormData({...formData, primaryColor: e.target.value})}
-                                    >
-                                        {['Brown', 'Black', 'White', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream', 'Red', 'Other'].map(c => (
-                                            <option key={c} value={c}>{c}</option>
-                                        ))}
-                                    </select>
-                                    {formData.primaryColor === 'Other' && (
-                                        <input
-                                            type="text"
-                                            className="w-full h-14 bg-[#FAFAF9] border border-orange-200 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-400 animate-in fade-in slide-in-from-top-1 duration-200"
-                                            placeholder="Type custom primary color (e.g. Brindle, Merle, Calico)"
-                                            value={formData.customPrimaryColor}
-                                            onChange={(e) => setFormData({...formData, customPrimaryColor: e.target.value})}
-                                        />
-                                    )}
-                                </div>
-                                <div className="space-y-4">
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Secondary Color <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
-                                    <select
-                                        className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
-                                        value={formData.secondaryColor}
-                                        onChange={(e) => setFormData({...formData, secondaryColor: e.target.value})}
-                                    >
-                                        <option value="">None</option>
-                                        {['White', 'Black', 'Brown', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream', 'Other'].map(c => (
-                                            <option key={c} value={c}>{c}</option>
-                                        ))}
-                                    </select>
-                                    {formData.secondaryColor === 'Other' && (
-                                        <input
-                                            type="text"
-                                            className="w-full h-14 bg-[#FAFAF9] border border-orange-200 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-400 animate-in fade-in slide-in-from-top-1 duration-200"
-                                            placeholder="Type custom secondary color (e.g. Sable, Chocolate)"
-                                            value={formData.customSecondaryColor}
-                                            onChange={(e) => setFormData({...formData, customSecondaryColor: e.target.value})}
-                                        />
-                                    )}
-                                </div>
-                                <div className="space-y-4">
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Color Markings / Patterns <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
-                                    <input 
-                                        type="text" 
-                                        className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
-                                        placeholder="e.g. Black with white patches on chest"
-                                        value={formData.color}
-                                        onChange={(e) => setFormData({...formData, color: e.target.value})}
-                                    />
-                                    {aiSuggestedColor && (
-                                        <div className="mt-2.5 flex items-center justify-between bg-orange-50/50 border border-orange-100 rounded-2xl p-3.5 animate-in slide-in-from-top-2 duration-300">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[10px] font-black text-[#F97316] uppercase tracking-widest bg-white px-2 py-0.5 rounded-md border border-orange-100 shadow-sm leading-none">AI Suggestion</span>
-                                                <span className="text-xs font-semibold text-gray-700">Detected: <span className="font-extrabold text-[#1a1208]">{aiSuggestedColor}</span></span>
+                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Pet Photo (Primary) <span className="text-red-500">*</span></label>
+                                    
+                                    {formData.mediaFiles && formData.mediaFiles.length > 0 ? (
+                                        <div className="relative rounded-2xl overflow-hidden border-2 border-orange-200 bg-orange-50/20 p-3.5 flex flex-col sm:flex-row items-center gap-4">
+                                            <img 
+                                                src={URL.createObjectURL(formData.mediaFiles[0])} 
+                                                alt="Selected pet" 
+                                                className="w-24 h-24 object-cover rounded-2xl shadow-md shrink-0 border border-orange-100" 
+                                            />
+                                            <div className="flex-1 space-y-1 text-center sm:text-left min-w-0">
+                                                <p className="text-xs font-black text-[#1a1208] uppercase tracking-tight truncate">{formData.mediaFiles[0].name}</p>
+                                                <p className="text-[10px] font-bold text-gray-400">{(formData.mediaFiles[0].size / 1024).toFixed(1)} KB • AI Analyzed</p>
+                                                <label className="inline-block mt-1 text-[10px] font-black text-[#F97316] uppercase tracking-wider hover:underline cursor-pointer">
+                                                    Change Photo
+                                                    <input 
+                                                        type="file" 
+                                                        className="hidden" 
+                                                        accept="image/*" 
+                                                        onChange={(e) => {
+                                                            handlePhotoChange(e);
+                                                            if (formErrors.photo) setFormErrors({...formErrors, photo: false});
+                                                        }} 
+                                                    />
+                                                </label>
                                             </div>
-                                            <button
-                                                type="button"
+                                            <button 
+                                                type="button" 
                                                 onClick={() => {
-                                                    const parts = aiSuggestedColor.split(',').map(s => s.trim());
-                                                    const presetPrimary = ['Brown', 'Black', 'White', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream', 'Red'];
-                                                    const p1 = parts[0] || 'Brown';
-                                                    const isP1Preset = presetPrimary.includes(p1);
-
-                                                    const presetSecondary = ['White', 'Black', 'Brown', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream'];
-                                                    const p2 = parts[1] || '';
-                                                    const isP2Preset = !p2 || presetSecondary.includes(p2);
-
-                                                    setFormData({ 
-                                                        ...formData, 
-                                                        primaryColor: isP1Preset ? p1 : 'Other',
-                                                        customPrimaryColor: isP1Preset ? '' : p1,
-                                                        secondaryColor: isP2Preset ? p2 : (p2 ? 'Other' : ''),
-                                                        customSecondaryColor: isP2Preset ? '' : p2,
-                                                        color: formData.color || aiSuggestedColor
-                                                    });
-                                                    setAiSuggestedColor(null);
-                                                }}
-                                                className="px-3.5 py-2 bg-[#F97316] text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:scale-105 transition-all shadow-md shadow-orange-100 cursor-pointer"
+                                                    setFormData(prev => ({ ...prev, mediaFiles: [] }));
+                                                    setAiAnalysisSummary(null);
+                                                }} 
+                                                className="text-[10px] font-black text-red-500 uppercase tracking-widest bg-red-50 hover:bg-red-100 px-3.5 py-2 rounded-xl transition-colors cursor-pointer"
                                             >
-                                                Apply
+                                                ✕ Remove
                                             </button>
+                                        </div>
+                                    ) : (
+                                        <input 
+                                            type="file" 
+                                            className={`w-full text-xs font-bold text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-widest transition-all ${
+                                                formErrors.photo 
+                                                ? 'file:bg-red-50 file:text-red-600 border border-dashed border-red-200 rounded-2xl p-4 bg-red-50/5' 
+                                                : 'file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100'
+                                            }`}
+                                            onChange={(e) => {
+                                                handlePhotoChange(e);
+                                                if (formErrors.photo) setFormErrors({...formErrors, photo: false});
+                                            }} 
+                                            accept="image/*" 
+                                        />
+                                    )}
+
+                                    {isAnalyzingPhoto && (
+                                        <div className="flex items-center gap-3 text-xs font-bold text-[#F97316] bg-orange-50/80 border border-orange-200/70 rounded-2xl p-4 animate-pulse">
+                                            <svg className="animate-spin h-5 w-5 text-[#F97316] shrink-0" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                            <div>
+                                                <p className="text-[10px] font-black uppercase tracking-widest text-[#F97316]">AI Recognition Active</p>
+                                                <p className="text-xs font-bold text-[#1a1208]">Identifying animal breed, coat colors, and details...</p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {!isAnalyzingPhoto && aiAnalysisSummary && (
+                                        <div className="bg-gradient-to-br from-orange-50/90 via-amber-50/60 to-white border border-orange-200/80 rounded-2xl p-4 shadow-sm animate-in slide-in-from-top-2 duration-300">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[9px] font-black uppercase tracking-widest bg-[#F97316] text-white px-2.5 py-0.5 rounded-full shadow-xs flex items-center gap-1">
+                                                            <span>✨</span> AI Recognition
+                                                        </span>
+                                                        <span className="text-xs font-extrabold text-[#1a1208]">
+                                                            {aiAnalysisSummary.species} • {aiAnalysisSummary.breed}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                                        {aiAnalysisSummary.colors && aiAnalysisSummary.colors.map((c, i) => (
+                                                            <span key={i} className="text-[10px] font-bold bg-white text-gray-700 border border-orange-200/60 px-2 py-0.5 rounded-lg shadow-2xs">
+                                                                🎨 {c}
+                                                            </span>
+                                                        ))}
+                                                        {aiAnalysisSummary.size && (
+                                                            <span className="text-[10px] font-bold bg-white text-gray-700 border border-orange-200/60 px-2 py-0.5 rounded-lg shadow-2xs">
+                                                                📏 {aiAnalysisSummary.size} Size
+                                                            </span>
+                                                        )}
+                                                        {aiAnalysisSummary.pattern && aiAnalysisSummary.pattern !== 'Solid' && (
+                                                            <span className="text-[10px] font-bold bg-white text-gray-700 border border-orange-200/60 px-2 py-0.5 rounded-lg shadow-2xs">
+                                                                🏷️ {aiAnalysisSummary.pattern}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[10px] font-bold text-[#F97316] flex items-center gap-1">
+                                                        <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                        Species, breed, colors, and size were automatically applied to your form.
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setAiAnalysisSummary(null)}
+                                                    className="text-gray-400 hover:text-gray-600 text-xs p-1 rounded-lg hover:bg-orange-100/50 transition-colors"
+                                                    title="Dismiss"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
-                                <div className="space-y-4">
-                                    <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Weight <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
-                                    <input 
-                                        type="text" 
-                                        className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
-                                        placeholder="e.g. 18kg"
-                                        value={formData.weight}
-                                        onChange={(e) => setFormData({...formData, weight: e.target.value})}
-                                    />
-                                </div>
-                            </div>
 
-                            <div className="space-y-4">
-                                <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Pet Photo <span className="text-red-500">*</span></label>
-                                <input 
-                                    type="file" 
-                                    className={`w-full text-xs font-bold text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-widest transition-all ${
-                                        formErrors.photo 
-                                        ? 'file:bg-red-50 file:text-red-600 border border-dashed border-red-200 rounded-2xl p-4 bg-red-50/5' 
-                                        : 'file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100'
-                                    }`}
-                                    onChange={(e) => {
-                                        handlePhotoChange(e);
-                                        if (formErrors.photo) setFormErrors({...formErrors, photo: false});
-                                    }}
-                                    accept="image/*"
-                                />
-                                {isAnalyzingPhoto && (
-                                    <div className="flex items-center gap-2 text-xs font-bold text-[#F97316] animate-pulse py-1 pl-1">
-                                        <svg className="animate-spin h-4 w-4 text-[#F97316]" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                        <span>🔍 AI suggestion analyzing photo details...</span>
+                                {/* Multi-Angle Identification Photos */}
+                                <div className="pt-2 space-y-4">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <h4 className="text-[10px] font-black text-[#1a1208] uppercase tracking-widest">Multi-Angle Identification Photos</h4>
+                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100">Optional</span>
                                     </div>
-                                )}
-                                {!isAnalyzingPhoto && aiSuggestedSpecies && (
-                                    <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-4 flex items-center justify-between animate-in slide-in-from-top-2 duration-300">
-                                        <div>
-                                            <p className="text-[10px] font-black text-[#F97316] uppercase tracking-widest">StraySafe AI Suggestion</p>
-                                            <p className="text-xs font-bold text-[#1a1208] mt-0.5">Detected {aiSuggestedSpecies}</p>
+                                    <p className="text-[10px] font-bold text-gray-400 leading-relaxed">Upload photos of your pet from different angles. These are used to improve identification accuracy when your pet is reported missing or found.</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                                        {/* Front Photo */}
+                                        <div className="space-y-3">
+                                            <label className="text-[10px] font-black text-[#1a1208] uppercase tracking-widest flex items-center gap-2">
+                                                <span className="w-5 h-5 rounded-lg bg-orange-100 text-[#F97316] flex items-center justify-center text-[8px] font-black shrink-0">F</span>
+                                                Front View
+                                            </label>
+                                            <label className={`flex flex-col items-center justify-center h-32 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${
+                                                formData.photoFrontFiles.length > 0
+                                                    ? 'border-[#F97316] bg-orange-50/40'
+                                                    : 'border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20'
+                                            }`}>
+                                                {formData.photoFrontFiles.length > 0 ? (
+                                                    <img
+                                                        src={URL.createObjectURL(formData.photoFrontFiles[0])}
+                                                        alt="Front preview"
+                                                        className="w-full h-full object-cover rounded-2xl"
+                                                    />
+                                                ) : (
+                                                    <div className="flex flex-col items-center gap-2 text-gray-400">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                                        <span className="text-[9px] font-black uppercase tracking-widest">Tap to upload</span>
+                                                    </div>
+                                                )}
+                                                <input
+                                                    type="file"
+                                                    className="hidden"
+                                                    accept="image/*"
+                                                    onChange={(e) => setFormData({...formData, photoFrontFiles: e.target.files ? Array.from(e.target.files) : []})}
+                                                />
+                                            </label>
+                                            {formData.photoFrontFiles.length > 0 && (
+                                                <button type="button" onClick={() => setFormData({...formData, photoFrontFiles: []})} className="text-[9px] font-black text-red-400 uppercase tracking-widest hover:text-red-600 transition-colors cursor-pointer">✕ Remove</button>
+                                            )}
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const isCat = (aiSuggestedSpecies || 'Dog') === 'Cat';
-                                                setFormData({
-                                                    ...formData,
-                                                    species: aiSuggestedSpecies || 'Dog',
-                                                    sizeCategory: isCat ? 'Small' : formData.sizeCategory
-                                                });
-                                                setAiSuggestedSpecies(null);
-                                            }}
-                                            className="px-4 py-2 bg-[#F97316] text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:scale-105 transition-all shadow-md shadow-orange-100 cursor-pointer"
-                                        >
-                                            Apply Suggestion
-                                        </button>
+
+                                        {/* Left Side Photo */}
+                                        <div className="space-y-3">
+                                            <label className="text-[10px] font-black text-[#1a1208] uppercase tracking-widest flex items-center gap-2">
+                                                <span className="w-5 h-5 rounded-lg bg-orange-100 text-[#F97316] flex items-center justify-center text-[8px] font-black shrink-0">L</span>
+                                                Left Side
+                                            </label>
+                                            <label className={`flex flex-col items-center justify-center h-32 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${
+                                                formData.photoLeftFiles.length > 0
+                                                    ? 'border-[#F97316] bg-orange-50/40'
+                                                    : 'border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20'
+                                            }`}>
+                                                {formData.photoLeftFiles.length > 0 ? (
+                                                    <img
+                                                        src={URL.createObjectURL(formData.photoLeftFiles[0])}
+                                                        alt="Left side preview"
+                                                        className="w-full h-full object-cover rounded-2xl"
+                                                    />
+                                                ) : (
+                                                    <div className="flex flex-col items-center gap-2 text-gray-400">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                                        <span className="text-[9px] font-black uppercase tracking-widest">Tap to upload</span>
+                                                    </div>
+                                                )}
+                                                <input
+                                                    type="file"
+                                                    className="hidden"
+                                                    accept="image/*"
+                                                    onChange={(e) => setFormData({...formData, photoLeftFiles: e.target.files ? Array.from(e.target.files) : []})}
+                                                />
+                                            </label>
+                                            {formData.photoLeftFiles.length > 0 && (
+                                                <button type="button" onClick={() => setFormData({...formData, photoLeftFiles: []})} className="text-[9px] font-black text-red-400 uppercase tracking-widest hover:text-red-600 transition-colors cursor-pointer">✕ Remove</button>
+                                            )}
+                                        </div>
+
+                                        {/* Right Side Photo */}
+                                        <div className="space-y-3">
+                                            <label className="text-[10px] font-black text-[#1a1208] uppercase tracking-widest flex items-center gap-2">
+                                                <span className="w-5 h-5 rounded-lg bg-orange-100 text-[#F97316] flex items-center justify-center text-[8px] font-black shrink-0">R</span>
+                                                Right Side
+                                            </label>
+                                            <label className={`flex flex-col items-center justify-center h-32 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${
+                                                formData.photoRightFiles.length > 0
+                                                    ? 'border-[#F97316] bg-orange-50/40'
+                                                    : 'border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20'
+                                            }`}>
+                                                {formData.photoRightFiles.length > 0 ? (
+                                                    <img
+                                                        src={URL.createObjectURL(formData.photoRightFiles[0])}
+                                                        alt="Right side preview"
+                                                        className="w-full h-full object-cover rounded-2xl"
+                                                    />
+                                                ) : (
+                                                    <div className="flex flex-col items-center gap-2 text-gray-400">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                                        <span className="text-[9px] font-black uppercase tracking-widest">Tap to upload</span>
+                                                    </div>
+                                                )}
+                                                <input
+                                                    type="file"
+                                                    className="hidden"
+                                                    accept="image/*"
+                                                    onChange={(e) => setFormData({...formData, photoRightFiles: e.target.files ? Array.from(e.target.files) : []})}
+                                                />
+                                            </label>
+                                            {formData.photoRightFiles.length > 0 && (
+                                                <button type="button" onClick={() => setFormData({...formData, photoRightFiles: []})} className="text-[9px] font-black text-red-400 uppercase tracking-widest hover:text-red-600 transition-colors cursor-pointer">✕ Remove</button>
+                                            )}
+                                        </div>
                                     </div>
-                                )}
+                                </div>
                             </div>
 
-                            {/* Section 1b: Side-View Photos */}
-                            <div className="border-t border-gray-100 pt-8 space-y-5">
-                                <div className="flex items-center gap-2 mb-1">
+                            {/* Section 2: Core Information */}
+                            <div className="border-t border-gray-100 pt-8 space-y-6">
+                                <div className="flex items-center gap-2 mb-2">
                                     <span className="h-6 w-1 bg-[#F97316] rounded-full"></span>
-                                    <h3 className="text-xs font-black text-[#1a1208] uppercase tracking-widest">Side-View Photos</h3>
-                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100">Optional — helps with matching</span>
+                                    <h3 className="text-xs font-black text-[#1a1208] uppercase tracking-widest">Pet Information</h3>
                                 </div>
-                                <p className="text-[10px] font-bold text-gray-400 leading-relaxed">Upload photos of your pet from different angles. These are used to improve identification accuracy when your pet is reported missing or found.</p>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                                    {/* Front Photo */}
-                                    <div className="space-y-3">
-                                        <label className="text-[10px] font-black text-[#1a1208] uppercase tracking-widest flex items-center gap-2">
-                                            <span className="w-5 h-5 rounded-lg bg-orange-100 text-[#F97316] flex items-center justify-center text-[8px] font-black shrink-0">F</span>
-                                            Front View
-                                        </label>
-                                        <label className={`flex flex-col items-center justify-center h-32 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${
-                                            formData.photoFrontFiles.length > 0
-                                                ? 'border-[#F97316] bg-orange-50/40'
-                                                : 'border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20'
-                                        }`}>
-                                            {formData.photoFrontFiles.length > 0 ? (
-                                                <img
-                                                    src={URL.createObjectURL(formData.photoFrontFiles[0])}
-                                                    alt="Front preview"
-                                                    className="w-full h-full object-cover rounded-2xl"
-                                                />
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-4">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Pet Name <span className="text-red-500">*</span></label>
+                                        <input 
+                                            type="text" 
+                                            className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${
+                                                formErrors.name 
+                                                ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10' 
+                                                : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
+                                            }`}
+                                            placeholder="e.g. Bruno"
+                                            value={formData.name}
+                                            onChange={(e) => {
+                                                setFormData({...formData, name: e.target.value});
+                                                if (formErrors.name) setFormErrors({...formErrors, name: false});
+                                            }}
+                                        />
+                                    </div>
+                                    <div className="space-y-4">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Species <span className="text-red-500">*</span></label>
+                                        <div className="flex gap-4 h-14">
+                                            {['Dog', 'Cat'].map((type) => (
+                                                <button 
+                                                    key={type}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const newSpecies = type;
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            species: newSpecies,
+                                                            sizeCategory: newSpecies === 'Cat' ? 'Small' : (prev.sizeCategory === 'Small' && newSpecies === 'Dog' ? 'Medium' : prev.sizeCategory)
+                                                        }));
+                                                    }}
+                                                    className={`flex-1 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${
+                                                        formData.species === type ? 'bg-[#F97316] text-white border-[#F97316] shadow-lg shadow-orange-100' : 'bg-white text-gray-400 border-gray-100'
+                                                    }`}
+                                                >
+                                                    {type}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Breed <span className="text-red-500">*</span></label>
+                                        <input 
+                                            type="text" 
+                                            list="pet-breed-suggestions"
+                                            className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${
+                                                formErrors.breed 
+                                                ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10' 
+                                                : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
+                                            }`}
+                                            placeholder="e.g. Aspin / Mixed"
+                                            value={formData.breed}
+                                            onChange={(e) => {
+                                                setFormData({...formData, breed: e.target.value});
+                                                if (formErrors.breed) setFormErrors({...formErrors, breed: false});
+                                            }}
+                                        />
+                                        <datalist id="pet-breed-suggestions">
+                                            {formData.species === 'Dog' ? (
+                                                <>
+                                                    <option value="Aspin" />
+                                                    {breedsData.length > 0 ? (
+                                                        breedsData.map((b: any) => (
+                                                            <option key={b.id || b.name} value={b.name} />
+                                                        ))
+                                                    ) : (
+                                                        <>
+                                                            <option value="Shih Tzu" />
+                                                            <option value="Shihtzu" />
+                                                            <option value="Chihuahua" />
+                                                            <option value="Golden Retriever" />
+                                                            <option value="Siberian Husky" />
+                                                            <option value="Bulldog" />
+                                                            <option value="Poodle" />
+                                                            <option value="German Shepherd" />
+                                                            <option value="Terrier" />
+                                                            <option value="Pug" />
+                                                        </>
+                                                    )}
+                                                    <option value="Mixed Breed" />
+                                                </>
                                             ) : (
-                                                <div className="flex flex-col items-center gap-2 text-gray-400">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                                    <span className="text-[9px] font-black uppercase tracking-widest">Tap to upload</span>
-                                                </div>
+                                                <>
+                                                    <option value="Puspin" />
+                                                    {breedsData.length > 0 ? (
+                                                        breedsData.map((b: any) => (
+                                                            <option key={b.id || b.name} value={b.name} />
+                                                        ))
+                                                    ) : (
+                                                        <>
+                                                            <option value="Siamese" />
+                                                            <option value="Persian" />
+                                                            <option value="Maine Coon" />
+                                                            <option value="Bengal" />
+                                                            <option value="Ragdoll" />
+                                                            <option value="Sphynx" />
+                                                            <option value="British Shorthair" />
+                                                        </>
+                                                    )}
+                                                    <option value="Mixed Breed" />
+                                                </>
                                             )}
-                                            <input
-                                                type="file"
-                                                className="hidden"
-                                                accept="image/*"
-                                                onChange={(e) => setFormData({...formData, photoFrontFiles: e.target.files ? Array.from(e.target.files) : []})}
-                                            />
-                                        </label>
-                                        {formData.photoFrontFiles.length > 0 && (
-                                            <button type="button" onClick={() => setFormData({...formData, photoFrontFiles: []})} className="text-[9px] font-black text-red-400 uppercase tracking-widest hover:text-red-600 transition-colors cursor-pointer">✕ Remove</button>
-                                        )}
+                                        </datalist>
+
+                                        {/* Dynamic Breed Thumbnail Preview */}
+                                        {(() => {
+                                            const query = formData.breed.trim().toLowerCase();
+                                            if (!query) return null;
+
+                                            // Standardize common phonetic typos and shortcuts
+                                            const normalizedQuery = query
+                                                .replace('dalmation', 'dalmatian')
+                                                .replace('shihtzu', 'shih tzu')
+                                                .replace('shepard', 'shepherd')
+                                                .replace('coly', 'collie');
+
+                                            const matchedBreed = breedsData.find((b) => {
+                                                const breedName = b.name.toLowerCase();
+                                                if (breedName === normalizedQuery) return true;
+                                                
+                                                // Handle smart partial matching when typing is at least 3 characters
+                                                if (normalizedQuery.length >= 3) {
+                                                    return breedName.includes(normalizedQuery) || normalizedQuery.includes(breedName);
+                                                }
+                                                return false;
+                                            });
+
+                                            if (matchedBreed && (breedImageUrl || isFetchingBreedImage)) {
+                                                return (
+                                                    <div className="mt-3 flex items-center gap-3.5 bg-orange-50/40 border border-orange-100 rounded-2xl p-3.5 animate-in slide-in-from-top-2 duration-300">
+                                                        {isFetchingBreedImage ? (
+                                                            <div className="w-12 h-12 rounded-xl border border-white bg-white/50 flex items-center justify-center shrink-0 shadow-sm">
+                                                                <div className="w-4 h-4 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin" />
+                                                            </div>
+                                                        ) : breedImageUrl ? (
+                                                            <img 
+                                                                src={breedImageUrl} 
+                                                                alt="Breed Preview" 
+                                                                className="w-12 h-12 object-cover rounded-xl shadow-sm border border-white shrink-0"
+                                                            />
+                                                        ) : null}
+                                                        <div>
+                                                            <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest leading-none">StraySafe Reference Photo</p>
+                                                            <p className="text-[11px] font-black text-[#1a1208] mt-1">{matchedBreed.name} Standard Profile</p>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
+                                    </div>
+                                    <div className="space-y-4">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Age (Estimated Age) <span className="text-red-500">*</span></label>
+                                        <input 
+                                            type="text" 
+                                            className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${
+                                                formErrors.age 
+                                                ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10' 
+                                                : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
+                                            }`}
+                                            placeholder="e.g. 2 years / Puppy"
+                                            value={formData.age}
+                                            onChange={(e) => {
+                                                setFormData({...formData, age: e.target.value});
+                                                if (formErrors.age) setFormErrors({...formErrors, age: false});
+                                            }}
+                                        />
                                     </div>
 
-                                    {/* Left Side Photo */}
-                                    <div className="space-y-3">
-                                        <label className="text-[10px] font-black text-[#1a1208] uppercase tracking-widest flex items-center gap-2">
-                                            <span className="w-5 h-5 rounded-lg bg-orange-100 text-[#F97316] flex items-center justify-center text-[8px] font-black shrink-0">L</span>
-                                            Left Side
+                                    <div className="space-y-4">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest flex items-center justify-between">
+                                            <span>Pet Size <span className="text-red-500">*</span></span>
+                                            <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">
+                                                {formData.sizeCategory === 'Small' ? 'Small (< 10kg)' : formData.sizeCategory === 'Large' ? 'Large (> 25kg)' : 'Medium (10-25kg)'}
+                                            </span>
                                         </label>
-                                        <label className={`flex flex-col items-center justify-center h-32 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${
-                                            formData.photoLeftFiles.length > 0
-                                                ? 'border-[#F97316] bg-orange-50/40'
-                                                : 'border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20'
-                                        }`}>
-                                            {formData.photoLeftFiles.length > 0 ? (
-                                                <img
-                                                    src={URL.createObjectURL(formData.photoLeftFiles[0])}
-                                                    alt="Left side preview"
-                                                    className="w-full h-full object-cover rounded-2xl"
-                                                />
-                                            ) : (
-                                                <div className="flex flex-col items-center gap-2 text-gray-400">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                                    <span className="text-[9px] font-black uppercase tracking-widest">Tap to upload</span>
-                                                </div>
-                                            )}
-                                            <input
-                                                type="file"
-                                                className="hidden"
-                                                accept="image/*"
-                                                onChange={(e) => setFormData({...formData, photoLeftFiles: e.target.files ? Array.from(e.target.files) : []})}
-                                            />
-                                        </label>
-                                        {formData.photoLeftFiles.length > 0 && (
-                                            <button type="button" onClick={() => setFormData({...formData, photoLeftFiles: []})} className="text-[9px] font-black text-red-400 uppercase tracking-widest hover:text-red-600 transition-colors cursor-pointer">✕ Remove</button>
-                                        )}
+                                        <div className="grid grid-cols-3 gap-2 h-14">
+                                            {['Small', 'Medium', 'Large'].map((sz) => (
+                                                <button 
+                                                    key={sz}
+                                                    type="button"
+                                                    onClick={() => setFormData({...formData, sizeCategory: sz})}
+                                                    className={`rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all cursor-pointer flex items-center justify-center ${
+                                                        formData.sizeCategory === sz 
+                                                            ? 'bg-[#F97316] text-white border-[#F97316] shadow-lg shadow-orange-100' 
+                                                            : 'bg-white text-gray-400 border-gray-100 hover:border-gray-200 hover:text-gray-700'
+                                                    }`}
+                                                >
+                                                    {sz}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
 
-                                    {/* Right Side Photo */}
-                                    <div className="space-y-3">
-                                        <label className="text-[10px] font-black text-[#1a1208] uppercase tracking-widest flex items-center gap-2">
-                                            <span className="w-5 h-5 rounded-lg bg-orange-100 text-[#F97316] flex items-center justify-center text-[8px] font-black shrink-0">R</span>
-                                            Right Side
-                                        </label>
-                                        <label className={`flex flex-col items-center justify-center h-32 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${
-                                            formData.photoRightFiles.length > 0
-                                                ? 'border-[#F97316] bg-orange-50/40'
-                                                : 'border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20'
-                                        }`}>
-                                            {formData.photoRightFiles.length > 0 ? (
-                                                <img
-                                                    src={URL.createObjectURL(formData.photoRightFiles[0])}
-                                                    alt="Right side preview"
-                                                    className="w-full h-full object-cover rounded-2xl"
-                                                />
-                                            ) : (
-                                                <div className="flex flex-col items-center gap-2 text-gray-400">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                                    <span className="text-[9px] font-black uppercase tracking-widest">Tap to upload</span>
-                                                </div>
-                                            )}
-                                            <input
-                                                type="file"
-                                                className="hidden"
-                                                accept="image/*"
-                                                onChange={(e) => setFormData({...formData, photoRightFiles: e.target.files ? Array.from(e.target.files) : []})}
+                                    <div className="space-y-4">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Current Status <span className="text-red-500">*</span></label>
+                                        <select 
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
+                                            value={formData.status}
+                                            onChange={(e) => setFormData({...formData, status: e.target.value})}
+                                        >
+                                            <option value="Active">Active</option>
+                                            <option value="Lost">Lost</option>
+                                            <option value="Found">Found</option>
+                                            <option value="Rescued">Rescued</option>
+                                            <option value="Deceased">Deceased</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Gender <span className="text-red-500">*</span></label>
+                                        <select 
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
+                                            value={formData.gender}
+                                            onChange={(e) => setFormData({...formData, gender: e.target.value})}
+                                        >
+                                            <option value="Male">Male</option>
+                                            <option value="Female">Female</option>
+                                            <option value="Unknown">Unknown</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Primary Color <span className="text-red-500">*</span></label>
+                                        <select 
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
+                                            value={formData.primaryColor}
+                                            onChange={(e) => setFormData({...formData, primaryColor: e.target.value})}
+                                        >
+                                            {['Brown', 'Black', 'White', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream', 'Red', 'Other'].map(c => (
+                                                <option key={c} value={c}>{c}</option>
+                                            ))}
+                                        </select>
+                                        {formData.primaryColor === 'Other' && (
+                                            <input 
+                                                type="text" 
+                                                className="w-full h-14 bg-[#FAFAF9] border border-orange-200 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-400 animate-in fade-in slide-in-from-top-1 duration-200"
+                                                placeholder="Type custom primary color (e.g. Brindle, Merle, Calico)"
+                                                value={formData.customPrimaryColor}
+                                                onChange={(e) => setFormData({...formData, customPrimaryColor: e.target.value})}
                                             />
-                                        </label>
-                                        {formData.photoRightFiles.length > 0 && (
-                                            <button type="button" onClick={() => setFormData({...formData, photoRightFiles: []})} className="text-[9px] font-black text-red-400 uppercase tracking-widest hover:text-red-600 transition-colors cursor-pointer">✕ Remove</button>
                                         )}
+                                    </div>
+                                    <div className="space-y-4">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Secondary Color <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
+                                        <select 
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
+                                            value={formData.secondaryColor}
+                                            onChange={(e) => setFormData({...formData, secondaryColor: e.target.value})}
+                                        >
+                                            <option value="">None</option>
+                                            {['White', 'Black', 'Brown', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream', 'Other'].map(c => (
+                                                <option key={c} value={c}>{c}</option>
+                                            ))}
+                                        </select>
+                                        {formData.secondaryColor === 'Other' && (
+                                            <input 
+                                                type="text" 
+                                                className="w-full h-14 bg-[#FAFAF9] border border-orange-200 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-400 animate-in fade-in slide-in-from-top-1 duration-200"
+                                                placeholder="Type custom secondary color (e.g. Sable, Chocolate)"
+                                                value={formData.customSecondaryColor}
+                                                onChange={(e) => setFormData({...formData, customSecondaryColor: e.target.value})}
+                                            />
+                                        )}
+                                    </div>
+                                    <div className="space-y-4">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Third Color (Tertiary) <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
+                                        <select 
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
+                                            value={formData.tertiaryColor}
+                                            onChange={(e) => setFormData({...formData, tertiaryColor: e.target.value})}
+                                        >
+                                            <option value="">None</option>
+                                            {['White', 'Black', 'Brown', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream', 'Other'].map(c => (
+                                                <option key={c} value={c}>{c}</option>
+                                            ))}
+                                        </select>
+                                        {formData.tertiaryColor === 'Other' && (
+                                            <input 
+                                                type="text" 
+                                                className="w-full h-14 bg-[#FAFAF9] border border-orange-200 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-400 animate-in fade-in slide-in-from-top-1 duration-200"
+                                                placeholder="Type custom third color"
+                                                value={formData.customTertiaryColor}
+                                                onChange={(e) => setFormData({...formData, customTertiaryColor: e.target.value})}
+                                            />
+                                        )}
+                                    </div>
+                                    <div className="space-y-4">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Color Markings / Patterns <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
+                                        <input 
+                                            type="text" 
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
+                                            placeholder="e.g. Black with white patches on chest"
+                                            value={formData.color}
+                                            onChange={(e) => setFormData({...formData, color: e.target.value})}
+                                        />
+                                    </div>
+                                    <div className="space-y-4">
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Weight <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
+                                        <input 
+                                            type="text" 
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
+                                            placeholder="e.g. 18kg"
+                                            value={formData.weight}
+                                            onChange={(e) => setFormData({...formData, weight: e.target.value})}
+                                        />
                                     </div>
                                 </div>
                             </div>

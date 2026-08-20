@@ -18,6 +18,7 @@ export interface PetRecord {
     // Expanded fields
     primaryColor?: string;
     secondaryColor?: string;
+    tertiaryColor?: string;
     colorMarkings?: string;
     sizeCategory?: string;
     isVaccinated?: boolean;

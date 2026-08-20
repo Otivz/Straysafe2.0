@@ -273,6 +273,7 @@ CREATE TABLE `pets` (
   `color_markings` varchar(255) DEFAULT NULL,
   `primary_color` varchar(100) DEFAULT NULL,
   `secondary_color` varchar(100) DEFAULT NULL,
+  `tertiary_color` varchar(100) DEFAULT NULL,
   `distinctive_markings` text,
   `gender` enum('Male','Female','Unknown') DEFAULT 'Unknown',
   `birth_date` date DEFAULT NULL,
@@ -357,17 +358,28 @@ DROP TABLE IF EXISTS `pet_qr_scans`;
 CREATE TABLE `pet_qr_scans` (
   `scan_id` int NOT NULL AUTO_INCREMENT,
   `qr_id` int NOT NULL,
-  `scanned_by_user_id` int DEFAULT NULL,
+  `pet_id` int NOT NULL,
+  `scanned_by` int DEFAULT NULL,
+  `finder_name` varchar(100) DEFAULT NULL,
+  `finder_contact` varchar(20) DEFAULT NULL,
   `scan_lat` decimal(10,8) DEFAULT NULL,
   `scan_lng` decimal(11,8) DEFAULT NULL,
-  `notes` text,
+  `street_address` varchar(255) DEFAULT NULL,
+  `barangay` varchar(100) DEFAULT NULL,
+  `city` varchar(100) DEFAULT NULL,
+  `landmark` varchar(255) DEFAULT NULL,
+  `location_type` enum('Found Location','Barangay Hall','Temporary Shelter') DEFAULT 'Found Location',
+  `notes` varchar(255) DEFAULT NULL,
   `scanned_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`scan_id`),
   KEY `fk_scans_qr` (`qr_id`),
-  KEY `fk_scans_user` (`scanned_by_user_id`),
+  KEY `fk_scans_pet` (`pet_id`),
+  KEY `fk_scans_user` (`scanned_by`),
   CONSTRAINT `fk_scans_qr` FOREIGN KEY (`qr_id`) REFERENCES `pet_qr_codes` (`qr_id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_scans_user` FOREIGN KEY (`scanned_by_user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+  CONSTRAINT `fk_scans_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_scans_user` FOREIGN KEY (`scanned_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 
 -- =========================================
 -- TABLE: REPORTS

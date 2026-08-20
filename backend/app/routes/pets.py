@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, cast, Any
 from app.database import get_db
 from app.models.pet import Pet
 from app.models.user import User
@@ -109,12 +109,304 @@ def update_pet(pet_id: int, pet_update: PetUpdate, req: Request, db: Session = D
     )
     return db_pet
 
+@router.get("/owner/{owner_id}/history")
+def get_owner_pet_history(owner_id: int, db: Session = Depends(get_db)):
+    from app.models.audit_log import AuditLog
+    from sqlalchemy.orm import joinedload
+    from datetime import datetime
+    
+    # 1. Current registered pets
+    current_pets = db.query(Pet).filter(Pet.owner_id == owner_id).all()
+    current_ids = {p.pet_id for p in current_pets}
+    current_list = []
+    for p in current_pets:
+        created_str = p.created_at.strftime("%Y-%m-%d %H:%M:%S") if isinstance(p.created_at, datetime) else str(p.created_at or "")
+        current_list.append({
+            "pet_id": p.pet_id,
+            "pet_name": p.pet_name,
+            "pet_type": p.pet_type,
+            "breed": p.breed or "Unknown",
+            "gender": p.gender or "Unknown",
+            "primary_color": p.primary_color or "",
+            "secondary_color": p.secondary_color or "",
+            "tertiary_color": p.tertiary_color or "",
+            "photo_url": p.photo_url,
+            "status": p.status or "Active",
+            "is_vaccinated": p.is_vaccinated,
+            "created_at": created_str,
+            "weight": str(p.weight) if p.weight is not None else None
+        })
+    
+    # 2. Audit logs for pet events
+    logs = (
+        db.query(AuditLog)
+        .filter(AuditLog.target_table == "pets")
+        .order_by(AuditLog.created_at.desc())
+        .all()
+    )
+    
+    owner_logs = []
+    removed_pets = []
+    created_pets_history = []
+    removed_pet_ids_seen = set()
+    
+    for l in logs:
+        # Check if log belongs to this owner
+        is_owner = False
+        if l.user_id == owner_id:
+            is_owner = True
+        elif l.old_values and isinstance(l.old_values, dict) and str(l.old_values.get("owner_id")) == str(owner_id):
+            is_owner = True
+        elif l.new_values and isinstance(l.new_values, dict) and str(l.new_values.get("owner_id")) == str(owner_id):
+            is_owner = True
+        elif f"owner_id={owner_id}" in (l.description or ""):
+            is_owner = True
+            
+        if not is_owner:
+            continue
+            
+        ts_str = l.created_at.strftime("%Y-%m-%d %H:%M:%S") if isinstance(l.created_at, datetime) else str(l.created_at or "")
+        
+        entry = {
+            "log_id": l.log_id,
+            "action": l.action,
+            "target_id": l.target_id,
+            "description": l.description,
+            "timestamp": ts_str,
+            "old_values": l.old_values,
+            "new_values": l.new_values
+        }
+        owner_logs.append(entry)
+        
+        if l.action == "DELETE_PET":
+            old = l.old_values if isinstance(l.old_values, dict) else {}
+            p_id = l.target_id
+            if p_id:
+                removed_pet_ids_seen.add(p_id)
+            removed_pets.append({
+                "log_id": l.log_id,
+                "pet_id": p_id,
+                "pet_name": old.get("pet_name") or "Unnamed Pet",
+                "pet_type": old.get("pet_type") or "Unknown",
+                "breed": old.get("breed") or "Unknown Breed",
+                "gender": old.get("gender") or "Unknown",
+                "primary_color": old.get("primary_color") or "",
+                "photo_url": old.get("photo_url"),
+                "status": "Removed",
+                "removed_at": ts_str,
+                "description": l.description
+            })
+        elif l.action == "CREATE_PET":
+            new_val = l.new_values if isinstance(l.new_values, dict) else {}
+            created_pets_history.append({
+                "log_id": l.log_id,
+                "pet_id": l.target_id,
+                "pet_name": new_val.get("pet_name") or "Unnamed Pet",
+                "pet_type": new_val.get("pet_type") or "Unknown",
+                "created_at": ts_str,
+                "description": l.description
+            })
+
+    # 3. Detect any pets that were previously created/logged but are no longer in current_pets
+    for l in owner_logs:
+        target_id = l.get("target_id")
+        if target_id and target_id not in current_ids and target_id not in removed_pet_ids_seen:
+            removed_pet_ids_seen.add(target_id)
+            
+            # Gather best snapshot across all logs for this target_id
+            merged_snapshot = {}
+            pet_timeline = []
+            for item in owner_logs:
+                if item.get("target_id") == target_id:
+                    pet_timeline.append(item)
+                    for src in [item.get("new_values"), item.get("old_values")]:
+                        if isinstance(src, dict):
+                            for k, v in src.items():
+                                if v is not None and k not in merged_snapshot:
+                                    merged_snapshot[k] = v
+
+            # Extract pet name from snapshot or description
+            name = merged_snapshot.get("pet_name")
+            desc = l.get("description") or ""
+            if not name and "Registered new pet:" in desc:
+                try:
+                    name = desc.split("Registered new pet:")[1].split("(")[0].strip()
+                except Exception:
+                    name = "Unnamed Pet"
+            elif not name and "Updated pet record:" in desc:
+                try:
+                    name = desc.split("Updated pet record:")[1].split("(")[0].strip()
+                except Exception:
+                    name = "Unnamed Pet"
+
+            removed_pets.append({
+                "log_id": l.get("log_id"),
+                "pet_id": target_id,
+                "pet_name": name or "Unnamed Pet",
+                "pet_type": merged_snapshot.get("pet_type") or "Dog",
+                "breed": merged_snapshot.get("breed") or "Unknown Breed",
+                "gender": merged_snapshot.get("gender") or "Unknown",
+                "primary_color": merged_snapshot.get("primary_color") or "",
+                "secondary_color": merged_snapshot.get("secondary_color") or "",
+                "color_markings": merged_snapshot.get("color_markings") or "",
+                "size_category": merged_snapshot.get("size_category") or "Medium",
+                "weight": merged_snapshot.get("weight"),
+                "photo_url": merged_snapshot.get("photo_url"),
+                "is_vaccinated": merged_snapshot.get("is_vaccinated", True),
+                "temperament": merged_snapshot.get("temperament") or "Friendly",
+                "health_condition": merged_snapshot.get("health_condition") or "Healthy",
+                "notes": merged_snapshot.get("notes") or "",
+                "status": "Removed",
+                "removed_at": l.get("timestamp") or "Past Deletion",
+                "description": f"Deleted pet record: {name or 'Pet'} (pet_id={target_id})",
+                "timeline": pet_timeline
+            })
+            
+    return {
+        "current_pets": current_list,
+        "removed_pets": removed_pets,
+        "created_pets_history": created_pets_history,
+        "all_logs": owner_logs
+    }
+
+from pydantic import BaseModel as PyBaseModel
+from typing import Optional as PyOptional
+
+class PetRestorePayload(PyBaseModel):
+    pet_id: PyOptional[int] = None
+    log_id: PyOptional[int] = None
+    pet_name: PyOptional[str] = None
+    pet_type: PyOptional[str] = "Dog"
+    breed: PyOptional[str] = "Unknown"
+    gender: PyOptional[str] = "Unknown"
+    primary_color: PyOptional[str] = None
+    secondary_color: PyOptional[str] = None
+    tertiary_color: PyOptional[str] = None
+    photo_url: PyOptional[str] = None
+    owner_id: PyOptional[int] = None
+
+@router.post("/restore")
+def restore_pet(payload: PetRestorePayload, req: Request, db: Session = Depends(get_db)):
+    from app.models.audit_log import AuditLog
+    
+    pet_data = {
+        "pet_name": payload.pet_name or "Restored Pet",
+        "pet_type": payload.pet_type or "Dog",
+        "breed": payload.breed or "Unknown",
+        "gender": payload.gender or "Unknown",
+        "primary_color": payload.primary_color or "Brown",
+        "secondary_color": payload.secondary_color,
+        "tertiary_color": payload.tertiary_color,
+        "photo_url": payload.photo_url,
+        "owner_id": payload.owner_id or 1,
+        "status": "Active"
+    }
+    
+    # Try reconstructing from audit log if available
+    if payload.log_id:
+        log = db.query(AuditLog).filter(AuditLog.log_id == payload.log_id).first()
+        if log:
+            snapshot = log.old_values or log.new_values or {}
+            if isinstance(snapshot, dict):
+                pet_data["pet_name"] = snapshot.get("pet_name") or pet_data["pet_name"]
+                pet_data["pet_type"] = snapshot.get("pet_type") or pet_data["pet_type"]
+                pet_data["breed"] = snapshot.get("breed") or pet_data["breed"]
+                pet_data["gender"] = snapshot.get("gender") or pet_data["gender"]
+                pet_data["primary_color"] = snapshot.get("primary_color") or pet_data["primary_color"]
+                pet_data["secondary_color"] = snapshot.get("secondary_color") or pet_data["secondary_color"]
+                pet_data["tertiary_color"] = snapshot.get("tertiary_color") or pet_data["tertiary_color"]
+                pet_data["photo_url"] = snapshot.get("photo_url") or pet_data["photo_url"]
+                owner_id_val = snapshot.get("owner_id") or log.user_id or pet_data["owner_id"]
+                if owner_id_val is not None:
+                    pet_data["owner_id"] = int(cast(Any, owner_id_val))
+    elif payload.pet_id:
+        logs = db.query(AuditLog).filter(AuditLog.target_table == "pets", AuditLog.target_id == payload.pet_id).order_by(AuditLog.created_at.desc()).all()
+        for log in logs:
+            snapshot = log.old_values or log.new_values or {}
+            if isinstance(snapshot, dict):
+                if snapshot.get("pet_name"):
+                    pet_data["pet_name"] = snapshot.get("pet_name")
+                if snapshot.get("pet_type"):
+                    pet_data["pet_type"] = snapshot.get("pet_type")
+                if snapshot.get("breed"):
+                    pet_data["breed"] = snapshot.get("breed")
+                if snapshot.get("gender"):
+                    pet_data["gender"] = snapshot.get("gender")
+                if snapshot.get("primary_color"):
+                    pet_data["primary_color"] = snapshot.get("primary_color")
+                if snapshot.get("secondary_color"):
+                    pet_data["secondary_color"] = snapshot.get("secondary_color")
+                if snapshot.get("tertiary_color"):
+                    pet_data["tertiary_color"] = snapshot.get("tertiary_color")
+                if snapshot.get("photo_url"):
+                    pet_data["photo_url"] = snapshot.get("photo_url")
+                if snapshot.get("owner_id"):
+                    pet_data["owner_id"] = int(cast(Any, snapshot.get("owner_id")))
+                break
+
+    valid_type = pet_data["pet_type"] if pet_data["pet_type"] in ["Dog", "Cat"] else "Dog"
+    new_pet = Pet(
+        owner_id=pet_data["owner_id"],
+        pet_name=pet_data["pet_name"],
+        pet_type=valid_type,
+        breed=pet_data.get("breed") or "Unknown",
+        gender=pet_data.get("gender") or "Unknown",
+        primary_color=pet_data.get("primary_color") or "Brown",
+        secondary_color=pet_data.get("secondary_color"),
+        tertiary_color=pet_data.get("tertiary_color"),
+        photo_url=pet_data.get("photo_url"),
+        status="Active",
+        is_vaccinated=True
+    )
+    db.add(new_pet)
+    db.commit()
+    db.refresh(new_pet)
+    
+    # Auto-generate QR code
+    try:
+        from app.routes.pet_qr import generate_qr_for_pet_internal
+        generate_qr_for_pet_internal(new_pet.pet_id, db)
+    except Exception as e:
+        print(f"Failed to generate QR for restored pet {new_pet.pet_id}: {e}")
+
+    log_activity(
+        db=db,
+        action="RESTORE_PET",
+        target_table="pets",
+        target_id=new_pet.pet_id,
+        description=f"Restored pet record: {new_pet.pet_name} ({new_pet.pet_type}, new_id={new_pet.pet_id})",
+        log_type="operation",
+        new_values={"pet_name": new_pet.pet_name, "pet_type": new_pet.pet_type, "owner_id": new_pet.owner_id},
+        request=req
+    )
+    return {
+        "message": "Pet restored successfully",
+        "pet": {
+            "pet_id": new_pet.pet_id,
+            "pet_name": new_pet.pet_name,
+            "pet_type": new_pet.pet_type,
+            "breed": new_pet.breed,
+            "status": new_pet.status
+        }
+    }
+
 @router.delete("/{pet_id}")
 def delete_pet(pet_id: int, req: Request, db: Session = Depends(get_db)):
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
-    pet_snapshot = {"pet_name": db_pet.pet_name, "pet_type": db_pet.pet_type, "owner_id": db_pet.owner_id}
+    pet_snapshot = {
+        "pet_name": db_pet.pet_name,
+        "pet_type": db_pet.pet_type,
+        "breed": db_pet.breed,
+        "gender": db_pet.gender,
+        "primary_color": db_pet.primary_color,
+        "secondary_color": db_pet.secondary_color,
+        "tertiary_color": db_pet.tertiary_color,
+        "status": db_pet.status,
+        "photo_url": db_pet.photo_url,
+        "owner_id": db_pet.owner_id
+    }
     db.delete(db_pet)
     db.commit()
     log_activity(
@@ -122,7 +414,7 @@ def delete_pet(pet_id: int, req: Request, db: Session = Depends(get_db)):
         action="DELETE_PET",
         target_table="pets",
         target_id=pet_id,
-        description=f"Deleted pet record: {pet_snapshot['pet_name']} (pet_id={pet_id})",
+        description=f"Deleted pet record: {pet_snapshot['pet_name']} ({pet_snapshot['pet_type']}, pet_id={pet_id})",
         log_type="operation",
         old_values=pet_snapshot,
         request=req
@@ -130,6 +422,10 @@ def delete_pet(pet_id: int, req: Request, db: Session = Depends(get_db)):
     return {"message": "Pet deleted successfully"}
 
 def auto_extract_pet_colors(file_content: bytes, filename: str, db_pet: Pet):
+    # If the pet already has valid colors assigned by user / registration form, DO NOT overwrite them!
+    if db_pet.primary_color and db_pet.primary_color.strip() not in ['Unknown', 'None', '']:
+        return
+
     try:
         from ultralytics import YOLO
         from app.utils.color_detection import extract_dominant_colors
@@ -172,10 +468,12 @@ def auto_extract_pet_colors(file_content: bytes, filename: str, db_pet: Pet):
                 dominant_colors_str = extract_dominant_colors(file_content)
                 
             if dominant_colors_str and dominant_colors_str != 'Unknown':
-                # Map dog color "Orange" or "Ginger" to standard "Brown"
+                # Map dog color "Orange" or "Ginger" to standard "Brown", filter out non-coat colors (Green, Blue, Mixed)
                 mapped = []
                 for c in dominant_colors_str.split(','):
                     c_clean = c.strip()
+                    if c_clean.lower() in ['green', 'blue', 'mixed color', 'unknown', 'none', '']:
+                        continue
                     if animal_type == 'Dog' and c_clean.lower() in ['orange', 'ginger']:
                         mapped.append('Brown')
                     else:
@@ -184,9 +482,9 @@ def auto_extract_pet_colors(file_content: bytes, filename: str, db_pet: Pet):
                 seen = set()
                 clean_colors = [x for x in mapped if not (x in seen or seen.add(x))]
                 
-                if len(clean_colors) > 0 and clean_colors[0] and clean_colors[0] != 'Mixed Color':
+                if len(clean_colors) > 0 and clean_colors[0]:
                     db_pet.primary_color = clean_colors[0]
-                if len(clean_colors) > 1 and clean_colors[1] and clean_colors[1] != 'Mixed Color':
+                if len(clean_colors) > 1 and clean_colors[1]:
                     db_pet.secondary_color = clean_colors[1]
         finally:
             if os.path.exists(tmp_img_path):
@@ -244,7 +542,6 @@ async def upload_pet_photo_front(pet_id: int, file: UploadFile = File(...), db: 
         if not image_url:
             raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
         db_pet.photo_front_url = image_url
-        auto_extract_pet_colors(file_content, file.filename or "", db_pet)
         db.commit()
         return {"photo_front_url": image_url}
     except Exception as e:
@@ -261,7 +558,6 @@ async def upload_pet_photo_left(pet_id: int, file: UploadFile = File(...), db: S
         if not image_url:
             raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
         db_pet.photo_left_url = image_url
-        auto_extract_pet_colors(file_content, file.filename or "", db_pet)
         db.commit()
         return {"photo_left_url": image_url}
     except Exception as e:
@@ -278,7 +574,6 @@ async def upload_pet_photo_right(pet_id: int, file: UploadFile = File(...), db: 
         if not image_url:
             raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
         db_pet.photo_right_url = image_url
-        auto_extract_pet_colors(file_content, file.filename or "", db_pet)
         db.commit()
         return {"photo_right_url": image_url}
     except Exception as e:

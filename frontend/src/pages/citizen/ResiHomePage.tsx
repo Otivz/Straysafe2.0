@@ -120,6 +120,7 @@ interface ReportFormData {
     animalBreed: string;
     primaryColor: string;
     secondaryColor: string;
+    tertiaryColor: string;
     coatPattern: string;
     distinctiveMarkings: string;
     observedConditions: string[];
@@ -292,6 +293,7 @@ const INITIAL_FORM_DATA: ReportFormData = {
     animalBreed: 'Unknown',
     primaryColor: 'Brown',
     secondaryColor: 'None',
+    tertiaryColor: 'None',
     coatPattern: 'Unknown',
     distinctiveMarkings: '',
     observedConditions: [],
@@ -318,6 +320,7 @@ const ResiHomePage = () => {
     const [showInconclusiveModal, setShowInconclusiveModal] = useState(false);
     const [inconclusiveText, setInconclusiveText] = useState('');
     const [showFinalConfirmModal, setShowFinalConfirmModal] = useState(false);
+    const [noAnimalModal, setNoAnimalModal] = useState<{ show: boolean; title?: string; message: string; isMultiple?: boolean }>({ show: false, message: '' });
     const [reports, setReports] = useState<any[]>([]);
     const [announcements, setAnnouncements] = useState<any[]>([]);
     const [notifications, setNotifications] = useState<any[]>([]);
@@ -361,20 +364,24 @@ const ResiHomePage = () => {
     const [reportStep, setReportStep] = useState<number>(1);
     const [formData, setFormData] = useState<ReportFormData>(INITIAL_FORM_DATA);
     const [aiAnalysisResult, setAiAnalysisResult] = useState<{
+        animalDetected: boolean;
         animalType: string;
         primaryColor: string;
         secondaryColor: string;
+        tertiaryColor: string;
         coatPattern: string;
         estimatedSize: string;
         possibleBreed: string;
         collarDetected: boolean;
         qrTagDetected: boolean;
+        message?: string;
     } | null>(null);
     const [isAnalyzingMedia, setIsAnalyzingMedia] = useState(false);
 
     const VALID_COAT_PATTERNS = ['Solid', 'Bicolor', 'Tricolor', 'Spotted', 'Striped', 'Patched', 'Brindle', 'Merle', 'Tabby', 'Calico', 'Tortoiseshell', 'Mixed', 'Unknown'];
     const VALID_PRIMARY_COLORS = ['Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange', 'Mixed'];
     const VALID_SECONDARY_COLORS = ['None', 'Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange'];
+    const VALID_TERTIARY_COLORS = ['None', 'Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange'];
 
     const normalizeOption = (val: string, options: string[], defaultVal: string) => {
         if (!val) return defaultVal;
@@ -395,35 +402,71 @@ const ResiHomePage = () => {
                 const res = await axios.post('http://localhost:8000/reports/analyze-media', mediaData);
                 if (res.status === 200 && res.data) {
                     const ai = res.data;
-                    const normType = ['Dog', 'Cat'].includes(ai.animal_type) ? ai.animal_type : (ai.animal_type?.toLowerCase().includes('dog') ? 'Dog' : 'Cat');
-                    const normPrimary = normalizeOption(ai.primary_color, VALID_PRIMARY_COLORS, 'Black');
-                    const normSecondary = normalizeOption(ai.secondary_color, VALID_SECONDARY_COLORS, 'None');
-                    const normPattern = normalizeOption(ai.coat_pattern, VALID_COAT_PATTERNS, 'Solid');
-                    const normSize = ['Small', 'Medium', 'Large'].includes(ai.estimated_size) ? ai.estimated_size : 'Medium';
+                    const isDetected = ai.animal_detected !== false && !['unknown', 'none', ''].includes((ai.animal_type || '').toLowerCase());
+                    
+                    if (!isDetected) {
+                        setAiAnalysisResult({
+                            animalDetected: false,
+                            animalType: 'Unknown',
+                            primaryColor: 'Unknown',
+                            secondaryColor: 'None',
+                            tertiaryColor: 'None',
+                            coatPattern: 'Unknown',
+                            estimatedSize: 'Unknown',
+                            possibleBreed: 'Unknown',
+                            collarDetected: false,
+                            qrTagDetected: false,
+                            message: ai.message || 'No cat or dog detected in the uploaded image. Please upload a clear photo of an animal.'
+                        });
+                    } else {
+                        const normType = ['Dog', 'Cat'].includes(ai.animal_type) ? ai.animal_type : (ai.animal_type?.toLowerCase().includes('dog') ? 'Dog' : 'Cat');
+                        const normPrimary = normalizeOption(ai.primary_color, VALID_PRIMARY_COLORS, 'Black');
+                        const normSecondary = normalizeOption(ai.secondary_color, VALID_SECONDARY_COLORS, 'None');
+                        const normTertiary = normalizeOption(ai.tertiary_color, VALID_TERTIARY_COLORS, 'None');
+                        const normPattern = normalizeOption(ai.coat_pattern, VALID_COAT_PATTERNS, 'Solid');
+                        const normSize = ['Small', 'Medium', 'Large'].includes(ai.estimated_size) ? ai.estimated_size : 'Medium';
 
-                    const resultObj = {
-                        animalType: normType,
-                        primaryColor: normPrimary,
-                        secondaryColor: normSecondary,
-                        coatPattern: normPattern,
-                        estimatedSize: normSize,
-                        possibleBreed: ai.possible_breed || 'Puspin',
-                        collarDetected: Boolean(ai.collar_detected),
-                        qrTagDetected: Boolean(ai.qr_tag_detected)
-                    };
-                    setAiAnalysisResult(resultObj);
-                    setFormData(prev => ({
-                        ...prev,
-                        animalType: resultObj.animalType,
-                        primaryColor: resultObj.primaryColor,
-                        secondaryColor: resultObj.secondaryColor,
-                        coatPattern: resultObj.coatPattern,
-                        estimatedSize: resultObj.estimatedSize,
-                        animalBreed: resultObj.possibleBreed
-                    }));
+                        const resultObj = {
+                            animalDetected: true,
+                            animalType: normType,
+                            primaryColor: normPrimary,
+                            secondaryColor: normSecondary,
+                            tertiaryColor: normTertiary,
+                            coatPattern: normPattern,
+                            estimatedSize: normSize,
+                            possibleBreed: ai.possible_breed || (normType === 'Cat' ? 'Puspin' : 'Aspin'),
+                            collarDetected: Boolean(ai.collar_detected),
+                            qrTagDetected: Boolean(ai.qr_tag_detected),
+                            message: ai.message || 'Animal detected successfully.'
+                        };
+                        setAiAnalysisResult(resultObj);
+                        setFormData(prev => ({
+                            ...prev,
+                            animalType: resultObj.animalType,
+                            primaryColor: resultObj.primaryColor,
+                            secondaryColor: resultObj.secondaryColor,
+                            tertiaryColor: resultObj.tertiaryColor,
+                            coatPattern: resultObj.coatPattern,
+                            estimatedSize: resultObj.estimatedSize,
+                            animalBreed: resultObj.possibleBreed
+                        }));
+                    }
                 }
             } catch (err) {
-                console.warn('AI media analysis error, using defaults:', err);
+                console.warn('AI media analysis error, using fallback:', err);
+                setAiAnalysisResult({
+                    animalDetected: false,
+                    animalType: 'Unknown',
+                    primaryColor: 'Unknown',
+                    secondaryColor: 'None',
+                    tertiaryColor: 'None',
+                    coatPattern: 'Unknown',
+                    estimatedSize: 'Unknown',
+                    possibleBreed: 'Unknown',
+                    collarDetected: false,
+                    qrTagDetected: false,
+                    message: 'Unable to analyze image. Please ensure a clear photo of a dog or cat.'
+                });
             } finally {
                 setIsAnalyzingMedia(false);
             }
@@ -685,10 +728,12 @@ const ResiHomePage = () => {
 
         let primaryColor = report.primary_color;
         let secondaryColor = report.secondary_color || 'None';
+        let tertiaryColor = report.tertiary_color || 'None';
         if (!primaryColor && report.animal_color) {
             const parts = report.animal_color.split(' and ');
             primaryColor = parts[0] || 'Brown';
             if (parts[1]) secondaryColor = parts[1];
+            if (parts[2]) tertiaryColor = parts[2];
         }
 
         const initialData: ReportFormData = {
@@ -703,6 +748,7 @@ const ResiHomePage = () => {
             animalBreed: report.animal_breed || '',
             primaryColor: primaryColor || 'Brown',
             secondaryColor: secondaryColor,
+            tertiaryColor: tertiaryColor,
             coatPattern: report.coat_pattern || 'Unknown',
             distinctiveMarkings: report.distinctive_markings || '',
             observedConditions: report.observed_conditions || [],
@@ -1115,8 +1161,28 @@ const ResiHomePage = () => {
                     if (errType === 'inconclusive') {
                         setInconclusiveText(msg);
                         setShowInconclusiveModal(true);
+                    } else if (errType === 'no_animal') {
+                        setNoAnimalModal({
+                            show: true,
+                            title: 'No Animal Detected',
+                            message: msg || 'No animal was detected in the uploaded image. Please ensure a cat or dog is clearly visible in your photo.',
+                            isMultiple: false
+                        });
+                    } else if (errType === 'multiple_animals') {
+                        setNoAnimalModal({
+                            show: true,
+                            title: 'Multiple Animals Detected',
+                            message: msg || 'Multiple animals were detected in one or more uploaded images. Please upload images containing only one animal per report.',
+                            isMultiple: true
+                        });
+                    } else if (errType === 'different_animals') {
+                        setNoAnimalModal({
+                            show: true,
+                            title: 'Different Animals Detected',
+                            message: msg || 'The uploaded images appear to show different animals. Please create a separate report for each animal.',
+                            isMultiple: true
+                        });
                     } else {
-                        // Display error message and prevent submission
                         alert(msg);
                     }
                     return;
@@ -1150,9 +1216,13 @@ const ResiHomePage = () => {
             const userStr = localStorage.getItem('resident_user');
             const userId = userStr ? JSON.parse(userStr).user_id : 1;
 
-            const compiledColor = formData.secondaryColor !== 'None' 
-                ? `${formData.primaryColor} and ${formData.secondaryColor}` 
-                : formData.primaryColor;
+            let compiledColor = formData.primaryColor;
+            if (formData.secondaryColor && formData.secondaryColor !== 'None') {
+                compiledColor += ` and ${formData.secondaryColor}`;
+            }
+            if (formData.tertiaryColor && formData.tertiaryColor !== 'None') {
+                compiledColor += ` and ${formData.tertiaryColor}`;
+            }
 
             const extraDetails = [
                 formData.coatPattern !== 'Unknown' ? `Pattern: ${formData.coatPattern}` : null,
@@ -1160,6 +1230,12 @@ const ResiHomePage = () => {
                 formData.observedConditions.length > 0 ? `Observed Conditions: ${formData.observedConditions.join(', ')}` : null,
                 formData.description ? `Notes: ${formData.description}` : null
             ].filter(Boolean).join(' | ');
+
+            const aiDominantColorStr = [
+                aiAnalysisResult?.primaryColor || formData.primaryColor,
+                aiAnalysisResult?.secondaryColor && aiAnalysisResult.secondaryColor !== 'None' ? aiAnalysisResult.secondaryColor : null,
+                aiAnalysisResult?.tertiaryColor && aiAnalysisResult.tertiaryColor !== 'None' ? aiAnalysisResult.tertiaryColor : null
+            ].filter(Boolean).join(', ');
 
             const payload = {
                 user_id: userId,
@@ -1179,7 +1255,7 @@ const ResiHomePage = () => {
                 is_possible_owned: formData.isPossibleOwned,
                 status_id: 1, // Pending Verification
                 ai_animal_type: aiAnalysisResult?.animalType || formData.animalType,
-                ai_dominant_color: aiAnalysisResult?.primaryColor || formData.primaryColor,
+                ai_dominant_color: aiDominantColorStr,
                 ai_coat_pattern: aiAnalysisResult?.coatPattern || formData.coatPattern,
                 ai_estimated_size: aiAnalysisResult?.estimatedSize || formData.estimatedSize,
                 ai_possible_breed: aiAnalysisResult?.possibleBreed || formData.animalBreed || 'Unknown',
@@ -1543,22 +1619,69 @@ const ResiHomePage = () => {
                                                 <div className="w-8 h-8 border-3 border-[#F97316] border-t-transparent rounded-full animate-spin" />
                                                 <div>
                                                     <h4 className="text-xs font-black uppercase tracking-wider text-[#1a1208]">Analyzing Media...</h4>
-                                                    <p className="text-[10px] font-bold text-gray-500 mt-1">Our AI is extracting animal characteristics from your uploaded photo</p>
+                                                    <p className="text-[10px] font-bold text-gray-500 mt-1">Our AI is checking for dogs and cats and extracting characteristics</p>
+                                                </div>
+                                            </div>
+                                        ) : aiAnalysisResult && !aiAnalysisResult.animalDetected ? (
+                                            <div className="p-6 bg-red-50/80 border-2 border-red-200 rounded-3xl space-y-5 text-center animate-in fade-in">
+                                                <div className="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto text-2xl shadow-sm border border-red-200">
+                                                    ⚠️
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-sm font-black uppercase tracking-wider text-red-900">
+                                                        No Animal Detected
+                                                    </h4>
+                                                    <p className="text-xs font-bold text-red-700 mt-1.5 leading-relaxed max-w-md mx-auto">
+                                                        {aiAnalysisResult.message || "No cat or dog was visible in your uploaded image. Please ensure your photo clearly shows the stray animal."}
+                                                    </p>
+                                                </div>
+
+                                                <div className="p-4 bg-white rounded-2xl border border-red-100 text-left text-xs space-y-2 shadow-xs">
+                                                    <p className="font-black text-red-800 flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
+                                                        <span>📷</span> Photo Requirements:
+                                                    </p>
+                                                    <ul className="list-disc list-inside space-y-1 text-gray-600 text-[11px] font-bold pl-1">
+                                                        <li>Ensure the stray dog or cat is clearly in frame and focused.</li>
+                                                        <li>Avoid blurry, too dark, or obstructed shots.</li>
+                                                        <li>Avoid photos of non-animal objects, landscapes, or screenshots.</li>
+                                                    </ul>
+                                                </div>
+
+                                                <div className="pt-2 flex flex-col sm:flex-row gap-2.5 justify-center">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setReportStep(1)}
+                                                        className="px-5 py-3.5 bg-red-600 hover:bg-red-700 text-white font-black text-[11px] uppercase tracking-wider rounded-2xl transition-all shadow-md active:scale-95"
+                                                    >
+                                                        ← Upload Clear Animal Photo
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setReportStep(4)}
+                                                        className="px-5 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-black text-[11px] uppercase tracking-wider rounded-2xl transition-all"
+                                                    >
+                                                        Continue Manually →
+                                                    </button>
                                                 </div>
                                             </div>
                                         ) : (
                                             <div className="p-5 bg-orange-50/60 border border-orange-200 rounded-3xl space-y-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-2xl bg-[#F97316] text-white flex items-center justify-center font-black text-lg shadow-md">
-                                                        🤖
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-2xl bg-[#F97316] text-white flex items-center justify-center font-black text-lg shadow-md">
+                                                            🤖
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="text-xs font-black uppercase tracking-wider text-[#1a1208]">AI Analysis Suggestions</h4>
+                                                            <p className="text-[10px] font-bold text-gray-500">Automatically extracted from uploaded media</p>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <h4 className="text-xs font-black uppercase tracking-wider text-[#1a1208]">AI Analysis Suggestions</h4>
-                                                        <p className="text-[10px] font-bold text-gray-500">Automatically extracted from uploaded media</p>
-                                                    </div>
+                                                    <span className="px-3 py-1 bg-emerald-100 text-emerald-700 font-black text-[9px] uppercase tracking-wider rounded-full flex items-center gap-1 border border-emerald-200">
+                                                        ✓ {formData.animalType} Detected
+                                                    </span>
                                                 </div>
 
-                                                <div className="grid grid-cols-2 gap-3 text-xs font-bold text-[#1a1208] pt-2">
+                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs font-bold text-[#1a1208] pt-2">
                                                     <div className="p-3 bg-white rounded-2xl border border-gray-100">
                                                         <span className="text-[9px] font-black text-gray-400 block uppercase">Animal Type</span>
                                                         <span className="text-[#F97316] font-black">{formData.animalType}</span>
@@ -1566,6 +1689,10 @@ const ResiHomePage = () => {
                                                     <div className="p-3 bg-white rounded-2xl border border-gray-100">
                                                         <span className="text-[9px] font-black text-gray-400 block uppercase">Animal Count</span>
                                                         <span className="text-[#F97316] font-black">{formData.animalCount}</span>
+                                                    </div>
+                                                    <div className="p-3 bg-white rounded-2xl border border-gray-100">
+                                                        <span className="text-[9px] font-black text-gray-400 block uppercase">Estimated Size</span>
+                                                        <span className="text-[#F97316] font-black">{formData.estimatedSize}</span>
                                                     </div>
                                                     <div className="p-3 bg-white rounded-2xl border border-gray-100">
                                                         <span className="text-[9px] font-black text-gray-400 block uppercase">Primary Color</span>
@@ -1576,12 +1703,12 @@ const ResiHomePage = () => {
                                                         <span className="text-[#F97316] font-black">{formData.secondaryColor}</span>
                                                     </div>
                                                     <div className="p-3 bg-white rounded-2xl border border-gray-100">
-                                                        <span className="text-[9px] font-black text-gray-400 block uppercase">Coat Pattern</span>
-                                                        <span className="text-[#F97316] font-black">{formData.coatPattern}</span>
+                                                        <span className="text-[9px] font-black text-gray-400 block uppercase">Third Color</span>
+                                                        <span className="text-[#F97316] font-black">{formData.tertiaryColor || 'None'}</span>
                                                     </div>
                                                     <div className="p-3 bg-white rounded-2xl border border-gray-100">
-                                                        <span className="text-[9px] font-black text-gray-400 block uppercase">Estimated Size</span>
-                                                        <span className="text-[#F97316] font-black">{formData.estimatedSize}</span>
+                                                        <span className="text-[9px] font-black text-gray-400 block uppercase">Coat Pattern</span>
+                                                        <span className="text-[#F97316] font-black">{formData.coatPattern}</span>
                                                     </div>
                                                     <div className="p-3 bg-white rounded-2xl border border-gray-100">
                                                         <span className="text-[9px] font-black text-gray-400 block uppercase">Possible Breed</span>
@@ -1644,8 +1771,8 @@ const ResiHomePage = () => {
                                             </div>
                                         </div>
 
-                                        {/* Primary & Secondary Color */}
-                                        <div className="grid grid-cols-2 gap-4">
+                                        {/* Primary, Secondary & Third (Tertiary) Color */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                             <div>
                                                 <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-2 block">Primary Color</label>
                                                 <select
@@ -1653,7 +1780,7 @@ const ResiHomePage = () => {
                                                     value={formData.primaryColor}
                                                     onChange={(e) => setFormData(prev => ({ ...prev, primaryColor: e.target.value }))}
                                                 >
-                                                    {['Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange', 'Mixed'].map(c => (
+                                                    {VALID_PRIMARY_COLORS.map(c => (
                                                         <option key={c} value={c}>{c}</option>
                                                     ))}
                                                 </select>
@@ -1665,7 +1792,19 @@ const ResiHomePage = () => {
                                                     value={formData.secondaryColor}
                                                     onChange={(e) => setFormData(prev => ({ ...prev, secondaryColor: e.target.value }))}
                                                 >
-                                                    {['None', 'Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange'].map(c => (
+                                                    {VALID_SECONDARY_COLORS.map(c => (
+                                                        <option key={c} value={c}>{c}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-2 block">Third Color (Tertiary)</label>
+                                                <select
+                                                    className="w-full h-12 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-4 text-xs font-bold text-[#1a1208]"
+                                                    value={formData.tertiaryColor}
+                                                    onChange={(e) => setFormData(prev => ({ ...prev, tertiaryColor: e.target.value }))}
+                                                >
+                                                    {VALID_TERTIARY_COLORS.map(c => (
                                                         <option key={c} value={c}>{c}</option>
                                                     ))}
                                                 </select>
@@ -2162,6 +2301,50 @@ const ResiHomePage = () => {
                                     className="w-full py-4 text-[10px] font-black text-gray-400 hover:text-gray-600 uppercase tracking-widest transition-all"
                                 >
                                     Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* No Animal / Multi-Animal Validation Modal */}
+                {noAnimalModal.show && (
+                    <div className="fixed inset-0 z-[410] flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setNoAnimalModal({ show: false, message: '' })} />
+                        <div className="relative w-full max-w-md bg-white rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 p-10 text-[#1a1208] border border-gray-50 text-center">
+                            <div className="mb-6">
+                                <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mb-5 mx-auto border border-red-100 text-2xl shadow-sm">
+                                    {noAnimalModal.isMultiple ? '👥' : '🚫'}
+                                </div>
+                                <h3 className="text-xl font-black uppercase tracking-tight text-[#1a1208] mb-1.5">
+                                    {noAnimalModal.title || 'No Animal Detected'}
+                                </h3>
+                                <p className="text-[9px] font-black text-red-500 uppercase tracking-widest">
+                                    AI Animal Verification Check
+                                </p>
+                            </div>
+
+                            <div className="bg-red-50/70 border border-red-100 rounded-2xl p-5 mb-8 text-xs font-bold text-red-800 leading-relaxed">
+                                {noAnimalModal.message}
+                            </div>
+
+                            <div className="space-y-3">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setNoAnimalModal({ show: false, message: '' });
+                                        setReportStep(1);
+                                    }}
+                                    className="w-full py-4 bg-red-600 hover:bg-red-700 text-white text-[11px] font-black uppercase tracking-[0.15em] rounded-2xl shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                >
+                                    ← Change / Upload Clear Photo
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setNoAnimalModal({ show: false, message: '' })}
+                                    className="w-full py-4 text-[10px] font-black text-gray-400 hover:text-gray-600 uppercase tracking-widest transition-all"
+                                >
+                                    Dismiss
                                 </button>
                             </div>
                         </div>

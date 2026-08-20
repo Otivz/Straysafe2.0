@@ -62,6 +62,7 @@ class Pet(Base):
 
     primary_color: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     secondary_color: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    tertiary_color: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     distinctive_markings: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     registered_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     registered_latitude: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 8), nullable=True)
@@ -82,8 +83,9 @@ class PetVaccination(Base):
         Integer, ForeignKey("pets.pet_id", ondelete="CASCADE"), nullable=False
     )
     vaccine_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    vaccination_date: Mapped[date] = mapped_column(Date, nullable=False)
+    administered_date: Mapped[date] = mapped_column(Date, nullable=False)
     expiry_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    clinic_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     veterinarian: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
