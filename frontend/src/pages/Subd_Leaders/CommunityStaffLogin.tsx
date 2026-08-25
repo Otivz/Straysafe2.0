@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Button from '../../components/Button';
 import { EyeIcon, EyeOffIcon } from '../../components/icon';
 import { useTheme } from '../../context/ThemeContext';
+import { clearAuthStorage } from '../../utils/api';
 
 const CommunityStaffLogin = () => {
     const navigate = useNavigate();
@@ -32,12 +33,10 @@ const CommunityStaffLogin = () => {
                 } else if (user && user.role_id === 3) {
                     navigate('/brgy/dashboard');
                 } else {
-                    localStorage.removeItem('staff_user');
-                    sessionStorage.removeItem('staff_user');
+                    clearAuthStorage();
                 }
             } catch {
-                localStorage.removeItem('staff_user');
-                sessionStorage.removeItem('staff_user');
+                clearAuthStorage();
             }
         }
     }, [navigate]);
@@ -67,9 +66,8 @@ const CommunityStaffLogin = () => {
                 return;
             }
 
-            // Clear any existing staff sessions to prevent conflicts between localStorage and sessionStorage
-            localStorage.removeItem('staff_user');
-            sessionStorage.removeItem('staff_user');
+            // Clear ALL previous session storage to prevent cross-role contamination
+            clearAuthStorage();
 
             // Store session info
             const storage = keepSignedIn ? localStorage : sessionStorage;

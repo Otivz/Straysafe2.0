@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import BrgySidebar from '../../components/BrgySidebar';
@@ -8,6 +8,10 @@ import MapComponent from '../../components/MapComponent';
 import DataTable from '../../components/DataTable';
 import RescueTimeline from '../../components/RescueTimeline';
 import AISuggestionPanel from '../../components/AISuggestionPanel';
+import RelativeTimestamp from '../../components/RelativeTimestamp';
+import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
+import ReportChatBadge from '../../components/Chat/ReportChatBadge';
+import { api } from '../../utils/api';
 
 interface RescueRequest {
     rescue_id: number;
@@ -19,6 +23,7 @@ interface RescueRequest {
     created_at: string;
     notes?: string;
     report?: {
+        report_id?: number;
         category_id: number;
         animal_type: string;
         breed?: string;
@@ -114,8 +119,31 @@ const BrgyRescueRequests = () => {
     const [resolvedAddress, setResolvedAddress] = useState('');
     const [isGeocoding, setIsGeocoding] = useState(false);
 
+    // Search, Filter & View Mode state
+    const [searchTerm, setSearchTerm] = useState('');
+    const [priorityFilter, setPriorityFilter] = useState('ALL');
+    const [statusFilter, setStatusFilter] = useState('ALL');
+    const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+    const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    // Chat Drawer state
+    const [isChatOpen, setIsChatOpen] = useState(false);
+    const [selectedChatReport, setSelectedChatReport] = useState<any>(null);
+
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
+    const currentUserId = currentUser ? currentUser.user_id : 1;
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setOpenMenuId(null);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     useEffect(() => {
         if (!userStr || currentUser?.role_id !== 3) {
@@ -225,7 +253,7 @@ const BrgyRescueRequests = () => {
 
     const fetchPersonnel = async () => {
         try {
-            const response = await axios.get('http://localhost:8000/users/?role_id=3');
+            const response = await api.get('/users/?role_id=3');
             setPersonnel(response.data);
         } catch (error) {
             console.error('Error fetching personnel:', error);
@@ -343,6 +371,54 @@ const BrgyRescueRequests = () => {
         }
     };
 
+    const getPriorityColor = (priority: string) => {
+        const p = (priority || 'medium').toLowerCase();
+        if (p === 'emergency' || p === 'high') return 'bg-red-50 text-red-600 border-red-200';
+        if (p === 'regular' || p === 'medium') return 'bg-amber-50 text-amber-600 border-amber-200';
+        if (p === 'low') return 'bg-blue-50 text-blue-600 border-blue-200';
+        return 'bg-gray-50 text-gray-600 border-gray-200';
+    };
+
+    const getStatusColor = (status: string) => {
+        const s = (status || 'pending').toLowerCase();
+        if (s.includes('approved')) return 'bg-indigo-50 text-indigo-600 border-indigo-200';
+        if (s.includes('dispatch') || s.includes('action') || s.includes('progress') || s.includes('started')) return 'bg-orange-50 text-orange-600 border-orange-200';
+        if (s.includes('picked up')) return 'bg-amber-50 text-amber-600 border-amber-200';
+        if (s.includes('observation')) return 'bg-cyan-50 text-cyan-700 border-cyan-200';
+        if (s.includes('impounded')) return 'bg-violet-50 text-violet-700 border-violet-200';
+        if (s.includes('resolved') || s.includes('claimed') || s.includes('released')) return 'bg-emerald-50 text-emerald-600 border-emerald-200';
+        if (s.includes('rejected') || s.includes('deceased')) return 'bg-red-50 text-red-600 border-red-200';
+        return 'bg-purple-50 text-purple-600 border-purple-200';
+    };
+
+    const filteredRequests = requests.filter((req: RescueRequest) => {
+        const report = req.report;
+        const reportStatusId = report?.status_id || req.status_id;
+        const priority = report?.priority_level || 'Medium';
+
+        // Search match
+        const matchesSearch = searchTerm.trim() === '' || 
+            req.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            req.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (req.leader_name && req.leader_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (report?.landmark && report.landmark.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (report?.animal_type && report.animal_type.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            req.rescue_id.toString().includes(searchTerm) ||
+            (req.report_id && req.report_id.toString().includes(searchTerm));
+
+        // Priority filter
+        const matchesPriority = priorityFilter === 'ALL' || priority.toLowerCase() === priorityFilter.toLowerCase();
+
+        // Status filter
+        const matchesStatus = statusFilter === 'ALL' || 
+            (statusFilter === 'PENDING' && (req.status_id === 1 || reportStatusId === 4)) ||
+            (statusFilter === 'APPROVED' && (reportStatusId === 13 || req.status_id === 2)) ||
+            (statusFilter === 'IN_ACTION' && [5, 6, 7, 8].includes(reportStatusId)) ||
+            (statusFilter === 'RESOLVED' && [11, 12, 9, 10].includes(reportStatusId));
+
+        return matchesSearch && matchesPriority && matchesStatus;
+    });
+
     return (
         <div className="min-h-screen w-full flex bg-[#F8F9FA] font-sans text-gray-800">
             <BrgySidebar 
@@ -362,141 +438,529 @@ const BrgyRescueRequests = () => {
                     }
                 />
 
-                <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-                    <div className="max-w-7xl mx-auto w-full">
-                        <div className="flex justify-end items-center mb-8">
-                            <Button variant="light" onClick={fetchRequests} className="flex items-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                                Refresh
-                            </Button>
+                <div className="flex-1 overflow-y-auto p-4 sm:p-8 flex flex-col gap-6 sm:gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                    <div className="max-w-7xl mx-auto w-full space-y-6 sm:space-y-8">
+                        {/* Header Actions & Stat Summary Cards */}
+                        <div className="flex flex-col gap-6">
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                    <span className="px-3 py-1 bg-orange-100/80 text-orange-700 rounded-full text-xs font-black uppercase tracking-wider">
+                                        Barangay Operations Command
+                                    </span>
+                                </div>
+                                <Button variant="light" onClick={fetchRequests} className="flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    Refresh
+                                </Button>
+                            </div>
+
+                            {/* Stat Summary Row */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total Escalated</p>
+                                        <h4 className="text-2xl font-black text-gray-900 mt-1">{requests.length}</h4>
+                                    </div>
+                                    <div className="w-11 h-11 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center font-bold text-lg border border-orange-100">
+                                        📋
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Pending Review</p>
+                                        <h4 className="text-2xl font-black text-purple-600 mt-1">
+                                            {requests.filter(r => r.report?.status_id === 4 || r.status_id === 1).length}
+                                        </h4>
+                                    </div>
+                                    <div className="w-11 h-11 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center font-bold text-lg border border-purple-100">
+                                        ⏳
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">In Action</p>
+                                        <h4 className="text-2xl font-black text-orange-600 mt-1">
+                                            {requests.filter(r => [5, 6, 7, 8, 13].includes(r.report?.status_id || 0)).length}
+                                        </h4>
+                                    </div>
+                                    <div className="w-11 h-11 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center font-bold text-lg border border-orange-100">
+                                        🚨
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Picked Up</p>
+                                        <h4 className="text-2xl font-black text-amber-600 mt-1">
+                                            {requests.filter(r => r.report?.status_id === 6).length}
+                                        </h4>
+                                    </div>
+                                    <div className="w-11 h-11 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center font-bold text-lg border border-amber-100">
+                                        🐾
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
-                        {/* Data Table Section */}
-                        <DataTable
-                            loading={loading}
-                            data={requests}
-                            onRowClick={openRequestModal}
-                            emptyMessage="No pending rescue requests."
-                            loadingMessage="Syncing rescue operations..."
-                            columns={[
-                                {
-                                    header: "Request ID",
-                                    key: "rescue_id",
-                                    render: (req) => (
-                                        <span className="text-xs font-mono text-gray-400">#REQ-{(req.rescue_id || 0).toString().padStart(4, '0')}</span>
-                                    )
-                                },
-                                {
-                                    header: "Title",
-                                    key: "title",
-                                    render: (req) => (
-                                        <div>
-                                            <p className="text-sm font-bold text-gray-900">{req.title}</p>
-                                            <p className="text-[10px] text-gray-400 truncate max-w-[200px]">{req.description}</p>
-                                        </div>
-                                    )
-                                },
-                                {
-                                    header: "Escalated By",
-                                    key: "leader",
-                                    render: (req) => (
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center text-[10px] font-bold text-orange-600">
-                                                {req.leader_name?.charAt(0) || 'L'}
+                        {/* Search & Filter Controls Bar */}
+                        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
+                            <div className="relative w-full md:w-80">
+                                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-gray-400">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                </span>
+                                <input
+                                    type="text"
+                                    placeholder="Search request #, animal, landmark..."
+                                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-orange-500 focus:bg-white outline-none transition-all"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="flex items-center gap-2.5 flex-wrap w-full md:w-auto justify-end">
+                                {/* Priority Filter */}
+                                <select
+                                    value={priorityFilter}
+                                    onChange={(e) => setPriorityFilter(e.target.value)}
+                                    className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-orange-500 transition-all cursor-pointer"
+                                >
+                                    <option value="ALL">All Priorities</option>
+                                    <option value="emergency">Emergency</option>
+                                    <option value="high">High</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="low">Low</option>
+                                </select>
+
+                                {/* Status Filter */}
+                                <select
+                                    value={statusFilter}
+                                    onChange={(e) => setStatusFilter(e.target.value)}
+                                    className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-orange-500 transition-all cursor-pointer"
+                                >
+                                    <option value="ALL">All Status</option>
+                                    <option value="PENDING">Pending Review</option>
+                                    <option value="APPROVED">Approved</option>
+                                    <option value="IN_ACTION">In Action / Dispatched</option>
+                                    <option value="RESOLVED">Resolved</option>
+                                </select>
+
+                                {/* View Mode Toggle */}
+                                <div className="flex items-center bg-gray-100 p-1 rounded-xl shrink-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => setViewMode('grid')}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                                            viewMode === 'grid'
+                                                ? 'bg-white text-[#F97316] shadow-sm'
+                                                : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                        title="Cards View"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                                        </svg>
+                                        <span className="hidden sm:inline">Cards</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setViewMode('table')}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                                            viewMode === 'table'
+                                                ? 'bg-white text-[#F97316] shadow-sm'
+                                                : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                        title="Table View"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                                        </svg>
+                                        <span className="hidden sm:inline">Table</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Content Area: Cards View or Table View */}
+                        {viewMode === 'grid' ? (
+                            loading ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {[1, 2, 3, 4, 5, 6].map((n) => (
+                                        <div key={n} className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm animate-pulse space-y-4">
+                                            <div className="flex justify-between items-center">
+                                                <div className="h-4 w-16 bg-gray-200 rounded"></div>
+                                                <div className="h-5 w-20 bg-gray-200 rounded-full"></div>
                                             </div>
-                                            <span className="text-xs text-gray-700">{req.leader_name || 'Subd Leader'}</span>
+                                            <div className="h-40 w-full bg-gray-100 rounded-2xl"></div>
+                                            <div className="h-5 w-3/4 bg-gray-200 rounded"></div>
+                                            <div className="h-3 w-1/2 bg-gray-200 rounded"></div>
                                         </div>
-                                    )
-                                },
-                                {
-                                    header: "Assigned",
-                                    key: "assigned",
-                                    render: (req) => (
-                                        req.assigned_staff_name ? (
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-[8px] font-bold text-blue-600 border border-blue-200">
-                                                    {req.assigned_staff_name.charAt(0)}
+                                    ))}
+                                </div>
+                            ) : filteredRequests.length === 0 ? (
+                                <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center shadow-xs">
+                                    <div className="w-16 h-16 bg-orange-50 text-[#F97316] rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                                        🐾
+                                    </div>
+                                    <h3 className="text-base font-bold text-gray-900">No rescue requests found</h3>
+                                    <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">There are no escalated requests matching your current filter criteria.</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {filteredRequests.map((req) => {
+                                        const report = req.report;
+                                        const priority = report?.priority_level || 'Medium';
+                                        const reportStatusId = report?.status_id || req.status_id;
+                                        const statusLabel = reportStatusMap[reportStatusId] || statusMap[req.status_id] || 'Escalated';
+                                        const reportId = req.report_id || report?.report_id || req.rescue_id;
+
+                                        return (
+                                            <div
+                                                key={req.rescue_id}
+                                                onClick={() => openRequestModal(req)}
+                                                className="bg-white rounded-2xl border border-gray-100 shadow-xs hover:shadow-md transition-all duration-200 p-6 flex flex-col justify-between cursor-pointer group hover:border-orange-200 relative"
+                                            >
+                                                <div>
+                                                    {/* Top Card Header */}
+                                                    <div className="flex items-center justify-between gap-2 mb-3">
+                                                        <div className="flex items-center space-x-2">
+                                                            <span className="text-xs font-mono font-bold text-gray-400">
+                                                                #REQ-{(req.rescue_id || 0).toString().padStart(4, '0')}
+                                                            </span>
+                                                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getPriorityColor(priority)}`}>
+                                                                {priority}
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="flex items-center space-x-2">
+                                                            <ReportChatBadge
+                                                                reportId={reportId}
+                                                                currentUserId={currentUserId}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setSelectedChatReport({
+                                                                        ...report,
+                                                                        report_id: reportId,
+                                                                        rescue_id: req.rescue_id,
+                                                                        title: req.title,
+                                                                        reporter_name: report?.reporter_name || req.leader_name
+                                                                    });
+                                                                    setIsChatOpen(true);
+                                                                }}
+                                                            />
+
+                                                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(statusLabel)}`}>
+                                                                {statusLabel}
+                                                            </span>
+
+                                                            {/* Three Dot Menu */}
+                                                            <div className="relative" ref={openMenuId === req.rescue_id ? menuRef : null}>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setOpenMenuId(openMenuId === req.rescue_id ? null : req.rescue_id);
+                                                                    }}
+                                                                    className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+                                                                >
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                                        <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
+                                                                    </svg>
+                                                                </button>
+
+                                                                {openMenuId === req.rescue_id && (
+                                                                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                openRequestModal(req);
+                                                                                setOpenMenuId(null);
+                                                                            }}
+                                                                            className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors"
+                                                                        >
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                            </svg>
+                                                                            Review Details
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setViewingRequest(req);
+                                                                                openStatusUpdate(req.rescue_id, req.report_id || report?.report_id || 0, reportStatusId);
+                                                                                setOpenMenuId(null);
+                                                                            }}
+                                                                            className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50 transition-colors"
+                                                                        >
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                                            </svg>
+                                                                            Update Status
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Animal Photo Preview */}
+                                                    {(() => {
+                                                        const mediaList = report?.media || [];
+                                                        const firstMedia = mediaList.find((m: any) =>
+                                                            m.media_type !== 'Document' &&
+                                                            !m.file_url?.toLowerCase().endsWith('.pdf') &&
+                                                            !m.file_url?.toLowerCase().endsWith('.docx') &&
+                                                            !m.file_url?.toLowerCase().endsWith('.doc')
+                                                        );
+
+                                                        const isVideo = firstMedia?.media_type === 'Video' || firstMedia?.file_url?.toLowerCase().match(/\.(mp4|mov|webm)$/i);
+                                                        const mediaCount = mediaList.filter((m: any) =>
+                                                            m.media_type !== 'Document' &&
+                                                            !m.file_url?.toLowerCase().endsWith('.pdf') &&
+                                                            !m.file_url?.toLowerCase().endsWith('.docx')
+                                                        ).length;
+
+                                                        if (!firstMedia) {
+                                                            return (
+                                                                <div className="w-full h-40 rounded-2xl mb-4 bg-gradient-to-br from-orange-50 to-amber-100 flex flex-col items-center justify-center text-orange-400 border border-orange-100">
+                                                                    <span className="text-3xl mb-1">🐾</span>
+                                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-orange-600">No Photo Uploaded</span>
+                                                                </div>
+                                                            );
+                                                        }
+
+                                                        return (
+                                                            <div className="w-full h-44 rounded-2xl overflow-hidden mb-4 bg-gray-100 border border-gray-100 relative group-hover:shadow-inner transition-all">
+                                                                {isVideo ? (
+                                                                    <video src={firstMedia.file_url} className="w-full h-full object-cover" />
+                                                                ) : (
+                                                                    <img src={firstMedia.file_url} alt="Animal evidence" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                                                )}
+                                                                {mediaCount > 1 && (
+                                                                    <span className="absolute bottom-2.5 right-2.5 bg-black/60 backdrop-blur-md text-white text-[9px] font-extrabold px-2.5 py-1 rounded-full border border-white/20">
+                                                                        +{mediaCount - 1} photos
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })()}
+
+                                                    {/* Category Title & Info */}
+                                                    <div className="flex items-start space-x-3 mb-3">
+                                                        <div className="w-9 h-9 rounded-xl bg-orange-50 text-[#F97316] flex items-center justify-center shrink-0 font-black text-base border border-orange-100/60">
+                                                            🐾
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <h3 className="text-base font-bold text-gray-900 group-hover:text-[#F97316] transition-colors leading-snug truncate">
+                                                                {report?.category_id ? categoryMap[report.category_id] : req.title}
+                                                            </h3>
+                                                            <p className="text-xs text-gray-500 font-medium mt-0.5">
+                                                                {report?.animal_type || 'Animal'} • {report?.animal_count || 1} count • <span className="font-semibold text-gray-700">{report?.condition || 'Healthy'}</span>
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Location Badge */}
+                                                    <div className="flex items-center space-x-1.5 text-gray-600 bg-gray-50/80 p-2.5 rounded-xl border border-gray-100 mb-3 text-xs">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-[#F97316] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                        </svg>
+                                                        <span className="truncate font-semibold text-gray-800" title={report?.landmark || 'Reported Location'}>
+                                                            {report?.landmark || 'Reported Location'}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Description / Leader Notes Preview */}
+                                                    {(req.description || report?.description) && (
+                                                        <p className="text-xs text-gray-600 line-clamp-2 mb-3 leading-relaxed bg-gray-50/50 p-2 rounded-lg italic">
+                                                            "{req.description || report?.description}"
+                                                        </p>
+                                                    )}
+
+                                                    {/* Assigned Personnel Badge if exists */}
+                                                    {req.assigned_staff_name && (
+                                                        <div className="inline-flex items-center space-x-2 bg-blue-50 border border-blue-100 px-3 py-1 rounded-lg text-xs text-blue-700 font-semibold mb-3">
+                                                            <div className="w-4 h-4 rounded-full bg-blue-200 text-blue-800 flex items-center justify-center text-[9px] font-bold">
+                                                                {req.assigned_staff_name.charAt(0)}
+                                                            </div>
+                                                            <span>Assigned: {req.assigned_staff_name}</span>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <span className="text-[10px] font-bold text-gray-900">{req.assigned_staff_name}</span>
+
+                                                {/* Card Footer */}
+                                                <div className="pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                                                    <div className="flex items-center space-x-2 truncate">
+                                                        <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center text-[10px] font-bold text-orange-600 shrink-0">
+                                                            {req.leader_name?.charAt(0) || 'L'}
+                                                        </div>
+                                                        <div className="truncate">
+                                                            <span className="font-semibold text-gray-700 block truncate">{req.leader_name || 'Subd Leader'}</span>
+                                                            <span className="text-[10px] text-gray-400">
+                                                                <RelativeTimestamp date={req.created_at || report?.created_at || Date.now()} />
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            openRequestModal(req);
+                                                        }}
+                                                        className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] rounded-xl text-xs font-bold transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
+                                                    >
+                                                        Review →
+                                                    </button>
+                                                </div>
                                             </div>
-                                        ) : (
-                                            <span className="text-[10px] font-medium text-gray-400 italic">Not Assigned</span>
+                                        );
+                                    })}
+                                </div>
+                            )
+                        ) : (
+                            /* Data Table Section */
+                            <DataTable
+                                loading={loading}
+                                data={filteredRequests}
+                                onRowClick={openRequestModal}
+                                emptyMessage="No pending rescue requests."
+                                loadingMessage="Syncing rescue operations..."
+                                columns={[
+                                    {
+                                        header: "Request ID",
+                                        key: "rescue_id",
+                                        render: (req) => (
+                                            <span className="text-xs font-mono text-gray-400">#REQ-{(req.rescue_id || 0).toString().padStart(4, '0')}</span>
                                         )
-                                    )
-                                },
-                                {
-                                    header: "Prioritization",
-                                    key: "priority",
-                                    render: (req) => {
-                                        const priority = req.report?.priority_level || 'Medium';
-                                        let colorClass = 'bg-gray-50 text-gray-600 border-gray-100';
-                                        if (priority.toLowerCase() === 'high' || priority.toLowerCase() === 'emergency') {
-                                            colorClass = 'bg-red-50 text-red-600 border-red-100';
-                                        } else if (priority.toLowerCase() === 'medium' || priority.toLowerCase() === 'regular') {
-                                            colorClass = 'bg-amber-50 text-amber-600 border-amber-100';
-                                        } else if (priority.toLowerCase() === 'low') {
-                                            colorClass = 'bg-blue-50 text-blue-600 border-blue-100';
+                                    },
+                                    {
+                                        header: "Title",
+                                        key: "title",
+                                        render: (req) => (
+                                            <div>
+                                                <p className="text-sm font-bold text-gray-900">{req.title}</p>
+                                                <p className="text-[10px] text-gray-400 truncate max-w-[200px]">{req.description}</p>
+                                            </div>
+                                        )
+                                    },
+                                    {
+                                        header: "Escalated By",
+                                        key: "leader",
+                                        render: (req) => (
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center text-[10px] font-bold text-orange-600">
+                                                    {req.leader_name?.charAt(0) || 'L'}
+                                                </div>
+                                                <span className="text-xs text-gray-700">{req.leader_name || 'Subd Leader'}</span>
+                                            </div>
+                                        )
+                                    },
+                                    {
+                                        header: "Assigned",
+                                        key: "assigned",
+                                        render: (req) => (
+                                            req.assigned_staff_name ? (
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-[8px] font-bold text-blue-600 border border-blue-200">
+                                                        {req.assigned_staff_name.charAt(0)}
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-gray-900">{req.assigned_staff_name}</span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-[10px] font-medium text-gray-400 italic">Not Assigned</span>
+                                            )
+                                        )
+                                    },
+                                    {
+                                        header: "Prioritization",
+                                        key: "priority",
+                                        render: (req) => {
+                                            const priority = req.report?.priority_level || 'Medium';
+                                            return (
+                                                <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getPriorityColor(priority)}`}>
+                                                    {priority}
+                                                </span>
+                                            );
                                         }
-                                        return (
-                                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${colorClass}`}>
-                                                {priority}
+                                    },
+                                    {
+                                        header: "Date",
+                                        key: "date",
+                                        render: (req) => (
+                                            <span className="text-xs text-gray-500">
+                                                {new Date(req.created_at || req.report?.created_at || Date.now()).toLocaleDateString()}
                                             </span>
-                                        );
-                                    }
-                                },
-                                {
-                                    header: "Date",
-                                    key: "date",
-                                    render: (req) => (
-                                        <span className="text-xs text-gray-500">
-                                            {new Date(req.created_at || req.report?.created_at || Date.now()).toLocaleDateString()}
-                                        </span>
-                                    )
-                                },
-                                {
-                                    header: "Status",
-                                    key: "status",
-                                    render: (req) => {
-                                        const reportStatus = req.report?.status_id;
-                                        const label = reportStatusMap[reportStatus || 0] || statusMap[req.status_id] || "Pending";
+                                        )
+                                    },
+                                    {
+                                        header: "Status",
+                                        key: "status",
+                                        render: (req) => {
+                                            const reportStatus = req.report?.status_id;
+                                            const label = reportStatusMap[reportStatus || 0] || statusMap[req.status_id] || "Pending";
+                                            const reportId = req.report_id || req.report?.report_id || req.rescue_id;
 
-                                        let colorClass = "bg-orange-50 text-orange-600 border border-orange-100"; // Default
-                                        if (reportStatus === 13) colorClass = "bg-indigo-50 text-indigo-600 border border-indigo-100";
-                                        if (reportStatus === 5) colorClass = "bg-blue-600 text-white";
-                                        if (reportStatus === 6) colorClass = "bg-amber-50 text-amber-600 border border-amber-100";
-                                        if (reportStatus === 11) colorClass = "bg-green-50 text-green-600 border border-green-100";
-                                        if (reportStatus === 3 || reportStatus === 12) colorClass = "bg-red-50 text-red-600 border border-red-100";
-
-                                        return (
-                                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${colorClass}`}>
-                                                {label}
-                                            </span>
-                                        );
+                                            return (
+                                                <div className="flex items-center gap-1.5">
+                                                    <ReportChatBadge
+                                                        reportId={reportId}
+                                                        currentUserId={currentUserId}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedChatReport({
+                                                                ...req.report,
+                                                                report_id: reportId,
+                                                                rescue_id: req.rescue_id,
+                                                                title: req.title,
+                                                                reporter_name: req.report?.reporter_name || req.leader_name
+                                                            });
+                                                            setIsChatOpen(true);
+                                                        }}
+                                                    />
+                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${getStatusColor(label)}`}>
+                                                        {label}
+                                                    </span>
+                                                </div>
+                                            );
+                                        }
+                                    },
+                                    {
+                                        header: "Action",
+                                        key: "action",
+                                        className: "text-right",
+                                        render: (req) => (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    openRequestModal(req);
+                                                }}
+                                                className="text-[10px] font-bold text-[#F97316] hover:underline"
+                                            >
+                                                {req.status_id === 1 ? 'Review Request' : 'Update Status'}
+                                            </button>
+                                        )
                                     }
-                                },
-                                {
-                                    header: "Action",
-                                    key: "action",
-                                    className: "text-right",
-                                    render: (req) => (
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                openRequestModal(req);
-                                            }}
-                                            className="text-[10px] font-bold text-[#F97316] hover:underline"
-                                        >
-                                            {req.status_id === 1 ? 'Review Request' : 'Update Status'}
-                                        </button>
-                                    )
-                                }
-                            ]}
-                        />
+                                ]}
+                            />
+                        )}
                     </div>
                 </div>
             </main>
+
+            {/* Case Chat Drawer */}
+            <ReportChatDrawer
+                isOpen={isChatOpen}
+                onClose={() => setIsChatOpen(false)}
+                report={selectedChatReport}
+                currentUser={currentUser}
+            />
 
             {/* Review Modal */}
             {viewingRequest && (

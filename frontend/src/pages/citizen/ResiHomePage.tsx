@@ -14,6 +14,8 @@ import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import ReturnToSeleraButton from '../../components/MapControls/ReturnToSeleraButton';
+import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
+import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -360,6 +362,10 @@ const ResiHomePage = () => {
     const [revertSize, setRevertSize] = useState<boolean>(false);
     const [activeQrModal, setActiveQrModal] = useState<{ url: string; petName?: string; hash?: string; ownerName?: string; ownerPhone?: string } | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
+
+    // Chat Drawer state
+    const [isChatOpen, setIsChatOpen] = useState(false);
+    const [selectedChatReport, setSelectedChatReport] = useState<any>(null);
 
     const [reportStep, setReportStep] = useState<number>(1);
     const [formData, setFormData] = useState<ReportFormData>(INITIAL_FORM_DATA);
@@ -2769,13 +2775,32 @@ const ResiHomePage = () => {
                                                             {categoryMap[report.category_id] || 'Incident Report'}
                                                         </span>
                                                         {report.status_id && (
-                                                            <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-2xs ${
-                                                                report.status_id === 2 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                                                report.status_id === 5 ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                                                'bg-gray-100 text-gray-700 border-gray-200'
-                                                            }`}>
-                                                                {reportStatusMap[report.status_id] || 'Reported'}
-                                                            </span>
+                                                            <div className="flex items-center gap-1.5">
+                                                                {(() => {
+                                                                    const isAuthorOrStaff = report.user_id === currentUserId || (currentUser && currentUser.role_id && currentUser.role_id !== 1);
+                                                                    if (!isAuthorOrStaff) return null;
+
+                                                                    return (
+                                                                        <ReportChatBadge
+                                                                            reportId={report.report_id}
+                                                                            currentUserId={currentUserId}
+                                                                            size="small"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setSelectedChatReport(report);
+                                                                                setIsChatOpen(true);
+                                                                            }}
+                                                                        />
+                                                                    );
+                                                                })()}
+                                                                <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-2xs ${
+                                                                    report.status_id === 2 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                                    report.status_id === 5 ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                                    'bg-gray-100 text-gray-700 border-gray-200'
+                                                                }`}>
+                                                                    {reportStatusMap[report.status_id] || 'Reported'}
+                                                                </span>
+                                                            </div>
                                                         )}
                                                     </div>
                                                 </div>
@@ -3609,6 +3634,17 @@ const ResiHomePage = () => {
                     setFormData(INITIAL_FORM_DATA);
                     setIsAddReportModalOpen(true);
                 }}
+            />
+
+            {/* Case Chat Drawer */}
+            <ReportChatDrawer
+                isOpen={isChatOpen}
+                onClose={() => {
+                    setIsChatOpen(false);
+                    setSelectedChatReport(null);
+                }}
+                report={selectedChatReport}
+                currentUser={currentUser}
             />
         </div>
     );

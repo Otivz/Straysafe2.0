@@ -11,6 +11,8 @@ import Select from '../../components/Dropdown';
 import MapComponent from '../../components/MapComponent';
 import DataTable from '../../components/DataTable';
 import AISuggestionPanel from '../../components/AISuggestionPanel';
+import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
+import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 
 interface Report {
     report_id: number;
@@ -216,6 +218,10 @@ const SubdReports = () => {
     const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
     const [replyingTo, setReplyingTo] = useState<Record<number, { commentId: number, userName: string } | null>>({});
     const [expandedComments, setExpandedComments] = useState<Record<number, boolean>>({});
+
+    // Chat Drawer state
+    const [isChatOpen, setIsChatOpen] = useState(false);
+    const [selectedChatReport, setSelectedChatReport] = useState<Report | null>(null);
 
     useEffect(() => {
         if (!userStr) {
@@ -751,6 +757,16 @@ const SubdReports = () => {
                                                             </div>
 
                                                             <div className="flex items-center space-x-2">
+                                                                <ReportChatBadge
+                                                                    reportId={rep.report_id}
+                                                                    currentUserId={currentUserId}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setSelectedChatReport(rep);
+                                                                        setIsChatOpen(true);
+                                                                    }}
+                                                                />
+
                                                                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || 'Pending')}`}>
                                                                     {statusMap[rep.status_id] || 'Pending'}
                                                                 </span>
@@ -1011,11 +1027,24 @@ const SubdReports = () => {
                                             {
                                                 header: "Status",
                                                 key: "status",
-                                                render: (rep) => (
-                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || 'Pending')}`}>
-                                                        {statusMap[rep.status_id] || 'Pending'}
-                                                    </span>
-                                                )
+                                                render: (rep) => {
+                                                    return (
+                                                        <div className="flex items-center gap-1.5">
+                                                            <ReportChatBadge
+                                                                reportId={rep.report_id}
+                                                                currentUserId={currentUserId}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setSelectedChatReport(rep);
+                                                                    setIsChatOpen(true);
+                                                                }}
+                                                            />
+                                                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || 'Pending')}`}>
+                                                                {statusMap[rep.status_id] || 'Pending'}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                }
                                             },
                                             {
                                                 header: "Submitted By",
@@ -2305,6 +2334,17 @@ const SubdReports = () => {
                     </div>
                 </div>
             )}
+
+            {/* Case Chat Drawer */}
+            <ReportChatDrawer
+                isOpen={isChatOpen}
+                onClose={() => {
+                    setIsChatOpen(false);
+                    setSelectedChatReport(null);
+                }}
+                report={selectedChatReport}
+                currentUser={currentUser}
+            />
         </div>
     );
 };

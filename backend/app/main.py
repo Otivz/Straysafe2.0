@@ -11,11 +11,13 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Local imports (now safe to import after path fix)
 from app.database import engine, Base
-from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims
+from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings
 from app.routes import audit_logs as audit_logs_router
 from app.models.pet_qr import PetQRCode, PetQRScan
 from app.models.audit_log import AuditLog  # noqa: F401 — ensures table is in Base.metadata
 from app.models.pet_claim import PetClaim  # noqa: F401 — ensures table is in Base.metadata
+from app.models.chat import ChatThread, ChatMessage  # noqa: F401
+from app.models.warning import OwnerWarning  # noqa: F401
 
 
 def ensure_report_media_status_column():
@@ -501,10 +503,77 @@ def ensure_notification_archived_column():
         if result.scalar() == 0:
             conn.execute(text("ALTER TABLE notifications ADD COLUMN is_archived TINYINT(1) DEFAULT 0"))
 
+def ensure_chat_tables():
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS chat_threads (
+                thread_id INT NOT NULL AUTO_INCREMENT,
+                thread_type ENUM('Report', 'Pet_Claim', 'Direct') NOT NULL DEFAULT 'Report',
+                related_id INT DEFAULT NULL,
+                created_by INT NOT NULL,
+                recipient_id INT NOT NULL,
+                title VARCHAR(255) DEFAULT NULL,
+                is_closed TINYINT(1) DEFAULT 0,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (thread_id),
+                KEY fk_threads_creator (created_by),
+                KEY fk_threads_recipient (recipient_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                message_id INT NOT NULL AUTO_INCREMENT,
+                thread_id INT NOT NULL,
+                sender_id INT NOT NULL,
+                message_text TEXT NOT NULL,
+                media_url VARCHAR(255) DEFAULT NULL,
+                is_read TINYINT(1) DEFAULT 0,
+                is_system TINYINT(1) DEFAULT 0,
+                sent_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (message_id),
+                KEY fk_messages_thread (thread_id),
+                KEY fk_messages_sender (sender_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+        """))
+
+def ensure_warning_tables():
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS owner_warnings (
+                warning_id INT NOT NULL AUTO_INCREMENT,
+                user_id INT NOT NULL,
+                pet_id INT DEFAULT NULL,
+                report_id INT DEFAULT NULL,
+                issued_by INT NOT NULL,
+                warning_level ENUM('Notice', '1st Warning', '2nd Warning', 'Final Notice / Escalation') NOT NULL DEFAULT '1st Warning',
+                violation_type ENUM(
+                    'Free-Roaming Unleashed',
+                    'Nuisance / Aggressive Behavior',
+                    'Overdue Vaccination',
+                    'Repeated Impoundment Retrieval',
+                    'Other'
+                ) NOT NULL DEFAULT 'Free-Roaming Unleashed',
+                description TEXT NOT NULL,
+                fine_amount DECIMAL(10,2) DEFAULT 0.00,
+                status ENUM('Pending', 'Acknowledged', 'Appealed', 'Resolved') NOT NULL DEFAULT 'Pending',
+                acknowledged_at TIMESTAMP NULL DEFAULT NULL,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (warning_id),
+                KEY fk_warnings_user (user_id),
+                KEY fk_warnings_pet (pet_id),
+                KEY fk_warnings_report (report_id),
+                KEY fk_warnings_issuer (issued_by)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+        """))
+
 ensure_announcement_tables_columns()
 ensure_rescue_tables_columns()
 ensure_report_verifications_columns()
 ensure_notification_archived_column()
+ensure_chat_tables()
+ensure_warning_tables()
 
 app = FastAPI(title="StraySafe API")
 
@@ -535,6 +604,8 @@ app.include_router(announcements.router)
 app.include_router(audit_logs_router.router)
 app.include_router(holding.router)
 app.include_router(claims.router)
+app.include_router(chat.router)
+app.include_router(warnings.router)
 
 @app.get("/")
 def read_root():

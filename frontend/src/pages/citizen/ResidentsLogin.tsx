@@ -4,6 +4,7 @@ import Button from '../../components/Button';
 import { EyeIcon, EyeOffIcon } from '../../components/icon';
 import SuccessModal from '../../components/Modals/SuccessModal';
 import { useTheme } from '../../context/ThemeContext';
+import { clearAuthStorage } from '../../utils/api';
 
 const ResidentsLogin = () => {
     const navigate = useNavigate();
@@ -38,6 +39,7 @@ const ResidentsLogin = () => {
     useEffect(() => {
         if (showSuccess && registeredUserData) {
             const timer = setTimeout(() => {
+                clearAuthStorage();
                 localStorage.setItem('resident_user', JSON.stringify(registeredUserData));
                 navigate('/resident-home');
             }, 3000); // 3 seconds delay
@@ -71,6 +73,9 @@ const ResidentsLogin = () => {
                 setLoading(false);
                 return;
             }
+
+            // Clear ALL previous session storage to prevent cross-role contamination
+            clearAuthStorage();
 
             // Store session info
             if (data.access_token) {

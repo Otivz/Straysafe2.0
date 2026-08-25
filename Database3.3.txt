@@ -796,4 +796,74 @@ CREATE TABLE `audit_logs` (
 INSERT INTO `audit_logs` (`log_id`, `user_id`, `action`, `target_table`, `target_id`, `description`, `ip_address`, `user_agent`, `log_type`, `old_values`, `new_values`, `created_at`) VALUES (1, 1, 'CREATE_REPORT', 'reports', 3, 'New report submitted (report_id=3): Cat, priority=Low', 'testclient', 'testclient', 'operation', 'null', '{"animal_type": "Cat", "priority_level": "Low", "subdivision_id": 1}', '2026-07-31 18:43:26');
 INSERT INTO `audit_logs` (`log_id`, `user_id`, `action`, `target_table`, `target_id`, `description`, `ip_address`, `user_agent`, `log_type`, `old_values`, `new_values`, `created_at`) VALUES (2, NULL, 'DELETE_REPORT', 'reports', 3, 'Deleted report #3', 'testclient', 'testclient', 'operation', '{"report_id": 3, "status_id": 1, "animal_type": "Cat"}', 'null', '2026-07-31 18:44:42');
 
+-- =========================================
+-- TABLE: CHAT_THREADS
+-- =========================================
+DROP TABLE IF EXISTS `chat_threads`;
+CREATE TABLE `chat_threads` (
+  `thread_id` int NOT NULL AUTO_INCREMENT,
+  `thread_type` enum('Report','Pet_Claim','Direct') NOT NULL DEFAULT 'Report',
+  `related_id` int DEFAULT NULL,
+  `created_by` int NOT NULL,
+  `recipient_id` int NOT NULL,
+  `title` varchar(255) DEFAULT NULL,
+  `is_closed` tinyint(1) DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`thread_id`),
+  KEY `fk_threads_creator` (`created_by`),
+  KEY `fk_threads_recipient` (`recipient_id`),
+  CONSTRAINT `fk_threads_creator` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_threads_recipient` FOREIGN KEY (`recipient_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- =========================================
+-- TABLE: CHAT_MESSAGES
+-- =========================================
+DROP TABLE IF EXISTS `chat_messages`;
+CREATE TABLE `chat_messages` (
+  `message_id` int NOT NULL AUTO_INCREMENT,
+  `thread_id` int NOT NULL,
+  `sender_id` int NOT NULL,
+  `message_text` text NOT NULL,
+  `media_url` varchar(255) DEFAULT NULL,
+  `is_read` tinyint(1) DEFAULT '0',
+  `is_system` tinyint(1) DEFAULT '0',
+  `sent_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`message_id`),
+  KEY `fk_messages_thread` (`thread_id`),
+  KEY `fk_messages_sender` (`sender_id`),
+  CONSTRAINT `fk_messages_sender` FOREIGN KEY (`sender_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_messages_thread` FOREIGN KEY (`thread_id`) REFERENCES `chat_threads` (`thread_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- =========================================
+-- TABLE: OWNER_WARNINGS
+-- =========================================
+DROP TABLE IF EXISTS `owner_warnings`;
+CREATE TABLE `owner_warnings` (
+  `warning_id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `pet_id` int DEFAULT NULL,
+  `report_id` int DEFAULT NULL,
+  `issued_by` int NOT NULL,
+  `warning_level` enum('Notice','1st Warning','2nd Warning','Final Notice / Escalation') NOT NULL DEFAULT '1st Warning',
+  `violation_type` enum('Free-Roaming Unleashed','Nuisance / Aggressive Behavior','Overdue Vaccination','Repeated Impoundment Retrieval','Other') NOT NULL DEFAULT 'Free-Roaming Unleashed',
+  `description` text NOT NULL,
+  `fine_amount` decimal(10,2) DEFAULT '0.00',
+  `status` enum('Pending','Acknowledged','Appealed','Resolved') NOT NULL DEFAULT 'Pending',
+  `acknowledged_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`warning_id`),
+  KEY `fk_warnings_user` (`user_id`),
+  KEY `fk_warnings_pet` (`pet_id`),
+  KEY `fk_warnings_report` (`report_id`),
+  KEY `fk_warnings_issuer` (`issued_by`),
+  CONSTRAINT `fk_warnings_issuer` FOREIGN KEY (`issued_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_warnings_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_warnings_report` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_warnings_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;

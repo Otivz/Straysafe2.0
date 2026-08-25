@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
+import { getPetPicture } from '../../utils/avatar';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import StatCard from '../../components/PetRecords/StatCard';
