@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate } from 'react-router-dom';
@@ -90,6 +91,109 @@ const SubdReports = () => {
     const [resolveCondition, setResolveCondition] = useState('Healthy');
     const [resolveMediaFiles, setResolveMediaFiles] = useState<File[]>([]);
     const [isResolving, setIsResolving] = useState(false);
+    
+    // Warning Modal state
+    const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
+    const [warningOwnerId, setWarningOwnerId] = useState<string>('');
+    const [warningTier, setWarningTier] = useState('Notice');
+    const [warningViolation, setWarningViolation] = useState('Free-Roaming Unleashed');
+    const [warningDescription, setWarningDescription] = useState('');
+    const [isIssuingWarning, setIsIssuingWarning] = useState(false);
+    const [warningEvidence, setWarningEvidence] = useState(true);
+    const [selectedWarningReport, setSelectedWarningReport] = useState<Report | null>(null);
+    const [priorWarnings, setPriorWarnings] = useState<any[]>([]);
+    const [isLoadingPriorWarnings, setIsLoadingPriorWarnings] = useState(false);
+
+    const openIssueWarningModal = async (rep: Report) => {
+        let targetUserId = (rep as any).owner_id;
+        let targetOwnerName = (rep as any).owner_name;
+
+        if (!targetUserId) {
+            if ((rep as any).is_owner_report) {
+                targetUserId = rep.user_id;
+                targetOwnerName = rep.reporter_name;
+            } else {
+                alert('Cannot issue warning. The owner of this animal has not been identified or matched yet.');
+                return;
+            }
+        }
+
+        setWarningOwnerId(targetOwnerName || `User #${targetUserId}`);
+        setSelectedWarningReport(rep);
+        setIsWarningModalOpen(true);
+        setIsLoadingPriorWarnings(true);
+        try {
+            let res;
+            if ((rep as any).pet_id) {
+                res = await api.get(`/warnings/pet/${(rep as any).pet_id}`);
+            } else {
+                res = await api.get(`/warnings/user/${targetUserId}`);
+            }
+            const history = res.data || [];
+            setPriorWarnings(history);
+            
+            // Calculate next tier in progression: Notice -> 1st Warning -> 2nd Warning -> Final Notice / Escalation
+            if (history.length === 0) {
+                setWarningTier('Notice');
+            } else {
+                const tierOrder = ['Notice', '1st Warning', '2nd Warning', 'Final Notice / Escalation'];
+                const maxIdx = history.reduce((max: number, w: any) => {
+                    const idx = tierOrder.indexOf(w.warning_level);
+                    return Math.max(max, idx);
+                }, -1);
+
+                if (maxIdx === 0) setWarningTier('1st Warning');
+                else if (maxIdx === 1) setWarningTier('2nd Warning');
+                else if (maxIdx >= 2) setWarningTier('Final Notice / Escalation');
+                else {
+                    const count = history.length;
+                    if (count === 1) setWarningTier('1st Warning');
+                    else if (count === 2) setWarningTier('2nd Warning');
+                    else setWarningTier('Final Notice / Escalation');
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching prior warnings:', err);
+            setPriorWarnings([]);
+            setWarningTier('Notice');
+        } finally {
+            setIsLoadingPriorWarnings(false);
+        }
+    };
+
+    const handleIssueWarning = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedWarningReport) return;
+        setIsIssuingWarning(true);
+        try {
+            let targetUserId = (selectedWarningReport as any).owner_id;
+            if (!targetUserId && (selectedWarningReport as any).is_owner_report) {
+                targetUserId = selectedWarningReport.user_id;
+            }
+            if (!targetUserId) {
+                throw new Error("Cannot issue warning: The owner of this animal has not been identified.");
+            }
+            
+            await api.post('/warnings/', {
+                user_id: targetUserId,
+                pet_id: (selectedWarningReport as any).pet_id || null,
+                report_id: selectedWarningReport.report_id,
+                warning_level: warningTier,
+                violation_type: warningViolation,
+                description: warningDescription,
+                fine_amount: 0.0
+            });
+            setIsWarningModalOpen(false);
+            setWarningDescription('');
+            alert('Warning citation successfully issued to resident!');
+        } catch (error: any) {
+            console.error('Failed to issue warning:', error);
+            alert(error.response?.data?.detail || 'Failed to issue warning. Please try again.');
+        } finally {
+            setIsIssuingWarning(false);
+        }
+    };
+
     const menuRef = useRef<HTMLDivElement>(null);
 
     const [viewReportAddress, setViewReportAddress] = useState('');
@@ -816,6 +920,19 @@ const SubdReports = () => {
                                                                                     Mark Resolved
                                                                                 </button>
                                                                             )}
+                                                                            {Boolean((rep as any).owner_id || ((rep as any).is_owner_report && rep.user_id) || (rep as any).owner_name || (rep as any).pet_id) && (
+                                                                                <button
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setOpenMenuId(null);
+                                                                                        openIssueWarningModal(rep);
+                                                                                    }}
+                                                                                    className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-yellow-600 hover:bg-yellow-50 transition-colors"
+                                                                                >
+                                                                                    <span className="h-4 w-4 flex items-center justify-center text-xs">⚠️</span>
+                                                                                    Issue Warning
+                                                                                </button>
+                                                                            )}
                                                                             <button
                                                                                 onClick={(e) => {
                                                                                     e.stopPropagation();
@@ -827,7 +944,7 @@ const SubdReports = () => {
                                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                                                 </svg>
-                                                                                Delete Report
+                                                                                Remove
                                                                             </button>
                                                                         </div>
                                                                     )}
@@ -1108,6 +1225,19 @@ const SubdReports = () => {
                                                                         Mark Resolved
                                                                     </button>
                                                                 )}
+                                                                {Boolean((rep as any).owner_id || ((rep as any).is_owner_report && rep.user_id) || (rep as any).owner_name || (rep as any).pet_id) && (
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setOpenMenuId(null);
+                                                                            openIssueWarningModal(rep);
+                                                                        }}
+                                                                        className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-yellow-600 hover:bg-yellow-50 transition-colors"
+                                                                    >
+                                                                        <span className="h-4 w-4 flex items-center justify-center text-xs">⚠️</span>
+                                                                        Issue Warning
+                                                                    </button>
+                                                                )}
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
@@ -1119,7 +1249,7 @@ const SubdReports = () => {
                                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                                     </svg>
-                                                                    Delete Report
+                                                                    Remove
                                                                 </button>
                                                             </div>
                                                         )}
@@ -1703,7 +1833,7 @@ const SubdReports = () => {
                                                             }}
                                                             className="w-full py-3 border border-gray-100 rounded-2xl text-[10px] font-bold text-gray-400 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all uppercase tracking-widest"
                                                         >
-                                                            Delete Report
+                                                            Remove
                                                         </button>
                                                     </div>
                                                 </div>
@@ -1717,6 +1847,136 @@ const SubdReports = () => {
             </div>
 
 
+            {/* Modal Overlay */}
+            {isWarningModalOpen && selectedWarningReport && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-300">
+                        <div className="px-8 py-6 border-b border-gray-150 flex justify-between items-center bg-yellow-50/50">
+                            <div className="flex items-center gap-3">
+                                <span className="text-3xl">⚠️</span>
+                                <div>
+                                    <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Issue Owner Warning</h3>
+                                    <p className="text-xs text-gray-500 mt-1 font-medium">Issue a formal notice to the registered pet owner.</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsWarningModalOpen(false)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-900 rounded-full hover:bg-gray-100 transition-all">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                        <form onSubmit={handleIssueWarning} className="p-8 space-y-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Pet Owner (Recipient)</label>
+                                <input
+                                    type="text"
+                                    readOnly
+                                    className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-semibold text-gray-500 outline-none"
+                                    value={warningOwnerId}
+                                />
+                            </div>
+
+                            {/* Prior Offenses & Escalation Status */}
+                            {isLoadingPriorWarnings ? (
+                                <div className="p-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs text-gray-400 font-bold flex items-center gap-2 animate-pulse">
+                                    <span className="w-3.5 h-3.5 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
+                                    Checking resident's previous warning history...
+                                </div>
+                            ) : priorWarnings.length > 0 ? (
+                                <div className="p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-2xl text-[11px] text-amber-900 flex flex-col gap-1.5 animate-in fade-in duration-200">
+                                    <div className="font-black flex items-center justify-between text-amber-900 uppercase tracking-wider text-[10px]">
+                                        <span className="flex items-center gap-1.5">📋 Prior Citations ({priorWarnings.length})</span>
+                                        <span className="text-amber-700 font-medium">auto-escalated to: <strong className="uppercase">{warningTier}</strong></span>
+                                    </div>
+                                    <div className="max-h-24 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar text-[10px]">
+                                        {priorWarnings.map((w: any, idx: number) => (
+                                            <div key={w.warning_id || idx} className="flex justify-between items-center bg-white/90 px-3 py-1.5 rounded-xl border border-amber-100 shadow-sm">
+                                                <span className="font-bold text-gray-800">{w.warning_level} <span className="font-normal text-gray-500">• {w.violation_type}</span></span>
+                                                <span className="text-gray-400 font-mono text-[9px]">{new Date(w.created_at).toLocaleDateString()}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-2xl text-[10px] font-bold text-blue-800 flex items-center gap-2">
+                                    <span>✨</span> First recorded violation for this resident. Defaulted to Notice (Friendly Reminder).
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Warning Tier</label>
+                                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 tracking-wider">
+                                            {priorWarnings.length === 0 ? '✨ Notice' : `⚡ Step ${Math.min(priorWarnings.length + 1, 4)}/4`}
+                                        </span>
+                                    </div>
+                                    <select
+                                        className="w-full px-5 py-4 bg-white border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-yellow-100 focus:border-yellow-500 outline-none transition-all"
+                                        value={warningTier}
+                                        onChange={(e) => setWarningTier(e.target.value)}
+                                    >
+                                        <option value="Notice">Notice (Initial Friendly Reminder)</option>
+                                        <option value="1st Warning">1st Warning (Official 1st Citation)</option>
+                                        <option value="2nd Warning">2nd Warning (Strict 2nd Citation)</option>
+                                        <option value="Final Notice / Escalation">Final Notice / Escalation (Barangay Action)</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Violation Category</label>
+                                    <select
+                                        className="w-full px-5 py-4 bg-white border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-yellow-100 focus:border-yellow-500 outline-none transition-all"
+                                        value={warningViolation}
+                                        onChange={(e) => setWarningViolation(e.target.value)}
+                                    >
+                                        <option value="Free-Roaming Unleashed">Free-Roaming Unleashed</option>
+                                        <option value="Nuisance / Aggressive Behavior">Nuisance / Aggressive Behavior</option>
+                                        <option value="Overdue Vaccination">Overdue Vaccination</option>
+                                        <option value="Repeated Impoundment Retrieval">Repeated Impoundment Retrieval</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Incident Description / Remarks</label>
+                                <textarea required rows={3}
+                                    className="w-full px-5 py-4 bg-white border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-yellow-100 focus:border-yellow-500 outline-none transition-all resize-none"
+                                    value={warningDescription}
+                                    onChange={(e) => setWarningDescription(e.target.value)}
+                                    placeholder="Provide specific details about the incident..."
+                                />
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <input
+                                    type="checkbox"
+                                    id="attach-evidence"
+                                    checked={warningEvidence}
+                                    onChange={(e) => setWarningEvidence(e.target.checked)}
+                                    className="w-5 h-5 rounded border-gray-300 text-yellow-500 focus:ring-yellow-500"
+                                />
+                                <label htmlFor="attach-evidence" className="text-xs font-semibold text-gray-700 cursor-pointer">
+                                    Attach incident photos from this report as evidence
+                                </label>
+                            </div>
+                            <div className="w-full h-[1px] bg-gray-150 my-6" />
+                            <div className="flex gap-4 pt-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsWarningModalOpen(false)}
+                                    className="flex-1 py-3.5 bg-[#F1F3F6] hover:bg-gray-200 text-gray-700 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isIssuingWarning}
+                                    className="flex-1 py-3.5 bg-yellow-500 hover:bg-yellow-600 disabled:bg-yellow-200 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                                >
+                                    {isIssuingWarning ? 'Issuing...' : 'ISSUE WARNING'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
             {/* Modal Overlay */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">

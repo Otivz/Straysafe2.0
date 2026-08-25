@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate, useParams, Link } from 'react-router-dom';
@@ -44,6 +45,7 @@ interface Report {
     pet_name?: string | null;
     pet_qr_code_url?: string | null;
     pet_qr_code_hash?: string | null;
+    owner_id?: number | null;
     owner_name?: string | null;
     owner_phone?: string | null;
     owner_email?: string | null;
@@ -95,6 +97,75 @@ const SubdViewReport = () => {
     const [resolveCondition, setResolveCondition] = useState('Healthy');
     const [resolveMediaFiles, setResolveMediaFiles] = useState<File[]>([]);
     const [isResolving, setIsResolving] = useState(false);
+    
+    // Warning Modal state
+    const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
+    const [warningOwnerId, setWarningOwnerId] = useState<string>('');
+    const [warningTier, setWarningTier] = useState('Notice');
+    const [warningViolation, setWarningViolation] = useState('Free-Roaming Unleashed');
+    const [warningDescription, setWarningDescription] = useState('');
+    const [isIssuingWarning, setIsIssuingWarning] = useState(false);
+    const [warningEvidence, setWarningEvidence] = useState(true);
+    const [priorWarnings, setPriorWarnings] = useState<any[]>([]);
+    const [isLoadingPriorWarnings, setIsLoadingPriorWarnings] = useState(false);
+
+    const openIssueWarningModal = async () => {
+        if (!report) return;
+
+        let targetUserId = report.owner_id;
+        let targetOwnerName = report.owner_name;
+
+        if (!targetUserId) {
+            if (report.is_owner_report) {
+                targetUserId = report.user_id;
+                targetOwnerName = report.reporter_name;
+            } else {
+                alert('Cannot issue warning. The owner of this animal has not been identified or matched yet.');
+                return;
+            }
+        }
+
+        setWarningOwnerId(targetOwnerName || `User #${targetUserId}`);
+        setIsWarningModalOpen(true);
+        setIsLoadingPriorWarnings(true);
+        try {
+            let res;
+            if (report.pet_id) {
+                res = await api.get(`/warnings/pet/${report.pet_id}`);
+            } else {
+                res = await api.get(`/warnings/user/${targetUserId}`);
+            }
+            const history = res.data || [];
+            setPriorWarnings(history);
+            
+            // Calculate next tier in progression: Notice -> 1st Warning -> 2nd Warning -> Final Notice / Escalation
+            if (history.length === 0) {
+                setWarningTier('Notice');
+            } else {
+                const tierOrder = ['Notice', '1st Warning', '2nd Warning', 'Final Notice / Escalation'];
+                const maxIdx = history.reduce((max: number, w: any) => {
+                    const idx = tierOrder.indexOf(w.warning_level);
+                    return Math.max(max, idx);
+                }, -1);
+
+                if (maxIdx === 0) setWarningTier('1st Warning');
+                else if (maxIdx === 1) setWarningTier('2nd Warning');
+                else if (maxIdx >= 2) setWarningTier('Final Notice / Escalation');
+                else {
+                    const count = history.length;
+                    if (count === 1) setWarningTier('1st Warning');
+                    else if (count === 2) setWarningTier('2nd Warning');
+                    else setWarningTier('Final Notice / Escalation');
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching prior warnings:', err);
+            setPriorWarnings([]);
+            setWarningTier('Notice');
+        } finally {
+            setIsLoadingPriorWarnings(false);
+        }
+    };
     
     // Image gallery state
     const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
@@ -354,6 +425,41 @@ const SubdViewReport = () => {
             alert('Failed to resolve report. Please try again.');
         } finally {
             setIsResolving(false);
+        }
+    };
+
+    const handleIssueWarning = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!report) return;
+        setIsIssuingWarning(true);
+        try {
+            let targetUserId = report.owner_id;
+            if (!targetUserId && report.is_owner_report) {
+                targetUserId = report.user_id;
+            }
+            if (!targetUserId) {
+                throw new Error("Cannot issue warning: The owner of this animal has not been identified.");
+            }
+
+            await api.post('/warnings/', {
+                user_id: targetUserId,
+                pet_id: report.pet_id || null,
+                report_id: report.report_id,
+                warning_level: warningTier,
+                violation_type: warningViolation,
+                description: warningDescription,
+                fine_amount: 0.0
+            });
+            setIsWarningModalOpen(false);
+            setWarningDescription('');
+            alert('Warning Citation Issued Successfully!');
+            setShowSuccess(true);
+            setTimeout(() => setShowSuccess(false), 3000);
+        } catch (error: any) {
+            console.error('Error issuing warning:', error);
+            alert(error.response?.data?.detail || 'Failed to issue warning. Please try again.');
+        } finally {
+            setIsIssuingWarning(false);
         }
     };
 
@@ -1087,6 +1193,17 @@ const SubdViewReport = () => {
                                             </button>
                                         )}
 
+                                        {/* STEP 2.5: ISSUE WARNING */}
+                                        {Boolean(report.owner_id || (report.is_owner_report && report.user_id) || report.owner_name || report.pet_id) && (
+                                            <button
+                                                onClick={openIssueWarningModal}
+                                                className="w-full py-4 bg-yellow-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-yellow-100 hover:bg-yellow-600 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
+                                            >
+                                                <span className="text-base">⚠️</span>
+                                                ISSUE OWNER WARNING
+                                            </button>
+                                        )}
+
                                         {/* STEP 3: PENDING BARANGAY */}
                                         {report.status_id === 4 && (
                                             <div className="w-full py-4 bg-gray-100 text-gray-500 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border border-gray-200">
@@ -1228,6 +1345,137 @@ const SubdViewReport = () => {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Warning Modal */}
+            {isWarningModalOpen && report && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-300">
+                        <div className="px-8 py-6 border-b border-gray-150 flex justify-between items-center bg-yellow-50/50">
+                            <div className="flex items-center gap-3">
+                                <span className="text-3xl">⚠️</span>
+                                <div>
+                                    <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Issue Owner Warning</h3>
+                                    <p className="text-xs text-gray-500 mt-1 font-medium">Issue a formal notice to the registered pet owner.</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsWarningModalOpen(false)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-900 rounded-full hover:bg-gray-100 transition-all">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                        <form onSubmit={handleIssueWarning} className="p-8 space-y-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Pet Owner (Recipient)</label>
+                                <input
+                                    type="text"
+                                    readOnly
+                                    className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-semibold text-gray-500 outline-none"
+                                    value={warningOwnerId}
+                                />
+                            </div>
+
+                            {/* Prior Offenses & Escalation Status */}
+                            {isLoadingPriorWarnings ? (
+                                <div className="p-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs text-gray-400 font-bold flex items-center gap-2 animate-pulse">
+                                    <span className="w-3.5 h-3.5 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
+                                    Checking resident's previous warning history...
+                                </div>
+                            ) : priorWarnings.length > 0 ? (
+                                <div className="p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-2xl text-[11px] text-amber-900 flex flex-col gap-1.5 animate-in fade-in duration-200">
+                                    <div className="font-black flex items-center justify-between text-amber-900 uppercase tracking-wider text-[10px]">
+                                        <span className="flex items-center gap-1.5">📋 Prior Citations ({priorWarnings.length})</span>
+                                        <span className="text-amber-700 font-medium">auto-escalated to: <strong className="uppercase">{warningTier}</strong></span>
+                                    </div>
+                                    <div className="max-h-24 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar text-[10px]">
+                                        {priorWarnings.map((w: any, idx: number) => (
+                                            <div key={w.warning_id || idx} className="flex justify-between items-center bg-white/90 px-3 py-1.5 rounded-xl border border-amber-100 shadow-sm">
+                                                <span className="font-bold text-gray-800">{w.warning_level} <span className="font-normal text-gray-500">• {w.violation_type}</span></span>
+                                                <span className="text-gray-400 font-mono text-[9px]">{new Date(w.created_at).toLocaleDateString()}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-2xl text-[10px] font-bold text-blue-800 flex items-center gap-2">
+                                    <span>✨</span> First recorded violation for this resident. Defaulted to Notice (Friendly Reminder).
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Warning Tier</label>
+                                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 tracking-wider">
+                                            {priorWarnings.length === 0 ? '✨ Notice' : `⚡ Step ${Math.min(priorWarnings.length + 1, 4)}/4`}
+                                        </span>
+                                    </div>
+                                    <select
+                                        className="w-full px-5 py-4 bg-white border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-yellow-100 focus:border-yellow-500 outline-none transition-all"
+                                        value={warningTier}
+                                        onChange={(e) => setWarningTier(e.target.value)}
+                                    >
+                                        <option value="Notice">Notice (Initial Friendly Reminder)</option>
+                                        <option value="1st Warning">1st Warning (Official 1st Citation)</option>
+                                        <option value="2nd Warning">2nd Warning (Strict 2nd Citation)</option>
+                                        <option value="Final Notice / Escalation">Final Notice / Escalation (Barangay Action)</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Violation Category</label>
+                                    <select
+                                        className="w-full px-5 py-4 bg-white border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-yellow-100 focus:border-yellow-500 outline-none transition-all"
+                                        value={warningViolation}
+                                        onChange={(e) => setWarningViolation(e.target.value)}
+                                    >
+                                        <option value="Free-Roaming Unleashed">Free-Roaming Unleashed</option>
+                                        <option value="Nuisance / Aggressive Behavior">Nuisance / Aggressive Behavior</option>
+                                        <option value="Overdue Vaccination">Overdue Vaccination</option>
+                                        <option value="Repeated Impoundment Retrieval">Repeated Impoundment Retrieval</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Incident Description / Remarks</label>
+                                <textarea required rows={3}
+                                    className="w-full px-5 py-4 bg-white border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-yellow-100 focus:border-yellow-500 outline-none transition-all resize-none"
+                                    value={warningDescription}
+                                    onChange={(e) => setWarningDescription(e.target.value)}
+                                    placeholder="Provide specific details about the incident..."
+                                />
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <input
+                                    type="checkbox"
+                                    id="attach-evidence"
+                                    checked={warningEvidence}
+                                    onChange={(e) => setWarningEvidence(e.target.checked)}
+                                    className="w-5 h-5 rounded border-gray-300 text-yellow-500 focus:ring-yellow-500"
+                                />
+                                <label htmlFor="attach-evidence" className="text-xs font-semibold text-gray-700 cursor-pointer">
+                                    Attach incident photos from this report as evidence
+                                </label>
+                            </div>
+                            <div className="w-full h-[1px] bg-gray-150 my-6" />
+                            <div className="flex gap-4 pt-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsWarningModalOpen(false)}
+                                    className="flex-1 py-3.5 bg-[#F1F3F6] hover:bg-gray-200 text-gray-700 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isIssuingWarning}
+                                    className="flex-1 py-3.5 bg-yellow-500 hover:bg-yellow-600 disabled:bg-yellow-200 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                                >
+                                    {isIssuingWarning ? 'Issuing...' : 'ISSUE WARNING'}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
