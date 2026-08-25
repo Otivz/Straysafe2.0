@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
+import { clearAuthStorage } from '../../utils/api';
 
 interface SubdNavbarProps {
     leftContent?: ReactNode;
@@ -10,8 +11,7 @@ const SubdNavbar = ({ leftContent }: SubdNavbarProps) => {
     const navigate = useNavigate();
 
     const handleLogout = () => {
-        localStorage.removeItem('staff_user');
-        sessionStorage.removeItem('staff_user');
+        clearAuthStorage();
         navigate('/staff/login');
     };
 

@@ -10,13 +10,13 @@ export const api = axios.create({
 });
 
 export const getStoredToken = (): string | null => {
-    // Check direct token keys first
-    const directToken = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    // Check direct token keys (sessionStorage first, then localStorage)
+    const directToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
     if (directToken) return directToken;
 
     // Check embedded token in user objects
-    for (const key of ['resident_user', 'admin_user', 'staff_user']) {
-        const raw = localStorage.getItem(key) || sessionStorage.getItem(key);
+    for (const key of ['staff_user', 'resident_user', 'admin_user']) {
+        const raw = sessionStorage.getItem(key) || localStorage.getItem(key);
         if (raw) {
             try {
                 const parsed = JSON.parse(raw);

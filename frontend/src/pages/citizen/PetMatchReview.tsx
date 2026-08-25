@@ -489,7 +489,7 @@ const PetMatchReview = () => {
                                         <p className="text-xs font-black text-[#1a1208] uppercase">{matchedPet ? matchedPet.pet_name : "Pet Details"}</p>
                                         <p className="text-xs text-gray-500 font-bold">Species: <span className="text-[#1a1208]">{matchedPet?.pet_type || "Select a pet"}</span></p>
                                         <p className="text-xs text-gray-500 font-bold">Breed: <span className="text-[#1a1208]">{matchedPet?.breed || "Select a pet"}</span></p>
-                                        <p className="text-xs text-gray-500 font-bold">Color: <span className="text-[#1a1208]">{matchedPet ? (matchedPet.color_markings || [matchedPet.primary_color, matchedPet.secondary_color].filter(Boolean).join(", ") || "Unknown") : "Select a pet"}</span></p>
+                                        <p className="text-xs text-gray-500 font-bold">Color: <span className="text-[#1a1208]">{matchedPet ? ([matchedPet.primary_color, matchedPet.secondary_color, matchedPet.third_color].filter(Boolean).join(" and ") || "Unknown") : "Select a pet"}</span></p>
                                         {matchedPet && (
                                             <p className="text-xs text-gray-500 font-bold">Address: <span className="text-[#1a1208]">{matchedPet.registered_address || matchedPet.owner?.address || currentUser?.address || "Not Specified"}</span></p>
                                         )}
@@ -700,9 +700,10 @@ const PetMatchReview = () => {
                                                 multiple
                                                 accept="image/*"
                                                 onChange={(e) => {
-                                                    const file = e.target.files?.[0] || null;
+                                                    const files = e.target.files;
+                                                    const file = files?.[0] || null;
                                                     setAdditionalPhotosFile(file);
-                                                    setPrevPhotoName(file?.name ? `${file.name} (+${e.target.files.length - 1} files)` : '');
+                                                    setPrevPhotoName(file?.name ? `${file.name}${files && files.length > 1 ? ` (+${files.length - 1} files)` : ''}` : '');
                                                 }}
                                                 className="w-full text-xs font-bold text-gray-465 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
                                             />

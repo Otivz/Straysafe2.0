@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
+import { clearAuthStorage } from '../../utils/api';
 
 interface AdminNavbarProps {
     leftContent?: ReactNode;
@@ -10,8 +11,7 @@ const AdminNavbar = ({ leftContent }: AdminNavbarProps) => {
     const navigate = useNavigate();
 
     const handleLogout = () => {
-        localStorage.removeItem('admin_user');
-        sessionStorage.removeItem('admin_user');
+        clearAuthStorage();
         navigate('/admin/login');
     };
 

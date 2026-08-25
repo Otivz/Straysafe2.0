@@ -15,6 +15,8 @@ import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import RescueTimeline from '../../components/RescueTimeline';
 import ReturnToSeleraButton from '../../components/MapControls/ReturnToSeleraButton';
 import ResolveLostPetModal from '../../components/Modals/ResolveLostPetModal';
+import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
+import { useReportChatCount } from '../../utils/chatUtils';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -150,10 +152,13 @@ const ResiViewReport = () => {
     const [resolvedAddress, setResolvedAddress] = useState('');
     const [isGeocoding, setIsGeocoding] = useState(false);
     const [isResolveLostModalOpen, setIsResolveLostModalOpen] = useState(false);
+    const [isChatOpen, setIsChatOpen] = useState(false);
 
-    const userStr = localStorage.getItem('resident_user');
+    const userStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
     const currentUserId = currentUser ? currentUser.user_id : null;
+
+    const chatCount = useReportChatCount(report?.report_id || 0, currentUserId);
 
     const fetchReportDetails = async () => {
         if (!id) return;
@@ -340,6 +345,20 @@ const ResiViewReport = () => {
                         </div>
                     </div>
                     <div className="flex items-center gap-3 flex-wrap">
+                        {(report.user_id === currentUserId || (currentUser && currentUser.role_id && currentUser.role_id !== 1)) && (
+                            <button
+                                type="button"
+                                onClick={() => setIsChatOpen(true)}
+                                className="px-5 py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-orange-600/20 hover:scale-105 active:scale-95 flex items-center gap-2"
+                                title="Open Case Chat with Responders"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                </svg>
+                                <span>Case Chat {chatCount > 0 ? `(${chatCount})` : ''}</span>
+                            </button>
+                        )}
+
                         {((report.category_id === 6 || report.pet_id || (report.description && report.description.includes('[LOST PET REPORT]'))) && ![9, 10, 11, 12].includes(report.status_id)) && (
                             <button
                                 onClick={() => setIsResolveLostModalOpen(true)}
@@ -414,12 +433,12 @@ const ResiViewReport = () => {
                             {/* Information Details Section */}
                             {(() => {
                                 const rawDesc = report.description || '';
-                                const parts = rawDesc.split('|').map(p => p.trim());
+                                const parts = rawDesc.split('|').map((p: string) => p.trim());
                                 let extractedPattern = '';
                                 let extractedConditions = '';
                                 let cleanNotes = '';
 
-                                parts.forEach(part => {
+                                parts.forEach((part: string) => {
                                     if (part.toLowerCase().startsWith('pattern:')) {
                                         extractedPattern = part.replace(/^pattern:\s*/i, '');
                                     } else if (part.toLowerCase().startsWith('observed conditions:')) {
@@ -908,9 +927,9 @@ const ResiViewReport = () => {
                     pet={{
                         pet_id: report.pet_id || 0,
                         pet_name: report.pet_name || 'Pet',
-                        photo_url: report.pet_photo_url || (report.media && report.media[0]?.file_url),
-                        breed: report.pet_breed || report.animal_breed,
-                        species: report.pet_type || report.animal_type
+                        photo_url: (report as any).pet_photo_url || (report.media && report.media[0]?.file_url),
+                        breed: (report as any).pet_breed || (report as any).animal_breed,
+                        species: (report as any).pet_type || report.animal_type
                     }}
                     reportId={report.report_id}
                     onClose={() => setIsResolveLostModalOpen(false)}
@@ -920,6 +939,14 @@ const ResiViewReport = () => {
                     }}
                 />
             )}
+
+            {/* Case Chat Drawer */}
+            <ReportChatDrawer
+                isOpen={isChatOpen}
+                onClose={() => setIsChatOpen(false)}
+                report={report}
+                currentUser={currentUser}
+            />
         </div>
     );
 };

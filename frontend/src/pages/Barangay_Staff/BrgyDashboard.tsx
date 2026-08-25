@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { api } from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
@@ -53,9 +53,9 @@ const BrgyDashboard = () => {
         const fetchDashboardData = async () => {
             try {
                 const [requestsRes, personnelRes, reportsRes] = await Promise.allSettled([
-                    axios.get('http://localhost:8000/rescue-requests/'),
-                    axios.get('http://localhost:8000/users/?role_id=3'),
-                    axios.get('http://localhost:8000/reports/?escalated_only=true')
+                    api.get('/rescue-requests/'),
+                    api.get('/users/?role_id=3'),
+                    api.get('/reports/?escalated_only=true')
                 ]);
 
                 if (requestsRes.status === 'fulfilled') {

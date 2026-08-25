@@ -16,10 +16,23 @@ const ProtectedRoute = ({ allowedRoles = [4] }: ProtectedRouteProps) => {
 
         const verify = async () => {
             const token = getStoredToken();
-            const rawUser = 
-                localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user') ||
-                localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user') ||
-                localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
+            
+            // Prioritize retrieving user matching the current route's expected role
+            let rawUser: string | null = null;
+            if (allowedRoles.includes(4)) {
+                rawUser = sessionStorage.getItem('admin_user') || localStorage.getItem('admin_user');
+            } else if (allowedRoles.includes(2) || allowedRoles.includes(3)) {
+                rawUser = sessionStorage.getItem('staff_user') || localStorage.getItem('staff_user');
+            } else if (allowedRoles.includes(1)) {
+                rawUser = sessionStorage.getItem('resident_user') || localStorage.getItem('resident_user');
+            }
+
+            if (!rawUser) {
+                rawUser = 
+                    sessionStorage.getItem('staff_user') || localStorage.getItem('staff_user') ||
+                    sessionStorage.getItem('resident_user') || localStorage.getItem('resident_user') ||
+                    sessionStorage.getItem('admin_user') || localStorage.getItem('admin_user');
+            }
 
             if (!token || !rawUser) {
                 clearAuthStorage();

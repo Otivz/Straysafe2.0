@@ -412,3 +412,4 @@ Think of the Messaging System as a **focused, private walkie-talkie** between pe
 - 🛡️ **Warning System:** Promotes **responsible pet ownership** by giving community leaders a fair, 3-strike digital citation tool to prevent pets from becoming roaming strays.
 - 💬 **Messaging System:** Enables **fast, private, and real-time coordination** between citizens and rescuers during emergency rescues and lost pet returns.
 
+-Progrssive loading screen with cute animal dog or cat s

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Button from '../../components/Button';
 import { EyeIcon, EyeOffIcon } from '../../components/icon';
 import { useTheme } from '../../context/ThemeContext';
+import { clearAuthStorage } from '../../utils/api';
 
 const AdminLogin = () => {
     const navigate = useNavigate();
@@ -30,13 +31,10 @@ const AdminLogin = () => {
                 if (user && user.role_id === 4) {
                     navigate('/admin/dashboard');
                 } else {
-                    // Clear non-admin session data
-                    localStorage.removeItem('admin_user');
-                    sessionStorage.removeItem('admin_user');
+                    clearAuthStorage();
                 }
             } catch {
-                localStorage.removeItem('admin_user');
-                sessionStorage.removeItem('admin_user');
+                clearAuthStorage();
             }
         }
     }, [navigate]);
@@ -59,6 +57,14 @@ const AdminLogin = () => {
                 setError(data.detail || 'Login failed. Please try again.');
                 return;
             }
+
+            if (data.role_id !== 4) {
+                setError('Access denied. This portal is for Administrators only.');
+                return;
+            }
+
+            // Clear ALL previous session storage to prevent cross-role contamination
+            clearAuthStorage();
 
             // Store session info
             const storage = keepSignedIn ? localStorage : sessionStorage;

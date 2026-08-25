@@ -9,6 +9,8 @@ import SuccessModal from '../../components/Modals/SuccessModal';
 import MapComponent from '../../components/MapComponent';
 import AISuggestionPanel from '../../components/AISuggestionPanel';
 import ResolveLostPetModal from '../../components/Modals/ResolveLostPetModal';
+import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
+import { useReportChatCount } from '../../utils/chatUtils';
 
 interface Report {
     report_id: number;
@@ -97,6 +99,14 @@ const SubdViewReport = () => {
     // Image gallery state
     const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
 
+    const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
+    const currentUser = userStr ? JSON.parse(userStr) : null;
+    const currentUserId = currentUser ? currentUser.user_id : 1;
+
+    // Chat Drawer state
+    const [isChatOpen, setIsChatOpen] = useState(false);
+    const chatCount = useReportChatCount(report?.report_id || 0, currentUserId);
+
     // Comments & Replies state
     const [commentInput, setCommentInput] = useState('');
     const [replyingTo, setReplyingTo] = useState<{ commentId: number, userName: string } | null>(null);
@@ -112,10 +122,6 @@ const SubdViewReport = () => {
     const [selectedQrPreview, setSelectedQrPreview] = useState<{ url: string; petName?: string; hash?: string; ownerName?: string; ownerPhone?: string } | null>(null);
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
     const BRGY_OFFICE: [number, number] = [14.8069, 121.0039]; // R243+QH Santa Maria, Bulacan
-
-    const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
-    const currentUser = userStr ? JSON.parse(userStr) : null;
-    const currentUserId = currentUser ? currentUser.user_id : 1;
 
     useEffect(() => {
         if (!userStr) {
@@ -474,6 +480,17 @@ const SubdViewReport = () => {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsChatOpen(true)}
+                                            className="px-4 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] border border-orange-200 rounded-full text-xs font-bold transition-all shadow-2xs hover:scale-105 active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                                            title="Open Case Chat with Reporter"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                            </svg>
+                                            <span>Message {chatCount > 0 ? `(${chatCount})` : ''}</span>
+                                        </button>
                                         <span className={`px-4 py-1.5 rounded-full text-xs font-bold border ${getStatusColor(statusMap[report.status_id] || 'Pending')}`}>
                                             {statusMap[report.status_id] || 'Pending'}
                                         </span>
@@ -1492,9 +1509,9 @@ const SubdViewReport = () => {
                     pet={{
                         pet_id: report.pet_id || 0,
                         pet_name: report.pet_name || 'Pet',
-                        photo_url: report.pet_photo_url || (report.media && report.media[0]?.file_url),
-                        breed: report.pet_breed || report.breed || report.animal_breed,
-                        species: report.pet_type || report.animal_type
+                        photo_url: (report as any).pet_photo_url || (report.media && report.media[0]?.file_url),
+                        breed: (report as any).pet_breed || report.breed || (report as any).animal_breed,
+                        species: (report as any).pet_type || report.animal_type
                     }}
                     reportId={report.report_id}
                     onClose={() => setIsResolveLostModalOpen(false)}
@@ -1503,6 +1520,14 @@ const SubdViewReport = () => {
                     }}
                 />
             )}
+
+            {/* Case Chat Drawer */}
+            <ReportChatDrawer
+                isOpen={isChatOpen}
+                onClose={() => setIsChatOpen(false)}
+                report={report}
+                currentUser={currentUser}
+            />
 
             {/* Success Modal */}
             <SuccessModal
