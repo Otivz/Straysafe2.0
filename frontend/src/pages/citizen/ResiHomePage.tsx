@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
@@ -366,6 +367,41 @@ const ResiHomePage = () => {
     // Chat Drawer state
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [selectedChatReport, setSelectedChatReport] = useState<any>(null);
+
+    // Warning Acknowledgment State
+    const [pendingWarning, setPendingWarning] = useState<any>(null);
+    const [showWarningModal, setShowWarningModal] = useState(false);
+
+    const fetchMyWarnings = async () => {
+        try {
+            const res = await api.get('/warnings/my-warnings');
+            const pending = (res.data || []).filter((w: any) => w.status === 'Pending');
+            if (pending.length > 0) {
+                setPendingWarning(pending[0]);
+            } else {
+                setPendingWarning(null);
+            }
+        } catch (err) {
+            console.error('Error fetching warnings:', err);
+        }
+    };
+
+    useEffect(() => {
+        fetchMyWarnings();
+    }, []);
+
+    const handleAcknowledgeWarning = async () => {
+        if (!pendingWarning) return;
+        try {
+            await api.patch(`/warnings/${pendingWarning.warning_id}/acknowledge`);
+            setPendingWarning(null);
+            setShowWarningModal(false);
+            fetchMyWarnings();
+        } catch (err: any) {
+            console.error('Failed to acknowledge warning:', err);
+            alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
+        }
+    };
 
     const [reportStep, setReportStep] = useState<number>(1);
     const [formData, setFormData] = useState<ReportFormData>(INITIAL_FORM_DATA);
@@ -970,6 +1006,11 @@ const ResiHomePage = () => {
             msgStr.includes('potential match') ||
             msgStr.includes('matches of your dog');
 
+        if (typeStr === 'warning' || titleStr.includes('citation')) {
+            setShowWarningModal(true);
+            return;
+        }
+
         if (isMatch && notif.related_id) {
             navigate(`/resident/reports/${notif.related_id}/match-review`);
         } else if (notif.related_id) {
@@ -1415,6 +1456,60 @@ const ResiHomePage = () => {
             />
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-32 pb-24 md:pb-8">
+
+                {/* Citizen Alert Banner Removed as per user request */}
+
+
+                {/* Warning Acknowledgment Modal */}
+                {showWarningModal && pendingWarning && (
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                        <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300">
+                            <div className="p-8 pb-6 flex flex-col items-center border-b border-gray-50 bg-gradient-to-b from-yellow-50/50 to-white">
+                                <div className="w-20 h-20 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center text-4xl mb-4 shadow-sm border-4 border-white">
+                                    ⚠️
+                                </div>
+                                <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tight text-center">Subdivision Notice</h3>
+                                <p className="text-[10px] font-black text-yellow-600 uppercase tracking-widest mt-1 bg-yellow-100 px-3 py-1 rounded-full">
+                                    {pendingWarning.warning_level}
+                                </p>
+                            </div>
+                            <div className="p-8 space-y-6">
+                                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between items-center border-b border-gray-150 pb-3">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Pet Name</span>
+                                            <span className="text-xs font-black text-gray-900">{pendingWarning.pet_name}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center border-b border-gray-150 pb-3">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Violation</span>
+                                            <span className="text-xs font-black text-red-600">{pendingWarning.violation_type}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Remarks</span>
+                                            <p className="text-xs font-semibold text-gray-700 leading-relaxed bg-white p-4 rounded-xl border border-gray-100">
+                                                {pendingWarning.description}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex items-start gap-3 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                                    <input type="checkbox" id="ack" className="mt-1 w-5 h-5 rounded border-gray-300 text-blue-500 focus:ring-blue-500" required />
+                                    <label htmlFor="ack" className="text-[11px] font-semibold text-gray-700 leading-relaxed">
+                                        I acknowledge receipt of this warning. I understand that repeated violations may result in escalation to the Barangay or HOA management.
+                                    </label>
+                                </div>
+
+                                <button
+                                    onClick={handleAcknowledgeWarning}
+                                    className="w-full py-4 bg-[#1a1208] hover:bg-black text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl active:scale-[0.98]"
+                                >
+                                    ACKNOWLEDGE NOTICE
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Top Actions - Hidden on mobile, shown on desktop */}
                 <div className="hidden md:flex justify-end relative mb-6">

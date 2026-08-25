@@ -82,7 +82,7 @@ def issue_warning(
     
     notif = Notification(
         user_id=warning_in.user_id,
-        report_id=warning_in.report_id,
+        related_id=warning_in.report_id,
         title=f"⚠️ {warning_in.warning_level} Citation Issued",
         message=notif_msg,
         type="Warning",
