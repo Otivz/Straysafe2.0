@@ -399,7 +399,7 @@ const ResiHomePage = () => {
             fetchMyWarnings();
         } catch (err: any) {
             console.error('Failed to acknowledge warning:', err);
-            alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
+alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
         }
     };
 
@@ -418,6 +418,7 @@ const ResiHomePage = () => {
         qrTagDetected: boolean;
         message?: string;
     } | null>(null);
+    const [lastAnalyzedSignature, setLastAnalyzedSignature] = useState<string | null>(null);
     const [isAnalyzingMedia, setIsAnalyzingMedia] = useState(false);
 
     const VALID_COAT_PATTERNS = ['Solid', 'Bicolor', 'Tricolor', 'Spotted', 'Striped', 'Patched', 'Brindle', 'Merle', 'Tabby', 'Calico', 'Tortoiseshell', 'Mixed', 'Unknown'];
@@ -434,13 +435,21 @@ const ResiHomePage = () => {
         return partial || defaultVal;
     };
 
-    const triggerMediaAnalysis = async (overrideFiles?: File[]) => {
+    const triggerMediaAnalysis = async (overrideFiles?: File[], forceReanalyze = false) => {
         const filesToUse = overrideFiles || formData.mediaFiles;
         if (filesToUse && filesToUse.length > 0) {
+            const primaryFile = filesToUse[0];
+            const currentSignature = `${primaryFile.name}-${primaryFile.size}-${primaryFile.lastModified}`;
+
+            // Prevent duplicate re-analysis if already analyzed this exact file
+            if (!forceReanalyze && aiAnalysisResult && lastAnalyzedSignature === currentSignature) {
+                return;
+            }
+
             setIsAnalyzingMedia(true);
             try {
                 const mediaData = new FormData();
-                mediaData.append("file", filesToUse[0]);
+                mediaData.append("file", primaryFile);
                 const res = await axios.post('http://localhost:8000/reports/analyze-media', mediaData);
                 if (res.status === 200 && res.data) {
                     const ai = res.data;
@@ -493,6 +502,7 @@ const ResiHomePage = () => {
                             animalBreed: resultObj.possibleBreed
                         }));
                     }
+                    setLastAnalyzedSignature(currentSignature);
                 }
             } catch (err) {
                 console.warn('AI media analysis error, using fallback:', err);
@@ -2994,7 +3004,7 @@ const ResiHomePage = () => {
                                                                     )}
                                                                 </div>
                                                                 <p className="text-xs font-bold text-amber-950">
-                                                                    Owner: <span className="font-extrabold">{report.owner_name || report.reporter_name || 'Registered Resident'}</span>
+                                                                    Owner: <span className="font-extrabold">{report.owner_name ? report.owner_name : 'No Registered Owner (Community Animal)'}</span>
                                                                     {report.owner_phone && <span className="text-amber-800 font-bold ml-1.5">• 📞 {report.owner_phone}</span>}
                                                                 </p>
                                                                 {report.pet_qr_code_hash && (
@@ -3022,7 +3032,7 @@ const ResiHomePage = () => {
                                                                         url: report.pet_qr_code_url,
                                                                         petName: report.pet_name,
                                                                         hash: report.pet_qr_code_hash,
-                                                                        ownerName: report.owner_name || report.reporter_name,
+                                                                        ownerName: report.owner_name || undefined,
                                                                         ownerPhone: report.owner_phone
                                                                     })}
                                                                     className="flex-1 sm:flex-initial px-3.5 py-2.5 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"

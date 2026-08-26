@@ -34,12 +34,57 @@ def get_owner_pets(owner_id: int, db: Session = Depends(get_db)):
 @router.get("/subdivision/{subdivision_id}", response_model=List[PetResponse])
 def get_subdivision_pets(subdivision_id: int, db: Session = Depends(get_db)):
     from app.models.user import User
+    from sqlalchemy import or_
     from sqlalchemy.orm import joinedload
-    return db.query(Pet).join(User).filter(User.subdivision_id == subdivision_id).options(joinedload(Pet.owner)).all()
+    return db.query(Pet).outerjoin(User, Pet.owner_id == User.user_id).filter(
+        or_(User.subdivision_id == subdivision_id, Pet.owner_id.is_(None))
+    ).options(joinedload(Pet.owner)).all()
+
+@router.post("/{pet_id}/assign-owner", response_model=PetResponse)
+def assign_pet_owner(pet_id: int, owner_id: int, req: Request, db: Session = Depends(get_db)):
+    """Assigns or updates the registered owner for an unassigned or community pet."""
+    pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
+    if not pet:
+        raise HTTPException(status_code=404, detail="Pet not found")
+    
+    owner = db.query(User).filter(User.user_id == owner_id).first()
+    if not owner:
+        raise HTTPException(status_code=404, detail="Owner user not found")
+    
+    old_owner_id = pet.owner_id
+    pet.owner_id = owner_id
+    db.commit()
+    db.refresh(pet)
+
+    log_activity(
+        db=db,
+        action="ASSIGN_PET_OWNER",
+        target_table="pets",
+        target_id=pet_id,
+        description=f"Assigned owner {owner.name} (user_id={owner_id}) to pet {pet.pet_name} (pet_id={pet_id})",
+        log_type="operation",
+        old_values={"owner_id": old_owner_id},
+        new_values={"owner_id": owner_id, "owner_name": owner.name},
+        request=req
+    )
+    return pet
 
 @router.post("/", response_model=PetResponse)
 def create_pet(pet: PetCreate, req: Request, db: Session = Depends(get_db)):
-    db_pet = Pet(**pet.model_dump())
+    pet_dict = pet.model_dump()
+    
+    # Auto-resolve registered_by_name if user ID was provided but name wasn't
+    if pet_dict.get("registered_by_user_id") and not pet_dict.get("registered_by_name"):
+        reg_user = db.query(User).filter(User.user_id == pet_dict["registered_by_user_id"]).first()
+        if reg_user:
+            pet_dict["registered_by_name"] = reg_user.name
+    elif not pet_dict.get("registered_by_name") and pet_dict.get("owner_id"):
+        owner_user = db.query(User).filter(User.user_id == pet_dict["owner_id"]).first()
+        if owner_user:
+            pet_dict["registered_by_name"] = owner_user.name
+            pet_dict["registered_by_user_id"] = owner_user.user_id
+
+    db_pet = Pet(**pet_dict)
     db.add(db_pet)
     db.commit()
     db.refresh(db_pet)
@@ -578,4 +623,43 @@ async def upload_pet_photo_right(pet_id: int, file: UploadFile = File(...), db: 
         return {"photo_right_url": image_url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{pet_id}")
+def delete_pet_record(pet_id: int, db: Session = Depends(get_db)):
+    """
+    Permanently delete a pet record and safely clean up related references:
+    - Pet QR codes
+    - AI Report Matches
+    - Pet Claims
+    - Unlinks reports referencing this pet
+    """
+    db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
+    if not db_pet:
+        raise HTTPException(status_code=404, detail="Pet not found")
+
+    try:
+        # 1. Clean up QR Codes
+        from app.models.pet_qr_code import PetQRCode
+        db.query(PetQRCode).filter(PetQRCode.pet_id == pet_id).delete(synchronize_session=False)
+
+        # 2. Clean up AI Matches
+        from app.models.report_match import ReportMatch
+        db.query(ReportMatch).filter(ReportMatch.matched_pet_id == pet_id).delete(synchronize_session=False)
+
+        # 3. Clean up Pet Claims
+        from app.models.pet_claim import PetClaim
+        db.query(PetClaim).filter(PetClaim.pet_id == pet_id).delete(synchronize_session=False)
+
+        # 4. Unlink Reports pointing to this pet
+        from app.models.report import Report
+        db.query(Report).filter(Report.pet_id == pet_id).update({"pet_id": None}, synchronize_session=False)
+
+        # 5. Delete the pet
+        db.delete(db_pet)
+        db.commit()
+        return {"message": f"Pet #{pet_id} '{db_pet.pet_name}' was successfully removed from records."}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete pet: {str(e)}")
 

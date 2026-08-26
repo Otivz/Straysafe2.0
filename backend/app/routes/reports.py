@@ -33,19 +33,24 @@ def populate_pet_and_owner_info(rep_data: ReportResponse, rep: Report, db: Sessi
                 if qr:
                     rep_data.pet_qr_code_url = qr.qr_image_url
                     rep_data.pet_qr_token = qr.qr_token
-                pet_owner = db.query(User).filter(User.user_id == linked_pet.owner_id).first()
-                if pet_owner:
-                    rep_data.owner_name = pet_owner.name
-                    rep_data.owner_phone = pet_owner.phone
-                    rep_data.owner_email = pet_owner.email
-                    rep_data.owner_address = pet_owner.address
-                    rep_data.is_owner_report = (rep.user_id == pet_owner.user_id)
-        elif rep.is_possible_owned and rep.reporter:
-            # Fallback to reporter contact info if possible owned
-            rep_data.owner_name = rep.reporter.name
-            rep_data.owner_phone = rep.reporter.phone
-            rep_data.owner_email = rep.reporter.email
-            rep_data.owner_address = rep.reporter.address
+                
+                if linked_pet.owner_id:
+                    pet_owner = db.query(User).filter(User.user_id == linked_pet.owner_id).first()
+                    if pet_owner:
+                        rep_data.owner_id = pet_owner.user_id
+                        rep_data.owner_name = pet_owner.name
+                        rep_data.owner_phone = pet_owner.phone
+                        rep_data.owner_email = pet_owner.email
+                        rep_data.owner_address = pet_owner.address
+                        rep_data.is_owner_report = (rep.user_id == pet_owner.user_id)
+                else:
+                    # Explicitly unowned / community pet
+                    rep_data.owner_id = None
+                    rep_data.owner_name = None
+                    rep_data.owner_phone = None
+                    rep_data.owner_email = None
+                    rep_data.owner_address = None
+                    rep_data.is_owner_report = False
     except Exception as err:
         print(f"Failed to populate pet/owner info for report {rep.report_id}: {err}")
 
@@ -583,9 +588,12 @@ def trigger_looks_matching(report: Report, db: Session):
                 db.add(new_notif)
     try:
         db.commit()
+        from app.routes.matches import scan_and_generate_matches_for_report
+        scan_and_generate_matches_for_report(report.report_id, db)
     except Exception as e:
         db.rollback()
         print(f"Error in trigger_looks_matching: {e}")
+
 
 
 
@@ -1046,6 +1054,7 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
         )
         db_report.ai_animal_type = suggestions["ai_animal_type"]  # type: ignore
         db_report.ai_dominant_color = suggestions["ai_dominant_color"]  # type: ignore
+        db_report.ai_coat_pattern = suggestions.get("ai_coat_pattern") or "Solid"  # type: ignore
         db_report.ai_estimated_size = suggestions["ai_estimated_size"]  # type: ignore
         db_report.ai_possible_breed = suggestions["ai_possible_breed"]  # type: ignore
         db_report.ai_suggested_risk_level = suggestions["ai_suggested_risk_level"]  # type: ignore
@@ -1102,6 +1111,26 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
         rep_data.ai_suggested_risk_level = db_report.ai_suggested_risk_level  # type: ignore
         rep_data.ai_suggested_priority = db_report.ai_suggested_priority  # type: ignore
         rep_data.ai_suggested_priority_reason = db_report.ai_suggested_priority_reason  # type: ignore
+
+        # Notify subdivision leader(s) about the new report
+        if db_report.subdivision_id:
+            try:
+                leaders = db.query(User).filter(
+                    User.subdivision_id == db_report.subdivision_id,
+                    User.role_id == 2
+                ).all()
+                for leader in leaders:
+                    if leader.user_id != db_report.user_id:
+                        subd_notif = Notification(
+                            user_id=leader.user_id,
+                            title=f"New Stray Report #{db_report.report_id}",
+                            message=f"A new {db_report.animal_type or 'stray'} report was submitted in your subdivision at {db_report.sighting_location or 'designated location'}.",
+                            type="alert",
+                            related_id=db_report.report_id
+                        )
+                        db.add(subd_notif)
+            except Exception as notif_err:
+                print(f"Notice: Failed to create leader notification: {notif_err}")
 
         log_activity(
             db=db,
@@ -1622,7 +1651,30 @@ def add_comment(report_id: int, comment_in: CommentCreate, db: Session = Depends
             related_id=report.report_id
         )
         db.add(new_notif)
-        db.commit()
+
+    # Also notify subdivision leader(s) if commenter is not the subdivision leader
+    if report.subdivision_id:
+        try:
+            leaders = db.query(User).filter(
+                User.subdivision_id == report.subdivision_id,
+                User.role_id == 2
+            ).all()
+            for leader in leaders:
+                if leader.user_id != comment_in.user_id and leader.user_id != report.user_id:
+                    commenter_name = db_comment.user.name if db_comment.user else "Someone"
+                    comment_text = comment_in.comment
+                    subd_notif = Notification(
+                        user_id=leader.user_id,
+                        title=f"New Message on Report #{report.report_id}",
+                        message=f"{commenter_name} commented: \"{comment_text[:60]}{'...' if len(comment_text) > 60 else ''}\"",
+                        type="message",
+                        related_id=report.report_id
+                    )
+                    db.add(subd_notif)
+        except Exception as notif_err:
+            print(f"Notice: Failed to create leader comment notification: {notif_err}")
+
+    db.commit()
 
     comment_data = CommentResponse.model_validate(db_comment)
     comment_data.user_name = db_comment.user.name if db_comment.user else "Unknown User"
@@ -1639,3 +1691,36 @@ def delete_report_media(media_id: int, db: Session = Depends(get_db)):
     db.delete(media)
     db.commit()
     return {"message": "Media deleted successfully"}
+
+
+@router.post("/{report_id}/link-pet")
+def link_pet_to_report(report_id: int, pet_id: int, req: Request, db: Session = Depends(get_db)):
+    """Links a newly registered or identified pet record to an existing incident report."""
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
+    if not pet:
+        raise HTTPException(status_code=404, detail="Pet not found")
+
+    report.pet_id = pet_id
+    db.commit()
+    db.refresh(report)
+
+    log_activity(
+        db=db,
+        action="LINK_PET_REPORT",
+        target_table="reports",
+        target_id=report_id,
+        description=f"Linked Report #{report_id} to Registered Pet #{pet_id} ('{pet.pet_name}')",
+        log_type="operation",
+        new_values={"pet_id": pet_id, "pet_name": pet.pet_name},
+        request=req
+    )
+
+    return {
+        "message": f"Report #{report_id} successfully linked to Registered Pet #{pet_id} ('{pet.pet_name}')",
+        "report_id": report_id,
+        "pet_id": pet_id
+    }

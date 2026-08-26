@@ -12,6 +12,7 @@ import Select from '../../components/Dropdown';
 import MapComponent from '../../components/MapComponent';
 import DataTable from '../../components/DataTable';
 import AISuggestionPanel from '../../components/AISuggestionPanel';
+import AIPotentialMatchesList from '../../components/AIPotentialMatchesList';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 
@@ -73,7 +74,7 @@ const SubdReports = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
-    const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+    const [viewMode, setViewMode] = useState<'cards' | 'table' | 'matches'>('cards');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
     const [openMenuId, setOpenMenuId] = useState<number | null>(null);
@@ -809,11 +810,29 @@ const SubdReports = () => {
                                                 </svg>
                                                 <span className="hidden sm:inline">Table</span>
                                             </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setViewMode('matches')}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 ${viewMode === 'matches'
+                                                        ? 'bg-white text-[#F97316] shadow-sm'
+                                                        : 'text-gray-500 hover:text-gray-700'
+                                                    }`}
+                                                title="AI Potential Matches"
+                                            >
+                                                <span className="w-2 h-2 rounded-full bg-[#F97316]"></span>
+                                                <span className="hidden sm:inline">AI Matches</span>
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
 
-                                {viewMode === 'cards' ? (
+                                {viewMode === 'matches' ? (
+                                    <AIPotentialMatchesList
+                                        subdivisionId={currentUser?.subdivision_id}
+                                        isStaff={true}
+                                        onMatchesUpdated={fetchReports}
+                                    />
+                                ) : viewMode === 'cards' ? (
                                     loading ? (
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                             {[1, 2, 3, 4, 5, 6].map((n) => (

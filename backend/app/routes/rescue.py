@@ -364,6 +364,26 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                     )
                     db.add(new_notif)
 
+                    # Also notify subdivision leader(s)
+                    if report_obj.subdivision_id:
+                        try:
+                            leaders = db.query(User).filter(
+                                User.subdivision_id == report_obj.subdivision_id,
+                                User.role_id == 2
+                            ).all()
+                            for leader in leaders:
+                                if leader.user_id != report_obj.user_id:
+                                    subd_notif = Notification(
+                                        user_id=leader.user_id,
+                                        title=f"Rescue Status: {status_name}",
+                                        message=f"Report #{report_obj.report_id} status updated to '{status_name}' by Barangay action team.",
+                                        type="status_update",
+                                        related_id=report_obj.report_id
+                                    )
+                                    db.add(subd_notif)
+                        except Exception as notif_err:
+                            print(f"Notice: Failed to create leader rescue notification: {notif_err}")
+
                     # ── Auto-intake into Holding Facility when Picked Up ──────
                     if report_status_id == 6:
                         already_in = db.query(HoldingAnimal).filter(

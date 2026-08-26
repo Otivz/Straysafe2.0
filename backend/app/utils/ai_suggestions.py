@@ -40,13 +40,14 @@ def generate_ai_suggestions(
             1. "ai_animal_type": Must be "Dog", "Cat", or "Unknown". Prefer media_animal_type if provided (e.g. "Cat"), otherwise infer accurately from user description.
             2. "ai_dominant_color": Dominant color or colors (e.g. "Brown", "Black, White"). Prefer visual detection if provided, otherwise infer from description.
             3. "ai_estimated_size": Must be "Small", "Medium", "Large", or "Unknown". For cats, default to "Small".
-            4. "ai_suggested_risk_level": Must be "Low Risk", "Medium Risk", or "High Risk".
+            4. "ai_coat_pattern": Must be "Solid", "Bicolor", "Tricolor", "Tabby", "Calico", "Tortoiseshell", "Striped", "Spotted", "Brindle", "Merle", "Patched", or "Unknown". Infer from user description (e.g. if description contains "Pattern: Tabby", "Tabby", "Stripes", "Calico", "Two colors", etc.).
+            5. "ai_suggested_risk_level": Must be "Low Risk", "Medium Risk", or "High Risk".
                - High Risk: Aggressive behaviors (biting, snarling, attacks, foaming) or severe injury/trauma.
                - Medium Risk: Nuisance behaviors (barking, chasing cars, roaming pack, crying, skinny/sick).
                - Low Risk: Normal stray animal condition (healthy, calm, not aggressive).
-            5. "ai_suggested_priority": Must be "Low Priority", "Medium Priority", or "High Priority". Matches the risk level or urgency.
-            6. "ai_possible_breed": Likely breed (e.g., "Aspin", "Puspin", "Golden Retriever", "Siamese"). Default to "Puspin" for cats, "Aspin" for dogs.
-            7. "ai_suggested_priority_reason": A short, conversational, warm, and helpful explanation (1-2 sentences) of why this priority level was suggested. Explain accurately without inventing unmentioned items (like collars or leashes).
+            6. "ai_suggested_priority": Must be "Low Priority", "Medium Priority", or "High Priority". Matches the risk level or urgency.
+            7. "ai_possible_breed": Likely breed (e.g., "Aspin", "Puspin", "Golden Retriever", "Siamese"). Default to "Puspin" for cats, "Aspin" for dogs.
+            8. "ai_suggested_priority_reason": A short, conversational, warm, and helpful explanation (1-2 sentences) of why this priority level was suggested. Explain accurately without inventing unmentioned items (like collars or leashes).
 
             Respond ONLY with a valid JSON block.
             """
@@ -73,6 +74,7 @@ def generate_ai_suggestions(
                 return {
                     "ai_animal_type": str(data["ai_animal_type"]),
                     "ai_dominant_color": str(data["ai_dominant_color"]),
+                    "ai_coat_pattern": str(data.get("ai_coat_pattern") or "Solid"),
                     "ai_estimated_size": str(data["ai_estimated_size"]),
                     "ai_possible_breed": str(data["ai_possible_breed"]),
                     "ai_suggested_risk_level": str(data["ai_suggested_risk_level"]),
@@ -265,14 +267,35 @@ def generate_ai_suggestions(
             reason = "Medium Priority suggested because the animal appears sick, weak, or undernourished. Needs attention, but doesn't pose an immediate threat."
         elif any(kw in text for kw in ["roaming", "pack", "group", "multiple", "horde"]):
             reason = "Medium Priority suggested because roaming behavior is causing a public nuisance."
-        else:
-            reason = "Medium Priority suggested because the animal is reported as scared or in distress, requiring a careful rescue."
-    else:
-        reason = "Low Priority suggested because the animal appears healthy and doesn't show signs of injury or aggressive behavior."
+    # Extract coat pattern from description or keywords
+    import re
+    coat_pattern = "Solid"
+    pat_match = re.search(r'(?:pattern|markings):\s*([^|]+)', description or '', re.IGNORECASE)
+    if pat_match and pat_match.group(1).strip():
+        coat_pattern = pat_match.group(1).strip().capitalize()
+    elif "tabby" in text:
+        coat_pattern = "Tabby"
+    elif "calico" in text:
+        coat_pattern = "Calico"
+    elif "tortoiseshell" in text or "tortie" in text:
+        coat_pattern = "Tortoiseshell"
+    elif "bicolor" in text or ("white" in text and ("black" in text or "brown" in text or "gray" in text or "grey" in text or "orange" in text)):
+        coat_pattern = "Bicolor"
+    elif "tricolor" in text:
+        coat_pattern = "Tricolor"
+    elif "striped" in text:
+        coat_pattern = "Striped"
+    elif "spotted" in text:
+        coat_pattern = "Spotted"
+    elif "brindle" in text:
+        coat_pattern = "Brindle"
+    elif "merle" in text:
+        coat_pattern = "Merle"
 
     return {
         "ai_animal_type": animal_type,
         "ai_dominant_color": dominant_color,
+        "ai_coat_pattern": coat_pattern,
         "ai_estimated_size": estimated_size,
         "ai_possible_breed": possible_breed,
         "ai_suggested_risk_level": risk_level,

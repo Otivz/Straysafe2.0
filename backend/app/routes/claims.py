@@ -87,6 +87,26 @@ def create_or_update_claim(claim_in: PetClaimCreate, db: Session = Depends(get_d
         status="Pending Review"
     )
     db.add(new_claim)
+
+    # Notify subdivision leaders if report belongs to a subdivision
+    if report and report.subdivision_id:
+        try:
+            leaders = db.query(User).filter(
+                User.subdivision_id == report.subdivision_id,
+                User.role_id == 2
+            ).all()
+            for leader in leaders:
+                subd_notif = Notification(
+                    user_id=leader.user_id,
+                    title="New Pet Claim Filed",
+                    message=f"A resident submitted a pet claim for report #{report.report_id} ({pet.pet_name if pet else 'Pet'}).",
+                    type="claim",
+                    related_id=report.report_id
+                )
+                db.add(subd_notif)
+        except Exception as notif_err:
+            print(f"Notice: Failed to create leader claim notification: {notif_err}")
+
     db.commit()
     db.refresh(new_claim)
     return new_claim

@@ -74,6 +74,7 @@ const LocationPicker = ({ onLocationSelect, position }: { onLocationSelect: (lat
 import DataTable from '../../components/DataTable';
 import RescueTimeline from '../../components/RescueTimeline';
 import AISuggestionPanel from '../../components/AISuggestionPanel';
+import AIPotentialMatchesList from '../../components/AIPotentialMatchesList';
 
 interface Report {
     report_id: number;
@@ -129,6 +130,7 @@ const categoryMap: Record<number, string> = {
 const AdminReport = () => {
     const [reports, setReports] = useState<Report[]>([]);
     const [loading, setLoading] = useState(true);
+    const [adminTab, setAdminTab] = useState<'reports' | 'matches'>('reports');
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -422,7 +424,23 @@ const AdminReport = () => {
                 <main className="flex-1 overflow-y-auto p-8">
                     <div className="max-w-7xl mx-auto">
                         {/* Header */}
-                        <div className="flex justify-end items-center mb-8">
+                        <div className="flex flex-wrap justify-between items-center mb-8 gap-4">
+                            <div className="flex bg-gray-100 p-1.5 rounded-2xl">
+                                <button
+                                    onClick={() => setAdminTab('reports')}
+                                    className={`px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${adminTab === 'reports' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                                >
+                                    Incident Reports
+                                </button>
+                                <button
+                                    onClick={() => setAdminTab('matches')}
+                                    className={`px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${adminTab === 'matches' ? 'bg-white text-[#F97316] shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                                >
+                                    <span className="w-2 h-2 rounded-full bg-[#F97316]"></span>
+                                    AI Potential Matches
+                                </button>
+                            </div>
+
                             <div className="flex items-center space-x-3">
                                 <Button variant="light" className="flex items-center space-x-2" onClick={fetchReports}>
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -439,38 +457,45 @@ const AdminReport = () => {
                             </div>
                         </div>
 
-                        {/* Search & Filters */}
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div className="relative flex-1 max-w-md">
-                                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                    </svg>
-                                </span>
-                                <input
-                                    type="text"
-                                    placeholder="Search by category or landmark..."
-                                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#F97316] outline-none transition-all"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                />
-                            </div>
-                            <div className="flex items-center space-x-2">
-                                <Select
-                                    value={statusFilter}
-                                    onChange={(e) => setStatusFilter(e.target.value)}
-                                    options={[
-                                        { value: 'all', label: 'All Status' },
-                                        { value: 'Pending', label: 'Pending' },
-                                        { value: 'Verified', label: 'Verified' },
-                                        { value: 'Escalated to Barangay', label: 'Escalated' },
-                                        { value: 'Rescue In Progress', label: 'In Progress' },
-                                        { value: 'Resolved', label: 'Resolved' }
-                                    ]}
-                                    className="w-[140px]"
-                                />
-                            </div>
-                        </div>
+                        {adminTab === 'matches' ? (
+                            <AIPotentialMatchesList
+                                isStaff={true}
+                                onMatchesUpdated={fetchReports}
+                            />
+                        ) : (
+                            <>
+                                {/* Search & Filters */}
+                                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                    <div className="relative flex-1 max-w-md">
+                                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                            </svg>
+                                        </span>
+                                        <input
+                                            type="text"
+                                            placeholder="Search by category or landmark..."
+                                            className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#F97316] outline-none transition-all"
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <Select
+                                            value={statusFilter}
+                                            onChange={(e) => setStatusFilter(e.target.value)}
+                                            options={[
+                                                { value: 'all', label: 'All Status' },
+                                                { value: 'Pending', label: 'Pending' },
+                                                { value: 'Verified', label: 'Verified' },
+                                                { value: 'Escalated to Barangay', label: 'Escalated' },
+                                                { value: 'Rescue In Progress', label: 'In Progress' },
+                                                { value: 'Resolved', label: 'Resolved' }
+                                            ]}
+                                            className="w-[140px]"
+                                        />
+                                    </div>
+                                </div>
 
                         {/* Table */}
                         {/* Data Table Section */}
@@ -625,6 +650,8 @@ const AdminReport = () => {
                                 }
                             ]}
                         />
+                            </>
+                        )}
                     </div>
                 </main>
             </div>
@@ -782,6 +809,7 @@ const AdminReport = () => {
                                              <AISuggestionPanel
                                                  animalType={viewReport.animal_type || viewReport.ai_animal_type}
                                                  dominantColor={(viewReport as any).animal_color || viewReport.ai_dominant_color}
+                                                 coatPattern={(viewReport as any).coat_pattern || (viewReport as any).animal_pattern || (viewReport as any).ai_coat_pattern}
                                                  estimatedSize={(viewReport as any).estimated_size || viewReport.ai_estimated_size}
                                                  suggestedRiskLevel={viewReport.ai_suggested_risk_level}
                                                  suggestedPriority={viewReport.ai_suggested_priority}

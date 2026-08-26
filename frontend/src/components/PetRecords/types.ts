@@ -31,5 +31,8 @@ export interface PetRecord {
     notes?: string;
     vaccineCardUrl?: string;
     
+    registeredByName?: string;
+    registeredAt?: string;
+
     rawPetObj?: any;
 }

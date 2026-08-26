@@ -184,6 +184,7 @@ export default function ReportStrayPage() {
         qrTagDetected: boolean;
         message?: string;
     } | null>(null);
+    const [lastAnalyzedSignature, setLastAnalyzedSignature] = useState<string | null>(null);
 
     const userStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -260,85 +261,95 @@ export default function ReportStrayPage() {
         return partial || defaultVal;
     };
 
-    const triggerAiAnalysis = async () => {
-        setIsAiProcessing(true);
-        if (formData.mediaFiles && formData.mediaFiles.length > 0) {
-            try {
-                const mediaData = new FormData();
-                mediaData.append("file", formData.mediaFiles[0]);
-                const res = await axios.post('http://localhost:8000/reports/analyze-media', mediaData);
-                if (res.status === 200 && res.data) {
-                    const ai = res.data;
-                    const isDetected = ai.animal_detected !== false && !['unknown', 'none', ''].includes((ai.animal_type || '').toLowerCase());
-                    
-                    if (!isDetected) {
-                        setAiAnalysisResult({
-                            animalDetected: false,
-                            animalType: 'Unknown',
-                            primaryColor: 'Unknown',
-                            secondaryColor: 'None',
-                            tertiaryColor: 'None',
-                            coatPattern: 'Unknown',
-                            estimatedSize: 'Unknown',
-                            possibleBreed: 'Unknown',
-                            collarDetected: false,
-                            qrTagDetected: false,
-                            message: ai.message || 'No cat or dog was detected in the uploaded image. Please ensure your photo clearly shows the stray animal.'
-                        });
-                    } else {
-                        const normType = ['Dog', 'Cat'].includes(ai.animal_type) ? ai.animal_type : (ai.animal_type?.toLowerCase().includes('dog') ? 'Dog' : 'Cat');
-                        const normPrimary = normalizeOption(ai.primary_color, VALID_PRIMARY_COLORS, 'Black');
-                        const normSecondary = normalizeOption(ai.secondary_color, VALID_SECONDARY_COLORS, 'None');
-                        const normTertiary = normalizeOption(ai.tertiary_color, VALID_TERTIARY_COLORS, 'None');
-                        const normPattern = normalizeOption(ai.coat_pattern, VALID_COAT_PATTERNS, 'Solid');
-                        const normSize = ['Small', 'Medium', 'Large'].includes(ai.estimated_size) ? ai.estimated_size : 'Medium';
+    const triggerAiAnalysis = async (forceReanalyze = false) => {
+        if (!formData.mediaFiles || formData.mediaFiles.length === 0) return;
+        
+        const primaryFile = formData.mediaFiles[0];
+        const currentSignature = `${primaryFile.name}-${primaryFile.size}-${primaryFile.lastModified}`;
 
-                        const resultObj = {
-                            animalDetected: true,
-                            animalType: normType,
-                            primaryColor: normPrimary,
-                            secondaryColor: normSecondary,
-                            tertiaryColor: normTertiary,
-                            coatPattern: normPattern,
-                            estimatedSize: normSize,
-                            possibleBreed: ai.possible_breed || (normType === 'Cat' ? 'Puspin' : 'Aspin'),
-                            collarDetected: Boolean(ai.collar_detected),
-                            qrTagDetected: Boolean(ai.qr_tag_detected),
-                            message: ai.message || 'Animal detected successfully.'
-                        };
-                        setAiAnalysisResult(resultObj);
-                        setFormData(prev => ({
-                            ...prev,
-                            animalType: resultObj.animalType,
-                            primaryColor: resultObj.primaryColor,
-                            secondaryColor: resultObj.secondaryColor,
-                            tertiaryColor: resultObj.tertiaryColor,
-                            coatPattern: resultObj.coatPattern,
-                            estimatedSize: resultObj.estimatedSize,
-                            animalBreed: resultObj.possibleBreed,
-                            collarDetected: resultObj.collarDetected,
-                            qrTagDetected: resultObj.qrTagDetected
-                        }));
-                    }
-                }
-            } catch (err) {
-                console.warn('AI media analysis error:', err);
-                setAiAnalysisResult({
-                    animalDetected: false,
-                    animalType: 'Unknown',
-                    primaryColor: 'Unknown',
-                    secondaryColor: 'None',
-                    tertiaryColor: 'None',
-                    coatPattern: 'Unknown',
-                    estimatedSize: 'Unknown',
-                    possibleBreed: 'Unknown',
-                    collarDetected: false,
-                    qrTagDetected: false,
-                    message: 'Unable to analyze image. Please ensure a clear photo of a dog or cat.'
-                });
-            }
+        // If already analyzed this exact media file and we have results, preserve and do not re-analyze
+        if (!forceReanalyze && aiAnalysisResult && lastAnalyzedSignature === currentSignature) {
+            return;
         }
-        setIsAiProcessing(false);
+
+        setIsAiProcessing(true);
+        try {
+            const mediaData = new FormData();
+            mediaData.append("file", primaryFile);
+            const res = await axios.post('http://localhost:8000/reports/analyze-media', mediaData);
+            if (res.status === 200 && res.data) {
+                const ai = res.data;
+                const isDetected = ai.animal_detected !== false && !['unknown', 'none', ''].includes((ai.animal_type || '').toLowerCase());
+                
+                if (!isDetected) {
+                    setAiAnalysisResult({
+                        animalDetected: false,
+                        animalType: 'Unknown',
+                        primaryColor: 'Unknown',
+                        secondaryColor: 'None',
+                        tertiaryColor: 'None',
+                        coatPattern: 'Unknown',
+                        estimatedSize: 'Unknown',
+                        possibleBreed: 'Unknown',
+                        collarDetected: false,
+                        qrTagDetected: false,
+                        message: ai.message || 'No cat or dog was detected in the uploaded image. Please ensure your photo clearly shows the stray animal.'
+                    });
+                } else {
+                    const normType = ['Dog', 'Cat'].includes(ai.animal_type) ? ai.animal_type : (ai.animal_type?.toLowerCase().includes('dog') ? 'Dog' : 'Cat');
+                    const normPrimary = normalizeOption(ai.primary_color, VALID_PRIMARY_COLORS, 'Black');
+                    const normSecondary = normalizeOption(ai.secondary_color, VALID_SECONDARY_COLORS, 'None');
+                    const normTertiary = normalizeOption(ai.tertiary_color, VALID_TERTIARY_COLORS, 'None');
+                    const normPattern = normalizeOption(ai.coat_pattern, VALID_COAT_PATTERNS, 'Solid');
+                    const normSize = ['Small', 'Medium', 'Large'].includes(ai.estimated_size) ? ai.estimated_size : 'Medium';
+
+                    const resultObj = {
+                        animalDetected: true,
+                        animalType: normType,
+                        primaryColor: normPrimary,
+                        secondaryColor: normSecondary,
+                        tertiaryColor: normTertiary,
+                        coatPattern: normPattern,
+                        estimatedSize: normSize,
+                        possibleBreed: ai.possible_breed || (normType === 'Cat' ? 'Puspin' : 'Aspin'),
+                        collarDetected: Boolean(ai.collar_detected),
+                        qrTagDetected: Boolean(ai.qr_tag_detected),
+                        message: ai.message || 'Animal detected successfully.'
+                    };
+                    setAiAnalysisResult(resultObj);
+                    setFormData(prev => ({
+                        ...prev,
+                        animalType: resultObj.animalType,
+                        primaryColor: resultObj.primaryColor,
+                        secondaryColor: resultObj.secondaryColor,
+                        tertiaryColor: resultObj.tertiaryColor,
+                        coatPattern: resultObj.coatPattern,
+                        estimatedSize: resultObj.estimatedSize,
+                        animalBreed: resultObj.possibleBreed,
+                        collarDetected: resultObj.collarDetected,
+                        qrTagDetected: resultObj.qrTagDetected
+                    }));
+                }
+                setLastAnalyzedSignature(currentSignature);
+            }
+        } catch (err) {
+            console.warn('AI media analysis error:', err);
+            setAiAnalysisResult({
+                animalDetected: false,
+                animalType: 'Unknown',
+                primaryColor: 'Unknown',
+                secondaryColor: 'None',
+                tertiaryColor: 'None',
+                coatPattern: 'Unknown',
+                estimatedSize: 'Unknown',
+                possibleBreed: 'Unknown',
+                collarDetected: false,
+                qrTagDetected: false,
+                message: 'Unable to analyze image. Please ensure a clear photo of a dog or cat.'
+            });
+        } finally {
+            setIsAiProcessing(false);
+        }
     };
 
     const handleNext = () => {

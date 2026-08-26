@@ -41,11 +41,14 @@ class PetBase(BaseModel):
     registered_address: Optional[str] = None
     registered_latitude: Optional[Decimal] = None
     registered_longitude: Optional[Decimal] = None
+    registered_by_user_id: Optional[int] = None
+    registered_by_name: Optional[str] = None
 
 class PetCreate(PetBase):
-    owner_id: int
+    owner_id: Optional[int] = None
 
 class PetUpdate(BaseModel):
+    owner_id: Optional[int] = None
     pet_name: Optional[str] = None
     pet_type: Optional[str] = None
     breed: Optional[str] = None
@@ -83,6 +86,8 @@ class PetUpdate(BaseModel):
     registered_address: Optional[str] = None
     registered_latitude: Optional[Decimal] = None
     registered_longitude: Optional[Decimal] = None
+    registered_by_user_id: Optional[int] = None
+    registered_by_name: Optional[str] = None
 
 class UserMini(BaseModel):
     name: str
@@ -94,10 +99,11 @@ class UserMini(BaseModel):
 
 class PetResponse(PetBase):
     pet_id: int
-    owner_id: int
+    owner_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
     owner: Optional[UserMini] = None
+    registered_by: Optional[UserMini] = None
 
     class Config:
         from_attributes = True

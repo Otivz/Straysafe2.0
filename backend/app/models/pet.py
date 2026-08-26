@@ -12,8 +12,8 @@ class Pet(Base):
     __tablename__ = "pets"
 
     pet_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    owner_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
+    owner_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
     )
     pet_name: Mapped[str] = mapped_column(String(100), nullable=False)
     pet_type: Mapped[str] = mapped_column(Enum("Dog", "Cat", name="pet_type"), nullable=False)
@@ -68,10 +68,16 @@ class Pet(Base):
     registered_latitude: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 8), nullable=True)
     registered_longitude: Mapped[Optional[Decimal]] = mapped_column(Numeric(11, 8), nullable=True)
 
+    registered_by_user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
+    )
+    registered_by_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
-    owner = relationship("User")
+    owner = relationship("User", foreign_keys=[owner_id])
+    registered_by = relationship("User", foreign_keys=[registered_by_user_id])
     vaccinations = relationship("PetVaccination", back_populates="pet", cascade="all, delete-orphan")
 
 

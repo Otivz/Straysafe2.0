@@ -3,13 +3,15 @@ import axios from 'axios';
 import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link, useLocation, useSearchParams } from 'react-router-dom';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SuccessModal from '../../components/Modals/SuccessModal';
 import MapComponent from '../../components/MapComponent';
 import AISuggestionPanel from '../../components/AISuggestionPanel';
+import AIPotentialMatchesList from '../../components/AIPotentialMatchesList';
 import ResolveLostPetModal from '../../components/Modals/ResolveLostPetModal';
+import AddPetModal from '../../components/PetRecords/AddPetModal';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import { useReportChatCount } from '../../utils/chatUtils';
 
@@ -77,11 +79,14 @@ const categoryMap: Record<number, string> = {
 const SubdViewReport = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const location = useLocation();
 
     const [report, setReport] = useState<Report | null>(null);
     const [loading, setLoading] = useState(true);
     const [showSuccess, setShowSuccess] = useState(false);
     const [isMapExpanded, setIsMapExpanded] = useState(false);
+    const [isAddPetModalOpen, setIsAddPetModalOpen] = useState(false);
     
     // Escalation Modal state
     const [isEscalateModalOpen, setIsEscalateModalOpen] = useState(false);
@@ -229,6 +234,12 @@ const SubdViewReport = () => {
     useEffect(() => {
         fetchReportDetails();
     }, [id]);
+
+    useEffect(() => {
+        if (searchParams.get('openChat') === 'true' || (location.state as any)?.openChat) {
+            setIsChatOpen(true);
+        }
+    }, [searchParams, location]);
 
     useEffect(() => {
         if (!report) return;
@@ -648,13 +659,15 @@ const SubdViewReport = () => {
                                 </div>
 
                                 {/* Lost Pet Owner Contact & Digital QR Tag Panel */}
-                                {(report.pet_id || report.owner_phone || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
+                                {(report.pet_id || report.owner_name || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
                                     <div className="p-6 rounded-3xl bg-gradient-to-br from-amber-50/90 to-orange-50/70 border-2 border-amber-200 shadow-sm space-y-4">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2.5">
-                                                <span className="px-3 py-1 bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
+                                                <span className={`px-3 py-1 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm ${
+                                                    report.owner_name ? 'bg-amber-600' : 'bg-emerald-600'
+                                                }`}>
                                                     <span>🐾</span>
-                                                    <span>Registered Lost Pet Case</span>
+                                                    <span>{report.owner_name ? 'Registered Pet Case' : 'Registered Community Animal Record'}</span>
                                                 </span>
                                                 {report.pet_name && (
                                                     <span className="text-sm font-black text-amber-950 uppercase">
@@ -672,7 +685,9 @@ const SubdViewReport = () => {
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                                             <div className="bg-white/90 p-4 rounded-2xl border border-amber-100 shadow-xs">
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Registered Owner</p>
-                                                <p className="text-sm font-black text-gray-900">{report.owner_name || report.reporter_name || 'Registered Resident'}</p>
+                                                <p className="text-sm font-black text-gray-900">
+                                                    {report.owner_name ? report.owner_name : <span className="text-gray-500 font-bold italic">No Registered Owner (Community / Unassigned)</span>}
+                                                </p>
                                                 {report.owner_address && (
                                                     <p className="text-xs text-gray-500 font-medium mt-1">{report.owner_address}</p>
                                                 )}
@@ -684,7 +699,9 @@ const SubdViewReport = () => {
                                             <div className="bg-white/90 p-4 rounded-2xl border border-amber-100 shadow-xs flex flex-col justify-between">
                                                 <div>
                                                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Owner Contact Hotline</p>
-                                                    <p className="text-sm font-black text-amber-900">{report.owner_phone || 'Available in StraySafe'}</p>
+                                                    <p className="text-sm font-black text-amber-900">
+                                                        {report.owner_phone ? report.owner_phone : <span className="text-gray-400 font-semibold text-xs italic">No Owner Hotline (Unassigned Animal)</span>}
+                                                    </p>
                                                 </div>
                                                 {report.owner_phone && (
                                                     <a
@@ -708,7 +725,7 @@ const SubdViewReport = () => {
                                                             url: report.pet_qr_code_url!,
                                                             petName: report.pet_name || undefined,
                                                             hash: report.pet_qr_code_hash || undefined,
-                                                            ownerName: report.owner_name || report.reporter_name,
+                                                            ownerName: report.owner_name || undefined,
                                                             ownerPhone: report.owner_phone || undefined
                                                         })}
                                                     />
@@ -723,7 +740,7 @@ const SubdViewReport = () => {
                                                         url: report.pet_qr_code_url!,
                                                         petName: report.pet_name || undefined,
                                                         hash: report.pet_qr_code_hash || undefined,
-                                                        ownerName: report.owner_name || report.reporter_name,
+                                                        ownerName: report.owner_name || undefined,
                                                         ownerPhone: report.owner_phone || undefined
                                                     })}
                                                     className="px-4 py-2 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer"
@@ -739,6 +756,7 @@ const SubdViewReport = () => {
                                 <AISuggestionPanel
                                     animalType={report.animal_type || report.ai_animal_type}
                                     dominantColor={(report as any).animal_color || report.ai_dominant_color}
+                                    coatPattern={(report as any).coat_pattern || (report as any).animal_pattern || (report as any).ai_coat_pattern}
                                     estimatedSize={(report as any).estimated_size || report.ai_estimated_size}
                                     suggestedRiskLevel={report.ai_suggested_risk_level}
                                     suggestedPriority={report.ai_suggested_priority}
@@ -747,6 +765,15 @@ const SubdViewReport = () => {
                                     categoryName={categoryMap[report.category_id]}
                                     suggestedPriorityReason={report.ai_suggested_priority_reason}
                                 />
+
+                                {/* AI Potential Matches Review Section */}
+                                <div className="mt-4">
+                                    <AIPotentialMatchesList
+                                        reportId={report.report_id}
+                                        isStaff={true}
+                                        onMatchesUpdated={fetchReportDetails}
+                                    />
+                                </div>
 
                                 {/* Map Location */}
                                 <div>
@@ -1163,6 +1190,18 @@ const SubdViewReport = () => {
                                 {/* ACTION PANEL */}
                                 <div className="mt-8 pt-8 border-t border-gray-100">
                                     <div className="flex flex-col gap-3">
+                                        {/* OPTION: ADD PET RECORD IF UNREGISTERED */}
+                                        {!report.pet_id && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsAddPetModalOpen(true)}
+                                                className="w-full py-3.5 border-2 border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 text-[#F97316] rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer hover:scale-[1.01] active:scale-95"
+                                            >
+                                                <span className="text-base">🐾</span>
+                                                <span>Add Record for this Animal in System</span>
+                                            </button>
+                                        )}
+
                                         {/* STEP 1: VERIFY */}
                                         {report.status_id === 1 && (
                                             <button
@@ -1776,6 +1815,19 @@ const SubdViewReport = () => {
                 report={report}
                 currentUser={currentUser}
             />
+
+            {/* Add Pet Record Modal */}
+            {isAddPetModalOpen && report && (
+                <AddPetModal
+                    isOpen={isAddPetModalOpen}
+                    onClose={() => setIsAddPetModalOpen(false)}
+                    initialReportData={report}
+                    onPetCreated={() => {
+                        fetchReportDetails();
+                        setShowSuccess(true);
+                    }}
+                />
+            )}
 
             {/* Success Modal */}
             <SuccessModal
