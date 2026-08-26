@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models.chat import ChatThread, ChatMessage
 from app.models.report import Report
 from app.models.user import User
+from app.models.notification import Notification
 from app.schemas.chat import (
     ChatThreadCreate, ChatThreadResponse,
     ChatMessageCreate, ChatMessageResponse,
@@ -191,6 +192,52 @@ async def send_report_message(
         is_system=is_system or False
     )
     db.add(new_msg)
+
+    # ── Notification Dispatch for Messages ──────────────────────────────────
+    try:
+        report = db.query(Report).filter(Report.report_id == report_id).first()
+        snippet = message_text.strip()
+        if not snippet and media_url:
+            snippet = "[Photo attached]"
+        elif len(snippet) > 80:
+            snippet = snippet[:80] + "..."
+
+        recipient_user_ids = set()
+
+        # If sender is citizen/resident, notify subdivision leaders for this report's subdivision
+        if current_user.role_id == 1:
+            if report and report.subdivision_id:
+                leaders = db.query(User).filter(
+                    User.subdivision_id == report.subdivision_id,
+                    User.role_id == 2
+                ).all()
+                for leader in leaders:
+                    if leader.user_id != current_user.user_id:
+                        recipient_user_ids.add(leader.user_id)
+            
+            # Also notify thread recipient if designated
+            if thread.recipient_id and thread.recipient_id != current_user.user_id:
+                recipient_user_ids.add(thread.recipient_id)
+        else:
+            # Sender is staff/leader: notify report creator
+            if report and report.user_id and report.user_id != current_user.user_id:
+                recipient_user_ids.add(report.user_id)
+            if thread.created_by and thread.created_by != current_user.user_id:
+                recipient_user_ids.add(thread.created_by)
+
+        for uid in recipient_user_ids:
+            notif = Notification(
+                user_id=uid,
+                title=f"New Message on Report #{report_id}",
+                message=f"{current_user.name}: {snippet}",
+                type="message",
+                related_id=report_id,
+                is_read=False
+            )
+            db.add(notif)
+    except Exception as notif_err:
+        print(f"Notice: Failed to dispatch message notification: {notif_err}")
+
     db.commit()
     db.refresh(new_msg)
 

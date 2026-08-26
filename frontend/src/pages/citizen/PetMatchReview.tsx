@@ -287,7 +287,24 @@ const PetMatchReview = () => {
             localStorage.setItem('straysafe_claims_submitted', JSON.stringify(filteredLocal));
 
             setExistingClaim(finalClaim);
-            alert("Claim filed successfully. Subdivision leaders and Barangay officials have been notified.");
+
+            // Sync with backend report_matches owner feedback
+            try {
+                const matchRes = await axios.get(`http://localhost:8000/matches/report/${reportId}`);
+                if (Array.isArray(matchRes.data) && matchRes.data.length > 0) {
+                    const matchingRecord = matchRes.data.find((m: any) => m.matched_pet_id === selectedPetId);
+                    if (matchingRecord) {
+                        await axios.post(`http://localhost:8000/matches/${matchingRecord.match_id}/owner-feedback`, {
+                            owner_confirmation: "OWNER_CONFIRMED",
+                            remarks: remarks || "Owner confirmed match and submitted ownership proofs."
+                        });
+                    }
+                }
+            } catch (matchErr) {
+                console.warn("Could not sync owner feedback to match record:", matchErr);
+            }
+
+            alert("Claim filed successfully. Subdivision leaders and Barangay officials have been notified for verification.");
         } catch (err: any) {
             console.error(err);
             alert("Failed to submit claim.");

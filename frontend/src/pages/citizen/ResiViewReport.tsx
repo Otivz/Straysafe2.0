@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { MapContainer, TileLayer, Marker } from 'react-leaflet';
@@ -15,6 +15,7 @@ import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import RescueTimeline from '../../components/RescueTimeline';
 import ReturnToSeleraButton from '../../components/MapControls/ReturnToSeleraButton';
 import ResolveLostPetModal from '../../components/Modals/ResolveLostPetModal';
+
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import { useReportChatCount } from '../../utils/chatUtils';
 
@@ -139,6 +140,8 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
 const ResiViewReport = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const location = useLocation();
 
     const [report, setReport] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
@@ -198,6 +201,12 @@ const ResiViewReport = () => {
     useEffect(() => {
         fetchReportDetails();
     }, [id]);
+
+    useEffect(() => {
+        if (searchParams.get('openChat') === 'true' || (location.state as any)?.openChat) {
+            setIsChatOpen(true);
+        }
+    }, [searchParams, location]);
 
     useEffect(() => {
         if (!report) return;
@@ -498,7 +507,7 @@ const ResiViewReport = () => {
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                                                     <div className="bg-white/80 p-3 rounded-2xl border border-amber-100">
                                                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Pet Owner</p>
-                                                        <p className="text-xs font-black text-gray-900">{report.owner_name || report.reporter_name || 'Registered Resident'}</p>
+                                                        <p className="text-xs font-black text-gray-900">{report.owner_name ? report.owner_name : <span className="text-gray-500 font-bold italic">No Registered Owner (Community Animal)</span>}</p>
                                                         {report.owner_address && (
                                                             <p className="text-[10px] text-gray-500 font-medium mt-0.5">{report.owner_address}</p>
                                                         )}
@@ -507,7 +516,7 @@ const ResiViewReport = () => {
                                                     <div className="bg-white/80 p-3 rounded-2xl border border-amber-100 flex flex-col justify-between">
                                                         <div>
                                                             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Owner Contact</p>
-                                                            <p className="text-xs font-black text-amber-900">{report.owner_phone || 'Available via StraySafe'}</p>
+                                                            <p className="text-xs font-black text-amber-900">{report.owner_phone || 'No Private Owner Contact'}</p>
                                                         </div>
                                                         {report.owner_phone && (
                                                             <a
@@ -531,7 +540,7 @@ const ResiViewReport = () => {
                                                                     url: report.pet_qr_code_url,
                                                                     petName: report.pet_name,
                                                                     hash: report.pet_qr_code_hash,
-                                                                    ownerName: report.owner_name || report.reporter_name,
+                                                                    ownerName: report.owner_name || undefined,
                                                                     ownerPhone: report.owner_phone
                                                                 })}
                                                             />
@@ -546,7 +555,7 @@ const ResiViewReport = () => {
                                                                 url: report.pet_qr_code_url,
                                                                 petName: report.pet_name,
                                                                 hash: report.pet_qr_code_hash,
-                                                                ownerName: report.owner_name || report.reporter_name,
+                                                                ownerName: report.owner_name || undefined,
                                                                 ownerPhone: report.owner_phone
                                                             })}
                                                             className="px-3.5 py-2 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer"
@@ -623,6 +632,8 @@ const ResiViewReport = () => {
                                                 <FormattedReportDescription description={cleanNotes} />
                                             </div>
                                         )}
+
+
                                     </div>
                                 );
                             })()}

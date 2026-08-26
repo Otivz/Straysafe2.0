@@ -8,6 +8,7 @@ import MapComponent from '../../components/MapComponent';
 import DataTable from '../../components/DataTable';
 import RescueTimeline from '../../components/RescueTimeline';
 import AISuggestionPanel from '../../components/AISuggestionPanel';
+import AIPotentialMatchesList from '../../components/AIPotentialMatchesList';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
@@ -123,7 +124,7 @@ const BrgyRescueRequests = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('ALL');
     const [statusFilter, setStatusFilter] = useState('ALL');
-    const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+    const [viewMode, setViewMode] = useState<'grid' | 'table' | 'matches'>('grid');
     const [openMenuId, setOpenMenuId] = useState<number | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -582,12 +583,30 @@ const BrgyRescueRequests = () => {
                                         </svg>
                                         <span className="hidden sm:inline">Table</span>
                                     </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setViewMode('matches')}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                                            viewMode === 'matches'
+                                                ? 'bg-white text-[#F97316] shadow-sm'
+                                                : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                        title="AI Potential Matches"
+                                    >
+                                        <span className="w-2 h-2 rounded-full bg-[#F97316]"></span>
+                                        <span className="hidden sm:inline">AI Matches</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Content Area: Cards View or Table View */}
-                        {viewMode === 'grid' ? (
+                        {/* Content Area: Matches View, Cards View or Table View */}
+                        {viewMode === 'matches' ? (
+                            <AIPotentialMatchesList
+                                isStaff={true}
+                                onMatchesUpdated={fetchRequests}
+                            />
+                        ) : viewMode === 'grid' ? (
                             loading ? (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {[1, 2, 3, 4, 5, 6].map((n) => (
@@ -1166,6 +1185,7 @@ const BrgyRescueRequests = () => {
                                 <AISuggestionPanel
                                     animalType={viewingRequest.report?.animal_type || viewingRequest.report?.ai_animal_type}
                                     dominantColor={(viewingRequest.report as any)?.animal_color || viewingRequest.report?.ai_dominant_color}
+                                    coatPattern={(viewingRequest.report as any)?.coat_pattern || (viewingRequest.report as any)?.animal_pattern || (viewingRequest.report as any)?.ai_coat_pattern}
                                     estimatedSize={(viewingRequest.report as any)?.estimated_size || viewingRequest.report?.ai_estimated_size}
                                     suggestedRiskLevel={viewingRequest.report?.ai_suggested_risk_level}
                                     suggestedPriority={viewingRequest.report?.ai_suggested_priority}

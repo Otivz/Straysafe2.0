@@ -106,8 +106,18 @@ const ResiNavbar = ({
                         msgStr.includes('potential match') ||
                         msgStr.includes('matches of your dog');
 
+        const isMessageOrComment =
+            typeStr.includes('message') ||
+            titleStr.includes('message') ||
+            typeStr.includes('comment') ||
+            titleStr.includes('comment') ||
+            typeStr.includes('chat') ||
+            titleStr.includes('chat');
+
         if (isMatch && notif.related_id) {
             navigate(`/resident/reports/${notif.related_id}/match-review`);
+        } else if (isMessageOrComment && notif.related_id) {
+            navigate(`/resident/reports/${notif.related_id}?openChat=true`, { state: { openChat: true } });
         } else if (notif.related_id) {
             if (typeStr === 'alert' || titleStr.includes('scan')) {
                 navigate(`/resident/pet/${notif.related_id}/scan-history`);

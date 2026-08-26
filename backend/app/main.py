@@ -11,13 +11,14 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Local imports (now safe to import after path fix)
 from app.database import engine, Base
-from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings
+from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches
 from app.routes import audit_logs as audit_logs_router
 from app.models.pet_qr import PetQRCode, PetQRScan
 from app.models.audit_log import AuditLog  # noqa: F401 — ensures table is in Base.metadata
 from app.models.pet_claim import PetClaim  # noqa: F401 — ensures table is in Base.metadata
 from app.models.chat import ChatThread, ChatMessage  # noqa: F401
 from app.models.warning import OwnerWarning  # noqa: F401
+from app.models.report_match import ReportMatch  # noqa: F401
 
 
 def ensure_report_media_status_column():
@@ -568,12 +569,41 @@ def ensure_warning_tables():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
         """))
 
+def ensure_report_matches_tables():
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS report_matches (
+                match_id INT NOT NULL AUTO_INCREMENT,
+                source_report_id INT NOT NULL,
+                matched_report_id INT DEFAULT NULL,
+                matched_pet_id INT DEFAULT NULL,
+                similarity_score INT NOT NULL DEFAULT 50,
+                status VARCHAR(50) NOT NULL DEFAULT 'AI_SUGGESTED',
+                ai_explanation TEXT DEFAULT NULL,
+                ai_evidence JSON DEFAULT NULL,
+                owner_confirmation_status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+                owner_notes TEXT DEFAULT NULL,
+                reviewed_by INT DEFAULT NULL,
+                reviewer_role VARCHAR(50) DEFAULT NULL,
+                verification_notes TEXT DEFAULT NULL,
+                verified_at TIMESTAMP NULL DEFAULT NULL,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (match_id),
+                KEY fk_matches_source_report (source_report_id),
+                KEY fk_matches_matched_report (matched_report_id),
+                KEY fk_matches_matched_pet (matched_pet_id),
+                KEY fk_matches_reviewer (reviewed_by)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+        """))
+
 ensure_announcement_tables_columns()
 ensure_rescue_tables_columns()
 ensure_report_verifications_columns()
 ensure_notification_archived_column()
 ensure_chat_tables()
 ensure_warning_tables()
+ensure_report_matches_tables()
 
 app = FastAPI(title="StraySafe API")
 
@@ -606,7 +636,9 @@ app.include_router(holding.router)
 app.include_router(claims.router)
 app.include_router(chat.router)
 app.include_router(warnings.router)
+app.include_router(matches.router)
 
 @app.get("/")
 def read_root():
     return {"message": "Welcome to StraySafe API"}
+

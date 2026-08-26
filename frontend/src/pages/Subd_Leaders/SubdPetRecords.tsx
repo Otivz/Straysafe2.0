@@ -13,6 +13,8 @@ import Button from '../../components/Button';
 const SubdPetRecords = () => {
     const [selectedPet, setSelectedPet] = useState<PetRecord | null>(null);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [editingPet, setEditingPet] = useState<PetRecord | null>(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [pets, setPets] = useState<PetRecord[]>([]);
     const [loading, setLoading] = useState(true);
@@ -30,14 +32,14 @@ const SubdPetRecords = () => {
                 age: pet.estimated_age || 'Unknown',
                 breed: pet.breed || 'Unknown',
                 species: pet.pet_type || 'Dog',
-                ownerName: pet.owner?.name || 'Unknown Owner',
-                ownerEmail: pet.owner?.email || 'No Email',
-                ownerPhone: pet.emergency_contact_phone || pet.owner?.phone || 'No Contact',
+                ownerName: pet.owner?.name || (pet.owner_id ? 'Unknown Owner' : 'No Owner (Community Animal)'),
+                ownerEmail: pet.owner?.email || (pet.owner_id ? 'No Email' : 'Unassigned'),
+                ownerPhone: pet.emergency_contact_phone || pet.owner?.phone || (pet.owner_id ? 'No Contact' : 'Unassigned'),
                 idNumber: `P-${pet.pet_id.toString().padStart(5, '0')}`,
                 status: pet.status || 'Active',
                 avatar: getPetPicture(pet.photo_url),
                 weight: pet.weight ? `${pet.weight}kg` : 'Unknown',
-                primaryColor: pet.primary_color || 'Brown',
+                primaryColor: pet.primary_color || (pet.color_markings ? pet.color_markings.split(' ')[0] : 'Unknown'),
                 secondaryColor: pet.secondary_color || '',
                 tertiaryColor: pet.tertiary_color || '',
                 colorMarkings: pet.color_markings || pet.distinctive_markings || 'None',
@@ -51,6 +53,8 @@ const SubdPetRecords = () => {
                 healthCondition: pet.health_condition || 'Healthy and active',
                 notes: pet.notes || '',
                 vaccineCardUrl: pet.vaccine_card_url || null,
+                registeredByName: pet.registered_by_name || pet.registered_by?.name || (pet.owner?.name ? `${pet.owner.name} (Resident Owner)` : 'Subdivision Leader / Staff'),
+                registeredAt: pet.created_at || null,
                 rawPetObj: pet
             }));
 
@@ -192,14 +196,41 @@ const SubdPetRecords = () => {
                         refreshPets();
                     }} />
 
+                    {/* Edit Pet Modal */}
+                    <AddPetModal 
+                        isOpen={isEditModalOpen} 
+                        editPetData={editingPet}
+                        onClose={() => {
+                            setIsEditModalOpen(false);
+                            setEditingPet(null);
+                            refreshPets();
+                        }} 
+                    />
+
                     {/* Centered Modal Popup */}
                     {selectedPet && (
                         <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 sm:p-12 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
                             <div className="w-full max-w-6xl rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-300 bg-white overflow-hidden flex flex-col max-h-[90vh]">
-                                <PetDetailPanel pet={selectedPet} onClose={() => {
-                                    setSelectedPet(null);
-                                    refreshPets();
-                                }} />
+                                <PetDetailPanel 
+                                    pet={selectedPet} 
+                                    onClose={() => {
+                                        setSelectedPet(null);
+                                        refreshPets();
+                                    }}
+                                    onEditClick={(petToEdit) => {
+                                        setEditingPet(petToEdit);
+                                        setSelectedPet(null);
+                                        setIsEditModalOpen(true);
+                                    }}
+                                    onOwnerAssigned={() => {
+                                        refreshPets();
+                                        setSelectedPet(null);
+                                    }}
+                                    onDeletePet={() => {
+                                        refreshPets();
+                                        setSelectedPet(null);
+                                    }}
+                                />
                             </div>
                         </div>
                     )}

@@ -226,7 +226,18 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                 <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Coat Pattern</span>
                     <div className="px-3 py-1.5 rounded-xl border bg-indigo-500/10 border-indigo-500/20 text-indigo-200 w-fit">
-                        <span className="text-xs font-extrabold uppercase tracking-wide">{coatPattern || 'Solid'}</span>
+                        <span className="text-xs font-extrabold uppercase tracking-wide">
+                            {(() => {
+                                if (coatPattern && coatPattern.trim() && coatPattern.toLowerCase() !== 'unknown') {
+                                    return coatPattern;
+                                }
+                                if (description) {
+                                    const match = description.match(/pattern:\s*([^|]+)/i) || description.match(/markings:\s*([^|]+)/i);
+                                    if (match && match[1].trim()) return match[1].trim();
+                                }
+                                return coatPattern || 'Solid';
+                            })()}
+                        </span>
                     </div>
                 </div>
 

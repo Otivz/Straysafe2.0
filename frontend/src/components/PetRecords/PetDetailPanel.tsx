@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { type PetRecord } from './types';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
@@ -10,6 +10,8 @@ interface PetDetailPanelProps {
     hideRegisteredPets?: boolean; // When true, viewed by citizen/owner
     onEditClick?: (pet: PetRecord) => void;
     onReportLostClick?: (pet: PetRecord) => void;
+    onOwnerAssigned?: () => void;
+    onDeletePet?: (petId: string) => void;
 }
 
 const PetDetailPanel: React.FC<PetDetailPanelProps> = ({ 
@@ -17,7 +19,9 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
     onClose, 
     hideRegisteredPets = false,
     onEditClick,
-    onReportLostClick
+    onReportLostClick,
+    onOwnerAssigned,
+    onDeletePet
 }) => {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'info' | 'health' | 'behavior' | 'incident'>('info');
@@ -26,6 +30,49 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
     const [incidentClaims, setIncidentClaims] = useState<any[]>([]);
     const [incidentReports, setIncidentReports] = useState<any[]>([]);
     const [isLoadingIncidents, setIsLoadingIncidents] = useState<boolean>(false);
+
+    // Photo Update State
+    const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+    const [currentPhoto, setCurrentPhoto] = useState<string | null>(null);
+    const photoInputRef = useRef<HTMLInputElement>(null);
+
+    // Assign Owner State
+    const [isAssignOwnerModalOpen, setIsAssignOwnerModalOpen] = useState(false);
+    const [assignOwnerMode, setAssignOwnerMode] = useState<'existing' | 'new'>('existing');
+    const [usersList, setUsersList] = useState<any[]>([]);
+    const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+    const [userSearchTerm, setUserSearchTerm] = useState('');
+    const [selectedOwner, setSelectedOwner] = useState<any | null>(null);
+    const [newOwnerName, setNewOwnerName] = useState('');
+    const [newOwnerEmail, setNewOwnerEmail] = useState('');
+    const [newOwnerPhone, setNewOwnerPhone] = useState('');
+    const [newOwnerAddress, setNewOwnerAddress] = useState('');
+    const [isAssigning, setIsAssigning] = useState(false);
+    const [assignError, setAssignError] = useState<string | null>(null);
+
+    // Delete Pet State
+    const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const handleDeletePet = async () => {
+        if (!pet) return;
+        try {
+            setIsDeleting(true);
+            await api.delete(`/pets/${pet.id}`);
+            setIsConfirmingDelete(false);
+            if (onDeletePet) {
+                onDeletePet(pet.id);
+            }
+            if (onClose) {
+                onClose();
+            }
+        } catch (err: any) {
+            console.error('Error deleting pet:', err);
+            alert(err.response?.data?.detail || 'Failed to delete pet record.');
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
     useEffect(() => {
         if (!pet) return;
@@ -75,7 +122,88 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
         };
     }, [pet?.id, activeTab]);
 
+    // Fetch users for owner assignment
+    const fetchUsers = async () => {
+        setIsLoadingUsers(true);
+        try {
+            const res = await api.get('/users');
+            setUsersList(Array.isArray(res.data) ? res.data : []);
+        } catch (err) {
+            console.error('Error fetching users for owner assignment:', err);
+        } finally {
+            setIsLoadingUsers(false);
+        }
+    };
+
+    useEffect(() => {
+        if (isAssignOwnerModalOpen) {
+            fetchUsers();
+            setSelectedOwner(null);
+            setNewOwnerName('');
+            setNewOwnerEmail('');
+            setNewOwnerPhone('');
+            setNewOwnerAddress('');
+            setAssignError(null);
+        }
+    }, [isAssignOwnerModalOpen]);
+
+    const handleAssignOwnerSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setAssignError(null);
+        let targetOwnerId: number | null = null;
+
+        if (assignOwnerMode === 'existing') {
+            if (!selectedOwner) {
+                setAssignError('Please select a resident account from the list.');
+                return;
+            }
+            targetOwnerId = selectedOwner.user_id;
+        } else {
+            if (!newOwnerName.trim() || !newOwnerEmail.trim()) {
+                setAssignError('Please enter the owner full name and email address.');
+                return;
+            }
+            try {
+                setIsAssigning(true);
+                const userRes = await api.post('/users/', {
+                    name: newOwnerName.trim(),
+                    email: newOwnerEmail.trim().toLowerCase(),
+                    phone: newOwnerPhone.trim() || null,
+                    password: 'password123',
+                    role_id: 1, // Resident
+                    subdivision_id: 1,
+                    barangay: 'San Vicente',
+                    city: 'Santa Maria, Bulacan',
+                    address: newOwnerAddress.trim() || null,
+                    status: 'Active'
+                });
+                targetOwnerId = userRes.data.user_id;
+            } catch (err: any) {
+                setIsAssigning(false);
+                const detail = err.response?.data?.detail || 'Failed to create new resident owner account.';
+                setAssignError(`Error creating owner: ${detail}`);
+                return;
+            }
+        }
+
+        try {
+            setIsAssigning(true);
+            await api.post(`/pets/${pet!.id}/assign-owner?owner_id=${targetOwnerId}`);
+            setIsAssignOwnerModalOpen(false);
+            if (onOwnerAssigned) {
+                onOwnerAssigned();
+            }
+        } catch (err: any) {
+            const detail = err.response?.data?.detail || 'Failed to assign owner to pet.';
+            setAssignError(`Assignment failed: ${detail}`);
+        } finally {
+            setIsAssigning(false);
+        }
+    };
+
     if (!pet) return null;
+
+    const hasOwner = Boolean(pet.rawPetObj?.owner_id && !pet.ownerName.toLowerCase().includes('no owner') && !pet.ownerName.toLowerCase().includes('unknown'));
 
     // Status pill style helper
     const getStatusStyle = (status: string) => {
@@ -93,6 +221,46 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                 return 'bg-gray-100 text-gray-600 border-gray-200';
             default:
                 return 'bg-amber-50 text-amber-600 border-amber-100';
+        }
+    };
+
+    const filteredUsers = usersList.filter(u => {
+        if (!userSearchTerm.trim()) return true;
+        const q = userSearchTerm.toLowerCase();
+        return (
+            (u.name && u.name.toLowerCase().includes(q)) ||
+            (u.email && u.email.toLowerCase().includes(q)) ||
+            (u.phone && u.phone.includes(q))
+        );
+    });
+
+    useEffect(() => {
+        if (pet) {
+            setCurrentPhoto(pet.avatar);
+        }
+    }, [pet?.avatar, pet?.id]);
+
+    const handleUpdatePetPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !pet) return;
+        try {
+            setIsUploadingPhoto(true);
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await api.post(`/pets/${pet.id}/photo`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            if (res.data?.photo_url) {
+                setCurrentPhoto(res.data.photo_url);
+                pet.avatar = res.data.photo_url;
+                if (pet.rawPetObj) pet.rawPetObj.photo_url = res.data.photo_url;
+            }
+            if (onOwnerAssigned) onOwnerAssigned();
+        } catch (err) {
+            console.error('Failed to update pet photo:', err);
+        } finally {
+            setIsUploadingPhoto(false);
+            if (photoInputRef.current) photoInputRef.current.value = '';
         }
     };
 
@@ -122,21 +290,48 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                 {/* Hero Profile Block */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Large Photo Overlay */}
-                    <div className="lg:col-span-2 relative h-[380px] rounded-[2.5rem] overflow-hidden shadow-lg border border-gray-100 bg-gray-50">
+                    <div className="lg:col-span-2 relative h-[380px] rounded-[2.5rem] overflow-hidden group shadow-lg border border-gray-100 bg-[#1a1208]">
                         <img 
-                            src={getPetPicture(pet.avatar)} 
+                            src={getPetPicture(currentPhoto || pet.avatar)} 
                             alt={pet.name} 
-                            className="w-full h-full object-cover" 
-                            onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
+                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                            onError={(e: any) => { e.target.src = DEFAULT_PET_AVATAR; }}
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent"></div>
-                        <div className="absolute bottom-8 left-8 text-white">
-                            <div className="flex items-center gap-3 mb-2 flex-wrap">
-                                <h2 className="text-4xl font-black uppercase tracking-tight">{pet.name}</h2>
-                                <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm ${getStatusStyle(pet.status)}`}>
+
+                        {/* Change Photo Button for Staff / Subdivision Leaders */}
+                        {!hideRegisteredPets && (
+                            <>
+                                <input 
+                                    type="file" 
+                                    ref={photoInputRef}
+                                    accept="image/*" 
+                                    onChange={handleUpdatePetPhoto} 
+                                    className="hidden" 
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => photoInputRef.current?.click()}
+                                    disabled={isUploadingPhoto}
+                                    className="absolute top-6 right-6 z-20 px-3.5 py-2 bg-black/60 hover:bg-[#B35D25] backdrop-blur-md text-white rounded-xl text-[11px] font-black uppercase tracking-wider border border-white/20 transition-all flex items-center gap-1.5 shadow-lg cursor-pointer disabled:opacity-50"
+                                >
+                                    <span>📷</span>
+                                    <span>{isUploadingPhoto ? 'Uploading...' : 'Change Photo'}</span>
+                                </button>
+                            </>
+                        )}
+
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-8 sm:p-10">
+                            <div className="flex items-center gap-3 mb-2">
+                                <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border ${getStatusStyle(pet.status)}`}>
                                     {pet.status}
                                 </span>
+                                {!hasOwner && (
+                                    <span className="px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest bg-amber-500 text-white shadow-sm">
+                                        🐾 Unassigned / No Owner Yet
+                                    </span>
+                                )}
                             </div>
+                            <h2 className="text-3xl sm:text-4xl font-black text-white uppercase tracking-tight">{pet.name}</h2>
                             <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">{pet.breed} • {pet.species} • {pet.sizeCategory || 'Medium'} Size</p>
                         </div>
                     </div>
@@ -145,7 +340,14 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                     <div className="flex flex-col justify-between gap-6">
                         {/* Vitals summary */}
                         <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 space-y-5">
-                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Registry Details</h3>
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Registry Details</h3>
+                                {!hasOwner && (
+                                    <span className="text-[9px] font-black uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
+                                        Community Animal
+                                    </span>
+                                )}
+                            </div>
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center">
                                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Record ID</span>
@@ -153,18 +355,22 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 </div>
                                 <div className="border-t border-gray-50"></div>
                                 <div className="flex justify-between items-center">
-                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Owner Name</span>
-                                    <span className="text-xs font-black text-[#1a1208] uppercase">{pet.ownerName}</span>
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Owner</span>
+                                    {hasOwner ? (
+                                        <span className="text-xs font-black text-[#1a1208] uppercase">{pet.ownerName}</span>
+                                    ) : (
+                                        <span className="text-xs font-black text-amber-800 uppercase italic">No Owner (Unassigned)</span>
+                                    )}
                                 </div>
                                 <div className="border-t border-gray-50"></div>
                                 <div className="flex justify-between items-center">
-                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Owner Email</span>
-                                    <span className="text-xs font-black text-[#1a1208] truncate max-w-[150px]">{pet.ownerEmail}</span>
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Email</span>
+                                    <span className="text-xs font-black text-[#1a1208] truncate max-w-[150px]">{hasOwner ? pet.ownerEmail : '—'}</span>
                                 </div>
                                 <div className="border-t border-gray-50"></div>
                                 <div className="flex justify-between items-center">
-                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Owner Contact</span>
-                                    <span className="text-xs font-black text-[#1a1208]">{pet.ownerPhone || 'No Contact'}</span>
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Contact</span>
+                                    <span className="text-xs font-black text-[#1a1208]">{hasOwner ? (pet.ownerPhone || 'No Contact') : '—'}</span>
                                 </div>
                             </div>
                         </div>
@@ -216,12 +422,34 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                             </div>
                         )}
 
-                        {/* Action Buttons for Subd Leader (read-only QR viewer) */}
+                        {/* Action Buttons for Subd Leader */}
                         {!hideRegisteredPets && (
                             <div className="space-y-3">
+                                {!hasOwner && (
+                                    <button 
+                                        onClick={() => onEditClick && onEditClick(pet)}
+                                        className="w-full py-3.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] rounded-2xl font-black text-xs uppercase tracking-widest border border-orange-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                        Edit Pet Details
+                                    </button>
+                                )}
+
+                                <button 
+                                    onClick={() => setIsAssignOwnerModalOpen(true)}
+                                    className={`w-full py-3.5 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                                        hasOwner ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-amber-600 hover:bg-amber-700'
+                                    }`}
+                                >
+                                    <span>👤</span>
+                                    {hasOwner ? 'Change / Reassign Owner' : '🐾 Assign / Register Owner'}
+                                </button>
+
                                 <button 
                                     onClick={() => navigate(`/resident/pet/${pet.id}/qr?mode=subd`)}
-                                    className="w-full py-4 bg-[#F97316] hover:bg-[#E2620D] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                    className="w-full py-3.5 bg-[#F97316] hover:bg-[#E2620D] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v1m0 11v1m4-12h1a2 2 0 012 2v1m-9 9h1a2 2 0 012 2v1M4 12H3m18 0h-1m-2-5H8a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2V9a2 2 0 00-2-2z" />
@@ -231,12 +459,22 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 
                                 <button 
                                     onClick={() => navigate(`/resident/pet/${pet.id}/scan-history?mode=subd`)}
-                                    className="w-full py-4 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-2xl font-black text-xs uppercase tracking-widest border border-gray-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                    className="w-full py-3.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-2xl font-black text-xs uppercase tracking-widest border border-gray-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                                     </svg>
                                     Sighting History
+                                </button>
+
+                                <button 
+                                    onClick={() => setIsConfirmingDelete(true)}
+                                    className="w-full py-3.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl font-black text-xs uppercase tracking-widest border border-red-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                    Remove Pet Record
                                 </button>
                             </div>
                         )}
@@ -321,6 +559,44 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                         <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
                                             <span className="text-xs font-bold text-gray-500">Color Markings</span>
                                             <span className="text-xs font-black text-[#1a1208] uppercase truncate max-w-[200px]">{pet.colorMarkings || 'None'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Registration & Ownership Record */}
+                                <div className="space-y-4 md:col-span-2 border-t border-gray-100 pt-6">
+                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Registration & Ownership Record</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        <div className="bg-[#FAFAF9] p-4 rounded-2xl border border-gray-100/80 flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-xl bg-orange-100 text-[#F97316] flex items-center justify-center text-lg font-black shrink-0">
+                                                📝
+                                            </div>
+                                            <div className="min-w-0">
+                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Registered By</span>
+                                                <span className="text-xs font-black text-[#1a1208] truncate block">{pet.registeredByName || pet.rawPetObj?.registered_by_name || 'Subdivision Leader / Staff'}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-[#FAFAF9] p-4 rounded-2xl border border-gray-100/80 flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-lg font-black shrink-0">
+                                                📅
+                                            </div>
+                                            <div className="min-w-0">
+                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Registration Date</span>
+                                                <span className="text-xs font-black text-[#1a1208] truncate block">
+                                                    {pet.registeredAt || pet.rawPetObj?.created_at ? new Date(pet.registeredAt || pet.rawPetObj?.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently Registered'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-[#FAFAF9] p-4 rounded-2xl border border-gray-100/80 flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-lg font-black shrink-0">
+                                                👤
+                                            </div>
+                                            <div className="min-w-0">
+                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Owner Status</span>
+                                                <span className="text-xs font-black text-[#1a1208] truncate block">{hasOwner ? pet.ownerName : 'No Owner Assigned'}</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -730,6 +1006,221 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 </svg>
                                 Open Original
                             </a>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Assign Owner Modal */}
+            {isAssignOwnerModalOpen && (
+                <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
+                    <div 
+                        className="absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300"
+                        onClick={() => !isAssigning && setIsAssignOwnerModalOpen(false)}
+                    />
+                    <div className="relative w-full max-w-lg bg-white rounded-[2.5rem] p-8 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+                        <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center font-black text-base shrink-0">
+                                    🐾
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-black text-[#1a1208] uppercase tracking-tight">
+                                        {hasOwner ? 'Reassign Pet Owner' : 'Assign / Register Pet Owner'}
+                                    </h3>
+                                    <p className="text-[11px] font-bold text-gray-400">For animal: <span className="text-[#B35D25]">{pet.name} ({pet.idNumber})</span></p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => !isAssigning && setIsAssignOwnerModalOpen(false)}
+                                className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-900"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {assignError && (
+                            <div className="p-3.5 mb-4 bg-red-50 border border-red-200 rounded-2xl text-xs font-bold text-red-700">
+                                {assignError}
+                            </div>
+                        )}
+
+                        {/* Mode Selection Tabs */}
+                        <div className="grid grid-cols-2 gap-2 p-1.5 bg-gray-100 rounded-2xl border border-gray-200 mb-6">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setAssignOwnerMode('existing');
+                                    setAssignError(null);
+                                }}
+                                className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 ${assignOwnerMode === 'existing' ? 'bg-white text-[#B35D25] shadow-md' : 'text-gray-500 hover:text-gray-800'}`}
+                            >
+                                Select Resident
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setAssignOwnerMode('new');
+                                    setAssignError(null);
+                                }}
+                                className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 ${assignOwnerMode === 'new' ? 'bg-[#B35D25] text-white shadow-md' : 'text-gray-500 hover:text-gray-800'}`}
+                            >
+                                + Create New Owner
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleAssignOwnerSubmit} className="space-y-4">
+                            {assignOwnerMode === 'existing' ? (
+                                <div className="space-y-3">
+                                    <input 
+                                        type="text" 
+                                        value={userSearchTerm}
+                                        onChange={(e) => setUserSearchTerm(e.target.value)}
+                                        placeholder="Search resident by name, email, or phone..." 
+                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-900 placeholder-gray-400 focus:bg-white focus:border-[#B35D25] outline-none"
+                                    />
+
+                                    {isLoadingUsers ? (
+                                        <div className="p-6 text-center text-xs text-gray-400">Loading residents...</div>
+                                    ) : filteredUsers.length === 0 ? (
+                                        <div className="p-6 text-center text-xs text-gray-400 bg-gray-50 rounded-2xl">
+                                            No matching residents found.
+                                        </div>
+                                    ) : (
+                                        <div className="max-h-44 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                                            {filteredUsers.map((u) => {
+                                                const isSelected = selectedOwner?.user_id === u.user_id;
+                                                return (
+                                                    <div 
+                                                        key={u.user_id}
+                                                        onClick={() => setSelectedOwner(u)}
+                                                        className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${isSelected ? 'bg-orange-50/70 border-[#B35D25] ring-2 ring-[#B35D25]/20' : 'bg-gray-50/50 border-gray-100 hover:bg-gray-100'}`}
+                                                    >
+                                                        <div className="min-w-0">
+                                                            <h5 className="text-xs font-black text-gray-900 truncate">{u.name}</h5>
+                                                            <p className="text-[10px] text-gray-500 truncate">{u.email} {u.phone ? `• ${u.phone}` : ''}</p>
+                                                        </div>
+                                                        {isSelected && <span className="text-xs font-black text-[#B35D25]">✓</span>}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+
+                                    {selectedOwner && (
+                                        <div className="p-3 bg-teal-50 border border-teal-100 rounded-xl flex items-center justify-between text-xs font-extrabold text-teal-900">
+                                            <span>Selected: {selectedOwner.name} ({selectedOwner.email})</span>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Full Name *</label>
+                                        <input 
+                                            type="text" 
+                                            value={newOwnerName} 
+                                            onChange={(e) => setNewOwnerName(e.target.value)} 
+                                            placeholder="Owner's full name"
+                                            className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Email Address *</label>
+                                        <input 
+                                            type="email" 
+                                            value={newOwnerEmail} 
+                                            onChange={(e) => setNewOwnerEmail(e.target.value)} 
+                                            placeholder="owner@example.com"
+                                            className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Contact Phone</label>
+                                        <input 
+                                            type="tel" 
+                                            value={newOwnerPhone} 
+                                            onChange={(e) => setNewOwnerPhone(e.target.value)} 
+                                            placeholder="0917 123 4567"
+                                            className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Subdivision Address</label>
+                                        <input 
+                                            type="text" 
+                                            value={newOwnerAddress} 
+                                            onChange={(e) => setNewOwnerAddress(e.target.value)} 
+                                            placeholder="Lot / Block / Street"
+                                            className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex gap-3 pt-4 border-t border-gray-100">
+                                <button 
+                                    type="button"
+                                    onClick={() => setIsAssignOwnerModalOpen(false)}
+                                    disabled={isAssigning}
+                                    className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-black uppercase tracking-wider"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    type="submit"
+                                    disabled={isAssigning}
+                                    className="flex-1 py-3 bg-[#B35D25] hover:bg-[#974A1A] text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md disabled:opacity-50"
+                                >
+                                    {isAssigning ? 'Saving...' : 'Confirm Assignment'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Remove Pet Record Confirmation Modal */}
+            {isConfirmingDelete && pet && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1a1208]/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="relative w-full max-w-md bg-white rounded-3xl p-6 md:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
+                        <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center text-xl shrink-0 mx-auto">
+                            🗑️
+                        </div>
+
+                        <div className="text-center space-y-2">
+                            <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Remove Pet Record</h3>
+                            <p className="text-xs text-gray-500 font-semibold leading-relaxed">
+                                Are you sure you want to remove <span className="font-bold text-gray-900">"{pet.name}"</span> ({pet.idNumber}) from the system records?
+                            </p>
+                            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 p-3 rounded-2xl font-medium text-left mt-3">
+                                ⚠️ This will permanently remove the pet, its QR codes, and any associated AI matching references.
+                            </p>
+                        </div>
+
+                        <div className="flex gap-3 pt-2">
+                            <button 
+                                type="button"
+                                onClick={() => setIsConfirmingDelete(false)}
+                                disabled={isDeleting}
+                                className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                type="button"
+                                onClick={handleDeletePet}
+                                disabled={isDeleting}
+                                className="flex-1 py-3.5 bg-red-600 hover:bg-red-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg shadow-red-900/20 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {isDeleting ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        <span>Removing...</span>
+                                    </>
+                                ) : (
+                                    <span>Yes, Remove</span>
+                                )}
+                            </button>
                         </div>
                     </div>
                 </div>
