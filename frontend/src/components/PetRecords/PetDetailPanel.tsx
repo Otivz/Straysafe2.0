@@ -26,10 +26,28 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'info' | 'health' | 'behavior' | 'incident'>('info');
     const [isQrOpen, setIsQrOpen] = useState(false);
+    const [qrData, setQrData] = useState<any | null>(null);
+    const [isLoadingQr, setIsLoadingQr] = useState(false);
     const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
     const [incidentClaims, setIncidentClaims] = useState<any[]>([]);
     const [incidentReports, setIncidentReports] = useState<any[]>([]);
     const [isLoadingIncidents, setIsLoadingIncidents] = useState<boolean>(false);
+
+    const handleOpenQrModal = async () => {
+        if (!pet) return;
+        setIsQrOpen(true);
+        if (!qrData) {
+            setIsLoadingQr(true);
+            try {
+                const res = await api.get(`/pets/${pet.id}/qr`);
+                setQrData(res.data);
+            } catch (err) {
+                console.error("Failed to load pet QR code:", err);
+            } finally {
+                setIsLoadingQr(false);
+            }
+        }
+    };
 
     // Photo Update State
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -401,7 +419,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 )}
 
                                 <button 
-                                    onClick={() => navigate(`/resident/pet/${pet.id}/qr`)}
+                                    onClick={handleOpenQrModal}
                                     className="w-full py-4 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-2xl font-black text-xs uppercase tracking-widest border border-gray-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -418,6 +436,16 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                                     </svg>
                                     Sighting History
+                                </button>
+
+                                <button 
+                                    onClick={() => setIsConfirmingDelete(true)}
+                                    className="w-full py-4 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl font-black text-xs uppercase tracking-widest border border-red-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                    Remove Pet
                                 </button>
                             </div>
                         )}
@@ -448,7 +476,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 </button>
 
                                 <button 
-                                    onClick={() => navigate(`/resident/pet/${pet.id}/qr?mode=subd`)}
+                                    onClick={handleOpenQrModal}
                                     className="w-full py-3.5 bg-[#F97316] hover:bg-[#E2620D] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -921,41 +949,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 
             </div>
 
-            {/* Mock QR Code Modal */}
-            {isQrOpen && (
-                <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
-                    <div 
-                        className="absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300"
-                        onClick={() => setIsQrOpen(false)}
-                    />
-                    <div className="relative w-full max-w-sm bg-white rounded-[2.5rem] p-8 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 text-center">
-                        <h3 className="text-xl font-black text-[#1a1208] uppercase tracking-tight mb-2">Pet ID QR Code</h3>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-6">StraySafe Smart Identification Tag</p>
-                        
-                        {/* High-Fidelity Mock QR Container */}
-                        <div className="w-48 h-48 mx-auto bg-gray-50 border-4 border-dashed border-[#F97316]/20 rounded-3xl p-6 flex flex-col items-center justify-center relative mb-6 shadow-inner group">
-                            {/* Inset mock QR code layout */}
-                            <div className="w-full h-full bg-cover bg-center rounded-lg opacity-90" style={{ backgroundImage: "url('https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=straysafe_pet_id_'" + pet.idNumber }}></div>
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 bg-white rounded-xl shadow-md border border-gray-100 flex items-center justify-center">
-                                <img src="/SSLOGO.png" className="h-7 w-auto" alt="Logo" />
-                            </div>
-                        </div>
 
-                        <div className="space-y-1.5 mb-8">
-                            <p className="text-base font-black text-[#1a1208] uppercase">{pet.name}</p>
-                            <p className="text-[10px] font-black text-[#F97316] uppercase tracking-widest">{pet.idNumber}</p>
-                            <p className="text-[11px] text-gray-400 font-semibold px-4 mt-2">Scan to retrieve vaccine verification, owner contact details, and emergency subdivision records.</p>
-                        </div>
-
-                        <button 
-                            onClick={() => setIsQrOpen(false)}
-                            className="w-full py-4 bg-[#1a1208] hover:bg-[#2c2010] text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-md transition-all cursor-pointer"
-                        >
-                            Close QR Tag
-                        </button>
-                    </div>
-                </div>
-            )}
 
             {/* Vaccine Card / Evidence Lightbox Modal */}
             {isEvidenceOpen && pet.vaccineCardUrl && (
@@ -1179,22 +1173,23 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                 </div>
             )}
 
-            {/* Remove Pet Record Confirmation Modal */}
+            {/* Remove Pet Confirmation Modal */}
             {isConfirmingDelete && pet && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1a1208]/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="relative w-full max-w-md bg-white rounded-3xl p-6 md:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
-                        <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center text-xl shrink-0 mx-auto">
-                            🗑️
+                        <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center text-2xl shrink-0 mx-auto border border-red-100 shadow-sm">
+                            🐾
                         </div>
 
-                        <div className="text-center space-y-2">
-                            <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Remove Pet Record</h3>
-                            <p className="text-xs text-gray-500 font-semibold leading-relaxed">
-                                Are you sure you want to remove <span className="font-bold text-gray-900">"{pet.name}"</span> ({pet.idNumber}) from the system records?
+                        <div className="text-center space-y-3">
+                            <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Remove this pet?</h3>
+                            <p className="text-xs text-gray-600 font-medium leading-relaxed">
+                                This pet will be removed from your active pet list. Previous reports, records, QR history, and other related information will remain in the system.
                             </p>
-                            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 p-3 rounded-2xl font-medium text-left mt-3">
-                                ⚠️ This will permanently remove the pet, its QR codes, and any associated AI matching references.
-                            </p>
+                            <div className="p-3 bg-gray-50 rounded-2xl border border-gray-100 text-left">
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Pet to Remove</span>
+                                <span className="text-xs font-black text-gray-900 block mt-0.5">{pet.name} {pet.breed ? `(${pet.breed})` : ''}</span>
+                            </div>
                         </div>
 
                         <div className="flex gap-3 pt-2">
@@ -1202,7 +1197,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 type="button"
                                 onClick={() => setIsConfirmingDelete(false)}
                                 disabled={isDeleting}
-                                className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+                                className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50"
                             >
                                 Cancel
                             </button>
@@ -1218,8 +1213,92 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                         <span>Removing...</span>
                                     </>
                                 ) : (
-                                    <span>Yes, Remove</span>
+                                    <span>Remove Pet</span>
                                 )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Real StraySafe QR Tag Lightbox Modal */}
+            {isQrOpen && (
+                <div 
+                    className="fixed inset-0 z-[700] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200"
+                    onClick={() => setIsQrOpen(false)}
+                >
+                    <div 
+                        className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl border border-amber-100 animate-in zoom-in-95 duration-200 text-center relative"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <button
+                            onClick={() => setIsQrOpen(false)}
+                            className="absolute top-5 right-5 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-colors cursor-pointer"
+                        >
+                            ✕
+                        </button>
+                        
+                        <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl font-black mx-auto mb-2">
+                            🐾
+                        </div>
+                        <h3 className="text-xl font-black text-[#1a1208] uppercase tracking-tight mb-1">
+                            Pet ID QR Code
+                        </h3>
+                        <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-5">
+                            StraySafe Smart Identification Tag
+                        </p>
+
+                        <div className="w-56 h-56 mx-auto bg-amber-50/50 border-4 border-dashed border-[#F97316]/30 rounded-3xl p-3 flex flex-col items-center justify-center relative mb-4 shadow-inner">
+                            {isLoadingQr ? (
+                                <div className="flex flex-col items-center justify-center gap-2">
+                                    <div className="w-8 h-8 border-3 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+                                    <span className="text-[11px] text-gray-400 font-bold">Generating real QR tag...</span>
+                                </div>
+                            ) : qrData?.qr_image_url ? (
+                                <img
+                                    src={qrData.qr_image_url}
+                                    alt="Live StraySafe Pet QR Code"
+                                    className="w-full h-full object-contain rounded-2xl shadow-xs bg-white p-1.5"
+                                />
+                            ) : (
+                                <div className="flex flex-col items-center justify-center gap-1 text-center p-2">
+                                    <span className="text-2xl">⚠️</span>
+                                    <span className="text-[11px] text-gray-500 font-bold">QR Tag not generated yet</span>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-1 mb-5">
+                            <p className="text-lg font-black text-[#1a1208] uppercase">{pet.name}</p>
+                            <p className="text-[11px] font-black text-[#F97316] uppercase tracking-widest">{pet.idNumber || `P-${pet.id.padStart(5, '0')}`}</p>
+                            {qrData?.qr_token && (
+                                <p className="text-[10px] font-mono font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md inline-block mt-1">
+                                    Tag ID: {qrData.qr_token.slice(0, 10).toUpperCase()}
+                                </p>
+                            )}
+                            <p className="text-[11px] text-gray-500 font-semibold px-2 pt-1 leading-relaxed">
+                                Scan to retrieve vaccine verification, owner contact details, and emergency subdivision records.
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsQrOpen(false);
+                                    navigate(hideRegisteredPets ? `/resident/pet/${pet.id}/qr` : `/subd/pet/${pet.id}/qr?mode=subd`);
+                                }}
+                                className="w-full py-3.5 bg-[#B35D25] hover:bg-[#964E1F] text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+                            >
+                                <span>Open Full Printable Card</span>
+                                <span>↗</span>
+                            </button>
+                            <button 
+                                type="button"
+                                onClick={() => setIsQrOpen(false)}
+                                className="w-full py-3 bg-[#1a1208] hover:bg-[#2c2010] text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer"
+                            >
+                                Close QR Tag
                             </button>
                         </div>
                     </div>

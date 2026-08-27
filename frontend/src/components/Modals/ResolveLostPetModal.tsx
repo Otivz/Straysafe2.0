@@ -193,9 +193,12 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
             // 3. Update report status if report ID is identified
             if (activeReportId) {
                 try {
+                    const userStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user') || localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
+                    const currentUser = userStr ? JSON.parse(userStr) : null;
                     const statusRes = await api.patch(`/reports/${activeReportId}/status`, {
                         status_id: meta.reportStatusId,
                         remarks: finalRemarks,
+                        user_id: currentUser?.user_id || currentUser?.id,
                         animal_condition: primaryChoice === 'deceased' ? 'Deceased' : 'Healthy'
                     });
 

@@ -15,6 +15,7 @@ import AISuggestionPanel from '../../components/AISuggestionPanel';
 import AIPotentialMatchesList from '../../components/AIPotentialMatchesList';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
+import TakeoverReportModal from '../../components/Modals/TakeoverReportModal';
 
 interface Report {
     report_id: number;
@@ -45,6 +46,10 @@ interface Report {
     ai_suggested_risk_level?: string | null;
     ai_suggested_priority?: string | null;
     ai_suggested_priority_reason?: string | null;
+    assigned_leader_id?: number | null;
+    assigned_leader_name?: string | null;
+    assigned_leader_photo?: string | null;
+    claimed_at?: string | null;
 }
 
 const statusMap: Record<number, string> = {
@@ -74,7 +79,10 @@ const SubdReports = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [reportQueue, setReportQueue] = useState<'all' | 'unassigned' | 'my_reports'>('all');
     const [viewMode, setViewMode] = useState<'cards' | 'table' | 'matches'>('cards');
+    const [takeoverTarget, setTakeoverTarget] = useState<{ id: number; currentHandlerName: string } | null>(null);
+    const [claimingReportId, setClaimingReportId] = useState<number | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
     const [openMenuId, setOpenMenuId] = useState<number | null>(null);
@@ -261,8 +269,30 @@ const SubdReports = () => {
             for (const r of reports) {
                 if (!isMounted) break;
                 if (reportAddresses[r.report_id]) continue;
+
+                // Priority 1: If report already has a descriptive landmark, use it directly
+                if (r.landmark && r.landmark.trim() && 
+                    !r.landmark.toLowerCase().includes('no landmark') &&
+                    r.landmark.trim().length > 3) {
+                    setReportAddresses(prev => ({ ...prev, [r.report_id]: r.landmark! }));
+                    continue;
+                }
+
                 if (!r.latitude || !r.longitude) continue;
 
+                // Priority 2: Check sessionStorage cache
+                const cacheKey = `straysafe_geo_${parseFloat(r.latitude.toString()).toFixed(4)}_${parseFloat(r.longitude.toString()).toFixed(4)}`;
+                try {
+                    const cached = sessionStorage.getItem(cacheKey);
+                    if (cached) {
+                        setReportAddresses(prev => ({ ...prev, [r.report_id]: cached }));
+                        continue;
+                    }
+                } catch {
+                    // Ignore storage access errors
+                }
+
+                // Priority 3: Query Nominatim with safe rate limiting
                 try {
                     const res = await axios.get('https://nominatim.openstreetmap.org/reverse', {
                         params: {
@@ -286,13 +316,15 @@ const SubdReports = () => {
                         const fullAddr = parts.join(', ') || res.data.display_name;
 
                         if (fullAddr) {
+                            try { sessionStorage.setItem(cacheKey, fullAddr); } catch { /* ignore */ }
                             setReportAddresses(prev => ({ ...prev, [r.report_id]: fullAddr }));
                         }
                     }
-                } catch (err) {
-                    // Ignore errors silently for individual items
+                } catch {
+                    // Ignore errors silently (rate limit 429 or network fail)
                 }
-                await new Promise(resolve => setTimeout(resolve, 200));
+                // Adhere to Nominatim 1 req/sec policy
+                await new Promise(resolve => setTimeout(resolve, 1000));
             }
         };
 
@@ -306,7 +338,7 @@ const SubdReports = () => {
             return reportAddresses[rep.report_id];
         }
         if (rep.landmark && rep.landmark.trim() && rep.landmark.toLowerCase() !== 'no landmark specified' && rep.landmark.toLowerCase() !== 'no landmark') {
-            return `${rep.landmark} (${parseFloat(rep.latitude.toString()).toFixed(5)}, ${parseFloat(rep.longitude.toString()).toFixed(5)})`;
+            return `${rep.landmark}`;
         }
         return `${parseFloat(rep.latitude.toString()).toFixed(5)}, ${parseFloat(rep.longitude.toString()).toFixed(5)}`;
     };
@@ -642,19 +674,58 @@ const SubdReports = () => {
         }
     };
 
+    const handleClaimReport = async (reportId: number, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        try {
+            setClaimingReportId(reportId);
+            await axios.post(`http://localhost:8000/reports/${reportId}/claim`, {
+                user_id: currentUserId
+            });
+            setShowSuccess(true);
+            await fetchReports();
+            setTimeout(() => setShowSuccess(false), 3000);
+        } catch (err: any) {
+            console.error('Error claiming report:', err);
+            const msg = err.response?.data?.detail || 'Failed to claim report. Please try again.';
+            alert(msg);
+            fetchReports();
+        } finally {
+            setClaimingReportId(null);
+        }
+    };
+
+    // Queue counts (excluding resolved/inactive)
+    const unassignedCount = reports.filter(r => !r.assigned_leader_id && ![11, 12, 3, 9, 10].includes(r.status_id)).length;
+    const myReportsCount = reports.filter(r => r.assigned_leader_id === currentUserId && ![11, 12, 3, 9, 10].includes(r.status_id)).length;
+    const allActiveCount = reports.filter(r => ![11, 12, 3, 9, 10].includes(r.status_id)).length;
+
     const filteredReports = reports.filter(rep => {
         const catName = categoryMap[rep.category_id]?.toLowerCase() || '';
         const land = (rep.landmark || '').toLowerCase();
         const exactLoc = getExactLocationText(rep).toLowerCase();
         const reporter = (rep.reporter_name || '').toLowerCase();
-        const matchesSearch = catName.includes(searchTerm.toLowerCase()) || land.includes(searchTerm.toLowerCase()) || exactLoc.includes(searchTerm.toLowerCase()) || reporter.includes(searchTerm.toLowerCase());
+        const handlerName = (rep.assigned_leader_name || '').toLowerCase();
+        const matchesSearch =
+            catName.includes(searchTerm.toLowerCase()) ||
+            land.includes(searchTerm.toLowerCase()) ||
+            exactLoc.includes(searchTerm.toLowerCase()) ||
+            reporter.includes(searchTerm.toLowerCase()) ||
+            handlerName.includes(searchTerm.toLowerCase());
         const statName = statusMap[rep.status_id] || '';
         const matchesStatus = statusFilter === 'all' || statName.toLowerCase() === statusFilter.toLowerCase();
+
+        // Queue filter
+        let matchesQueue = true;
+        if (reportQueue === 'unassigned') {
+            matchesQueue = !rep.assigned_leader_id;
+        } else if (reportQueue === 'my_reports') {
+            matchesQueue = rep.assigned_leader_id === currentUserId;
+        }
 
         // Exclude resolved (11), deceased (12), rejected (3), claimed (9), and released (10) reports from the active ongoing list
         const isActive = rep.status_id !== 11 && rep.status_id !== 12 && rep.status_id !== 3 && rep.status_id !== 9 && rep.status_id !== 10;
 
-        return matchesSearch && matchesStatus && isActive;
+        return matchesSearch && matchesStatus && matchesQueue && isActive;
     });
 
     const getPriorityColor = (priority: string) => {
@@ -747,6 +818,89 @@ const SubdReports = () => {
                                             <span>Report Incident</span>
                                         </Button>
                                     </div>
+                                </div>
+
+                                {/* Workflow Queues Segmented Tabs */}
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setReportQueue('all'); if (viewMode === 'matches') setViewMode('cards'); }}
+                                        className={`p-4 rounded-2xl border transition-all text-left flex flex-col justify-between cursor-pointer ${
+                                            reportQueue === 'all' && viewMode !== 'matches'
+                                                ? 'bg-white border-[#F97316] ring-2 ring-orange-500/20 shadow-sm'
+                                                : 'bg-white/80 border-gray-100 hover:bg-white hover:border-gray-200'
+                                        }`}
+                                    >
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">All Active Reports</span>
+                                        <div className="flex items-baseline justify-between mt-2">
+                                            <span className="text-2xl font-black text-gray-900">{allActiveCount}</span>
+                                            <span className="text-xs text-gray-400 font-bold">Total</span>
+                                        </div>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => { setReportQueue('unassigned'); if (viewMode === 'matches') setViewMode('cards'); }}
+                                        className={`p-4 rounded-2xl border transition-all text-left flex flex-col justify-between relative overflow-hidden cursor-pointer ${
+                                            reportQueue === 'unassigned' && viewMode !== 'matches'
+                                                ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/20 shadow-sm'
+                                                : 'bg-white border-gray-100 hover:bg-amber-50/50 hover:border-amber-200'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black text-amber-800 uppercase tracking-widest flex items-center gap-1.5">
+                                                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                                                Unassigned
+                                            </span>
+                                            {unassignedCount > 0 && (
+                                                <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black">
+                                                    Claim Now
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-baseline justify-between mt-2">
+                                            <span className="text-2xl font-black text-amber-950">{unassignedCount}</span>
+                                            <span className="text-xs text-amber-700 font-bold">Unclaimed</span>
+                                        </div>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => { setReportQueue('my_reports'); if (viewMode === 'matches') setViewMode('cards'); }}
+                                        className={`p-4 rounded-2xl border transition-all text-left flex flex-col justify-between cursor-pointer ${
+                                            reportQueue === 'my_reports' && viewMode !== 'matches'
+                                                ? 'bg-emerald-500/10 border-emerald-500 ring-2 ring-emerald-500/20 shadow-sm'
+                                                : 'bg-white border-gray-100 hover:bg-emerald-50/50 hover:border-emerald-200'
+                                        }`}
+                                    >
+                                        <span className="text-[10px] font-black text-emerald-800 uppercase tracking-widest flex items-center gap-1.5">
+                                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                            My Reports
+                                        </span>
+                                        <div className="flex items-baseline justify-between mt-2">
+                                            <span className="text-2xl font-black text-emerald-950">{myReportsCount}</span>
+                                            <span className="text-xs text-emerald-700 font-bold">Your Cases</span>
+                                        </div>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setViewMode('matches')}
+                                        className={`p-4 rounded-2xl border transition-all text-left flex flex-col justify-between cursor-pointer ${
+                                            viewMode === 'matches'
+                                                ? 'bg-purple-500/10 border-purple-500 ring-2 ring-purple-500/20 shadow-sm'
+                                                : 'bg-white border-gray-100 hover:bg-purple-50/50 hover:border-purple-200'
+                                        }`}
+                                    >
+                                        <span className="text-[10px] font-black text-purple-800 uppercase tracking-widest flex items-center gap-1.5">
+                                            <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                                            AI Sighting Matches
+                                        </span>
+                                        <div className="flex items-baseline justify-between mt-2">
+                                            <span className="text-2xl font-black text-purple-950">AI</span>
+                                            <span className="text-xs text-purple-700 font-bold">Match Review</span>
+                                        </div>
+                                    </button>
                                 </div>
 
                                 {/* Search & Filters */}
@@ -1045,8 +1199,8 @@ const SubdReports = () => {
                                                         )}
                                                     </div>
 
-                                                    {/* Card Footer */}
-                                                    <div className="pt-3.5 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                                                    {/* Card Footer - Reporter & Timestamp */}
+                                                    <div className="pt-3.5 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500 mb-3">
                                                         <div className="flex items-center space-x-2">
                                                             <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] text-gray-500 font-bold border border-gray-200 shrink-0">
                                                                 {(rep.reporter_name || 'U').charAt(0).toUpperCase()}
@@ -1067,6 +1221,62 @@ const SubdReports = () => {
                                                                 </svg>
                                                             </span>
                                                         </div>
+                                                    </div>
+
+                                                    {/* Handler Ownership Footer */}
+                                                    <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                                                        {!rep.assigned_leader_id ? (
+                                                            <div className="flex items-center justify-between w-full">
+                                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 text-[11px] font-black border border-amber-200/60">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                                                                    Unassigned
+                                                                </span>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => handleClaimReport(rep.report_id, e)}
+                                                                    disabled={claimingReportId === rep.report_id}
+                                                                    className="px-3 py-1.5 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black shadow-xs transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                                                                >
+                                                                    {claimingReportId === rep.report_id ? (
+                                                                        <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin"></span>
+                                                                    ) : (
+                                                                        <span>🛡️ Claim Report</span>
+                                                                    )}
+                                                                </button>
+                                                            </div>
+                                                        ) : rep.assigned_leader_id === currentUserId ? (
+                                                            <div className="flex items-center justify-between w-full">
+                                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-800 text-[11px] font-black border border-emerald-200/60">
+                                                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                                                    Handled by You
+                                                                </span>
+                                                                <span className="text-[10px] text-gray-400 font-bold">
+                                                                    {rep.claimed_at ? <RelativeTimestamp date={rep.claimed_at} /> : 'Active'}
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center justify-between w-full">
+                                                                <div className="flex items-center gap-1.5 overflow-hidden">
+                                                                    <span className="text-xs">👤</span>
+                                                                    <span className="text-xs font-black text-gray-700 truncate max-w-[120px]" title={rep.assigned_leader_name || ''}>
+                                                                        {rep.assigned_leader_name || `Officer #${rep.assigned_leader_id}`}
+                                                                    </span>
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setTakeoverTarget({
+                                                                            id: rep.report_id,
+                                                                            currentHandlerName: rep.assigned_leader_name || `Officer #${rep.assigned_leader_id}`
+                                                                        });
+                                                                    }}
+                                                                    className="px-3 py-1 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-black border border-blue-200 transition-colors cursor-pointer"
+                                                                >
+                                                                    Take Over
+                                                                </button>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             ))}
@@ -1178,6 +1388,56 @@ const SubdReports = () => {
                                                             <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || 'Pending')}`}>
                                                                 {statusMap[rep.status_id] || 'Pending'}
                                                             </span>
+                                                        </div>
+                                                    );
+                                                }
+                                            },
+                                            {
+                                                header: "Handler",
+                                                key: "handler",
+                                                render: (rep) => {
+                                                    if (!rep.assigned_leader_id) {
+                                                        return (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => handleClaimReport(rep.report_id, e)}
+                                                                disabled={claimingReportId === rep.report_id}
+                                                                className="px-2.5 py-1 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-[11px] font-black shadow-2xs transition-all flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                                                            >
+                                                                {claimingReportId === rep.report_id ? (
+                                                                    <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin"></span>
+                                                                ) : (
+                                                                    <span>🛡️ Claim</span>
+                                                                )}
+                                                            </button>
+                                                        );
+                                                    }
+                                                    if (rep.assigned_leader_id === currentUserId) {
+                                                        return (
+                                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-800 text-[11px] font-black border border-emerald-200/60">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                                                You
+                                                            </span>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs font-bold text-gray-700 truncate max-w-[90px]" title={rep.assigned_leader_name || ''}>
+                                                                {rep.assigned_leader_name || `Officer #${rep.assigned_leader_id}`}
+                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setTakeoverTarget({
+                                                                        id: rep.report_id,
+                                                                        currentHandlerName: rep.assigned_leader_name || `Officer #${rep.assigned_leader_id}`
+                                                                    });
+                                                                }}
+                                                                className="px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-black border border-blue-200 transition-colors cursor-pointer"
+                                                            >
+                                                                Take Over
+                                                            </button>
                                                         </div>
                                                     );
                                                 }
@@ -2624,6 +2884,22 @@ const SubdReports = () => {
                 report={selectedChatReport}
                 currentUser={currentUser}
             />
+
+            {/* Takeover Modal */}
+            {takeoverTarget && (
+                <TakeoverReportModal
+                    isOpen={Boolean(takeoverTarget)}
+                    onClose={() => setTakeoverTarget(null)}
+                    reportId={takeoverTarget.id}
+                    currentHandlerName={takeoverTarget.currentHandlerName}
+                    currentUserId={currentUserId}
+                    onSuccess={() => {
+                        setShowSuccess(true);
+                        fetchReports();
+                        setTimeout(() => setShowSuccess(false), 3000);
+                    }}
+                />
+            )}
         </div>
     );
 };

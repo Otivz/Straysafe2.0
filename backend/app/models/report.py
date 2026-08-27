@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional, List
 from sqlalchemy import Column, Integer, String, Text, DateTime, func, ForeignKey, Numeric, Boolean, Enum
 from sqlalchemy.orm import relationship, backref, Mapped, mapped_column
@@ -37,8 +38,8 @@ class Report(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     condition: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    latitude = Column(Numeric(10, 8), nullable=False)
-    longitude = Column(Numeric(11, 8), nullable=False)
+    latitude: Mapped[Decimal] = mapped_column(Numeric(10, 8), nullable=False)
+    longitude: Mapped[Decimal] = mapped_column(Numeric(11, 8), nullable=False)
 
     animal_count: Mapped[int] = mapped_column(Integer, default=1)
     landmark: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -62,10 +63,15 @@ class Report(Base):
     # DB column is current_status_id (not status_id)
     current_status_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("report_status.status_id"), nullable=True)
 
-    created_at = Column(DateTime, server_default=func.now())
+    assigned_leader_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    claimed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    unassigned_notified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # Relationships
-    reporter: Mapped[Optional["User"]] = relationship("User", backref="reports")
+    reporter: Mapped[Optional["User"]] = relationship("User", foreign_keys=[user_id], backref="reports")
+    assigned_leader: Mapped[Optional["User"]] = relationship("User", foreign_keys=[assigned_leader_id])
     category = relationship("ReportCategory")
     status = relationship("ReportStatus")
     subdivision = relationship("Subdivision")
@@ -79,6 +85,8 @@ class Report(Base):
     # Transient fields populated at runtime (not DB columns)
     reporter_name: Optional[str] = None
     status_id: Optional[int] = None
+    assigned_leader_name: Optional[str] = None
+    assigned_leader_photo: Optional[str] = None
 
 
 class LetterStatus(Base):

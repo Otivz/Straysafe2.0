@@ -14,9 +14,12 @@ router = APIRouter(
 )
 
 @router.get("/", response_model=List[PetResponse])
-def get_pets(db: Session = Depends(get_db)):
+def get_pets(include_archived: bool = False, db: Session = Depends(get_db)):
     from sqlalchemy.orm import joinedload
-    return db.query(Pet).options(joinedload(Pet.owner)).all()
+    query = db.query(Pet).options(joinedload(Pet.owner))
+    if not include_archived:
+        query = query.filter(Pet.status.notin_(["Archived", "Inactive"]))
+    return query.all()
 
 @router.get("/{pet_id}", response_model=PetResponse)
 def get_pet(pet_id: int, db: Session = Depends(get_db)):
@@ -27,18 +30,24 @@ def get_pet(pet_id: int, db: Session = Depends(get_db)):
     return pet
 
 @router.get("/owner/{owner_id}", response_model=List[PetResponse])
-def get_owner_pets(owner_id: int, db: Session = Depends(get_db)):
+def get_owner_pets(owner_id: int, include_archived: bool = False, db: Session = Depends(get_db)):
     from sqlalchemy.orm import joinedload
-    return db.query(Pet).options(joinedload(Pet.owner)).filter(Pet.owner_id == owner_id).all()
+    query = db.query(Pet).options(joinedload(Pet.owner)).filter(Pet.owner_id == owner_id)
+    if not include_archived:
+        query = query.filter(Pet.status.notin_(["Archived", "Inactive"]))
+    return query.all()
 
 @router.get("/subdivision/{subdivision_id}", response_model=List[PetResponse])
-def get_subdivision_pets(subdivision_id: int, db: Session = Depends(get_db)):
+def get_subdivision_pets(subdivision_id: int, include_archived: bool = False, db: Session = Depends(get_db)):
     from app.models.user import User
     from sqlalchemy import or_
     from sqlalchemy.orm import joinedload
-    return db.query(Pet).outerjoin(User, Pet.owner_id == User.user_id).filter(
+    query = db.query(Pet).outerjoin(User, Pet.owner_id == User.user_id).filter(
         or_(User.subdivision_id == subdivision_id, Pet.owner_id.is_(None))
-    ).options(joinedload(Pet.owner)).all()
+    )
+    if not include_archived:
+        query = query.filter(Pet.status.notin_(["Archived", "Inactive"]))
+    return query.options(joinedload(Pet.owner)).all()
 
 @router.post("/{pet_id}/assign-owner", response_model=PetResponse)
 def assign_pet_owner(pet_id: int, owner_id: int, req: Request, db: Session = Depends(get_db)):
@@ -160,8 +169,8 @@ def get_owner_pet_history(owner_id: int, db: Session = Depends(get_db)):
     from sqlalchemy.orm import joinedload
     from datetime import datetime
     
-    # 1. Current registered pets
-    current_pets = db.query(Pet).filter(Pet.owner_id == owner_id).all()
+    # 1. Current registered active pets
+    current_pets = db.query(Pet).filter(Pet.owner_id == owner_id, Pet.status.notin_(["Archived", "Inactive"])).all()
     current_ids = {p.pet_id for p in current_pets}
     current_list = []
     for p in current_pets:
@@ -182,7 +191,38 @@ def get_owner_pet_history(owner_id: int, db: Session = Depends(get_db)):
             "weight": str(p.weight) if p.weight is not None else None
         })
     
-    # 2. Audit logs for pet events
+    # 2. Directly get archived / removed pets from DB records
+    archived_db_pets = db.query(Pet).filter(Pet.owner_id == owner_id, Pet.status.in_(["Archived", "Inactive"])).all()
+    removed_pet_ids_seen = set()
+    removed_pets = []
+
+    for ap in archived_db_pets:
+        removed_pet_ids_seen.add(ap.pet_id)
+        archived_at_str = ap.updated_at.strftime("%Y-%m-%d %H:%M:%S") if isinstance(ap.updated_at, datetime) else str(ap.updated_at or "")
+        removed_pets.append({
+            "log_id": None,
+            "pet_id": ap.pet_id,
+            "pet_name": ap.pet_name,
+            "pet_type": ap.pet_type,
+            "breed": ap.breed or "Unknown Breed",
+            "gender": ap.gender or "Unknown",
+            "primary_color": ap.primary_color or "",
+            "secondary_color": ap.secondary_color or "",
+            "tertiary_color": ap.tertiary_color or "",
+            "color_markings": ap.color_markings or "",
+            "size_category": ap.size_category or "Medium",
+            "weight": str(ap.weight) if ap.weight is not None else None,
+            "photo_url": ap.photo_url,
+            "is_vaccinated": ap.is_vaccinated,
+            "temperament": ap.temperament or "Friendly",
+            "health_condition": ap.health_condition or "Healthy",
+            "notes": ap.notes or "",
+            "status": "Archived",
+            "removed_at": archived_at_str,
+            "description": f"Archived pet record: {ap.pet_name} ({ap.pet_type}, pet_id={ap.pet_id})"
+        })
+
+    # 3. Audit logs for pet events
     logs = (
         db.query(AuditLog)
         .filter(AuditLog.target_table == "pets")
@@ -191,9 +231,7 @@ def get_owner_pet_history(owner_id: int, db: Session = Depends(get_db)):
     )
     
     owner_logs = []
-    removed_pets = []
     created_pets_history = []
-    removed_pet_ids_seen = set()
     
     for l in logs:
         # Check if log belongs to this owner
@@ -223,24 +261,24 @@ def get_owner_pet_history(owner_id: int, db: Session = Depends(get_db)):
         }
         owner_logs.append(entry)
         
-        if l.action == "DELETE_PET":
+        if l.action in ("DELETE_PET", "REMOVE_PET"):
             old = l.old_values if isinstance(l.old_values, dict) else {}
             p_id = l.target_id
-            if p_id:
+            if p_id and p_id not in removed_pet_ids_seen:
                 removed_pet_ids_seen.add(p_id)
-            removed_pets.append({
-                "log_id": l.log_id,
-                "pet_id": p_id,
-                "pet_name": old.get("pet_name") or "Unnamed Pet",
-                "pet_type": old.get("pet_type") or "Unknown",
-                "breed": old.get("breed") or "Unknown Breed",
-                "gender": old.get("gender") or "Unknown",
-                "primary_color": old.get("primary_color") or "",
-                "photo_url": old.get("photo_url"),
-                "status": "Removed",
-                "removed_at": ts_str,
-                "description": l.description
-            })
+                removed_pets.append({
+                    "log_id": l.log_id,
+                    "pet_id": p_id,
+                    "pet_name": old.get("pet_name") or "Unnamed Pet",
+                    "pet_type": old.get("pet_type") or "Unknown",
+                    "breed": old.get("breed") or "Unknown Breed",
+                    "gender": old.get("gender") or "Unknown",
+                    "primary_color": old.get("primary_color") or "",
+                    "photo_url": old.get("photo_url"),
+                    "status": "Archived",
+                    "removed_at": ts_str,
+                    "description": l.description
+                })
         elif l.action == "CREATE_PET":
             new_val = l.new_values if isinstance(l.new_values, dict) else {}
             created_pets_history.append({
@@ -436,10 +474,19 @@ def restore_pet(payload: PetRestorePayload, req: Request, db: Session = Depends(
     }
 
 @router.delete("/{pet_id}")
-def delete_pet(pet_id: int, req: Request, db: Session = Depends(get_db)):
+@router.post("/{pet_id}/remove")
+def remove_pet(pet_id: int, req: Request, db: Session = Depends(get_db)):
+    """
+    Soft-archives a pet for resident removal.
+    Does NOT hard-delete from the database.
+    Preserves all reports, vaccination logs, QR records, and audit history.
+    """
+    from app.models.pet_claim import PetClaim
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
+    
+    old_status = db_pet.status
     pet_snapshot = {
         "pet_name": db_pet.pet_name,
         "pet_type": db_pet.pet_type,
@@ -448,23 +495,39 @@ def delete_pet(pet_id: int, req: Request, db: Session = Depends(get_db)):
         "primary_color": db_pet.primary_color,
         "secondary_color": db_pet.secondary_color,
         "tertiary_color": db_pet.tertiary_color,
-        "status": db_pet.status,
+        "status": old_status,
         "photo_url": db_pet.photo_url,
         "owner_id": db_pet.owner_id
     }
-    db.delete(db_pet)
+
+    # Soft-remove: mark pet as Archived
+    db_pet.status = "Archived"
+
+    # Invalidate any pending active AI match claims
+    db.query(PetClaim).filter(
+        PetClaim.pet_id == pet_id,
+        PetClaim.status.in_(["Potential Owner Match", "Possible Match Found", "Pending Review"])
+    ).delete(synchronize_session=False)
+
     db.commit()
+    db.refresh(db_pet)
+
     log_activity(
         db=db,
-        action="DELETE_PET",
+        action="REMOVE_PET",
         target_table="pets",
         target_id=pet_id,
-        description=f"Deleted pet record: {pet_snapshot['pet_name']} ({pet_snapshot['pet_type']}, pet_id={pet_id})",
+        description=f"Removed pet from active list (Archived): {pet_snapshot['pet_name']} ({pet_snapshot['pet_type']}, pet_id={pet_id})",
         log_type="operation",
         old_values=pet_snapshot,
+        new_values={"status": "Archived"},
         request=req
     )
-    return {"message": "Pet deleted successfully"}
+    return {
+        "message": "Pet removed and archived successfully",
+        "pet_id": pet_id,
+        "status": "Archived"
+    }
 
 def auto_extract_pet_colors(file_content: bytes, filename: str, db_pet: Pet):
     # If the pet already has valid colors assigned by user / registration form, DO NOT overwrite them!
@@ -640,7 +703,7 @@ def delete_pet_record(pet_id: int, db: Session = Depends(get_db)):
 
     try:
         # 1. Clean up QR Codes
-        from app.models.pet_qr_code import PetQRCode
+        from app.models.pet_qr import PetQRCode
         db.query(PetQRCode).filter(PetQRCode.pet_id == pet_id).delete(synchronize_session=False)
 
         # 2. Clean up AI Matches

@@ -1,7 +1,12 @@
+import { useState, useRef, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { clearAuthStorage } from '../../utils/api';
+import { useUnreadMessageCount } from '../../utils/useUnreadMessageCount';
+import type { ChatThreadSummary } from '../../utils/useUnreadMessageCount';
+import MessagesDropdown from '../Chat/MessagesDropdown';
+import ReportChatDrawer from '../Chat/ReportChatDrawer';
 
 interface AdminNavbarProps {
     leftContent?: ReactNode;
@@ -9,6 +14,9 @@ interface AdminNavbarProps {
 
 const AdminNavbar = ({ leftContent }: AdminNavbarProps) => {
     const navigate = useNavigate();
+    const [isMessagesOpen, setIsMessagesOpen] = useState(false);
+    const [activeChatThread, setActiveChatThread] = useState<ChatThreadSummary | null>(null);
+    const messagesRef = useRef<HTMLDivElement>(null);
 
     const handleLogout = () => {
         clearAuthStorage();
@@ -19,6 +27,27 @@ const AdminNavbar = ({ leftContent }: AdminNavbarProps) => {
     const userStr = localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user');
     const user = userStr ? JSON.parse(userStr) : { email: 'admin@straysafe.com' };
 
+    const { unreadCount: unreadMessageCount, threads: messageThreads, loading: isMessagesLoading, refreshThreads } = useUnreadMessageCount(user?.user_id);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (messagesRef.current && !messagesRef.current.contains(event.target as Node)) {
+                setIsMessagesOpen(false);
+            }
+        };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setIsMessagesOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, []);
+
     return (
         <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-10 w-full shadow-sm">
             {/* Left Content Area */}
@@ -27,13 +56,49 @@ const AdminNavbar = ({ leftContent }: AdminNavbarProps) => {
             </div>
 
             {/* Right Side Actions */}
-            <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-4">
+                {/* Messages Dropdown Container */}
+                <div className="relative" ref={messagesRef}>
+                    <button 
+                        onClick={() => setIsMessagesOpen(!isMessagesOpen)}
+                        className={`relative p-2.5 rounded-xl transition-all group cursor-pointer ${
+                            isMessagesOpen
+                                ? 'bg-orange-50 text-[#F97316]'
+                                : 'text-gray-400 hover:text-[#F97316] hover:bg-orange-50'
+                        }`}
+                        title="Case Messages & Inquiries"
+                        aria-label="Messages"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        {unreadMessageCount > 0 && (
+                            <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 bg-[#F97316] text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-xs">
+                                {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+                            </span>
+                        )}
+                    </button>
+
+                    {/* Messages Dropdown Panel */}
+                    <MessagesDropdown
+                        isOpen={isMessagesOpen}
+                        onClose={() => setIsMessagesOpen(false)}
+                        threads={messageThreads}
+                        loading={isMessagesLoading}
+                        onRefresh={refreshThreads}
+                        onSelectThread={(thread) => {
+                            setIsMessagesOpen(false);
+                            setActiveChatThread(thread);
+                        }}
+                        currentRole="admin"
+                    />
+                </div>
+
                 {/* Notifications */}
-                <button className="relative p-2 text-gray-400 hover:text-[#F97316] hover:bg-orange-50 rounded-lg transition-all group">
+                <button className="relative p-2.5 text-gray-400 hover:text-[#F97316] hover:bg-orange-50 rounded-xl transition-all group cursor-pointer" title="System Notifications">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                     </svg>
-                    <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
                 </button>
 
                 {/* Settings */}
@@ -113,6 +178,35 @@ const AdminNavbar = ({ leftContent }: AdminNavbarProps) => {
                     </div>
                 </div>
             </div>
+
+            {/* DIRECT CHAT DRAWER */}
+            {activeChatThread && activeChatThread.report_id && (
+                <ReportChatDrawer
+                    isOpen={!!activeChatThread}
+                    onClose={() => setActiveChatThread(null)}
+                    report={{
+                        report_id: activeChatThread.report_id,
+                        user_id: activeChatThread.report?.user_id || 0,
+                        reporter_name: activeChatThread.report?.reporter_name || undefined,
+                        reporter_photo: activeChatThread.report?.reporter_photo || undefined,
+                        animal_type: activeChatThread.report?.animal_type || undefined,
+                        category_id: activeChatThread.report?.category_id || undefined,
+                        status_id: activeChatThread.report?.status_id || undefined,
+                        landmark: activeChatThread.report?.landmark || undefined
+                    }}
+                    currentUser={user ? {
+                        user_id: user.user_id,
+                        name: user.name || 'Admin User',
+                        role_id: user.role_id || 4,
+                        profile_picture: user.profile_picture
+                    } : null}
+                    customCounterpartName={activeChatThread.counterpart?.name}
+                    customCounterpartRole={activeChatThread.counterpart?.role}
+                    matchedPet={activeChatThread.matched_pet ? (activeChatThread.matched_pet as any) : undefined}
+                    matchId={activeChatThread.match_id || undefined}
+                    threadMode={activeChatThread.thread_mode}
+                />
+            )}
         </header>
     );
 };

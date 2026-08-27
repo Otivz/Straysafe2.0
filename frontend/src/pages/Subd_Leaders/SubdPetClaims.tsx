@@ -46,6 +46,7 @@ const SubdPetClaims = () => {
     const [statusFilter, setStatusFilter] = useState('All Claims');
     const [searchQuery, setSearchQuery] = useState('');
     const [viewMode, setViewMode] = useState<'list' | 'review'>('list');
+    const [roadDistance, setRoadDistance] = useState<number | null>(null);
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
     const [openKebab, setOpenKebab] = useState<number | null>(null);
     const kebabRef = useRef<HTMLDivElement>(null);
@@ -53,6 +54,7 @@ const SubdPetClaims = () => {
     const [isViewReportAddressLoading, setIsViewReportAddressLoading] = useState(false);
 
     useEffect(() => {
+        setRoadDistance(null);
         if (!selectedClaim || !selectedClaim.sighting_lat || !selectedClaim.sighting_lng) {
             setViewReportAddress('');
             return;
@@ -118,7 +120,31 @@ const SubdPetClaims = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    const calculateHaversine = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+        const R = 6371e3;
+        const q1 = lat1 * Math.PI/180;
+        const q2 = lat2 * Math.PI/180;
+        const dq = (lat2-lat1) * Math.PI/180;
+        const dl = (lon2-lon1) * Math.PI/180;
+        const a = Math.sin(dq/2) * Math.sin(dq/2) +
+                  Math.cos(q1) * Math.cos(q2) *
+                  Math.sin(dl/2) * Math.sin(dl/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c; // meters
+    };
+
     const transformClaim = (bc: any) => {
+        const sightingLat = bc.report?.latitude ? parseFloat(bc.report.latitude) : 14.8018;
+        const sightingLng = bc.report?.longitude ? parseFloat(bc.report.longitude) : 121.0035;
+
+        const rawPetLat = bc.pet?.registered_latitude ?? bc.pet?.owner?.latitude ?? bc.claimant?.latitude ?? null;
+        const rawPetLng = bc.pet?.registered_longitude ?? bc.pet?.owner?.longitude ?? bc.claimant?.longitude ?? null;
+
+        const petLat = rawPetLat !== null ? parseFloat(rawPetLat) : (sightingLat - 0.0004);
+        const petLng = rawPetLng !== null ? parseFloat(rawPetLng) : (sightingLng - 0.0003);
+
+        const computedMeters = calculateHaversine(sightingLat, sightingLng, petLat, petLng);
+
         return {
             report: bc.report,
             claim_id: bc.claim_id,
@@ -127,15 +153,21 @@ const SubdPetClaims = () => {
             status: bc.status,
             remarks: bc.remarks || '',
             similarity_score: (() => {
+                if (bc.match_score !== undefined && bc.match_score !== null) {
+                    return bc.match_score;
+                }
+                if (bc.similarity_score !== undefined && bc.similarity_score !== null) {
+                    return bc.similarity_score;
+                }
                 const match = bc.remarks?.match(/AI detected a (\d+)% potential match/i);
-                return match ? parseInt(match[1]) : 85;
+                return match ? parseInt(match[1]) : 90;
             })(),
             reported_date: bc.report?.created_at ? new Date(bc.report.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'June 6, 2026',
             claim_date: bc.created_at ? new Date(bc.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'June 6, 2026',
             claim_time: bc.created_at ? new Date(bc.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '10:25 AM',
             sighting_location: bc.report?.landmark || 'Selera Homes',
-            sighting_lat: bc.report?.latitude ? parseFloat(bc.report.latitude) : 14.8018,
-            sighting_lng: bc.report?.longitude ? parseFloat(bc.report.longitude) : 121.0035,
+            sighting_lat: sightingLat,
+            sighting_lng: sightingLng,
             description: bc.report?.description || 'Roaming stray animal',
             sighting_photo: bc.report?.media?.[0]?.file_url || '',
             pet: {
@@ -145,11 +177,12 @@ const SubdPetClaims = () => {
                 gender: bc.pet?.gender || 'Unknown',
                 primary_color: bc.pet?.primary_color || 'Brown',
                 secondary_color: bc.pet?.secondary_color || '',
+                tertiary_color: bc.pet?.tertiary_color || '',
                 distinctive_markings: bc.pet?.distinctive_markings || bc.pet?.color_markings || '',
                 registered_address: bc.pet?.registered_address || bc.pet?.owner?.address || bc.claimant?.address || 'Registered Owner Address',
                 registered_since: bc.pet?.created_at ? new Date(bc.pet.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'January 2025',
-                registered_latitude: bc.pet?.registered_latitude ? parseFloat(bc.pet.registered_latitude) : 14.801496,
-                registered_longitude: bc.pet?.registered_longitude ? parseFloat(bc.pet.registered_longitude) : 121.003280,
+                registered_latitude: petLat,
+                registered_longitude: petLng,
                 photo_url: bc.pet?.photo_url || '',
                 owner: {
                     name: bc.pet?.owner?.name || 'Citizen',
@@ -168,51 +201,44 @@ const SubdPetClaims = () => {
             ].filter(Boolean),
             owner_notes: bc.remarks || '',
             distinctive_markings: bc.distinctive_markings || '',
-            distance: (() => {
-                if (bc.pet?.registered_latitude && bc.pet?.registered_longitude && bc.report?.latitude && bc.report?.longitude) {
-                    const lat1 = parseFloat(bc.pet.registered_latitude);
-                    const lon1 = parseFloat(bc.pet.registered_longitude);
-                    const lat2 = parseFloat(bc.report.latitude);
-                    const lon2 = parseFloat(bc.report.longitude);
-                    const R = 6371e3;
-                    const q1 = lat1 * Math.PI/180;
-                    const q2 = lat2 * Math.PI/180;
-                    const dq = (lat2-lat1) * Math.PI/180;
-                    const dl = (lon2-lon1) * Math.PI/180;
-                    const a = Math.sin(dq/2) * Math.sin(dq/2) +
-                              Math.cos(q1) * Math.cos(q2) *
-                              Math.sin(dl/2) * Math.sin(dl/2);
-                    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                    const meters = R * c;
-                    return meters < 1000 ? `${meters.toFixed(0)}m` : `${(meters/1000).toFixed(1)}km`;
-                }
-                return '50m';
-            })(),
-            distance_meters: (() => {
-                if (bc.pet?.registered_latitude && bc.pet?.registered_longitude && bc.report?.latitude && bc.report?.longitude) {
-                    const lat1 = parseFloat(bc.pet.registered_latitude);
-                    const lon1 = parseFloat(bc.pet.registered_longitude);
-                    const lat2 = parseFloat(bc.report.latitude);
-                    const lon2 = parseFloat(bc.report.longitude);
-                    const R = 6371e3;
-                    const q1 = lat1 * Math.PI/180;
-                    const q2 = lat2 * Math.PI/180;
-                    const dq = (lat2-lat1) * Math.PI/180;
-                    const dl = (lon2-lon1) * Math.PI/180;
-                    const a = Math.sin(dq/2) * Math.sin(dq/2) +
-                              Math.cos(q1) * Math.cos(q2) *
-                              Math.sin(dl/2) * Math.sin(dl/2);
-                    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                    return Math.round(R * c);
-                }
-                return 50;
-            })(),
+            distance: computedMeters < 1000 ? `${Math.round(computedMeters)}m` : `${(computedMeters/1000).toFixed(1)}km`,
+            distance_meters: Math.round(computedMeters),
+            distance_str: computedMeters < 1000 ? `${Math.round(computedMeters)} meters` : `${(computedMeters/1000).toFixed(1)} km`,
             match_found_date: bc.report?.created_at ? new Date(bc.report.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'June 5, 2026',
             claim_submitted_date: bc.created_at ? new Date(bc.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'June 6, 2026',
             evidence_requested_date: (bc.status === 'Evidence Requested' || bc.status === 'Approved' || bc.status === 'Rejected') && bc.updated_at ? new Date(bc.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null,
             approved_date: bc.status === 'Approved' && bc.updated_at ? new Date(bc.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null,
             rejected_date: bc.status === 'Rejected' && bc.updated_at ? new Date(bc.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null,
         };
+    };
+
+    const updateWalkingDistances = async (claimsList: any[]) => {
+        try {
+            const updated = await Promise.all(claimsList.map(async (c) => {
+                if (!c.sighting_lat || !c.sighting_lng || !c.pet?.registered_latitude || !c.pet?.registered_longitude) {
+                    return c;
+                }
+                try {
+                    const walkingUrl = `https://router.project-osrm.org/route/v1/walking/${c.sighting_lng},${c.sighting_lat};${c.pet.registered_longitude},${c.pet.registered_latitude}?overview=false`;
+                    const res = await axios.get(walkingUrl);
+                    const dist = res.data?.routes?.[0]?.distance;
+                    if (dist && !isNaN(dist)) {
+                        return {
+                            ...c,
+                            distance: dist < 1000 ? `${Math.round(dist)}m` : `${(dist/1000).toFixed(1)}km`,
+                            distance_meters: Math.round(dist),
+                            distance_str: dist < 1000 ? `${Math.round(dist)} meters` : `${(dist/1000).toFixed(1)} km`,
+                        };
+                    }
+                } catch {
+                    // ignore error and keep default
+                }
+                return c;
+            }));
+            setClaims(updated);
+        } catch (e) {
+            console.warn("Could not update walking distances", e);
+        }
     };
 
     const fetchBackendClaims = async () => {
@@ -224,6 +250,7 @@ const SubdPetClaims = () => {
             if (res.data?.length > 0) {
                 const transformed = res.data.map((bc: any) => transformClaim(bc));
                 setClaims(transformed);
+                updateWalkingDistances(transformed);
                 
                 // Mark claims as viewed so sidebar notification count clears after viewing
                 try {
@@ -288,7 +315,12 @@ const SubdPetClaims = () => {
     const rejectedCount = claims.filter(c => c.status === 'Rejected').length;
     const avgMatch = claims.length > 0 ? Math.round(claims.reduce((a, c) => a + (c.similarity_score || 0), 0) / claims.length) : 0;
 
-    const openReview = (claim: any) => { setSelectedClaim(claim); setRemarks(claim.remarks || ''); setViewMode('review'); };
+    const openReview = (claim: any) => { 
+        setSelectedClaim(claim); 
+        setRoadDistance(claim.distance_meters || null);
+        setRemarks(claim.remarks || ''); 
+        setViewMode('review'); 
+    };
 
     // ─── Render ──────────────────────────────────────────────────────────────
     return (
@@ -716,7 +748,7 @@ const SubdPetClaims = () => {
                                                             <li className="col-span-2"><span className="text-gray-400 font-semibold">Name: </span><span className="font-bold text-gray-800">{selectedClaim.pet?.pet_name}</span></li>
                                                             <li><span className="text-gray-400 font-semibold">Breed: </span><span className="font-bold text-gray-800 truncate block">{selectedClaim.pet?.breed}</span></li>
                                                             <li><span className="text-gray-400 font-semibold">Type: </span><span className="font-bold text-gray-800">{selectedClaim.pet?.pet_type}</span></li>
-                                                            <li className="col-span-2"><span className="text-gray-400 font-semibold">Colors: </span><span className="font-bold text-gray-800">{selectedClaim.pet?.primary_color} {selectedClaim.pet?.secondary_color ? `/ ${selectedClaim.pet.secondary_color}` : ''}</span></li>
+                                                            <li className="col-span-2"><span className="text-gray-400 font-semibold">Colors: </span><span className="font-bold text-gray-800">{[selectedClaim.pet?.primary_color, selectedClaim.pet?.secondary_color, selectedClaim.pet?.tertiary_color].filter(Boolean).join(' / ') || 'Unknown'}</span></li>
                                                             <li className="col-span-2"><span className="text-gray-400 font-semibold">Markings: </span><span className="font-bold text-gray-800 leading-tight">{selectedClaim.pet?.distinctive_markings}</span></li>
                                                         </ul>
                                                     </div>
@@ -794,7 +826,11 @@ const SubdPetClaims = () => {
                                                         </tr>
                                                         <tr className="hover:bg-gray-50/50">
                                                             <td className="py-2.5 px-4 text-gray-600 font-medium">Location Distance</td>
-                                                            <td className="py-2.5 px-4 text-right font-bold text-gray-700">{selectedClaim.distance_meters} meters</td>
+                                                            <td className="py-2.5 px-4 text-right font-bold text-gray-700">
+                                                                {roadDistance !== null 
+                                                                    ? (roadDistance < 1000 ? `${Math.round(roadDistance)} meters` : `${(roadDistance / 1000).toFixed(1)} km`)
+                                                                    : (selectedClaim.distance_str || `${selectedClaim.distance_meters} meters`)}
+                                                            </td>
                                                         </tr>
                                                     </tbody>
                                                 </table>
@@ -928,17 +964,31 @@ const SubdPetClaims = () => {
                                     {/* D: Location Verification */}
                                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                                         <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">D. Location Verification</h4>
-                                        <div className="w-full rounded-xl overflow-hidden border border-gray-100" style={{ height: '200px' }}>
+                                        <div className="w-full rounded-xl overflow-hidden border border-gray-100" style={{ height: '220px' }}>
                                             <MapComponent
                                                 height="100%"
                                                 center={[selectedClaim.sighting_lat, selectedClaim.sighting_lng]}
-                                                zoom={15}
+                                                zoom={16}
                                                 showHeatmap={false}
                                                 showGeofence={true}
                                                 showLandmarks={false}
+                                                showConnectingLine={true}
+                                                onRouteCalculated={(dist: number) => {
+                                                    setRoadDistance(dist);
+                                                    if (selectedClaim && Math.round(dist) !== selectedClaim.distance_meters) {
+                                                        const updatedClaim = {
+                                                            ...selectedClaim,
+                                                            distance: dist < 1000 ? `${Math.round(dist)}m` : `${(dist/1000).toFixed(1)}km`,
+                                                            distance_meters: Math.round(dist),
+                                                            distance_str: dist < 1000 ? `${Math.round(dist)} meters` : `${(dist/1000).toFixed(1)} km`,
+                                                        };
+                                                        setSelectedClaim(updatedClaim);
+                                                        setClaims(prev => prev.map(c => c.claim_id === selectedClaim.claim_id ? updatedClaim : c));
+                                                    }
+                                                }}
                                                 markers={[
                                                     { id: 1, lat: selectedClaim.sighting_lat, lng: selectedClaim.sighting_lng, title: viewReportAddress || selectedClaim.sighting_location || 'Sighting Location', category: 'Stray Sighting', color: 'orange' },
-                                                    { id: 2, lat: selectedClaim.pet?.registered_latitude || selectedClaim.sighting_lat - 0.0004, lng: selectedClaim.pet?.registered_longitude || selectedClaim.sighting_lng - 0.0003, title: selectedClaim.pet?.registered_address || selectedClaim.pet?.owner?.address || 'Registered Owner Address', category: 'User Location' },
+                                                    { id: 2, lat: selectedClaim.pet?.registered_latitude, lng: selectedClaim.pet?.registered_longitude, title: selectedClaim.pet?.registered_address || selectedClaim.pet?.owner?.address || 'Registered Owner Address', category: 'User Location' },
                                                 ]}
                                             />
                                         </div>
@@ -952,12 +1002,15 @@ const SubdPetClaims = () => {
                                             </div>
                                             <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Registered Address</p>
-                                                <p className="text-xs font-bold text-gray-800 mt-1">{selectedClaim.pet?.registered_address || selectedClaim.pet?.owner?.address || 'Registered Owner Address'}</p>
-                                                <p className="text-[9px] font-bold text-gray-400 mt-0.5">{selectedClaim.pet?.registered_address || selectedClaim.pet?.owner?.address || 'Registered Owner Address'}</p>
+                                                <p className="text-xs font-bold text-gray-800 mt-1 leading-snug">{selectedClaim.pet?.registered_address || selectedClaim.pet?.owner?.address || 'Registered Owner Address'}</p>
                                             </div>
                                             <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Distance</p>
-                                                <p className="text-xl font-black text-green-600 mt-1">{selectedClaim.distance_meters} meters</p>
+                                                <p className="text-xl font-black text-green-600 mt-1">
+                                                    {roadDistance !== null 
+                                                        ? (roadDistance < 1000 ? `${Math.round(roadDistance)} meters` : `${(roadDistance / 1000).toFixed(1)} km`)
+                                                        : (selectedClaim.distance_str || `${selectedClaim.distance_meters} meters`)}
+                                                </p>
                                                 <div className="flex items-center gap-1 mt-0.5">
                                                     <span className="text-[9px] font-black text-gray-400 uppercase">Same Subdivision:</span>
                                                     <span className="text-[9px] font-black text-green-600">Yes ✓</span>

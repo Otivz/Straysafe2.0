@@ -156,6 +156,7 @@ const ResiViewReport = () => {
     const [isGeocoding, setIsGeocoding] = useState(false);
     const [isResolveLostModalOpen, setIsResolveLostModalOpen] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
+    const [userMatch, setUserMatch] = useState<any | null>(null);
 
     const userStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -185,14 +186,29 @@ const ResiViewReport = () => {
                     console.error('Error fetching holding details:', err);
                     setHoldingAnimal(null);
                 }
+
+                // Check if current user owns a matched registered pet for this report
+                try {
+                    const matchesRes = await axios.get(`http://localhost:8000/matches/report/${id}`);
+                    if (Array.isArray(matchesRes.data) && currentUserId) {
+                        const myMatch = matchesRes.data.find((m: any) => m.matched_pet?.owner_id === currentUserId);
+                        setUserMatch(myMatch || null);
+                    } else {
+                        setUserMatch(null);
+                    }
+                } catch {
+                    setUserMatch(null);
+                }
             } else {
                 setReport(null);
                 setHoldingAnimal(null);
+                setUserMatch(null);
             }
         } catch (error) {
             console.error('Error fetching report details:', error);
             setReport(null);
             setHoldingAnimal(null);
+            setUserMatch(null);
         } finally {
             setLoading(false);
         }
@@ -334,6 +350,37 @@ const ResiViewReport = () => {
                     )}
                 </div>
 
+                {/* Look-Alike AI Match Banner for Matched Pet Owner */}
+                {userMatch && (
+                    <div className="mb-8 p-6 rounded-3xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-50 border-2 border-amber-300 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl font-bold shadow-md shadow-amber-500/30 shrink-0">
+                                🔍
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="px-2.5 py-0.5 bg-amber-600 text-white rounded-lg text-[10px] font-black uppercase tracking-wider">
+                                        AI Look-Alike Match ({userMatch.similarity_score}%)
+                                    </span>
+                                    <span className="text-xs font-black text-amber-950">
+                                        Registered Pet: {userMatch.matched_pet?.pet_name}
+                                    </span>
+                                </div>
+                                <p className="text-xs text-amber-900 font-semibold mt-1">
+                                    AI detected this reported stray looks like your registered pet! Compare photos, submit proof, or chat directly with responders.
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => navigate(`/resident/reports/${id}/match-review?openChat=true`)}
+                            className="px-6 py-3 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+                        >
+                            <span>💬 Review Match & Chat</span>
+                            <span>→</span>
+                        </button>
+                    </div>
+                )}
+
                 {/* Cover Banner Title */}
                 <div className="bg-white rounded-[2.5rem] border border-gray-100 p-8 sm:p-10 shadow-sm mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
                     <div className="flex items-center gap-6">
@@ -354,12 +401,12 @@ const ResiViewReport = () => {
                         </div>
                     </div>
                     <div className="flex items-center gap-3 flex-wrap">
-                        {(report.user_id === currentUserId || (currentUser && currentUser.role_id && currentUser.role_id !== 1)) && (
+                        {currentUser && (
                             <button
                                 type="button"
                                 onClick={() => setIsChatOpen(true)}
-                                className="px-5 py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-orange-600/20 hover:scale-105 active:scale-95 flex items-center gap-2"
-                                title="Open Case Chat with Responders"
+                                className="px-5 py-3.5 bg-gradient-to-r from-[#F97316] to-[#EA580C] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-orange-600/20 hover:scale-105 active:scale-95 flex items-center gap-2"
+                                title="Open Case Chat with Responders & Pet Owner"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -760,6 +807,8 @@ const ResiViewReport = () => {
                                         return h.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
                                     })()}
                                     currentStatusId={report.status_id}
+                                    assignedLeaderName={report.assigned_leader_name}
+                                    reporterName={report.reporter_name}
                                     endorsementLetter={report.endorsement_letter}
                                 />
                             </div>
@@ -958,6 +1007,29 @@ const ResiViewReport = () => {
                 report={report}
                 currentUser={currentUser}
             />
+
+            {/* Floating Chat Trigger */}
+            {currentUser && !isChatOpen && (
+                <div className="fixed bottom-6 right-6 z-40">
+                    <button
+                        onClick={() => setIsChatOpen(true)}
+                        className="px-4 py-3.5 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-full shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-2.5 cursor-pointer border-2 border-white"
+                        title="Chat about this report"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        <span className="font-black text-xs uppercase tracking-wider">
+                            Case Chat
+                        </span>
+                        {chatCount > 0 && (
+                            <span className="w-5 h-5 bg-white text-[#F97316] rounded-full text-[10px] font-black flex items-center justify-center shadow-xs">
+                                {chatCount}
+                            </span>
+                        )}
+                    </button>
+                </div>
+            )}
         </div>
     );
 };

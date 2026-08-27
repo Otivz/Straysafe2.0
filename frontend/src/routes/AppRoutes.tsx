@@ -22,6 +22,7 @@ import EndorsementArch from '../pages/Subd_Leaders/EndorsementArch';
 import SubdPetRecords from '../pages/Subd_Leaders/SubdPetRecords';
 import SubdProfile from '../pages/Subd_Leaders/SubdProfile';
 import SubdHazardAlert from '../pages/Subd_Leaders/SubdHazardAlert';
+import SubdMessages from '../pages/Subd_Leaders/SubdMessages';
 
 import LandingPage from '../pages/citizen/LandingPage';
 import ResidentsLogin from '../pages/citizen/ResidentsLogin';
@@ -56,6 +57,18 @@ const AppRoutes = () => {
             <Route path="/pet/scan/:token" element={<PetScanPage />} />
             <Route path="/pet/scan/:token/success" element={<PetScanSuccessPage />} />
 
+            {/* Shared Authenticated QR Tag & Scan History Routes (Roles: Resident, Subd, Brgy, Admin) */}
+            <Route element={<ProtectedRoute allowedRoles={[1, 2, 3, 4]} />}>
+                <Route path="/resident/pet/:petId/qr" element={<PetQrCardPage />} />
+                <Route path="/resident/pet/:petId/scan-history" element={<PetScanHistoryPage />} />
+                <Route path="/subd/pet/:petId/qr" element={<PetQrCardPage />} />
+                <Route path="/subd/pet/:petId/scan-history" element={<PetScanHistoryPage />} />
+                <Route path="/brgy/pet/:petId/qr" element={<PetQrCardPage />} />
+                <Route path="/brgy/pet/:petId/scan-history" element={<PetScanHistoryPage />} />
+                <Route path="/admin/pet/:petId/qr" element={<PetQrCardPage />} />
+                <Route path="/admin/pet/:petId/scan-history" element={<PetScanHistoryPage />} />
+            </Route>
+
             {/* Protected Resident Routes (Role ID = 1) */}
             <Route element={<ProtectedRoute allowedRoles={[1]} />}>
                 <Route path="/resident-home" element={<ResiHomePage />} />
@@ -64,8 +77,6 @@ const AppRoutes = () => {
                 <Route path="/resident/pets" element={<ResidentPet />} />
                 <Route path="/resident/profile" element={<ResiProfile />} />
                 <Route path="/resident/settings" element={<ResidentSettings />} />
-                <Route path="/resident/pet/:petId/qr" element={<PetQrCardPage />} />
-                <Route path="/resident/pet/:petId/scan-history" element={<PetScanHistoryPage />} />
                 <Route path="/resident/reports/:reportId/match-review" element={<PetMatchReview />} />
                 <Route path="/resident/pet/:petId/claims-dashboard" element={<PetClaimsDashboard />} />
             </Route>
@@ -73,6 +84,7 @@ const AppRoutes = () => {
             {/* Protected Subdivision Leader Routes (Role ID = 2) */}
             <Route element={<ProtectedRoute allowedRoles={[2]} />}>
                 <Route path="/subd/dashboard" element={<SubdDashboard />} />
+                <Route path="/subd/messages" element={<SubdMessages />} />
                 <Route path="/subd/reports" element={<SubdReports />} />
                 <Route path="/subd/reports/:id" element={<SubdViewReport />} />
                 <Route path="/subd/history" element={<SubdHistoryReport />} />

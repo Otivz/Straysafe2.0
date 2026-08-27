@@ -297,7 +297,7 @@ CREATE TABLE `pets` (
   `bite_incident_count` int DEFAULT '0',
   `chase_behavior` tinyint(1) DEFAULT '0',
   `notes` text,
-  `status` enum('Active','Lost','Found','Rescued','Deceased') DEFAULT 'Active',
+  `status` enum('Active','Lost','Found','Rescued','Deceased','Archived','Inactive') DEFAULT 'Active',
   `is_verified` tinyint(1) DEFAULT '0',
   `last_seen_lat` decimal(10,8) DEFAULT NULL,
   `last_seen_lng` decimal(11,8) DEFAULT NULL,
@@ -307,12 +307,16 @@ CREATE TABLE `pets` (
   `registered_address` varchar(255) DEFAULT NULL,
   `registered_latitude` decimal(10,8) DEFAULT NULL,
   `registered_longitude` decimal(11,8) DEFAULT NULL,
+  `registered_by_user_id` int DEFAULT NULL,
+  `registered_by_name` varchar(100) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`pet_id`),
   KEY `idx_pets_owner` (`owner_id`),
   KEY `idx_pets_status` (`status`),
-  CONSTRAINT `fk_pets_owner` FOREIGN KEY (`owner_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+  KEY `fk_pets_registered_by` (`registered_by_user_id`),
+  CONSTRAINT `fk_pets_owner` FOREIGN KEY (`owner_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_pets_registered_by` FOREIGN KEY (`registered_by_user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- =========================================
@@ -415,14 +419,19 @@ CREATE TABLE `reports` (
   `ai_suggested_risk_level` varchar(50) DEFAULT NULL,
   `ai_suggested_priority` varchar(50) DEFAULT NULL,
   `ai_suggested_priority_reason` text,
+  `assigned_leader_id` int DEFAULT NULL,
+  `claimed_at` timestamp NULL DEFAULT NULL,
+  `unassigned_notified` tinyint(1) NOT NULL DEFAULT '0',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`report_id`),
   KEY `fk_reports_subdivision` (`subdivision_id`),
   KEY `fk_reports_category` (`category_id`),
   KEY `fk_reports_pet` (`pet_id`),
+  KEY `fk_reports_assigned_leader` (`assigned_leader_id`),
   KEY `idx_reports_location` (`latitude`,`longitude`),
   KEY `idx_reports_user` (`user_id`),
   KEY `idx_reports_status` (`current_status_id`),
+  CONSTRAINT `fk_reports_assigned_leader` FOREIGN KEY (`assigned_leader_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_category` FOREIGN KEY (`category_id`) REFERENCES `report_categories` (`category_id`),
   CONSTRAINT `fk_reports_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_status` FOREIGN KEY (`current_status_id`) REFERENCES `report_status` (`status_id`) ON DELETE SET NULL,
@@ -763,6 +772,7 @@ CREATE TABLE `notifications` (
   `message` text NOT NULL,
   `related_id` int DEFAULT NULL,
   `is_read` tinyint(1) DEFAULT '0',
+  `is_archived` tinyint(1) DEFAULT '0',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`notification_id`),
   KEY `idx_notifications_user_read` (`user_id`,`is_read`),
@@ -866,82 +876,6 @@ CREATE TABLE `owner_warnings` (
   CONSTRAINT `fk_warnings_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_warnings_report` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_warnings_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- =========================================
--- TABLE: HOLDING_ANIMALS
--- =========================================
-DROP TABLE IF EXISTS `holding_animals`;
-CREATE TABLE `holding_animals` (
-  `holding_id` int NOT NULL AUTO_INCREMENT,
-  `report_id` int NOT NULL,
-  `rescue_id` int DEFAULT NULL,
-  `animal_type` enum('Dog','Cat','Unknown') DEFAULT 'Unknown',
-  `animal_name` varchar(100) DEFAULT NULL,
-  `breed` varchar(100) DEFAULT NULL,
-  `color` varchar(100) DEFAULT NULL,
-  `estimated_size` varchar(50) DEFAULT NULL,
-  `facility_status` int NOT NULL DEFAULT '1',
-  `kennel_slot` varchar(50) DEFAULT NULL,
-  `medical_notes` text,
-  `intake_date` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `discharge_date` timestamp NULL DEFAULT NULL,
-  `intake_staff_id` int DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`holding_id`),
-  KEY `fk_holding_report` (`report_id`),
-  KEY `fk_holding_rescue` (`rescue_id`),
-  KEY `fk_holding_facility_status` (`facility_status`),
-  KEY `fk_holding_staff` (`intake_staff_id`),
-  CONSTRAINT `fk_holding_facility_status` FOREIGN KEY (`facility_status`) REFERENCES `facility_status` (`status_id`),
-  CONSTRAINT `fk_holding_report` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_holding_rescue` FOREIGN KEY (`rescue_id`) REFERENCES `rescues` (`rescue_id`) ON DELETE SET NULL,
-  CONSTRAINT `fk_holding_staff` FOREIGN KEY (`intake_staff_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- =========================================
--- TABLE: HOLDING_TIMELINE
--- =========================================
-DROP TABLE IF EXISTS `holding_timeline`;
-CREATE TABLE `holding_timeline` (
-  `log_id` int NOT NULL AUTO_INCREMENT,
-  `holding_id` int NOT NULL,
-  `event_type` varchar(50) NOT NULL DEFAULT 'observation',
-  `title` varchar(255) NOT NULL,
-  `notes` text,
-  `logged_by` int DEFAULT NULL,
-  `logged_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`log_id`),
-  KEY `fk_timeline_user` (`logged_by`),
-  KEY `fk_timeline_holding` (`holding_id`),
-  CONSTRAINT `fk_timeline_holding` FOREIGN KEY (`holding_id`) REFERENCES `holding_animals` (`holding_id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_timeline_user` FOREIGN KEY (`logged_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- =========================================
--- TABLE: PET_CLAIMS
--- =========================================
-DROP TABLE IF EXISTS `pet_claims`;
-CREATE TABLE `pet_claims` (
-  `claim_id` int NOT NULL AUTO_INCREMENT,
-  `report_id` int NOT NULL,
-  `pet_id` int NOT NULL,
-  `status` enum('Potential Owner Match','Possible Match Found','Pending Review','Approved','Rejected','Evidence Requested') NOT NULL DEFAULT 'Potential Owner Match',
-  `evidence_url` varchar(255) DEFAULT NULL,
-  `vaccine_card_url` varchar(255) DEFAULT NULL,
-  `vet_record_url` varchar(255) DEFAULT NULL,
-  `registration_record_url` varchar(255) DEFAULT NULL,
-  `additional_photos_url` varchar(255) DEFAULT NULL,
-  `distinctive_markings` text,
-  `remarks` text,
-  `match_score` int DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`claim_id`),
-  KEY `fk_claims_report` (`report_id`),
-  KEY `fk_claims_pet` (`pet_id`),
-  CONSTRAINT `fk_claims_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_claims_report` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- =========================================

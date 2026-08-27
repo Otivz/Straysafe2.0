@@ -827,11 +827,20 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                 const data = await response.json();
 
                 // Filter out Private reports that do not belong to the current user
-                // Also exclude resolved and deceased reports (status_id 11 and 12) from the home page feed
+                // Also exclude resolved, claimed, released, and deceased reports from the active home page feed
                 const visibleReports = data.filter((report: any) => {
                     const isVisible = report.visibility === 'Public' || report.user_id === currentUserId;
-                    const isNotResolved = report.status_id !== 3 && report.status_id !== 11 && report.status_id !== 12 && report.current_status_id !== 3 && report.current_status_id !== 11 && report.current_status_id !== 12;
-                    return isVisible && isNotResolved;
+                    const statusId = report.status_id || report.current_status_id;
+                    const statusName = (report.status_name || report.status?.status_name || '').toLowerCase();
+
+                    const isResolved = [3, 9, 10, 11, 12].includes(statusId) ||
+                                       statusName.includes('resolved') ||
+                                       statusName.includes('claimed') ||
+                                       statusName.includes('released') ||
+                                       statusName.includes('deceased') ||
+                                       statusName.includes('rejected');
+
+                    return isVisible && !isResolved;
                 });
 
                 setReports(visibleReports.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
@@ -1008,22 +1017,68 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
         const titleStr = (notif.title || '').toLowerCase();
         const msgStr = (notif.message || '').toLowerCase();
 
+        let targetReportId = notif.related_id;
+        if (!targetReportId) {
+            const idMatch = (notif.title || '').match(/Report\s*#(\d+)/i) || (notif.message || '').match(/Report\s*#(\d+)/i);
+            if (idMatch) targetReportId = Number(idMatch[1]);
+        }
+
+        const isMatchInquiry = typeStr === 'match_message' || 
+                               titleStr.includes('match inquiry') || 
+                               (titleStr.includes('💬') && (titleStr.includes('match') || msgStr.includes('look-alike') || msgStr.includes('match')));
+
         const isMatch = typeStr === 'potential_match' ||
             typeStr === 'match_review' ||
             titleStr.includes('match') ||
-            titleStr.includes('sighting') ||
-            msgStr.includes('match') ||
+            titleStr.includes('look-alike') ||
+            titleStr.includes('look-alik') ||
+            msgStr.includes('look-alike') ||
             msgStr.includes('potential match') ||
             msgStr.includes('matches of your dog');
+
+        const isMessageOrComment =
+            typeStr === 'message' ||
+            typeStr.includes('message') ||
+            titleStr.includes('message') ||
+            typeStr.includes('comment') ||
+            titleStr.includes('comment') ||
+            typeStr.includes('chat') ||
+            titleStr.includes('chat') ||
+            titleStr.includes('💬');
+
+        if ((isMatchInquiry || isMatch) && targetReportId) {
+            navigate(`/resident/reports/${targetReportId}/match-review?openChat=true`, { state: { openChat: true, highlightMatch: true } });
+            return;
+        }
+
+        if (isMessageOrComment && targetReportId) {
+            const targetReport = reports.find((r: any) => r.report_id === Number(targetReportId));
+            if (targetReport) {
+                setSelectedChatReport(targetReport);
+                setIsChatOpen(true);
+            } else {
+                api.get(`/reports/${targetReportId}`)
+                    .then(res => {
+                        if (res.data) {
+                            setSelectedChatReport(res.data);
+                            setIsChatOpen(true);
+                        } else {
+                            navigate(`/resident/reports/${targetReportId}?openChat=true`, { state: { openChat: true } });
+                        }
+                    })
+                    .catch(() => {
+                        navigate(`/resident/reports/${targetReportId}?openChat=true`, { state: { openChat: true } });
+                    });
+            }
+            return;
+        }
 
         if (typeStr === 'warning' || titleStr.includes('citation')) {
             setShowWarningModal(true);
             return;
         }
 
-        if (isMatch && notif.related_id) {
-            navigate(`/resident/reports/${notif.related_id}/match-review`);
-        } else if (notif.related_id) {
+        if (notif.related_id) {
             if (typeStr === 'alert' || titleStr.includes('scan')) {
                 navigate(`/resident/pet/${notif.related_id}/scan-history`);
             } else {
@@ -3334,13 +3389,19 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                         const typeStr = (notif.type || '').toLowerCase();
                                         const titleStr = (notif.title || '').toLowerCase();
                                         const msgStr = (notif.message || '').toLowerCase();
+                                        const isMatchInquiry = typeStr === 'match_message' || 
+                                                               titleStr.includes('match inquiry') || 
+                                                               (titleStr.includes('💬') && (titleStr.includes('match') || msgStr.includes('look-alike') || msgStr.includes('match')));
                                         const isMatch = typeStr === 'potential_match' ||
                                             typeStr === 'match_review' ||
                                             titleStr.includes('match') ||
                                             titleStr.includes('sighting') ||
+                                            titleStr.includes('look-alike') ||
+                                            titleStr.includes('look-alik') ||
                                             msgStr.includes('match') ||
                                             msgStr.includes('potential match') ||
-                                            msgStr.includes('matches of your dog');
+                                            msgStr.includes('matches of your dog') ||
+                                            msgStr.includes('look-alike');
                                         return (
                                             <div
                                                 key={notif.notification_id}
@@ -3364,14 +3425,21 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                             <p className="text-[11px] font-semibold text-gray-650 mt-1 leading-relaxed">
                                                                 {notif.message}
                                                             </p>
-                                                            <div className="flex items-center gap-2 mt-2">
+                                                            <div className="flex items-center gap-2 mt-2 flex-wrap">
                                                                 <span className="text-[9px] font-bold text-gray-400 block uppercase tracking-widest">
                                                                     {formatTimestamp(notif.created_at)}
                                                                 </span>
-                                                                {isMatch && (
-                                                                    <span className="text-[8px] font-black text-[#F97316] bg-orange-100/80 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                                                        Review Match →
-                                                                    </span>
+                                                                {(isMatch || isMatchInquiry || typeStr.includes('message') || titleStr.includes('message') || titleStr.includes('💬') || titleStr.includes('inquiry') || msgStr.includes('look-alike')) && notif.related_id && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleNotificationClick(notif);
+                                                                        }}
+                                                                        className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                                                                    >
+                                                                        <span>💬 Open Chat</span>
+                                                                    </button>
                                                                 )}
                                                             </div>
                                                         </div>

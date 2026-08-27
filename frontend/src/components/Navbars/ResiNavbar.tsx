@@ -1,8 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import api, { clearAuthStorage } from '../../utils/api';
 import { useTheme } from '../../context/ThemeContext';
+import { useUnreadMessageCount } from '../../utils/useUnreadMessageCount';
+import type { ChatThreadSummary } from '../../utils/useUnreadMessageCount';
+import MessagesDropdown from '../Chat/MessagesDropdown';
+import ReportChatDrawer from '../Chat/ReportChatDrawer';
 
 interface ResiNavbarProps {
     onMenuToggle?: (isOpen: boolean) => void;
@@ -43,12 +47,37 @@ const ResiNavbar = ({
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isMobileHamburgerOpen, setIsMobileHamburgerOpen] = useState(false);
     const [isMobileNotificationsOpen, setIsMobileNotificationsOpen] = useState(false);
+    const [isMessagesOpen, setIsMessagesOpen] = useState(false);
+    const [activeChatThread, setActiveChatThread] = useState<ChatThreadSummary | null>(null);
     const [drawerNotifLimit, setDrawerNotifLimit] = useState(5);
     const [hasClickedViewAllDrawer, setHasClickedViewAllDrawer] = useState(false);
+
+    const messagesRef = useRef<HTMLDivElement>(null);
 
     const userStr = localStorage.getItem('resident_user');
     const initialUser = userStr ? JSON.parse(userStr) : null;
     const [user, setUser] = useState(initialUser);
+
+    const { unreadCount: unreadMessageCount, threads: messageThreads, loading: isMessagesLoading, refreshThreads } = useUnreadMessageCount(user?.user_id);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (messagesRef.current && !messagesRef.current.contains(event.target as Node)) {
+                setIsMessagesOpen(false);
+            }
+        };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setIsMessagesOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, []);
 
     useEffect(() => {
         const fetchLatestProfile = async () => {
@@ -64,18 +93,56 @@ const ResiNavbar = ({
         fetchLatestProfile();
     }, [initialUser?.user_id]);
 
-    const unreadCount = (notifications || []).filter((n: any) => !n.is_read).length;
+    const [internalNotifications, setInternalNotifications] = useState<any[]>([]);
+
+    useEffect(() => {
+        const fetchNotifications = async () => {
+            if (!user?.user_id) return;
+            try {
+                const res = await api.get(`/notifications/user/${user.user_id}`);
+                setInternalNotifications(res.data || []);
+            } catch (err) {
+                console.error("Failed to fetch resident notifications in navbar", err);
+            }
+        };
+
+        fetchNotifications();
+        const interval = setInterval(fetchNotifications, 8000);
+        return () => clearInterval(interval);
+    }, [user?.user_id]);
+
+    const activeNotificationsList = (notifications && notifications.length > 0)
+        ? notifications
+        : internalNotifications;
+
+    // Separate System Notifications from raw chat messages
+    const isMessageNotif = (notif: any) => {
+        const t = (notif.type || '').toLowerCase();
+        const title = (notif.title || '').toLowerCase();
+        return t === 'message' || t === 'match_message' || title.includes('💬') || title.includes('match inquiry');
+    };
+
+    const systemNotifications = activeNotificationsList.filter((n: any) => !isMessageNotif(n));
+    const unreadCount = systemNotifications.filter((n: any) => !n.is_read).length;
+
+    const handleMarkAllRead = () => {
+        if (onMarkAllNotificationsRead) {
+            onMarkAllNotificationsRead();
+        }
+        if (user?.user_id) {
+            api.post(`/notifications/mark-all-read/${user.user_id}`)
+                .then(() => {
+                    setInternalNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+                })
+                .catch(err => console.error("Failed to mark notifications read", err));
+        }
+    };
 
     useEffect(() => {
         if (isMobileNotificationsOpen && unreadCount > 0) {
-            if (onMarkAllNotificationsRead) {
-                onMarkAllNotificationsRead();
-            } else if (user?.user_id) {
-                api.post(`/notifications/mark-all-read/${user.user_id}`)
-                    .catch(err => console.error("Failed to mark notifications read", err));
-            }
+            handleMarkAllRead();
         }
-    }, [isMobileNotificationsOpen, unreadCount, onMarkAllNotificationsRead, user?.user_id]);
+    }, [isMobileNotificationsOpen, unreadCount]);
 
     const handleNotificationClick = (notif: any) => {
         if (!notif.is_read) {
@@ -85,6 +152,7 @@ const ResiNavbar = ({
                 api.patch(`/notifications/${notif.notification_id}`, { is_read: true })
                     .catch(err => console.error("Failed to mark notification read", err));
             }
+            setInternalNotifications(prev => prev.map(n => n.notification_id === notif.notification_id ? { ...n, is_read: true } : n));
         }
 
         setIsMobileNotificationsOpen(false);
@@ -98,27 +166,42 @@ const ResiNavbar = ({
         const titleStr = (notif.title || '').toLowerCase();
         const msgStr = (notif.message || '').toLowerCase();
 
+        const isMatchInquiry = typeStr === 'match_message' || 
+                               titleStr.includes('match inquiry') || 
+                               (titleStr.includes('💬') && (titleStr.includes('match') || msgStr.includes('look-alike') || msgStr.includes('match')));
+
         const isMatch = typeStr === 'potential_match' || 
                         typeStr === 'match_review' ||
                         titleStr.includes('match') ||
                         titleStr.includes('sighting') ||
+                        titleStr.includes('look-alike') ||
+                        titleStr.includes('look-alik') ||
                         msgStr.includes('match') ||
                         msgStr.includes('potential match') ||
-                        msgStr.includes('matches of your dog');
+                        msgStr.includes('matches of your dog') ||
+                        msgStr.includes('look-alike');
+
+        if ((isMatchInquiry || isMatch) && notif.related_id) {
+            navigate(`/resident/reports/${notif.related_id}/match-review?openChat=true`, { state: { openChat: true, highlightMatch: true } });
+            return;
+        }
 
         const isMessageOrComment =
+            typeStr === 'message' ||
             typeStr.includes('message') ||
             titleStr.includes('message') ||
             typeStr.includes('comment') ||
             titleStr.includes('comment') ||
             typeStr.includes('chat') ||
-            titleStr.includes('chat');
+            titleStr.includes('chat') ||
+            titleStr.includes('💬');
 
-        if (isMatch && notif.related_id) {
-            navigate(`/resident/reports/${notif.related_id}/match-review`);
-        } else if (isMessageOrComment && notif.related_id) {
+        if (isMessageOrComment && notif.related_id) {
             navigate(`/resident/reports/${notif.related_id}?openChat=true`, { state: { openChat: true } });
-        } else if (notif.related_id) {
+            return;
+        }
+
+        if (notif.related_id) {
             if (typeStr === 'alert' || titleStr.includes('scan')) {
                 navigate(`/resident/pet/${notif.related_id}/scan-history`);
             } else {
@@ -175,6 +258,44 @@ const ResiNavbar = ({
                                     onChange={(e) => onSearch && onSearch(e.target.value)}
                                     placeholder="Search reports..."
                                     className="w-64 pl-10 pr-4 py-2.5 bg-[#FAFAF9] dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-full text-[#1a1208] dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-[#F97316]/50 focus:bg-white dark:focus:bg-gray-900 transition-all shadow-sm"
+                                />
+                            </div>
+
+                            {/* MESSAGES BUTTON (DESKTOP) */}
+                            <div className="relative" ref={messagesRef}>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsMessagesOpen(!isMessagesOpen)}
+                                    className={`relative p-2.5 rounded-full border transition-all active:scale-95 cursor-pointer ${
+                                        isMessagesOpen
+                                            ? 'bg-orange-50 dark:bg-gray-800 text-[#F97316] border-orange-200 dark:border-orange-900/50'
+                                            : 'bg-[#FAFAF9] dark:bg-gray-800 border-gray-100 dark:border-gray-700 text-[#4a3b28] dark:text-gray-200 hover:text-[#F97316] hover:bg-orange-50 dark:hover:bg-gray-700'
+                                    }`}
+                                    title="Case Messages & Inquiries"
+                                    aria-label="Open messages"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                    </svg>
+                                    {unreadMessageCount > 0 && (
+                                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-[#F97316] text-white text-[9px] font-black rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-900 shadow-xs animate-in zoom-in">
+                                            {unreadMessageCount}
+                                        </span>
+                                    )}
+                                </button>
+
+                                {/* Messages Dropdown */}
+                                <MessagesDropdown
+                                    isOpen={isMessagesOpen}
+                                    onClose={() => setIsMessagesOpen(false)}
+                                    threads={messageThreads}
+                                    loading={isMessagesLoading}
+                                    onRefresh={refreshThreads}
+                                    onSelectThread={(thread) => {
+                                        setIsMessagesOpen(false);
+                                        setActiveChatThread(thread);
+                                    }}
+                                    currentRole="citizen"
                                 />
                             </div>
 
@@ -248,19 +369,36 @@ const ResiNavbar = ({
                         </div>
 
                         {/* MOBILE ACTIONS */}
-                        <div className="md:hidden flex items-center gap-2">
+                        <div className="md:hidden flex items-center gap-1">
+
+                            {/* Message Button (Mobile) */}
+                            <button
+                                type="button"
+                                onClick={() => setIsMessagesOpen(true)}
+                                className="p-2 text-[#4a3b28] hover:text-[#F97316] transition-all flex items-center justify-center active:scale-95 relative"
+                                aria-label="Open messages"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                </svg>
+                                {unreadMessageCount > 0 && (
+                                    <span className="absolute top-1 right-1 min-w-[16px] h-[16px] px-0.5 bg-[#F97316] text-white text-[8px] font-black rounded-full flex items-center justify-center ring-2 ring-white">
+                                        {unreadMessageCount}
+                                    </span>
+                                )}
+                            </button>
 
                             {/* Notification Bell Button */}
                             <button
                                 onClick={() => setIsMobileNotificationsOpen(!isMobileNotificationsOpen)}
-                                className="p-2.5 text-[#4a3b28] hover:text-[#F97316] transition-all flex items-center justify-center active:scale-95 relative"
+                                className="p-2 text-[#4a3b28] hover:text-[#F97316] transition-all flex items-center justify-center active:scale-95 relative"
                                 aria-label="Open notifications"
                             >
-                                <svg className="w-6.5 h-6.5" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
                                 </svg>
                                 {unreadCount > 0 && (
-                                    <span className="absolute top-1.5 right-1.5 w-5 h-5 bg-[#EF4444] text-white text-[9px] font-black rounded-full flex items-center justify-center ring-2 ring-white">
+                                    <span className="absolute top-1 right-1 min-w-[16px] h-[16px] px-0.5 bg-[#EF4444] text-white text-[8px] font-black rounded-full flex items-center justify-center ring-2 ring-white">
                                         {unreadCount}
                                     </span>
                                 )}
@@ -269,7 +407,7 @@ const ResiNavbar = ({
                             {/* Hamburger Menu Button */}
                             <button
                                 onClick={() => setIsMobileHamburgerOpen(true)}
-                                className="p-2.5 text-[#4a3b28] hover:text-[#F97316] transition-all flex items-center justify-center active:scale-95"
+                                className="p-2 text-[#4a3b28] hover:text-[#F97316] transition-all flex items-center justify-center active:scale-95"
                                 aria-label="Open menu"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -597,13 +735,19 @@ const ResiNavbar = ({
                                 const typeStr = (notif.type || '').toLowerCase();
                                 const titleStr = (notif.title || '').toLowerCase();
                                 const msgStr = (notif.message || '').toLowerCase();
+                                const isMatchInquiry = typeStr === 'match_message' || 
+                                                       titleStr.includes('match inquiry') || 
+                                                       (titleStr.includes('💬') && (titleStr.includes('match') || msgStr.includes('look-alike') || msgStr.includes('match')));
                                 const isMatch = typeStr === 'potential_match' || 
                                                 typeStr === 'match_review' ||
                                                 titleStr.includes('match') ||
                                                 titleStr.includes('sighting') ||
+                                                titleStr.includes('look-alike') ||
+                                                titleStr.includes('look-alik') ||
                                                 msgStr.includes('match') ||
                                                 msgStr.includes('potential match') ||
-                                                msgStr.includes('matches of your dog');
+                                                msgStr.includes('matches of your dog') ||
+                                                msgStr.includes('look-alike');
                                 return (
                                     <div
                                         key={notif.notification_id}
@@ -626,14 +770,22 @@ const ResiNavbar = ({
                                                     <p className="text-xs font-semibold text-[#4a3b28]/85 mt-1 leading-relaxed">
                                                         {notif.message}
                                                     </p>
-                                                    <div className="flex items-center gap-2 mt-2.5">
+                                                    <div className="flex items-center gap-2 mt-2.5 flex-wrap">
                                                         <span className="text-[9px] font-bold text-gray-450 block uppercase tracking-widest">
                                                             {new Date(notif.created_at).toLocaleDateString()}
                                                         </span>
-                                                        {isMatch && (
-                                                            <span className="text-[8px] font-black text-[#F97316] bg-orange-100/80 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                                                Review Match →
-                                                            </span>
+                                                        {(isMatch || isMatchInquiry || typeStr.includes('message') || titleStr.includes('message') || titleStr.includes('💬') || titleStr.includes('inquiry') || msgStr.includes('look-alike')) && notif.related_id && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setIsMobileNotificationsOpen(false);
+                                                                    handleNotificationClick(notif);
+                                                                }}
+                                                                className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                                                            >
+                                                                <span>💬 Open Chat</span>
+                                                            </button>
                                                         )}
                                                     </div>
                                                 </div>
@@ -661,17 +813,13 @@ const ResiNavbar = ({
 
                     {/* Drawer Footer: Mark All Read & View All Notifications */}
                     <div className="px-6 py-4 border-t border-gray-100 bg-white flex items-center justify-between shrink-0">
-                        {onMarkAllNotificationsRead ? (
-                            <button
-                                onClick={onMarkAllNotificationsRead}
-                                className="text-xs font-semibold text-gray-500 hover:text-gray-900 underline underline-offset-2 transition-colors cursor-pointer"
-                            >
-                                Mark All Read
-                            </button>
-                        ) : (
-                            <span />
-                        )}
-                        {drawerNotifLimit < (notifications || []).length && (
+                        <button
+                            onClick={handleMarkAllRead}
+                            className="text-xs font-semibold text-gray-500 hover:text-gray-900 underline underline-offset-2 transition-colors cursor-pointer"
+                        >
+                            Mark All Read
+                        </button>
+                        {drawerNotifLimit < systemNotifications.length && (
                             <button
                                 onClick={() => {
                                     setDrawerNotifLimit(prev => prev + 10);
@@ -685,6 +833,35 @@ const ResiNavbar = ({
                     </div>
                 </div>
             </div>
+
+            {/* DIRECT CHAT DRAWER */}
+            {activeChatThread && activeChatThread.report_id && (
+                <ReportChatDrawer
+                    isOpen={!!activeChatThread}
+                    onClose={() => setActiveChatThread(null)}
+                    report={{
+                        report_id: activeChatThread.report_id,
+                        user_id: activeChatThread.report?.user_id || 0,
+                        reporter_name: activeChatThread.report?.reporter_name || undefined,
+                        reporter_photo: activeChatThread.report?.reporter_photo || undefined,
+                        animal_type: activeChatThread.report?.animal_type || undefined,
+                        category_id: activeChatThread.report?.category_id || undefined,
+                        status_id: activeChatThread.report?.status_id || undefined,
+                        landmark: activeChatThread.report?.landmark || undefined
+                    }}
+                    currentUser={user ? {
+                        user_id: user.user_id,
+                        name: user.name || 'User',
+                        role_id: user.role_id || (user.subdivision_id ? 2 : 1),
+                        profile_picture: user.profile_picture
+                    } : null}
+                    customCounterpartName={activeChatThread.counterpart?.name}
+                    customCounterpartRole={activeChatThread.counterpart?.role}
+                    matchedPet={activeChatThread.matched_pet ? (activeChatThread.matched_pet as any) : undefined}
+                    matchId={activeChatThread.match_id || undefined}
+                    threadMode={activeChatThread.thread_mode}
+                />
+            )}
         </>
     );
 };

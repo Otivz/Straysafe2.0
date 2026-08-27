@@ -136,14 +136,32 @@ class ReportResponse(ReportBase):
     pet_name: Optional[str] = None
     pet_qr_code_url: Optional[str] = None
     pet_qr_code_hash: Optional[str] = None
+    pet_qr_token: Optional[str] = None
+    owner_id: Optional[int] = None
     owner_name: Optional[str] = None
     owner_phone: Optional[str] = None
     owner_email: Optional[str] = None
     owner_address: Optional[str] = None
     is_owner_report: Optional[bool] = False
+    # Handler / Officer Ownership
+    assigned_leader_id: Optional[int] = None
+    assigned_leader_name: Optional[str] = None
+    assigned_leader_photo: Optional[str] = None
+    claimed_at: Optional[datetime] = None
+    unassigned_notified: Optional[bool] = False
 
     class Config:
         from_attributes = True
+
+
+class ReportClaimRequest(BaseModel):
+    user_id: int
+
+
+class ReportTakeoverRequest(BaseModel):
+    user_id: int
+    reason: str
+    notes: Optional[str] = None
 
 
 class ReportStatusUpdate(BaseModel):

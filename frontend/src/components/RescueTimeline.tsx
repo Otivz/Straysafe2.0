@@ -21,6 +21,8 @@ interface TimelineEntry {
 interface RescueTimelineProps {
     history: TimelineEntry[];
     currentStatusId: number;
+    assignedLeaderName?: string;
+    reporterName?: string;
     endorsementLetter?: {
         letter_id: number;
         report_id: number;
@@ -109,9 +111,31 @@ const rescueStatusLabels: Record<number, string> = {
     6: 'Resolved'
 };
 
-const RescueTimeline: React.FC<RescueTimelineProps> = ({ history, currentStatusId, endorsementLetter }) => {
+const RescueTimeline: React.FC<RescueTimelineProps> = ({ 
+    history, 
+    currentStatusId, 
+    assignedLeaderName,
+    reporterName,
+    endorsementLetter 
+}) => {
     const [filter, setFilter] = useState<number | 'all'>('all');
     const [activeMedia, setActiveMedia] = useState<Media | null>(null);
+
+    const resolveHandlerName = (entry: TimelineEntry) => {
+        if (entry.updater_name && entry.updater_name.trim() && entry.updater_name.toLowerCase() !== 'system') {
+            return entry.updater_name;
+        }
+        if (assignedLeaderName) {
+            return `${assignedLeaderName} (Subdivision Leader)`;
+        }
+        if (endorsementLetter?.leader_id) {
+            return 'Subdivision Leader';
+        }
+        if (entry.report_status_id === 1) {
+            return reporterName || 'Incident Reporter';
+        }
+        return 'Subdivision Leader';
+    };
 
     // Deduplicate consecutive identical status updates so only single stage updates appear
     const cleanHistory = (history || []).filter((entry, idx, arr) => {
@@ -204,20 +228,27 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({ history, currentStatusI
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center gap-3 mb-6 p-3 bg-gray-50/50 rounded-2xl border border-gray-50/50">
-                                            {entry.updater_photo ? (
-                                                <img
-                                                    src={entry.updater_photo}
-                                                    className="w-6 h-6 rounded-lg object-cover border border-gray-100 shadow-sm"
-                                                    alt={entry.updater_name}
-                                                />
-                                            ) : (
-                                                <div className="w-6 h-6 rounded-lg bg-white flex items-center justify-center text-[10px] font-black text-gray-400 border border-gray-100 shadow-sm">
-                                                    {entry.updater_name?.charAt(0) || 'S'}
+                                        {(() => {
+                                            const handler = resolveHandlerName(entry);
+                                            return (
+                                                <div className="flex items-center gap-3 mb-6 p-3 bg-gray-50/50 rounded-2xl border border-gray-50/50">
+                                                    {entry.updater_photo ? (
+                                                        <img
+                                                            src={entry.updater_photo}
+                                                            className="w-6 h-6 rounded-lg object-cover border border-gray-100 shadow-sm"
+                                                            alt={handler}
+                                                        />
+                                                    ) : (
+                                                        <div className="w-6 h-6 rounded-lg bg-orange-100 flex items-center justify-center text-[10px] font-black text-orange-600 border border-orange-200 shadow-sm">
+                                                            {handler.charAt(0).toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                    <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest">
+                                                        Handled by {handler}
+                                                    </span>
                                                 </div>
-                                            )}
-                                            <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest">Updated by {entry.updater_name || 'System'}</span>
-                                        </div>
+                                            );
+                                        })()}
 
                                         {/* Endorsement Letter table details */}
                                         {entry.report_status_id === 4 && endorsementLetter && (
