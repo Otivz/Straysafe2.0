@@ -1,7 +1,8 @@
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, Polyline, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import L from 'leaflet';
+import axios from 'axios';
 
 const BrgyIcon = L.divIcon({
     html: `
@@ -252,6 +253,15 @@ interface MapComponentProps {
     onViewDetails?: (marker: any) => void;
     showGeofence?: boolean;
     showLandmarks?: boolean;
+    showConnectingLine?: boolean;
+    onRouteCalculated?: (distanceMeters: number) => void;
+    polylines?: {
+        positions: [number, number][];
+        color?: string;
+        weight?: number;
+        dashArray?: string;
+        opacity?: number;
+    }[];
 }
 
 // Internal component to handle view changes
@@ -285,6 +295,98 @@ const MapEventsHandler = ({ onLocationChange }: { onLocationChange?: (lat: numbe
     return null;
 };
 
+// Internal component to fetch and render road-following turn-by-turn routes
+const RoadRouteOverlay = ({
+    start,
+    end,
+    color = '#F97316',
+    weight = 4,
+    dashArray = '6, 8',
+    onRouteCalculated
+}: {
+    start: [number, number];
+    end: [number, number];
+    color?: string;
+    weight?: number;
+    dashArray?: string;
+    onRouteCalculated?: (distanceMeters: number) => void;
+}) => {
+    const [positions, setPositions] = useState<[number, number][]>([start, end]);
+
+    useEffect(() => {
+        let isMounted = true;
+        const fetchRoadRoute = async () => {
+            if (!start[0] || !start[1] || !end[0] || !end[1]) return;
+            try {
+                // Query OSRM walking profile first for pedestrian / neighbourhood pathways
+                const walkingUrl = `https://router.project-osrm.org/route/v1/walking/${start[1]},${start[0]};${end[1]},${end[0]}?overview=full&geometries=geojson`;
+                const res = await axios.get(walkingUrl);
+                if (res.data?.routes?.[0]?.geometry?.coordinates && isMounted) {
+                    const coords = res.data.routes[0].geometry.coordinates.map((c: [number, number]) => [c[1], c[0]] as [number, number]);
+                    if (coords.length > 0) {
+                        setPositions(coords);
+                        if (onRouteCalculated && res.data.routes[0].distance) {
+                            onRouteCalculated(res.data.routes[0].distance);
+                        }
+                        return;
+                    }
+                }
+            } catch (err) {
+                try {
+                    // Fallback to driving profile
+                    const drivingUrl = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${end[1]},${end[0]}?overview=full&geometries=geojson`;
+                    const drivingRes = await axios.get(drivingUrl);
+                    if (drivingRes.data?.routes?.[0]?.geometry?.coordinates && isMounted) {
+                        const coords = drivingRes.data.routes[0].geometry.coordinates.map((c: [number, number]) => [c[1], c[0]] as [number, number]);
+                        if (coords.length > 0) {
+                            setPositions(coords);
+                            if (onRouteCalculated && drivingRes.data.routes[0].distance) {
+                                onRouteCalculated(drivingRes.data.routes[0].distance);
+                            }
+                            return;
+                        }
+                    }
+                } catch (e2) {
+                    console.warn("OSRM routing fallback to straight line:", e2);
+                }
+            }
+            if (isMounted) {
+                setPositions([start, end]);
+            }
+        };
+
+        fetchRoadRoute();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [start[0], start[1], end[0], end[1]]);
+
+    return (
+        <>
+            {/* White outline halo for high road visibility */}
+            <Polyline
+                positions={positions}
+                pathOptions={{
+                    color: '#ffffff',
+                    weight: weight + 3,
+                    opacity: 0.85
+                }}
+            />
+            {/* Main colored road trajectory line */}
+            <Polyline
+                positions={positions}
+                pathOptions={{
+                    color: color,
+                    weight: weight,
+                    dashArray: dashArray,
+                    opacity: 1
+                }}
+            />
+        </>
+    );
+};
+
 const MapComponent = ({
     height = "100%",
     center = [14.6760, 121.0437],
@@ -297,7 +399,10 @@ const MapComponent = ({
     onMarkerClick,
     onViewDetails,
     showGeofence = true,
-    showLandmarks = false
+    showLandmarks = false,
+    showConnectingLine = false,
+    onRouteCalculated,
+    polylines = []
 }: MapComponentProps) => {
     const SELERA_BOUNDS: [number, number][] = [
         [14.801496, 121.005174],
@@ -371,12 +476,30 @@ const MapComponent = ({
                 </Marker>
             ))}
 
-            {showHeatmap && (
-                <HeatmapLayer
-                    points={heatmapPoints}
-                    options={{ radius: 35, blur: 15 }}
+            {/* Road-following Route Line between markers */}
+            {showConnectingLine && markers.length >= 2 && markers[0].lat && markers[1].lat && (
+                <RoadRouteOverlay
+                    start={[markers[0].lat, markers[0].lng]}
+                    end={[markers[1].lat, markers[1].lng]}
+                    color="#F97316"
+                    weight={4}
+                    dashArray="6, 8"
+                    onRouteCalculated={onRouteCalculated}
                 />
             )}
+
+            {polylines && polylines.map((line, idx) => (
+                <Polyline
+                    key={`custom-line-${idx}`}
+                    positions={line.positions}
+                    pathOptions={{
+                        color: line.color || '#F97316',
+                        weight: line.weight || 3.5,
+                        dashArray: line.dashArray || '6, 8',
+                        opacity: line.opacity || 0.9
+                    }}
+                />
+            ))}
 
             {markers.map((marker) => (
                 <Marker

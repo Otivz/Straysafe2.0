@@ -294,16 +294,35 @@ const ResidentSettings = () => {
         const titleStr = (notif.title || '').toLowerCase();
         const msgStr = (notif.message || '').toLowerCase();
 
+        const isMatchInquiry = typeStr === 'match_message' || 
+                               titleStr.includes('match inquiry') || 
+                               (titleStr.includes('💬') && (titleStr.includes('match') || msgStr.includes('look-alike') || msgStr.includes('match')));
+
         const isMatch = typeStr === 'potential_match' ||
             typeStr === 'match_review' ||
             titleStr.includes('match') ||
             titleStr.includes('sighting') ||
+            titleStr.includes('look-alike') ||
+            titleStr.includes('look-alik') ||
             msgStr.includes('match') ||
             msgStr.includes('potential match') ||
-            msgStr.includes('matches of your dog');
+            msgStr.includes('matches of your dog') ||
+            msgStr.includes('look-alike');
 
-        if (isMatch && notif.related_id) {
-            navigate(`/resident/reports/${notif.related_id}/match-review`);
+        const isMessageOrComment =
+            typeStr === 'message' ||
+            typeStr.includes('message') ||
+            titleStr.includes('message') ||
+            typeStr.includes('comment') ||
+            titleStr.includes('comment') ||
+            typeStr.includes('chat') ||
+            titleStr.includes('chat') ||
+            titleStr.includes('💬');
+
+        if ((isMatchInquiry || isMatch) && notif.related_id) {
+            navigate(`/resident/reports/${notif.related_id}/match-review?openChat=true`, { state: { openChat: true, highlightMatch: true } });
+        } else if (isMessageOrComment && notif.related_id) {
+            navigate(`/resident/reports/${notif.related_id}?openChat=true`, { state: { openChat: true } });
         } else if (notif.related_id) {
             if (typeStr === 'alert' || titleStr.includes('scan')) {
                 navigate(`/resident/pet/${notif.related_id}/scan-history`);

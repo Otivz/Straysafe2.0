@@ -3,6 +3,9 @@ import axios from 'axios';
 import Button from '../Button';
 import { DEFAULT_AVATAR } from '../../utils/avatar';
 import AddPetModal from '../PetRecords/AddPetModal';
+import PetDetailPanel from '../PetRecords/PetDetailPanel';
+import { type PetRecord, mapRawPetToPetRecord } from '../PetRecords/types';
+import ReportChatDrawer from '../Chat/ReportChatDrawer';
 
 interface AIMatchReviewModalProps {
     isOpen: boolean;
@@ -54,10 +57,35 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     const [submitError, setSubmitError] = useState('');
     const [activeTab, setActiveTab] = useState<'comparison' | 'audit'>('comparison');
     const [isAddPetModalOpen, setIsAddPetModalOpen] = useState(false);
+    const [isChatOpen, setIsChatOpen] = useState(false);
+    const [selectedPetRecord, setSelectedPetRecord] = useState<PetRecord | null>(null);
+    const [isLoadingPetRecord, setIsLoadingPetRecord] = useState(false);
 
     // Resident feedback state
     const [ownerRemarks, setOwnerRemarks] = useState('');
     const [isSubmittingOwnerFeedback, setIsSubmittingOwnerFeedback] = useState(false);
+
+    const userStr = localStorage.getItem('resident_user') || localStorage.getItem('staff_user') || localStorage.getItem('admin_user') || sessionStorage.getItem('staff_user');
+    const currentUser = userStr ? JSON.parse(userStr) : null;
+
+    const handleOpenPetDetail = async (petData: any) => {
+        if (!petData) return;
+        setIsLoadingPetRecord(true);
+        try {
+            const petId = petData.pet_id || petData.id;
+            if (petId) {
+                const res = await axios.get(`http://localhost:8000/pets/${petId}`);
+                setSelectedPetRecord(mapRawPetToPetRecord(res.data));
+            } else {
+                setSelectedPetRecord(mapRawPetToPetRecord(petData));
+            }
+        } catch (e) {
+            console.error("Failed to fetch detailed pet info, using fallback data:", e);
+            setSelectedPetRecord(mapRawPetToPetRecord(petData));
+        } finally {
+            setIsLoadingPetRecord(false);
+        }
+    };
 
     if (!isOpen || !match) return null;
 
@@ -229,6 +257,48 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                 </div>
                             </div>
 
+                            {/* ── Look-Alike Direct Confirmation & Message Callout ── */}
+                            {(() => {
+                                const isOwner = isPetMatch && currentUser?.user_id && (targetPet?.owner_id === currentUser.user_id || targetPet?.owner?.user_id === currentUser.user_id);
+                                const ownerName = targetPet?.owner?.name || (isOwner ? "You" : "Registered Owner");
+                                const petName = targetPet?.pet_name || "Registered Pet";
+
+                                return (
+                                    <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/40 to-white border border-blue-200/80 rounded-2xl p-4.5 flex flex-wrap items-center justify-between gap-4 shadow-xs">
+                                        <div className="flex items-start gap-3.5 flex-1 min-w-[280px]">
+                                            <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-lg font-black shadow-md shadow-blue-500/20 shrink-0">
+                                                💬
+                                            </div>
+                                            <div className="space-y-0.5">
+                                                <h4 className="text-xs font-black text-blue-950 uppercase tracking-wide flex items-center gap-2">
+                                                    <span>{isOwner ? "Look-Alike Pet Sighting" : "Look-Alike Registered Pet Detected"}</span>
+                                                    <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-[10px] font-extrabold lowercase">
+                                                        {isOwner ? "direct confirmation" : "message owner"}
+                                                    </span>
+                                                </h4>
+                                                <p className="text-xs text-gray-600 font-medium leading-relaxed">
+                                                    {isOwner ? (
+                                                        `Does this sighting resemble your registered pet '${petName}'? You can message the original reporter or subdivision case handler directly to ask questions, request more photos, or verify identifying marks for yourself.`
+                                                    ) : (
+                                                        `This sighting has a ${match.similarity_score}% similarity with registered pet '${petName}' owned by ${ownerName}. Message the registered pet owner directly so they can check their pet and confirm for themselves.`
+                                                    )}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsChatOpen(true)}
+                                            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center gap-2 cursor-pointer whitespace-nowrap"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                            </svg>
+                                            {isOwner ? "Message Reporter / Officer" : `Message Owner (${ownerName})`}
+                                        </button>
+                                    </div>
+                                );
+                            })()}
+
                             {/* ── Side-by-Side Comparison Columns ── */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 
@@ -289,26 +359,59 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
 
                                 {/* ── RIGHT: Matching Candidate ── */}
                                 <div className="border border-gray-200 rounded-2xl p-5 bg-white shadow-xs space-y-4">
-                                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                                        <span className="px-3 py-1 bg-amber-100 text-amber-800 font-bold text-xs rounded-full">
-                                            {isPetMatch ? `Registered Pet: ${targetPet?.pet_name}` : `Report #${targetReport?.report_id}`} (Candidate)
-                                        </span>
+                                    <div className="flex items-center justify-between border-b border-gray-100 pb-3 flex-wrap gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-3 py-1 bg-amber-100 text-amber-800 font-bold text-xs rounded-full">
+                                                {isPetMatch ? `Registered Pet: ${targetPet?.pet_name}` : `Report #${targetReport?.report_id}`} (Candidate)
+                                            </span>
+                                            {isPetMatch && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenPetDetail(targetPet)}
+                                                    disabled={isLoadingPetRecord}
+                                                    className="px-2.5 py-1 bg-gradient-to-r from-amber-600 to-[#B35D25] hover:from-amber-700 hover:to-[#964E1F] text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm hover:shadow transition-all cursor-pointer shrink-0"
+                                                >
+                                                    {isLoadingPetRecord ? (
+                                                        <span className="animate-spin text-xs">⏳</span>
+                                                    ) : (
+                                                        <span>🐾 View Record</span>
+                                                    )}
+                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                    </svg>
+                                                </button>
+                                            )}
+                                        </div>
                                         <span className="text-xs text-gray-500 font-medium">
                                             {isPetMatch ? `Owner: ${targetPet?.owner?.name || "Registered Resident"}` : (targetReport?.category?.category_name || "Sighting")}
                                         </span>
                                     </div>
 
                                     {/* Image */}
-                                    <div className="w-full h-56 bg-gray-100 rounded-xl overflow-hidden relative border border-gray-100 group">
+                                    <div 
+                                        onClick={() => isPetMatch && handleOpenPetDetail(targetPet)}
+                                        className={`w-full h-56 bg-gray-100 rounded-xl overflow-hidden relative border border-gray-100 group ${isPetMatch ? 'cursor-pointer' : ''}`}
+                                    >
                                         <img
                                             src={targetImage}
                                             alt="Candidate Animal"
                                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                             onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
                                         />
-                                        <span className="absolute bottom-2 left-2 px-2.5 py-1 bg-black/60 backdrop-blur-md text-white text-[11px] font-semibold rounded-md">
-                                            Candidate Profile
+                                        <span className="absolute bottom-2 left-2 px-2.5 py-1 bg-black/60 backdrop-blur-md text-white text-[11px] font-semibold rounded-md flex items-center gap-1.5">
+                                            <span>Candidate Profile</span>
+                                            {isPetMatch && <span className="text-[10px] text-amber-300 font-bold">• Click to view modal ↗</span>}
                                         </span>
+                                        {isPetMatch && (
+                                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                                                <span className="px-3.5 py-1.5 bg-white/95 text-gray-900 font-black text-xs rounded-xl shadow-lg flex items-center gap-2">
+                                                    <span>🐾 View Registered Animal Record</span>
+                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                    </svg>
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Details */}
@@ -344,6 +447,20 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             "{isPetMatch ? (targetPet?.distinctive_markings || targetPet?.color_markings || "None noted") : (targetReport?.description || "No specific marks.")}"
                                         </p>
                                     </div>
+
+                                    {isPetMatch && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleOpenPetDetail(targetPet)}
+                                            disabled={isLoadingPetRecord}
+                                            className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
+                                        >
+                                            <span>🐾 Open Full Animal Record (Medical, Owner, QR)</span>
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                            </svg>
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </>
@@ -537,6 +654,78 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                         onClose();
                     }}
                 />
+            )}
+
+            {/* Case Chat Drawer for Look-Alike Inquiries */}
+            {isChatOpen && source && (() => {
+                const isOwner = isPetMatch && currentUser?.user_id && (targetPet?.owner_id === currentUser.user_id || targetPet?.owner?.user_id === currentUser.user_id);
+                const ownerName = targetPet?.owner?.name || "Registered Pet Owner";
+                const petName = targetPet?.pet_name || "Registered Pet";
+                const sightingBreedColor = [source.breed, source.color].filter(Boolean).join(', ') || source.animal_type || 'Stray Animal';
+                const sightingLoc = source.landmark || 'Subdivision Community Area';
+                const petBreedColor = [targetPet?.breed, targetPet?.color].filter(Boolean).join(', ') || 'Registered Pet';
+
+                const customCounterpartName = isOwner ? undefined : `${ownerName} (Owner of ${petName})`;
+                const customCounterpartRole = isOwner ? undefined : "Registered Pet Owner";
+                
+                const initialSnippet = isOwner
+                    ? ''
+                    : `Hello ${ownerName}!
+
+STRAY-SAFE AI detected a ${match.similarity_score}% look-alike match for your registered pet '${petName}' in Report #${source.report_id}.
+
+🔍 Side-by-Side Comparison:
+• Sighting: Report #${source.report_id} (${sightingBreedColor} at ${sightingLoc})
+• Registered Pet: ${petName} (${petBreedColor})
+• AI Similarity: ${match.similarity_score}% Match
+
+Please review the comparison photos above and let us know if this is your pet.`;
+
+                return (
+                    <ReportChatDrawer
+                        isOpen={isChatOpen}
+                        onClose={() => setIsChatOpen(false)}
+                        report={source}
+                        currentUser={currentUser}
+                        matchId={match.match_id}
+                        threadMode="match"
+                        customCounterpartName={customCounterpartName}
+                        customCounterpartRole={customCounterpartRole}
+                        initialMessageSnippet={initialSnippet}
+                        matchedPet={{
+                            pet_id: targetPet?.pet_id,
+                            pet_name: petName,
+                            photo_url: targetPet?.photo_url,
+                            species: targetPet?.pet_type || "Dog",
+                            breed: targetPet?.breed || "Shih Tzu",
+                            color: [targetPet?.primary_color, targetPet?.secondary_color].filter(Boolean).join(' ') || targetPet?.color || "White Black",
+                            size: targetPet?.size_category || "Small",
+                            owner_name: ownerName,
+                            registered_address: targetPet?.registered_address || (ownerName ? `Registered by ${ownerName}` : 'Registered Pet'),
+                            similarity_score: match.similarity_score,
+                            sighting_photo_url: sourceImage,
+                            sighting_species: source?.animal_type || source?.ai_animal_type || "Dog",
+                            sighting_breed: source?.animal_breed || source?.ai_possible_breed || "Shih Tzu",
+                            sighting_color: source?.animal_color || source?.ai_dominant_color || "White and Black",
+                            sighting_size: source?.estimated_size || source?.ai_estimated_size || "Small",
+                            sighting_landmark: source?.landmark || "Selera Homes Subdivision",
+                            sighting_description: source?.description,
+                            key_evidence_bullets: bullets
+                        }}
+                    />
+                );
+            })()}
+
+            {/* Nested Pet Details Modal */}
+            {selectedPetRecord && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 sm:p-10 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="w-full max-w-6xl rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-200 bg-white overflow-hidden flex flex-col max-h-[90vh] border border-gray-100">
+                        <PetDetailPanel
+                            pet={selectedPetRecord}
+                            onClose={() => setSelectedPetRecord(null)}
+                        />
+                    </div>
+                </div>
             )}
         </div>
     );

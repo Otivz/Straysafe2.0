@@ -5,20 +5,56 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from typing import List, Optional
 from sqlalchemy import or_
 from app.database import get_db
-from app.models.report import Report, ReportMedia, Comment, StatusHistory, ReportCategory, EndorsementLetter, ReportStatus, Rescue
+from app.models.report import Report, ReportMedia, Comment, StatusHistory, ReportCategory, EndorsementLetter, ReportStatus, Rescue, HoldingAnimal
 from app.models.user import User, Subdivision
 from app.models.notification import Notification
 from app.models.pet import Pet
 from app.models.pet_qr import PetQRCode
-from app.schemas.report import ReportCreate, ReportResponse, ReportStatusUpdate, ReportUpdate, ReportMediaResponse, CommentCreate, CommentResponse
+from app.models.pet_claim import PetClaim
+from app.models.report_match import ReportMatch
+from app.models.warning import OwnerWarning
+from app.models.chat import ChatThread
+from app.schemas.report import (
+    ReportCreate, ReportResponse, ReportStatusUpdate, ReportUpdate, 
+    ReportMediaResponse, CommentCreate, CommentResponse,
+    ReportClaimRequest, ReportTakeoverRequest
+)
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.color_detection import extract_dominant_colors
 from app.utils.audit import log_activity
+from app.utils.ai_suggestions import call_gemini_with_fallback
 
 router = APIRouter(
     prefix="/reports",
     tags=["reports"]
 )
+
+
+def populate_handler_info(rep_data: ReportResponse, rep: Report):
+    """Populates current handler officer details on ReportResponse."""
+    if rep.assigned_leader:
+        rep_data.assigned_leader_id = rep.assigned_leader_id
+        rep_data.assigned_leader_name = rep.assigned_leader.name
+        rep_data.assigned_leader_photo = rep.assigned_leader.profile_picture
+    elif rep.assigned_leader_id:
+        rep_data.assigned_leader_id = rep.assigned_leader_id
+        rep_data.assigned_leader_name = f"Officer #{rep.assigned_leader_id}"
+        rep_data.assigned_leader_photo = None
+    else:
+        rep_data.assigned_leader_id = None
+        rep_data.assigned_leader_name = None
+        rep_data.assigned_leader_photo = None
+    rep_data.claimed_at = rep.claimed_at
+
+
+def get_hist_updater_name(hist, rep) -> str:
+    if hist.updater and hist.updater.name:
+        return hist.updater.name
+    if hasattr(rep, 'assigned_leader') and rep.assigned_leader and rep.assigned_leader.name:
+        return rep.assigned_leader.name
+    if hasattr(rep, 'reporter') and rep.reporter and rep.reporter.name:
+        return rep.reporter.name
+    return "Subdivision Officer / Responders"
 
 
 def populate_pet_and_owner_info(rep_data: ReportResponse, rep: Report, db: Session):
@@ -30,9 +66,16 @@ def populate_pet_and_owner_info(rep_data: ReportResponse, rep: Report, db: Sessi
             if linked_pet:
                 rep_data.pet_name = getattr(linked_pet, "pet_name", None) or getattr(linked_pet, "name", None)
                 qr = db.query(PetQRCode).filter(PetQRCode.pet_id == linked_pet.pet_id).first()
+                if not qr:
+                    try:
+                        from app.routes.pet_qr import generate_qr_for_pet_internal
+                        qr = generate_qr_for_pet_internal(linked_pet.pet_id, db)
+                    except Exception as qr_err:
+                        print(f"Could not auto-generate QR for pet #{linked_pet.pet_id}: {qr_err}")
                 if qr:
                     rep_data.pet_qr_code_url = qr.qr_image_url
                     rep_data.pet_qr_token = qr.qr_token
+                    rep_data.pet_qr_code_hash = qr.qr_token[:10].upper() if qr.qr_token else None
                 
                 if linked_pet.owner_id:
                     pet_owner = db.query(User).filter(User.user_id == linked_pet.owner_id).first()
@@ -77,6 +120,7 @@ def get_reports(
 
     reports = query.options(
         joinedload(Report.reporter),
+        joinedload(Report.assigned_leader),
         joinedload(Report.category),
         joinedload(Report.status),
         joinedload(Report.subdivision),
@@ -87,14 +131,6 @@ def get_reports(
         joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
     ).all()
     
-    for rep in reports:
-        if rep.endorsement_letter:
-            let = rep.endorsement_letter
-            if let.leader:
-                let.leader_name = let.leader.name
-                if let.leader.position:
-                    let.leader_position = let.leader.position.position_name
-                    
     results = []
     
     from app.utils.ai_suggestions import generate_ai_suggestions
@@ -150,7 +186,7 @@ def get_reports(
             if rep.history:
                 for i, hist in enumerate(rep.history):  # type: ignore[arg-type]
                     if rep_data.history and i < len(rep_data.history):
-                        rep_data.history[i].updater_name = hist.updater.name if hist.updater else "System"
+                        rep_data.history[i].updater_name = get_hist_updater_name(hist, rep)
                         rep_data.history[i].updater_photo = hist.updater.profile_picture if hist.updater else None
 
             if rep.comments:
@@ -161,6 +197,9 @@ def get_reports(
 
             # Populate pet & owner contact info for lost pet reports
             populate_pet_and_owner_info(rep_data, rep, db)
+
+            # Populate handler details
+            populate_handler_info(rep_data, rep)
 
             results.append(rep_data)
         except Exception as e:
@@ -179,15 +218,13 @@ SELERA_POLYGON = [
     (14.802461, 121.003280)
 ]
 
-def is_inside_selera_homes(lat: float, lng: float) -> bool:
+def is_inside_selera_homes(lat: float | None, lng: float | None) -> bool:
     """Check if point is within the Selera Homes / Santa Maria, Bulacan area."""
     if lat is None or lng is None:
         return True
     try:
-        flat = float(lat)
-        flng = float(lng)
         # Bounding box covering Selera Homes, San Vicente, and Santa Maria, Bulacan
-        if 14.70 <= flat <= 14.90 and 120.90 <= flng <= 121.10:
+        if 14.70 <= lat <= 14.90 and 120.90 <= lng <= 121.10:
             return True
     except (ValueError, TypeError):
         pass
@@ -235,363 +272,11 @@ def classify_category_from_description(description: str) -> int:
 
 
 def trigger_looks_matching(report: Report, db: Session):
-    """Compare stray report AI suggestions against registered pets of other owners.
-    Triggers notification and pre-files a claim as 'Potential Owner Match' if matching.
-    """
-    if not report.ai_animal_type or report.ai_animal_type == "Unknown":
-        return
-
-    def parse_colors(color_str: str) -> list:
-        if not color_str:
-            return []
-        cleaned = color_str.lower()
-        for sep in [",", "/", "&", "and", ";", "-"]:
-            cleaned = cleaned.replace(sep, " ")
-        return [c.strip() for c in cleaned.split() if c.strip()]
-
-    def load_image(url: str):
-        import requests
-        from PIL import Image
-        import io
-        if not url:
-            return None
-        try:
-            if url.startswith("http://") or url.startswith("https://"):
-                resp = requests.get(url, timeout=5)
-                if resp.status_code == 200:
-                    return Image.open(io.BytesIO(resp.content))
-        except Exception as e:
-            print(f"Failed to load image from {url}: {e}")
-        return None
-
-    r_img_url = report.media[0].file_url if (report.media and len(report.media) > 0) else None
-    stray_img = load_image(str(r_img_url)) if r_img_url else None
-
-    # Fetch registered pets of other owners that are eligible (Active, Lost, Found, Rescued). Strictly exclude Deceased pets.
-    all_pets = db.query(Pet).filter(
-        Pet.owner_id != report.user_id,
-        Pet.status.in_(["Active", "Lost", "Found", "Rescued"]),
-        Pet.status != "Deceased"
-    ).all()
-
-    # Pre-filter candidate pets according to system rules:
-    # 1. Same animal type (Dog/Cat)
-    # 2. Nearby registered location (within subdivision / close coordinates)
-    # 3. Similar color
-    # 4. Similar size (same or adjacent)
-    # 5. Similar breed
-    pets = []
-    for pet in all_pets:
-        if not pet.status or pet.status.lower() == "deceased":
-            continue
-
-        # Same animal type
-        same_type = pet.pet_type.lower() == (report.animal_type or report.ai_animal_type or "").lower()
-        if not same_type:
-            continue
-            
-        # Nearby registered location
-        nearby = False
-        r_lat = getattr(report, "latitude", None)
-        r_lng = getattr(report, "longitude", None)
-        p_lat = getattr(pet, "registered_latitude", None)
-        p_lng = getattr(pet, "registered_longitude", None)
-        
-        if r_lat is not None and r_lng is not None and p_lat is not None and p_lng is not None:
-            lat_diff = float(r_lat) - float(p_lat)
-            lng_diff = float(r_lng) - float(p_lng)
-            dist = (lat_diff ** 2 + lng_diff ** 2) ** 0.5
-            if dist <= 0.015:
-                nearby = True
-        if not nearby and pet.owner and pet.owner.subdivision_id is not None and report.subdivision_id is not None:
-            if pet.owner.subdivision_id == report.subdivision_id:
-                nearby = True
-        if not nearby:
-            p_addr = (pet.registered_address or "").lower()
-            o_addr = (pet.owner.address or "").lower() if pet.owner else ""
-            r_land = (report.landmark or "").lower()
-            if "selera" in p_addr or "selera" in o_addr or "selera" in r_land:
-                nearby = True
-        if not nearby and (pet.registered_latitude is None or pet.registered_longitude is None):
-            nearby = True
-            
-        if not nearby:
-            continue
-            
-        # Similar color (at least one overlapping color term)
-        pet_colors = {c.strip().lower() for c in [pet.primary_color, pet.secondary_color, pet.color_markings] if c}
-        report_colors = set(parse_colors(f"{report.animal_color or ''} {report.ai_dominant_color or ''}"))
-        color_similar = True
-        if pet_colors and report_colors:
-            color_similar = len(pet_colors.intersection(report_colors)) > 0
-        if not color_similar:
-            continue
-            
-        # Similar size (same or adjacent category)
-        p_size = (pet.size_category or "Medium").lower()
-        r_size = (report.estimated_size or report.ai_estimated_size or "Medium").lower()
-        size_map = {"small": 1, "medium": 2, "large": 3}
-        size_similar = abs(size_map.get(p_size, 2) - size_map.get(r_size, 2)) <= 1
-        if not size_similar:
-            continue
-            
-        # Similar breed (substring match, mixed/aspin/puspin fallback, or either empty)
-        p_breed = (pet.breed or "").lower().strip()
-        r_breed = (report.animal_breed or report.ai_possible_breed or "").lower().strip()
-        breed_similar = True
-        if p_breed and r_breed:
-            p_breed_norm = p_breed.replace(" ", "").replace("-", "").replace("_", "")
-            r_breed_norm = r_breed.replace(" ", "").replace("-", "").replace("_", "")
-            breed_similar = (
-                p_breed_norm in r_breed_norm or r_breed_norm in p_breed_norm or
-                "aspin" in p_breed or "puspin" in p_breed or
-                "aspin" in r_breed or "puspin" in r_breed or
-                "unknown" in p_breed or "unknown" in r_breed or
-                "mixed" in p_breed or "mixed" in r_breed
-            )
-        if not breed_similar:
-            continue
-            
-        pets.append(pet)
-
-    for pet in pets:
-        # 1. Base attribute matching
-        attribute_score = 20  # Base score for matching species
-        
-        # Breed Matching (up to 30 points)
-        breed_match = False
-        p_breed = (pet.breed or "").lower().strip()
-        r_breed = (report.animal_breed or report.ai_possible_breed or "").lower().strip()
-        
-        is_p_purebred = p_breed not in ["aspin", "puspin", "unknown", "mixed", ""]
-        is_r_purebred = r_breed not in ["aspin", "puspin", "unknown", "mixed", ""]
-
-        if p_breed and r_breed:
-            p_breed_norm = p_breed.replace(" ", "").replace("-", "").replace("_", "")
-            r_breed_norm = r_breed.replace(" ", "").replace("-", "").replace("_", "")
-            if p_breed_norm == r_breed_norm or p_breed_norm in r_breed_norm or r_breed_norm in p_breed_norm:
-                breed_match = True
-                attribute_score += 30
-            elif is_p_purebred and is_r_purebred:
-                # Two completely different purebreds! Major penalty.
-                attribute_score -= 30
-            elif (is_p_purebred and r_breed in ["aspin", "puspin"]) or (is_r_purebred and p_breed in ["aspin", "puspin"]):
-                # One is purebred and the other is a local mix. Major penalty.
-                attribute_score -= 20
-            else:
-                # Both are local mixed breeds (e.g. Aspin vs Mixed)
-                attribute_score += 15
-        
-        # Color Matching (up to 40 points)
-        color_match_points = 0
-        r_colors = parse_colors(f"{report.animal_color or ''} {report.ai_dominant_color or ''}")
-        
-        p_primary = (pet.primary_color or "").lower().strip()
-        p_secondary = (pet.secondary_color or "").lower().strip()
-        
-        # If primary color matches one of report colors
-        if p_primary and p_primary in r_colors:
-            color_match_points += 25
-        # If secondary color matches one of report colors
-        if p_secondary and p_secondary in r_colors:
-            color_match_points += 15
-            
-        if color_match_points == 0 and (p_primary or p_secondary) and r_colors:
-            # Check for color markings or general substring overlap
-            p_markings = (pet.color_markings or "").lower().strip()
-            if any(rc in p_markings for rc in r_colors) or any(rc in p_primary for rc in r_colors) or any(rc in p_secondary for rc in r_colors):
-                color_match_points = 15
-                
-        # If no colors match at all, apply a mismatch penalty
-        if color_match_points == 0 and (p_primary or p_secondary) and r_colors:
-            attribute_score -= 20
-        else:
-            attribute_score += color_match_points
-        
-        # Size Matching (up to 15 points)
-        p_size = (pet.size_category or "Medium").lower().strip()
-        r_size = (report.estimated_size or report.ai_estimated_size or "Medium").lower().strip()
-        size_map = {"small": 1, "medium": 2, "large": 3}
-        
-        p_size_val = size_map.get(p_size, 2)
-        r_size_val = size_map.get(r_size, 2)
-        
-        if p_size == r_size:
-            attribute_score += 15
-        elif abs(p_size_val - r_size_val) == 1:
-            attribute_score -= 15
-        else:
-            attribute_score -= 30
-
-        # Distinctive Markings Matching (up to 10 points)
-        markings_match = False
-        p_distinctive = (pet.distinctive_markings or pet.color_markings or "").lower().strip()
-        r_desc = (report.description or "").lower().strip()
-        
-        if p_distinctive and r_desc:
-            # Check for common keywords of markings
-            keywords = ["spot", "patch", "socks", "stripe", "collar", "leash", "scar", "band", "tag"]
-            for kw in keywords:
-                if kw in p_distinctive and kw in r_desc:
-                    markings_match = True
-                    break
-            if markings_match:
-                attribute_score += 10
-
-        # 2. Call Gemini 2.5 Flash for Multimodal Visual & Description-Based comparison
-        import google.generativeai as genai
-        import json
-        import os
-        
-        api_key = os.getenv("GEMINI_API_KEY")
-        gemini_confidence = 50  # Default fallback
-        gemini_explanation = f"AI matching system detected a potential match based on attributes."
-        gemini_success = False
-        
-        if api_key:
-            try:
-                genai.configure(api_key=api_key)
-                model = genai.GenerativeModel("gemini-2.5-flash")
-                
-                p_img_url = pet.photo_url
-                pet_img = load_image(str(p_img_url)) if p_img_url else None
-                
-                has_images = (stray_img is not None) and (pet_img is not None)
-                
-                if has_images:
-                    prompt = f"""
-                    You are the StraySafe Copilot, an AI assistant for a subdivision's stray animal safety system.
-                    Your task is to compare the visual appearance of a stray animal from a sighting against a registered pet to determine if they are the same individual animal (i.e. they are a close visual match).
-                    
-                    We are providing you with two images:
-                    - The first image attached is the stray animal sighted in the subdivision.
-                    - The second image attached is the registered pet named '{pet.pet_name}'.
-                    
-                    Also compare these attributes:
-                    Stray Report Attributes:
-                    - Species: {report.animal_type or report.ai_animal_type}
-                    - Breed: {report.animal_breed or report.ai_possible_breed or 'Unknown'}
-                    - Dominant Colors: {report.animal_color or report.ai_dominant_color or 'Unknown'}
-                    - Description: "{report.description or ''}"
-                    
-                    Registered Pet Attributes:
-                    - Pet Name: {pet.pet_name}
-                    - Species: {pet.pet_type}
-                    - Breed: {pet.breed or 'Unknown'}
-                    - Primary Color: {pet.primary_color or 'Unknown'}
-                    - Secondary Color: {pet.secondary_color or 'Unknown'}
-                    - Distinctive Markings: {pet.distinctive_markings or pet.color_markings or 'None'}
-                    
-                    Please inspect the physical characteristics and visual details in both images:
-                    - Fur color patterns, markings, spot locations, snout/facial features.
-                    - Ear shape and carriage (floppy vs erect).
-                    - Body shape and breed appearance.
-                    
-                    Rules:
-                    1. Evaluate the likelihood of a match. Be very accurate and realistic to prevent false positives.
-                    2. Respond ONLY with a valid JSON block containing:
-                       - "confidence_score": An integer from 0 to 100 representing how confident you are that these show the same individual animal.
-                         * If the animals are clearly different breeds or have completely mismatched markings/colors/shapes, return a low confidence score (< 30).
-                         * If they are a strong visual match, return a high confidence score (>= 75).
-                       - "explanation": A warm, friendly, and conversational explanation (1-2 sentences) of why they match or mismatch (e.g. "Both the reported animal and {pet.pet_name} have the same distinctive white patches on their chest and identical floppy ears."). Do not mention JSON, confidence_score, or technical terms in the explanation.
-                    
-                    Respond ONLY with a valid JSON block.
-                    """
-                    content_to_send = [prompt, stray_img, pet_img]
-                else:
-                    prompt = f"""
-                    You are the StraySafe Copilot, an AI assistant for a subdivision's stray animal safety system.
-                    Your task is to compare two sets of animal attributes and determine if they describe the same individual animal.
-                    
-                    Stray Report Attributes (extracted from sighting):
-                    - Species: {report.animal_type or report.ai_animal_type}
-                    - Breed: {report.animal_breed or report.ai_possible_breed or 'Unknown'}
-                    - Dominant Colors: {report.animal_color or report.ai_dominant_color or 'Unknown'}
-                    - Description: "{report.description or ''}"
-                    
-                    Registered Pet Attributes:
-                    - Pet Name: {pet.pet_name}
-                    - Species: {pet.pet_type}
-                    - Breed: {pet.breed or 'Unknown'}
-                    - Primary Color: {pet.primary_color or 'Unknown'}
-                    - Secondary Color: {pet.secondary_color or 'Unknown'}
-                    - Distinctive Markings: {pet.distinctive_markings or pet.color_markings or 'None'}
-                    
-                    Evaluate the likelihood of a match based purely on these structured descriptions.
-                    Respond ONLY with a valid JSON block containing:
-                    - "confidence_score": An integer from 0 to 100 representing how confident you are that these descriptions refer to the same animal.
-                    - "explanation": A warm, friendly, and conversational explanation (1-2 sentences) of why they match or mismatch (e.g. "Both the reported animal and {pet.pet_name} are white cats with black spots on their tails."). Do not mention JSON, confidence_score, or technical terms in the explanation.
-                    
-                    Respond ONLY with a valid JSON block.
-                    """
-                    content_to_send = prompt
-                
-                response = model.generate_content(
-                    content_to_send,
-                    generation_config={"response_mime_type": "application/json"}
-                )
-                
-                text_resp = response.text.strip()
-                if text_resp.startswith("```"):
-                    lines = text_resp.split("\n")
-                    if lines[0].startswith("```json"):
-                        text_resp = "\n".join(lines[1:-1])
-                    elif lines[0].startswith("```"):
-                        text_resp = "\n".join(lines[1:-1])
-                        
-                data = json.loads(text_resp)
-                gemini_confidence = int(data.get("confidence_score", 50))
-                gemini_explanation = data.get("explanation", gemini_explanation)
-                gemini_success = True
-            except Exception as ex:
-                print(f"Gemini matching error: {ex}")
-
-        # 3. Combine base attribute score and Gemini confidence score (50/50 weighting)
-        if gemini_success:
-            final_score = min(int(0.5 * attribute_score + 0.5 * gemini_confidence), 100)
-        else:
-            final_score = min(attribute_score, 100)
-            gemini_explanation = "Note: Gemini free-tier quota is currently exceeded, so this match is verified using local YOLOv8 attribute similarity."
-        
-        # 4. Check if final score meets the notification threshold (>= 60%)
-        if final_score >= 60:
-            # Check if a claim already exists for this pet and report
-            from app.models.pet_claim import PetClaim
-            existing = db.query(PetClaim).filter(
-                PetClaim.report_id == report.report_id,
-                PetClaim.pet_id == pet.pet_id
-            ).first()
-            
-            if not existing:
-                new_claim = PetClaim(
-                    report_id=report.report_id,
-                    pet_id=pet.pet_id,
-                    status="Potential Owner Match",
-                    match_score=final_score,
-                    remarks=f"AI detected a {final_score}% potential match. {gemini_explanation}"
-                )
-                db.add(new_claim)
-                
-                notif_msg = (
-                    f"AI matching system detected a {final_score}% potential match for your pet "
-                    f"'{pet.pet_name}' in landmark '{report.landmark or 'Selera Homes'}'. Please review it."
-                )
-                
-                from app.models.notification import Notification
-                new_notif = Notification(
-                    user_id=pet.owner_id,
-                    title="Potential Owner Match Sighting",
-                    message=notif_msg,
-                    type="potential_match",
-                    related_id=report.report_id
-                )
-                db.add(new_notif)
+    """Compare stray report AI suggestions against registered pets of other owners using the unified AI matching engine."""
     try:
-        db.commit()
         from app.routes.matches import scan_and_generate_matches_for_report
         scan_and_generate_matches_for_report(report.report_id, db)
     except Exception as e:
-        db.rollback()
         print(f"Error in trigger_looks_matching: {e}")
 
 
@@ -612,9 +297,10 @@ async def analyze_report_media(
 
         img = Image.open(io.BytesIO(content)).convert("RGB")
 
-        # Run YOLOv8 detection first to check for cats/dogs
+        # Run YOLOv8 detection first to check for cats/dogs and bounding boxes
         yolo_count = 0
         detected_yolo_labels = []
+        detected_yolo_boxes = []
         try:
             from ultralytics import YOLO
             with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
@@ -624,49 +310,68 @@ async def analyze_report_media(
                 yolo_model = YOLO('yolov8n.pt')
                 results = yolo_model(tmp_path)
                 for r in results:
-                    for c in r.boxes.cls:
+                    for c, box in zip(r.boxes.cls, r.boxes.xyxy):
                         label = r.names[int(c)]
                         if label.lower() in ['dog', 'cat']:
                             yolo_count += 1
                             detected_yolo_labels.append(label.capitalize())
+                            detected_yolo_boxes.append([float(v) for v in box])
             finally:
                 if os.path.exists(tmp_path):
                     os.unlink(tmp_path)
         except Exception as yerr:
             print("YOLO check in analyze-media error:", yerr)
 
+        # Crop image to primary animal subject bounding box to eliminate background distraction (cobblestones, street, buildings)
+        cropped_img = img
+        if detected_yolo_boxes:
+            box = max(detected_yolo_boxes, key=lambda b: (b[2] - b[0]) * (b[3] - b[1]))
+            x1, y1, x2, y2 = box
+            w, h = img.size
+            pad_w = (x2 - x1) * 0.05
+            pad_h = (y2 - y1) * 0.05
+            cx1 = max(0, int(x1 - pad_w))
+            cy1 = max(0, int(y1 - pad_h))
+            cx2 = min(w, int(x2 + pad_w))
+            cy2 = min(h, int(y2 + pad_h))
+            if cx2 > cx1 and cy2 > cy1:
+                cropped_img = img.crop((cx1, cy1, cx2, cy2))
+
         api_key = os.getenv("GEMINI_API_KEY")
         if api_key:
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=api_key)
-                model = genai.GenerativeModel("gemini-2.5-flash")
-
                 prompt = """
                 You are an expert AI animal inspector for a stray pet safety system.
-                Inspect the attached photo and determine whether a real, live stray dog or cat is clearly visible.
+                Inspect the attached image of the animal subject and determine whether a real, live stray dog or cat is clearly visible.
+
+                CRITICAL RULE FOR COLOR & PATTERN DETECTION:
+                Focus strictly and exclusively on the fur/coat of the animal subject in the foreground.
+                Do NOT include background colors (such as ground, pavement, street, cobblestones, grass, walls, or furniture).
 
                 Provide predictions in a valid JSON object with the following fields:
                 1. "animal_detected": true ONLY if a real dog or cat is clearly visible in the image. Set to false if the image shows inanimate objects, landscapes, food, people without a pet, documents, or non-dog/cat animals.
                 2. "animal_type": "Dog", "Cat", or "Unknown" (if animal_detected is false, must be "Unknown").
-                3. "primary_color": Dominant primary fur color (e.g. "Black", "White", "Brown", "Orange", "Gray", "Calico", "Cream", "Golden", or "Unknown").
+                3. "primary_color": Dominant primary fur color of the animal (e.g. "Black", "White", "Brown", "Orange", "Gray", "Calico", "Cream", "Golden", or "Unknown"). If the animal is solid black, primary_color MUST be "Black".
                 4. "secondary_color": Secondary fur color or "None".
-                5. "tertiary_color": Third fur color (e.g. "Black", "White", "Brown", "Tan", "Gray", "Orange", "Cream", "Golden") or "None" if there is no third color (common for tricolor, calico, tortie, or multi-colored animals).
+                5. "tertiary_color": Third fur color or "None" if there is no third color.
                 6. "coat_pattern": "Solid", "Bicolor", "Tricolor", "Spotted", "Striped", "Patched", "Brindle", "Merle", "Tabby", "Calico", "Tortoiseshell", "Mixed", or "Unknown".
                 7. "estimated_size": "Small", "Medium", "Large", or "Unknown". (Default "Small" for cats).
-                8. "possible_breed": Likely breed name (e.g., "Puspin" for domestic cats, "Aspin" for local dogs, "Siamese", "Persian", "Golden Retriever", "Beagle", or "Unknown").
+                8. "possible_breed": Likely breed name (e.g., "Puspin" for domestic cats, "Shih Tzu", "Aspin" for local dogs, "Siamese", "Persian", "Golden Retriever", "Beagle", or "Unknown").
                 9. "collar_detected": true ONLY if a collar or harness is clearly visible around the neck, otherwise false.
                 10. "qr_tag_detected": true ONLY if a QR tag or ID tag is attached, otherwise false.
                 11. "message": If animal_detected is false, provide a short friendly message: "No animal detected in the uploaded image. Please ensure a cat or dog is clearly visible in your photo." If detected, provide "Animal detected successfully."
 
-                Be extremely accurate. If the animal has 3 distinct colors (e.g. a tricolor Beagle with Brown, White, and Black, or a Calico cat with Orange, Black, and White), specify all three in primary_color, secondary_color, and tertiary_color.
+                Be extremely accurate.
                 Respond ONLY with a valid JSON block.
                 """
 
-                res = model.generate_content(
-                    [prompt, img],
+                res = call_gemini_with_fallback(
+                    [prompt, cropped_img],
                     generation_config={"response_mime_type": "application/json"}
                 )
+
+                if not res or not getattr(res, "text", None):
+                    raise ValueError("Gemini API returned an empty or invalid response.")
 
                 text_resp = res.text.strip()
                 if text_resp.startswith("```"):
@@ -721,7 +426,7 @@ async def analyze_report_media(
             except Exception as gem_err:
                 print("Gemini Vision analysis error:", gem_err)
 
-        # Fallback if Gemini is not available: use YOLO detection result
+        # Fallback if Gemini is not available: use YOLO detection result and extract color from cropped animal subject
         if yolo_count == 0:
             return {
                 "animal_detected": False,
@@ -737,28 +442,23 @@ async def analyze_report_media(
                 "message": "No animal detected in the uploaded image. Please ensure a cat or dog is clearly visible."
             }
 
-        # YOLO found an animal; extract local colors
+        # YOLO found an animal; extract dominant colors strictly from the cropped animal region
         detected_type = detected_yolo_labels[0] if detected_yolo_labels else "Dog"
-        import numpy as np
-        arr = np.array(img)
-        avg_r, avg_g, avg_b = arr.mean(axis=(0,1))
-        brightness = (avg_r + avg_g + avg_b) / 3.0
-
-        if brightness < 80:
-            color = "Black"
-        elif brightness > 190:
-            color = "White"
-        elif avg_r > avg_g and avg_r > avg_b:
-            color = "Orange" if avg_r > 150 else "Brown"
-        else:
-            color = "Gray"
+        cropped_bytes_io = io.BytesIO()
+        cropped_img.save(cropped_bytes_io, format='JPEG')
+        extracted_color_str = extract_dominant_colors(cropped_bytes_io.getvalue())
+        extracted_colors = [c.strip() for c in extracted_color_str.split(',') if c.strip() and c.strip() != "Unknown"]
+        
+        p_color = extracted_colors[0] if extracted_colors else "Black"
+        s_color = extracted_colors[1] if len(extracted_colors) > 1 else "None"
+        t_color = extracted_colors[2] if len(extracted_colors) > 2 else "None"
 
         return {
             "animal_detected": True,
             "animal_type": detected_type,
-            "primary_color": color,
-            "secondary_color": "None",
-            "tertiary_color": "None",
+            "primary_color": p_color,
+            "secondary_color": s_color,
+            "tertiary_color": t_color,
             "coat_pattern": "Solid",
             "estimated_size": "Small" if detected_type == "Cat" else "Medium",
             "possible_breed": "Puspin" if detected_type == "Cat" else "Aspin",
@@ -849,18 +549,18 @@ async def validate_report_images(
                     os.unlink(tmp_path)
 
             # If YOLO detected 0 animals, double-check with Gemini Vision to prevent false negatives
-            if animal_count == 0 and api_key:
+            if animal_count == 0:
                 try:
-                    genai.configure(api_key=api_key)
-                    g_model = genai.GenerativeModel("gemini-2.5-flash")
                     check_prompt = """
                     Is there a real live dog or cat visible in this photo?
                     Respond ONLY with a JSON object: {"animal_detected": true/false, "count": number}
                     """
-                    g_res = g_model.generate_content(
+                    g_res = call_gemini_with_fallback(
                         [check_prompt, img],
                         generation_config={"response_mime_type": "application/json"}
                     )
+                    if not g_res or not getattr(g_res, "text", None):
+                        raise ValueError("Gemini API returned an empty or invalid response.")
                     g_text = g_res.text.strip()
                     if g_text.startswith("```"):
                         lines = g_text.split("\n")
@@ -898,17 +598,7 @@ async def validate_report_images(
 
     # If multiple images, run visual similarity analysis
     if len(pil_images) > 1:
-        if not api_key:
-            return {
-                "valid": False,
-                "error_type": "inconclusive",
-                "message": "The system could not confidently determine whether the uploaded images belong to the same animal. Please review your uploaded images before submitting."
-            }
-
         try:
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-2.5-flash")
-
             prompt = """
             You are the StraySafe Copilot, an AI assistant for a subdivision's stray animal reporting and safety system.
             You are given multiple images of stray animals uploaded for a single report.
@@ -938,10 +628,13 @@ async def validate_report_images(
             for img in pil_images:
                 content_to_send.append(img)
 
-            response = model.generate_content(
+            response = call_gemini_with_fallback(
                 content_to_send,
                 generation_config={"response_mime_type": "application/json"}
             )
+
+            if not response or not getattr(response, "text", None):
+                raise ValueError("Gemini API returned an empty or invalid response.")
 
             text_resp = response.text.strip()
             if text_resp.startswith("```"):
@@ -1124,7 +817,7 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
                         subd_notif = Notification(
                             user_id=leader.user_id,
                             title=f"New Stray Report #{db_report.report_id}",
-                            message=f"A new {db_report.animal_type or 'stray'} report was submitted in your subdivision at {db_report.sighting_location or 'designated location'}.",
+                            message=f"A new {db_report.animal_type or 'stray'} report was submitted in your subdivision at {db_report.landmark or 'designated location'}.",
                             type="alert",
                             related_id=db_report.report_id
                         )
@@ -1146,6 +839,7 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
 
         # Populate pet & owner contact info for lost pet reports
         populate_pet_and_owner_info(rep_data, db_report, db)
+        populate_handler_info(rep_data, db_report)
 
         return rep_data
     except HTTPException:
@@ -1160,6 +854,7 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
 def get_report(report_id: int, db: Session = Depends(get_db)):
     report = db.query(Report).options(
         joinedload(Report.reporter),
+        joinedload(Report.assigned_leader),
         joinedload(Report.category),
         joinedload(Report.status),
         joinedload(Report.subdivision),
@@ -1225,7 +920,7 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
         if report.history:
             for i, hist in enumerate(report.history):  # type: ignore[arg-type]
                 if rep_data.history and i < len(rep_data.history):
-                    rep_data.history[i].updater_name = hist.updater.name if hist.updater else "System"
+                    rep_data.history[i].updater_name = get_hist_updater_name(hist, report)
                     rep_data.history[i].updater_photo = hist.updater.profile_picture if hist.updater else None
 
         if report.comments:
@@ -1236,6 +931,7 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
 
         # Populate pet & owner contact info for lost pet reports
         populate_pet_and_owner_info(rep_data, report, db)
+        populate_handler_info(rep_data, report)
 
         return rep_data
     except Exception as e:
@@ -1249,8 +945,33 @@ def delete_report(report_id: int, req: Request, db: Session = Depends(get_db)):
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     report_snapshot = {"report_id": report.report_id, "animal_type": str(report.animal_type), "status_id": report.current_status_id}
-    db.delete(report)
-    db.commit()
+    
+    try:
+        # 1. Clean up report matches (both source and matched targets)
+        db.query(ReportMatch).filter(
+            (ReportMatch.source_report_id == report_id) | (ReportMatch.matched_report_id == report_id)
+        ).delete(synchronize_session=False)
+
+        # 2. Clean up pet claims
+        db.query(PetClaim).filter(PetClaim.report_id == report_id).delete(synchronize_session=False)
+
+        # 3. Clean up holding animals admitted from this report
+        db.query(HoldingAnimal).filter(HoldingAnimal.report_id == report_id).delete(synchronize_session=False)
+
+        # 4. Nullify warnings referencing this report
+        db.query(OwnerWarning).filter(OwnerWarning.report_id == report_id).update({"report_id": None}, synchronize_session=False)
+
+        # 5. Clean up chat threads for this report
+        chat_threads = db.query(ChatThread).filter((ChatThread.thread_type == "Report") & (ChatThread.related_id == report_id)).all()
+        for ct in chat_threads:
+            db.delete(ct)
+
+        db.delete(report)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete report: {str(e)}")
+
     log_activity(
         db=db,
         action="DELETE_REPORT",
@@ -1266,7 +987,7 @@ def delete_report(report_id: int, req: Request, db: Session = Depends(get_db)):
 
 @router.patch("/{report_id}", response_model=ReportResponse)
 def update_report(report_id: int, report_update: ReportUpdate, db: Session = Depends(get_db)):
-    db_report = db.query(Report).filter(Report.report_id == report_id).first()
+    db_report = db.query(Report).options(joinedload(Report.assigned_leader)).filter(Report.report_id == report_id).first()
     if not db_report:
         raise HTTPException(status_code=404, detail="Report not found")
 
@@ -1289,6 +1010,7 @@ def update_report(report_id: int, report_update: ReportUpdate, db: Session = Dep
 
     # Populate pet & owner contact info for lost pet reports
     populate_pet_and_owner_info(rep_data, db_report, db)
+    populate_handler_info(rep_data, db_report)
 
     return rep_data
 
@@ -1494,6 +1216,7 @@ async def upload_report_media(
 @router.patch("/{report_id}/status", response_model=ReportResponse)
 def update_report_status(report_id: int, status_update: ReportStatusUpdate, req: Request, db: Session = Depends(get_db)):
     report = db.query(Report).options(
+        joinedload(Report.assigned_leader),
         selectinload(Report.history),
         joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
     ).filter(Report.report_id == report_id).first()
@@ -1601,8 +1324,10 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
     if report.history:
         for i, hist in enumerate(report.history):  # type: ignore[arg-type]
             if rep_data.history and i < len(rep_data.history):
-                rep_data.history[i].updater_name = hist.updater.name if hist.updater else "System"
+                rep_data.history[i].updater_name = get_hist_updater_name(hist, report)
                 rep_data.history[i].updater_photo = hist.updater.profile_picture if hist.updater else None
+
+    populate_handler_info(rep_data, report)
 
     status_names = {
         1: "Reported", 2: "Verified", 3: "Rejected", 4: "Escalated to Barangay",
@@ -1724,3 +1449,325 @@ def link_pet_to_report(report_id: int, pet_id: int, req: Request, db: Session = 
         "report_id": report_id,
         "pet_id": pet_id
     }
+
+
+@router.post("/{report_id}/claim", response_model=ReportResponse)
+def claim_report(report_id: int, claim_in: ReportClaimRequest, req: Request, db: Session = Depends(get_db)):
+    """Claim ownership of an unassigned report by a subdivision officer with atomic concurrency check."""
+    # 1. Fetch claiming officer
+    user = db.query(User).filter(User.user_id == claim_in.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.role_id not in [2, 4]:
+        raise HTTPException(status_code=403, detail="Only Subdivision Leaders / Officers are authorized to claim reports.")
+
+    # 2. Fetch report with locking
+    report = db.query(Report).options(
+        joinedload(Report.assigned_leader),
+        selectinload(Report.history).joinedload(StatusHistory.updater),
+        selectinload(Report.history).selectinload(StatusHistory.media),
+        joinedload(Report.reporter),
+        joinedload(Report.category),
+        joinedload(Report.status),
+        joinedload(Report.subdivision),
+        selectinload(Report.media),
+        selectinload(Report.comments).joinedload(Comment.user),
+        joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
+    ).filter(Report.report_id == report_id).with_for_update().first()
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    # 3. Check subdivision match
+    if user.role_id == 2 and user.subdivision_id and report.subdivision_id:
+        if user.subdivision_id != report.subdivision_id:
+            raise HTTPException(status_code=403, detail="You can only claim reports within your assigned subdivision.")
+
+    # 4. Atomic Concurrency Check
+    if report.assigned_leader_id is not None:
+        if report.assigned_leader_id == user.user_id:
+            rep_data = ReportResponse.model_validate(report)
+            rep_data.status_id = report.current_status_id
+            rep_data.reporter_name = report.reporter.name if report.reporter else "Unknown User"
+            rep_data.reporter_photo = report.reporter.profile_picture if report.reporter else None
+            populate_handler_info(rep_data, report)
+            populate_pet_and_owner_info(rep_data, report, db)
+            return rep_data
+
+        current_handler_name = report.assigned_leader.name if report.assigned_leader else f"Officer #{report.assigned_leader_id}"
+        raise HTTPException(
+            status_code=409,
+            detail=f"This report has already been claimed by {current_handler_name}."
+        )
+
+    # 5. Assign handler
+    from datetime import datetime
+    now = datetime.now()
+    report.assigned_leader_id = user.user_id
+    report.claimed_at = now
+
+    prev_status = report.current_status_id
+    # Transition 'Reported' (1) to 'Verified' / Under Review (2)
+    if report.current_status_id == 1:
+        report.current_status_id = 2
+
+    # 6. Record in StatusHistory
+    status_hist = StatusHistory(
+        report_id=report.report_id,
+        report_status_id=report.current_status_id,
+        updated_by=user.user_id,
+        remarks=f"Officer {user.name} claimed the report and is now handling the case."
+    )
+    db.add(status_hist)
+
+    # 7. Record in AuditLog
+    log_activity(
+        db=db,
+        action="CLAIM_REPORT",
+        target_table="reports",
+        target_id=report.report_id,
+        description=f"Officer {user.name} claimed report #{report.report_id}",
+        user_id=user.user_id,
+        log_type="operation",
+        old_values={"assigned_leader_id": None, "status_id": prev_status},
+        new_values={"assigned_leader_id": user.user_id, "status_id": report.current_status_id},
+        request=req
+    )
+
+    # 8. Notify other subdivision officers
+    if report.subdivision_id:
+        try:
+            colleagues = db.query(User).filter(
+                User.subdivision_id == report.subdivision_id,
+                User.role_id == 2,
+                User.user_id != user.user_id
+            ).all()
+            for col in colleagues:
+                notif = Notification(
+                    user_id=col.user_id,
+                    title=f"Report #{report.report_id} Claimed",
+                    message=f"Officer {user.name} has claimed Report #{report.report_id} and is now handling it.",
+                    type="report_claimed",
+                    related_id=report.report_id
+                )
+                db.add(notif)
+        except Exception as notif_err:
+            print(f"Notice: Failed to create claim notification: {notif_err}")
+
+    db.commit()
+    db.refresh(report)
+
+    rep_data = ReportResponse.model_validate(report)
+    rep_data.status_id = report.current_status_id
+    rep_data.reporter_name = report.reporter.name if report.reporter else "Unknown User"
+    rep_data.reporter_photo = report.reporter.profile_picture if report.reporter else None
+
+    if report.history:
+        for i, hist in enumerate(report.history):
+            if rep_data.history and i < len(rep_data.history):
+                rep_data.history[i].updater_name = get_hist_updater_name(hist, report)
+                rep_data.history[i].updater_photo = hist.updater.profile_picture if hist.updater else None
+
+    populate_handler_info(rep_data, report)
+    populate_pet_and_owner_info(rep_data, report, db)
+    return rep_data
+
+
+@router.post("/{report_id}/take-over", response_model=ReportResponse)
+def takeover_report(report_id: int, takeover_in: ReportTakeoverRequest, req: Request, db: Session = Depends(get_db)):
+    """Take over handling of a report from another officer with reason tracking."""
+    # 1. Fetch new handler
+    new_officer = db.query(User).filter(User.user_id == takeover_in.user_id).first()
+    if not new_officer:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if new_officer.role_id not in [2, 4]:
+        raise HTTPException(status_code=403, detail="Only Subdivision Leaders / Officers are authorized to take over reports.")
+
+    # 2. Fetch report with locking
+    report = db.query(Report).options(
+        joinedload(Report.assigned_leader),
+        selectinload(Report.history).joinedload(StatusHistory.updater),
+        selectinload(Report.history).selectinload(StatusHistory.media),
+        joinedload(Report.reporter),
+        joinedload(Report.category),
+        joinedload(Report.status),
+        joinedload(Report.subdivision),
+        selectinload(Report.media),
+        selectinload(Report.comments).joinedload(Comment.user),
+        joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
+    ).filter(Report.report_id == report_id).with_for_update().first()
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if new_officer.role_id == 2 and new_officer.subdivision_id and report.subdivision_id:
+        if new_officer.subdivision_id != report.subdivision_id:
+            raise HTTPException(status_code=403, detail="You can only take over reports within your assigned subdivision.")
+
+    prev_handler_id = report.assigned_leader_id
+    prev_handler_name = report.assigned_leader.name if report.assigned_leader else (f"Officer #{prev_handler_id}" if prev_handler_id else "Unassigned")
+
+    if prev_handler_id == new_officer.user_id:
+        rep_data = ReportResponse.model_validate(report)
+        rep_data.status_id = report.current_status_id
+        rep_data.reporter_name = report.reporter.name if report.reporter else "Unknown User"
+        rep_data.reporter_photo = report.reporter.profile_picture if report.reporter else None
+        populate_handler_info(rep_data, report)
+        populate_pet_and_owner_info(rep_data, report, db)
+        return rep_data
+
+    # 3. Update handler
+    from datetime import datetime
+    now = datetime.now()
+    report.assigned_leader_id = new_officer.user_id
+    report.claimed_at = now
+
+    # 4. Record takeover in StatusHistory
+    reason_text = takeover_in.reason.strip() if takeover_in.reason else "Workload reassignment"
+    notes_text = f" (Notes: {takeover_in.notes.strip()})" if takeover_in.notes and takeover_in.notes.strip() else ""
+    history_remarks = f"Officer {new_officer.name} took over the report from {prev_handler_name}. Reason: {reason_text}{notes_text}"
+
+    status_hist = StatusHistory(
+        report_id=report.report_id,
+        report_status_id=report.current_status_id,
+        updated_by=new_officer.user_id,
+        remarks=history_remarks
+    )
+    db.add(status_hist)
+
+    # 5. Record in AuditLog
+    log_activity(
+        db=db,
+        action="TAKEOVER_REPORT",
+        target_table="reports",
+        target_id=report.report_id,
+        description=f"Officer {new_officer.name} took over report #{report.report_id} from {prev_handler_name}. Reason: {reason_text}",
+        user_id=new_officer.user_id,
+        log_type="operation",
+        old_values={"assigned_leader_id": prev_handler_id, "handler_name": prev_handler_name},
+        new_values={"assigned_leader_id": new_officer.user_id, "handler_name": new_officer.name, "reason": reason_text, "notes": takeover_in.notes},
+        request=req
+    )
+
+    # 6. Notify previous handler
+    if prev_handler_id and prev_handler_id != new_officer.user_id:
+        try:
+            prev_notif = Notification(
+                user_id=prev_handler_id,
+                title=f"Report #{report.report_id} Handover",
+                message=f"Officer {new_officer.name} has taken over Report #{report.report_id}. Reason: {reason_text}.",
+                type="report_takeover",
+                related_id=report.report_id
+            )
+            db.add(prev_notif)
+        except Exception as notif_err:
+            print(f"Notice: Failed to notify previous handler: {notif_err}")
+
+    # 7. Notify other subdivision colleagues
+    if report.subdivision_id:
+        try:
+            colleagues = db.query(User).filter(
+                User.subdivision_id == report.subdivision_id,
+                User.role_id == 2,
+                User.user_id.notin_([new_officer.user_id, prev_handler_id] if prev_handler_id else [new_officer.user_id])
+            ).all()
+            for col in colleagues:
+                col_notif = Notification(
+                    user_id=col.user_id,
+                    title=f"Report #{report.report_id} Handover",
+                    message=f"Officer {new_officer.name} took over Report #{report.report_id} from {prev_handler_name}.",
+                    type="report_takeover",
+                    related_id=report.report_id
+                )
+                db.add(col_notif)
+        except Exception as notif_err:
+            print(f"Notice: Failed to notify colleagues: {notif_err}")
+
+    db.commit()
+    db.refresh(report)
+
+    rep_data = ReportResponse.model_validate(report)
+    rep_data.status_id = report.current_status_id
+    rep_data.reporter_name = report.reporter.name if report.reporter else "Unknown User"
+    rep_data.reporter_photo = report.reporter.profile_picture if report.reporter else None
+
+    if report.history:
+        for i, hist in enumerate(report.history):
+            if rep_data.history and i < len(rep_data.history):
+                rep_data.history[i].updater_name = get_hist_updater_name(hist, report)
+                rep_data.history[i].updater_photo = hist.updater.profile_picture if hist.updater else None
+
+    populate_handler_info(rep_data, report)
+    populate_pet_and_owner_info(rep_data, report, db)
+    return rep_data
+
+
+@router.post("/{report_id}/unclaim", response_model=ReportResponse)
+def unclaim_report(report_id: int, unclaim_in: ReportClaimRequest, req: Request, db: Session = Depends(get_db)):
+    """Release a claimed report back to the unassigned queue."""
+    user = db.query(User).filter(User.user_id == unclaim_in.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    report = db.query(Report).options(
+        joinedload(Report.assigned_leader),
+        selectinload(Report.history).joinedload(StatusHistory.updater),
+        selectinload(Report.history).selectinload(StatusHistory.media),
+        joinedload(Report.reporter),
+        joinedload(Report.category),
+        joinedload(Report.status),
+        joinedload(Report.subdivision),
+        selectinload(Report.media),
+        selectinload(Report.comments).joinedload(Comment.user),
+        joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
+    ).filter(Report.report_id == report_id).with_for_update().first()
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if report.assigned_leader_id != user.user_id and user.role_id != 4:
+        raise HTTPException(status_code=403, detail="You can only unclaim reports assigned to yourself.")
+
+    report.assigned_leader_id = None
+    report.claimed_at = None
+
+    status_hist = StatusHistory(
+        report_id=report.report_id,
+        report_status_id=report.current_status_id,
+        updated_by=user.user_id,
+        remarks=f"Officer {user.name} released this report back to the unassigned queue."
+    )
+    db.add(status_hist)
+
+    log_activity(
+        db=db,
+        action="UNCLAIM_REPORT",
+        target_table="reports",
+        target_id=report.report_id,
+        description=f"Officer {user.name} released report #{report.report_id} back to unassigned queue",
+        user_id=user.user_id,
+        log_type="operation",
+        old_values={"assigned_leader_id": user.user_id},
+        new_values={"assigned_leader_id": None},
+        request=req
+    )
+
+    db.commit()
+    db.refresh(report)
+
+    rep_data = ReportResponse.model_validate(report)
+    rep_data.status_id = report.current_status_id
+    rep_data.reporter_name = report.reporter.name if report.reporter else "Unknown User"
+    rep_data.reporter_photo = report.reporter.profile_picture if report.reporter else None
+
+    if report.history:
+        for i, hist in enumerate(report.history):
+            if rep_data.history and i < len(rep_data.history):
+                rep_data.history[i].updater_name = get_hist_updater_name(hist, report)
+                rep_data.history[i].updater_photo = hist.updater.profile_picture if hist.updater else None
+
+    populate_handler_info(rep_data, report)
+    populate_pet_and_owner_info(rep_data, report, db)
+    return rep_data

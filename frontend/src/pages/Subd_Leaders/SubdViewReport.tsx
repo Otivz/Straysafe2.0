@@ -14,6 +14,9 @@ import ResolveLostPetModal from '../../components/Modals/ResolveLostPetModal';
 import AddPetModal from '../../components/PetRecords/AddPetModal';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import { useReportChatCount } from '../../utils/chatUtils';
+import TakeoverReportModal from '../../components/Modals/TakeoverReportModal';
+import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
+import { type PetRecord, mapRawPetToPetRecord } from '../../components/PetRecords/types';
 
 interface Report {
     report_id: number;
@@ -53,6 +56,10 @@ interface Report {
     owner_email?: string | null;
     owner_address?: string | null;
     is_owner_report?: boolean;
+    assigned_leader_id?: number | null;
+    assigned_leader_name?: string | null;
+    assigned_leader_photo?: string | null;
+    claimed_at?: string | null;
 }
 
 const statusMap: Record<number, string> = {
@@ -87,6 +94,52 @@ const SubdViewReport = () => {
     const [showSuccess, setShowSuccess] = useState(false);
     const [isMapExpanded, setIsMapExpanded] = useState(false);
     const [isAddPetModalOpen, setIsAddPetModalOpen] = useState(false);
+    const [selectedPetDetail, setSelectedPetDetail] = useState<PetRecord | null>(null);
+    const [isLoadingPetDetail, setIsLoadingPetDetail] = useState(false);
+
+    const handleOpenPetDetail = async (petId?: number) => {
+        if (!petId) return;
+        setIsLoadingPetDetail(true);
+        try {
+            const res = await axios.get(`http://localhost:8000/pets/${petId}`);
+            setSelectedPetDetail(mapRawPetToPetRecord(res.data));
+        } catch (e) {
+            console.error("Failed to load pet details:", e);
+        } finally {
+            setIsLoadingPetDetail(false);
+        }
+    };
+
+    const handleOpenQrTag = async () => {
+        if (report?.pet_qr_code_url) {
+            setSelectedQrPreview({
+                url: report.pet_qr_code_url,
+                petName: report.pet_name || undefined,
+                hash: report.pet_qr_code_hash || undefined,
+                ownerName: report.owner_name || undefined,
+                ownerPhone: report.owner_phone || undefined
+            });
+            return;
+        }
+
+        if (report?.pet_id) {
+            try {
+                const res = await axios.get(`http://localhost:8000/pets/${report.pet_id}/qr`);
+                if (res.data?.qr_image_url) {
+                    setSelectedQrPreview({
+                        url: res.data.qr_image_url,
+                        petName: report.pet_name || undefined,
+                        hash: res.data.qr_token ? res.data.qr_token.slice(0, 10).toUpperCase() : undefined,
+                        ownerName: report.owner_name || undefined,
+                        ownerPhone: report.owner_phone || undefined
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to load pet QR tag:", err);
+                alert("Could not load QR tag for this pet.");
+            }
+        }
+    };
     
     // Escalation Modal state
     const [isEscalateModalOpen, setIsEscalateModalOpen] = useState(false);
@@ -178,6 +231,11 @@ const SubdViewReport = () => {
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
     const currentUserId = currentUser ? currentUser.user_id : 1;
+
+    // Handler Workflow States
+    const [isTakeoverModalOpen, setIsTakeoverModalOpen] = useState(false);
+    const [isClaiming, setIsClaiming] = useState(false);
+    const [isUnclaiming, setIsUnclaiming] = useState(false);
 
     // Chat Drawer state
     const [isChatOpen, setIsChatOpen] = useState(false);
@@ -491,6 +549,45 @@ const SubdViewReport = () => {
         }
     };
 
+    const handleClaimReport = async () => {
+        if (!report) return;
+        try {
+            setIsClaiming(true);
+            await axios.post(`http://localhost:8000/reports/${report.report_id}/claim`, {
+                user_id: currentUserId
+            });
+            setShowSuccess(true);
+            await fetchReportDetails();
+            setTimeout(() => setShowSuccess(false), 3000);
+        } catch (err: any) {
+            console.error('Error claiming report:', err);
+            const msg = err.response?.data?.detail || 'Failed to claim report. Please try again.';
+            alert(msg);
+            fetchReportDetails();
+        } finally {
+            setIsClaiming(false);
+        }
+    };
+
+    const handleUnclaimReport = async () => {
+        if (!report) return;
+        if (!window.confirm('Are you sure you want to release this report back to the unassigned queue?')) return;
+        try {
+            setIsUnclaiming(true);
+            await axios.post(`http://localhost:8000/reports/${report.report_id}/unclaim`, {
+                user_id: currentUserId
+            });
+            setShowSuccess(true);
+            await fetchReportDetails();
+            setTimeout(() => setShowSuccess(false), 3000);
+        } catch (err: any) {
+            console.error('Error releasing report:', err);
+            alert(err.response?.data?.detail || 'Failed to release report.');
+        } finally {
+            setIsUnclaiming(false);
+        }
+    };
+
     const getPriorityColor = (priority: string) => {
         switch (priority.toLowerCase()) {
             case 'emergency':
@@ -585,6 +682,99 @@ const SubdViewReport = () => {
                             </div>
                         ) : (
                             <div className="space-y-8 bg-white p-8 sm:p-10 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                                {/* Case Handler Ownership Banner */}
+                                {!report.assigned_leader_id ? (
+                                    <div className="p-5 rounded-3xl bg-amber-500/10 border border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                        <div className="flex items-center gap-3.5">
+                                            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl font-black shadow-md shadow-amber-500/20 shrink-0">
+                                                ⚠️
+                                            </div>
+                                            <div>
+                                                <h4 className="text-xs font-black text-amber-950 uppercase tracking-widest flex items-center gap-2">
+                                                    Report is Unassigned
+                                                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                                                </h4>
+                                                <p className="text-xs text-amber-800 font-semibold mt-0.5">
+                                                    No officer has claimed this case yet. Claiming will assign you as the primary handler.
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleClaimReport}
+                                            disabled={isClaiming}
+                                            className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-[#F97316] hover:bg-[#EA580C] text-white font-black text-xs uppercase tracking-wider shadow-md shadow-orange-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer shrink-0"
+                                        >
+                                            {isClaiming ? (
+                                                <>
+                                                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                                                    <span>Claiming...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span>🛡️ Claim This Report</span>
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                ) : report.assigned_leader_id === currentUserId ? (
+                                    <div className="p-5 rounded-3xl bg-emerald-500/10 border border-emerald-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                        <div className="flex items-center gap-3.5">
+                                            <div className="w-11 h-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center text-xl font-black shadow-md shadow-emerald-600/20 shrink-0">
+                                                🛡️
+                                            </div>
+                                            <div>
+                                                <h4 className="text-xs font-black text-emerald-950 uppercase tracking-widest flex items-center gap-2">
+                                                    You are handling this case
+                                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                                </h4>
+                                                <p className="text-xs text-emerald-800 font-semibold mt-0.5">
+                                                    {report.claimed_at ? (
+                                                        <>Claimed <RelativeTimestamp date={report.claimed_at} /> — All investigation & status controls are active.</>
+                                                    ) : (
+                                                        <>You are the designated handler for this incident report.</>
+                                                    )}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleUnclaimReport}
+                                            disabled={isUnclaiming}
+                                            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-black text-[11px] uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shrink-0"
+                                        >
+                                            {isUnclaiming ? 'Releasing...' : 'Release / Unclaim'}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="p-5 rounded-3xl bg-blue-500/10 border border-blue-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                        <div className="flex items-center gap-3.5">
+                                            <div className="w-11 h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-xl font-black shadow-md shadow-blue-600/20 shrink-0">
+                                                👤
+                                            </div>
+                                            <div>
+                                                <h4 className="text-xs font-black text-blue-950 uppercase tracking-widest flex items-center gap-2">
+                                                    Handled by {report.assigned_leader_name || `Officer #${report.assigned_leader_id}`}
+                                                </h4>
+                                                <p className="text-xs text-blue-800 font-semibold mt-0.5">
+                                                    {report.claimed_at ? (
+                                                        <>Primary handler since <RelativeTimestamp date={report.claimed_at} />. Actions are reserved for the current handler.</>
+                                                    ) : (
+                                                        <>Assigned to another subdivision officer.</>
+                                                    )}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsTakeoverModalOpen(true)}
+                                            className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                                        >
+                                            🔄 Take Over Report
+                                        </button>
+                                    </div>
+                                )}
+
                                 {/* Header Info */}
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                     <div className="flex items-center gap-4">
@@ -675,11 +865,30 @@ const SubdViewReport = () => {
                                                     </span>
                                                 )}
                                             </div>
-                                            {report.pet_qr_code_hash && (
-                                                <span className="text-[10px] font-mono font-bold text-amber-900 bg-white/90 px-2.5 py-1 rounded-lg border border-amber-200 shadow-xs">
-                                                    Tag: {report.pet_qr_code_hash}
-                                                </span>
-                                            )}
+                                            <div className="flex items-center gap-2">
+                                                {report.pet_id && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleOpenPetDetail(report.pet_id)}
+                                                        disabled={isLoadingPetDetail}
+                                                        className="px-3 py-1 bg-gradient-to-r from-amber-600 to-[#B35D25] hover:from-amber-700 hover:to-[#964E1F] text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm hover:shadow transition-all cursor-pointer"
+                                                    >
+                                                        {isLoadingPetDetail ? (
+                                                            <span className="animate-spin text-xs">⏳</span>
+                                                        ) : (
+                                                            <span>🐾 View Animal Record</span>
+                                                        )}
+                                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                        </svg>
+                                                    </button>
+                                                )}
+                                                {report.pet_qr_code_hash && (
+                                                    <span className="text-[10px] font-mono font-bold text-amber-900 bg-white/90 px-2.5 py-1 rounded-lg border border-amber-200 shadow-xs">
+                                                        Tag: {report.pet_qr_code_hash}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
 
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
@@ -714,21 +923,24 @@ const SubdViewReport = () => {
                                             </div>
                                         </div>
 
-                                        {report.pet_qr_code_url && (
+                                        {(report.pet_qr_code_url || report.pet_id) && (
                                             <div className="pt-2 flex items-center justify-between bg-white p-4 rounded-2xl border border-amber-200 gap-4 shadow-xs">
                                                 <div className="flex items-center gap-3.5">
-                                                    <img 
-                                                        src={report.pet_qr_code_url} 
-                                                        alt="Pet QR Tag" 
-                                                        className="w-14 h-14 rounded-xl object-contain bg-white border border-gray-200 p-1 cursor-pointer hover:scale-105 transition-transform"
-                                                        onClick={() => setSelectedQrPreview({
-                                                            url: report.pet_qr_code_url!,
-                                                            petName: report.pet_name || undefined,
-                                                            hash: report.pet_qr_code_hash || undefined,
-                                                            ownerName: report.owner_name || undefined,
-                                                            ownerPhone: report.owner_phone || undefined
-                                                        })}
-                                                    />
+                                                    {report.pet_qr_code_url ? (
+                                                        <img 
+                                                            src={report.pet_qr_code_url} 
+                                                            alt="Pet QR Tag" 
+                                                            className="w-14 h-14 rounded-xl object-contain bg-white border border-gray-200 p-1 cursor-pointer hover:scale-105 transition-transform"
+                                                            onClick={handleOpenQrTag}
+                                                        />
+                                                    ) : (
+                                                        <div 
+                                                            onClick={handleOpenQrTag}
+                                                            className="w-14 h-14 rounded-xl bg-amber-100 flex items-center justify-center text-2xl cursor-pointer hover:scale-105 transition-transform border border-amber-200"
+                                                        >
+                                                            🐾
+                                                        </div>
+                                                    )}
                                                     <div>
                                                         <p className="text-xs font-black text-gray-900 uppercase">Pet StraySafe QR Tag</p>
                                                         <p className="text-[11px] text-gray-500 font-medium">Click or scan tag to verify animal registration</p>
@@ -736,13 +948,7 @@ const SubdViewReport = () => {
                                                 </div>
                                                 <button
                                                     type="button"
-                                                    onClick={() => setSelectedQrPreview({
-                                                        url: report.pet_qr_code_url!,
-                                                        petName: report.pet_name || undefined,
-                                                        hash: report.pet_qr_code_hash || undefined,
-                                                        ownerName: report.owner_name || undefined,
-                                                        ownerPhone: report.owner_phone || undefined
-                                                    })}
+                                                    onClick={handleOpenQrTag}
                                                     className="px-4 py-2 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer"
                                                 >
                                                     View Tag ↗
@@ -1190,70 +1396,137 @@ const SubdViewReport = () => {
                                 {/* ACTION PANEL */}
                                 <div className="mt-8 pt-8 border-t border-gray-100">
                                     <div className="flex flex-col gap-3">
-                                        {/* OPTION: ADD PET RECORD IF UNREGISTERED */}
-                                        {!report.pet_id && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsAddPetModalOpen(true)}
-                                                className="w-full py-3.5 border-2 border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 text-[#F97316] rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer hover:scale-[1.01] active:scale-95"
-                                            >
-                                                <span className="text-base">🐾</span>
-                                                <span>Add Record for this Animal in System</span>
-                                            </button>
-                                        )}
-
-                                        {/* STEP 1: VERIFY */}
-                                        {report.status_id === 1 && (
-                                            <button
-                                                onClick={() => handleUpdateStatus(2)}
-                                                className="w-full py-4 bg-blue-600 text-white rounded-2xl text-xs font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                </svg>
-                                                VERIFY INCIDENT REPORT
-                                            </button>
-                                        )}
-
-                                        {/* STEP 2: ESCALATE */}
-                                        {report.status_id === 2 && (
-                                            <button
-                                                onClick={() => {
-                                                    setEscalationTitle('');
-                                                    setEscalationDescription('');
-                                                    setIsEscalateModalOpen(true);
-                                                }}
-                                                className="w-full py-4 bg-orange-600 text-white rounded-2xl text-xs font-bold shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                                                </svg>
-                                                ESCALATE TO BARANGAY
-                                            </button>
-                                        )}
-
-                                        {/* STEP 2.5: ISSUE WARNING */}
-                                        {Boolean(report.owner_id || (report.is_owner_report && report.user_id) || report.owner_name || report.pet_id) && (
-                                            <button
-                                                onClick={openIssueWarningModal}
-                                                className="w-full py-4 bg-yellow-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-yellow-100 hover:bg-yellow-600 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
-                                            >
-                                                <span className="text-base">⚠️</span>
-                                                ISSUE OWNER WARNING
-                                            </button>
-                                        )}
-
-                                        {/* STEP 3: PENDING BARANGAY */}
-                                        {report.status_id === 4 && (
-                                            <div className="w-full py-4 bg-gray-100 text-gray-500 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border border-gray-200">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                </svg>
-                                                Pending Barangay Review
+                                        {/* CASE NOT HANDLED BY CURRENT USER */}
+                                        {report.assigned_leader_id && report.assigned_leader_id !== currentUserId && ![11, 12].includes(report.status_id) && (
+                                            <div className="p-5 rounded-2xl bg-blue-50/70 border border-blue-200 text-center space-y-2">
+                                                <p className="text-xs font-bold text-blue-900">
+                                                    🔒 Operational controls are reserved for the assigned case officer (<span className="font-black text-blue-700">{report.assigned_leader_name || `Officer #${report.assigned_leader_id}`}</span>).
+                                                </p>
+                                                <p className="text-[11px] text-blue-700/80">
+                                                    If this officer is unavailable or you need to manage this case, you can take over this report.
+                                                </p>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsTakeoverModalOpen(true)}
+                                                    className="mt-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase tracking-wider shadow-sm transition-all cursor-pointer"
+                                                >
+                                                    🔄 Take Over Report
+                                                </button>
                                             </div>
                                         )}
 
-                                        {/* RESOLVED / HISTORY STATE */}
+                                        {/* CASE IS UNASSIGNED */}
+                                        {!report.assigned_leader_id && ![11, 12].includes(report.status_id) && (
+                                            <div className="p-5 rounded-2xl bg-amber-50/80 border border-amber-200 text-center space-y-2">
+                                                <p className="text-xs font-bold text-amber-900">
+                                                    ⚠️ Please claim this incident report to unlock verification, warning citations, and resolution actions.
+                                                </p>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleClaimReport}
+                                                    disabled={isClaiming}
+                                                    className="mt-2 px-6 py-2.5 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+                                                >
+                                                    {isClaiming ? 'Claiming...' : '🛡️ Claim This Report'}
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {/* OPERATIONAL CONTROLS - ACTIVE FOR ASSIGNED HANDLER */}
+                                        {report.assigned_leader_id === currentUserId && (
+                                            <>
+                                                {/* OPTION: ADD PET RECORD IF UNREGISTERED */}
+                                                {!report.pet_id && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsAddPetModalOpen(true)}
+                                                        className="w-full py-3.5 border-2 border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 text-[#F97316] rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer hover:scale-[1.01] active:scale-95"
+                                                    >
+                                                        <span className="text-base">🐾</span>
+                                                        <span>Add Record for this Animal in System</span>
+                                                    </button>
+                                                )}
+
+                                                {/* STEP 1: VERIFY */}
+                                                {report.status_id === 1 && (
+                                                    <button
+                                                        onClick={() => handleUpdateStatus(2)}
+                                                        className="w-full py-4 bg-blue-600 text-white rounded-2xl text-xs font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                        </svg>
+                                                        VERIFY INCIDENT REPORT
+                                                    </button>
+                                                )}
+
+                                                {/* STEP 2: ESCALATE */}
+                                                {report.status_id === 2 && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setEscalationTitle('');
+                                                            setEscalationDescription('');
+                                                            setIsEscalateModalOpen(true);
+                                                        }}
+                                                        className="w-full py-4 bg-orange-600 text-white rounded-2xl text-xs font-bold shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                                        </svg>
+                                                        ESCALATE TO BARANGAY
+                                                    </button>
+                                                )}
+
+                                                {/* STEP 2.5: ISSUE WARNING */}
+                                                {Boolean(report.owner_id || (report.is_owner_report && report.user_id) || report.owner_name || report.pet_id) && (
+                                                    <button
+                                                        onClick={openIssueWarningModal}
+                                                        className="w-full py-4 bg-yellow-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-yellow-100 hover:bg-yellow-600 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
+                                                    >
+                                                        <span className="text-base">⚠️</span>
+                                                        ISSUE OWNER WARNING
+                                                    </button>
+                                                )}
+
+                                                {/* STEP 3: PENDING BARANGAY */}
+                                                {report.status_id === 4 && (
+                                                    <div className="w-full py-4 bg-gray-100 text-gray-500 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border border-gray-200">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                        </svg>
+                                                        Pending Barangay Review
+                                                    </div>
+                                                )}
+
+                                                {(report.status_id === 1 || report.status_id === 2 || report.status_id === 4 || report.status_id === 7) && (
+                                                    <button
+                                                        onClick={() => {
+                                                            const isLostPet = report.category_id === 6 || !!report.pet_id || (!!report.description && report.description.includes('[LOST PET REPORT]'));
+                                                            if (isLostPet) {
+                                                                setIsResolveLostModalOpen(true);
+                                                            } else {
+                                                                setIsResolveModalOpen(true);
+                                                            }
+                                                        }}
+                                                        className="w-full py-3.5 border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100 text-emerald-700 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                                                    >
+                                                        <span>{(report.category_id === 6 || !!report.pet_id || (!!report.description && report.description.includes('[LOST PET REPORT]'))) ? '🏠' : '✅'}</span>
+                                                        {(report.category_id === 6 || !!report.pet_id || (!!report.description && report.description.includes('[LOST PET REPORT]'))) ? 'Resolve Lost Pet Report' : 'Mark as Resolved'}
+                                                    </button>
+                                                )}
+
+                                                {(report.status_id === 1 || report.status_id === 2) && (
+                                                    <button
+                                                        onClick={handleReject}
+                                                        className="w-full py-3 border border-gray-100 rounded-2xl text-[10px] font-bold text-gray-400 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all uppercase tracking-widest cursor-pointer"
+                                                    >
+                                                        Reject Report
+                                                    </button>
+                                                )}
+                                            </>
+                                        )}
+
+                                        {/* RESOLVED / HISTORY STATE (Visible to everyone) */}
                                         {report.status_id === 11 && (
                                             <div className="w-full p-5 bg-green-50 border border-green-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in duration-300">
                                                 <div className="flex items-center gap-3">
@@ -1278,32 +1551,6 @@ const SubdViewReport = () => {
                                             <div className="w-full py-4 bg-gray-100 text-gray-600 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border border-gray-200">
                                                 Status: Deceased — Archived in History Reports
                                             </div>
-                                        )}
-
-                                        {(report.status_id === 1 || report.status_id === 2 || report.status_id === 4 || report.status_id === 7) && (
-                                            <button
-                                                onClick={() => {
-                                                    const isLostPet = report.category_id === 6 || !!report.pet_id || (!!report.description && report.description.includes('[LOST PET REPORT]'));
-                                                    if (isLostPet) {
-                                                        setIsResolveLostModalOpen(true);
-                                                    } else {
-                                                        setIsResolveModalOpen(true);
-                                                    }
-                                                }}
-                                                className="w-full py-3.5 border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100 text-emerald-700 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
-                                            >
-                                                <span>{(report.category_id === 6 || !!report.pet_id || (!!report.description && report.description.includes('[LOST PET REPORT]'))) ? '🏠' : '✅'}</span>
-                                                {(report.category_id === 6 || !!report.pet_id || (!!report.description && report.description.includes('[LOST PET REPORT]'))) ? 'Resolve Lost Pet Report' : 'Mark as Resolved'}
-                                            </button>
-                                        )}
-
-                                        {(report.status_id === 1 || report.status_id === 2) && (
-                                            <button
-                                                onClick={handleReject}
-                                                className="w-full py-3 border border-gray-100 rounded-2xl text-[10px] font-bold text-gray-400 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all uppercase tracking-widest cursor-pointer"
-                                            >
-                                                Reject Report
-                                            </button>
                                         )}
                                     </div>
                                 </div>
@@ -1814,6 +2061,7 @@ const SubdViewReport = () => {
                 onClose={() => setIsChatOpen(false)}
                 report={report}
                 currentUser={currentUser}
+                threadMode="report"
             />
 
             {/* Add Pet Record Modal */}
@@ -1829,6 +2077,22 @@ const SubdViewReport = () => {
                 />
             )}
 
+            {/* Takeover Modal */}
+            {isTakeoverModalOpen && report && (
+                <TakeoverReportModal
+                    isOpen={isTakeoverModalOpen}
+                    onClose={() => setIsTakeoverModalOpen(false)}
+                    reportId={report.report_id}
+                    currentHandlerName={report.assigned_leader_name || `Officer #${report.assigned_leader_id}`}
+                    currentUserId={currentUserId}
+                    onSuccess={() => {
+                        setShowSuccess(true);
+                        fetchReportDetails();
+                        setTimeout(() => setShowSuccess(false), 3000);
+                    }}
+                />
+            )}
+
             {/* Success Modal */}
             <SuccessModal
                 isOpen={showSuccess}
@@ -1836,6 +2100,21 @@ const SubdViewReport = () => {
                 title="Action Successful"
                 message="Your action has been processed successfully."
             />
+
+            {/* Registered Pet Detail Modal */}
+            {selectedPetDetail && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 sm:p-10 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="w-full max-w-6xl rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-200 bg-white overflow-hidden flex flex-col max-h-[90vh] border border-gray-100">
+                        <PetDetailPanel
+                            pet={selectedPetDetail}
+                            onClose={() => {
+                                setSelectedPetDetail(null);
+                                fetchReportDetails();
+                            }}
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

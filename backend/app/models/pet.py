@@ -50,7 +50,7 @@ class Pet(Base):
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     status: Mapped[Optional[str]] = mapped_column(
-        Enum("Active", "Lost", "Found", "Rescued", "Deceased", name="pet_status"), default="Active"
+        Enum("Active", "Lost", "Found", "Rescued", "Deceased", "Archived", "Inactive", name="pet_status"), default="Active"
     )
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     last_seen_lat: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 8), nullable=True)

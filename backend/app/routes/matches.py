@@ -56,6 +56,23 @@ def get_actor_user(req: Request, db: Session) -> Optional[User]:
     return None
 
 
+COLOR_FAMILIES = {
+    "black": {"black", "dark"},
+    "white": {"white", "cream", "light"},
+    "gray": {"gray", "grey", "silver", "ash"},
+    "orange": {"orange", "ginger", "red", "yellow", "tan", "gold", "golden", "fawn", "sable"},
+    "brown": {"brown", "chocolate", "brindle", "dark brown"}
+}
+
+def get_color_family(c_str: Optional[str]) -> Optional[str]:
+    if not c_str:
+        return None
+    c_clean = c_str.lower().strip()
+    for fam, members in COLOR_FAMILIES.items():
+        if c_clean in members:
+            return fam
+    return None
+
 def parse_colors(color_str: Optional[str]) -> List[str]:
     if not color_str:
         return []
@@ -63,7 +80,6 @@ def parse_colors(color_str: Optional[str]) -> List[str]:
     for sep in [",", "/", "&", ";", "-", "|", "(", ")", "."]:
         cleaned = cleaned.replace(sep, " ")
     
-    # Known color keywords
     known_colors = {
         "black", "white", "brown", "cream", "tan", "golden", "yellow", 
         "gray", "grey", "silver", "orange", "red", "chocolate", "fawn", 
@@ -86,8 +102,8 @@ def calculate_match_details(
     - Species (Hard gatekeeper: 0% on mismatch)
     - Breed (Strict comparison: -40% on purebred conflict, +30% on match)
     - Primary & Secondary Coat Colors (-35% on complete color clash, +30% on match)
+    - Coat Pattern & Texture (Tabby vs Solid vs Calico vs Bicolor)
     - Size Category (+10% on match, -35% on 2-step mismatch)
-    - Coat Pattern & Fur Characteristics
     - Distinctive Physical Markings
     - Geographic & Time Proximity
     """
@@ -115,6 +131,7 @@ def calculate_match_details(
     evidence_bullets = [f"Species Match: Both identified as {src_type.capitalize()}"]
     has_breed_conflict = False
     has_color_conflict = False
+    has_pattern_conflict = False
 
     # 2. Breed Comparison
     src_breed = (source_report.animal_breed or source_report.ai_possible_breed or "").lower().strip()
@@ -148,16 +165,19 @@ def calculate_match_details(
             evidence_bullets.append("Breed Classification: Both identified as local/mixed breed")
 
     # 3. Color & Pattern Comparison
+    src_p_color = (source_report.ai_dominant_color or source_report.animal_color or "").lower().strip()
     src_raw_color = f"{source_report.animal_color or ''} {source_report.ai_dominant_color or ''}".lower()
     src_colors = set(parse_colors(src_raw_color))
     
     if is_pet:
         cand_primary = (candidate.primary_color or "").lower().strip()
         cand_secondary = (candidate.secondary_color or "").lower().strip()
+        cand_p_color = cand_primary or cand_secondary or (candidate.color_markings or "").lower().strip()
         cand_raw_color = f"{cand_primary} {cand_secondary} {candidate.color_markings or ''}".lower()
         cand_colors = set(parse_colors(cand_raw_color))
         cand_pattern = candidate.color_markings or "Uniform"
     else:
+        cand_p_color = (candidate.ai_dominant_color or candidate.animal_color or "").lower().strip()
         cand_raw_color = f"{candidate.animal_color or ''} {candidate.ai_dominant_color or ''}".lower()
         cand_colors = set(parse_colors(cand_raw_color))
         cand_pattern = candidate.ai_coat_pattern or "Uniform"
@@ -165,19 +185,45 @@ def calculate_match_details(
     src_pattern = source_report.ai_coat_pattern or "Uniform"
     color_overlap = src_colors.intersection(cand_colors)
 
-    if is_pet and candidate.primary_color and candidate.primary_color.lower() in src_colors:
-        # Strong primary color match
+    # Detect Primary Color Family Conflict
+    src_p_fam = get_color_family(src_p_color.split()[0]) if src_p_color else None
+    cand_p_fam = get_color_family(cand_p_color.split()[0]) if cand_p_color else None
+
+    is_primary_color_conflict = False
+    if src_p_fam and cand_p_fam and src_p_fam != cand_p_fam:
+        if not (src_p_fam in cand_raw_color and cand_p_fam in src_raw_color):
+            is_primary_color_conflict = True
+
+    # Detect Coat Pattern Conflict
+    src_pat_str = f"{src_pattern} {source_report.description or ''} {source_report.animal_color or ''}".lower()
+    cand_pat_str = f"{cand_pattern} {getattr(candidate, 'distinctive_markings', '') or ''} {getattr(candidate, 'color_markings', '') or ''}".lower()
+
+    if ("solid" in src_pat_str or ("black" in src_pat_str and "tabby" not in src_pat_str)) and ("tabby" in cand_pat_str or "striped" in cand_pat_str):
+        has_pattern_conflict = True
+    elif ("tabby" in src_pat_str or "striped" in src_pat_str) and ("solid" in cand_pat_str or ("black" in cand_pat_str and "tabby" not in cand_pat_str)):
+        has_pattern_conflict = True
+    elif ("calico" in src_pat_str or "tortoiseshell" in src_pat_str) != ("calico" in cand_pat_str or "tortoiseshell" in cand_pat_str):
+        if ("calico" in src_pat_str or "calico" in cand_pat_str):
+            has_pattern_conflict = True
+
+    if is_primary_color_conflict:
+        attribute_score -= 35
+        has_color_conflict = True
+        evidence_bullets.append(f"Color Contrast: Sighted primary color ({src_p_color.title() or 'Dark'}) clashes with pet ({cand_p_color.title() or 'Light'})")
+    elif is_pet and candidate.primary_color and candidate.primary_color.lower() in src_colors:
         attribute_score += 30
         evidence_bullets.append(f"Color Match: Primary color matches ({candidate.primary_color.title()})")
-    elif color_overlap:
-        # Partial color overlap
+    elif color_overlap and not is_primary_color_conflict:
         attribute_score += 15
         evidence_bullets.append(f"Color Overlap: Shared colors ({', '.join(color_overlap).title()})")
     elif src_colors and cand_colors:
-        # Complete color mismatch (e.g. Cream/Tan vs Black/White)
         attribute_score -= 35
         has_color_conflict = True
         evidence_bullets.append(f"Color Contrast: Sighted colors ({', '.join(src_colors).title()}) differ from pet ({', '.join(cand_colors).title()})")
+
+    if has_pattern_conflict:
+        attribute_score -= 20
+        evidence_bullets.append("Coat Pattern Contrast: Sighted coat pattern clashes with registered pet coat pattern")
 
     # 4. Size Category Comparison
     size_map = {"small": 1, "medium": 2, "large": 3}
@@ -215,8 +261,11 @@ def calculate_match_details(
     # 6. Location Proximity
     s_lat = float(source_report.latitude) if source_report.latitude is not None else None
     s_lng = float(source_report.longitude) if source_report.longitude is not None else None
-    c_lat = float(candidate.registered_latitude if is_pet else candidate.latitude) if (getattr(candidate, "registered_latitude" if is_pet else "latitude", None) is not None) else None
-    c_lng = float(candidate.registered_longitude if is_pet else candidate.longitude) if (getattr(candidate, "registered_longitude" if is_pet else "longitude", None) is not None) else None
+
+    cand_lat_raw = getattr(candidate, "registered_latitude", None) if is_pet else getattr(candidate, "latitude", None)
+    cand_lng_raw = getattr(candidate, "registered_longitude", None) if is_pet else getattr(candidate, "longitude", None)
+    c_lat = float(cand_lat_raw) if cand_lat_raw is not None else None
+    c_lng = float(cand_lng_raw) if cand_lng_raw is not None else None
 
     dist_km = None
     if s_lat is not None and s_lng is not None and c_lat is not None and c_lng is not None:
@@ -236,11 +285,13 @@ def calculate_match_details(
             attribute_score += 5
             evidence_bullets.append("Subdivision: Located in same subdivision")
 
-    # Hard conflict override: If BOTH breed and color conflict, cap score severely (< 15%)
-    if has_breed_conflict and has_color_conflict:
+    # Hard conflict override: If color conflict OR pattern conflict OR breed conflict, cap score severely (< 30%)
+    if has_breed_conflict and (has_color_conflict or has_pattern_conflict):
         final_score = min(max(attribute_score, 5), 15)
-    elif has_breed_conflict or has_color_conflict:
-        final_score = min(max(attribute_score, 10), 40)
+    elif has_color_conflict or is_primary_color_conflict or has_pattern_conflict:
+        final_score = min(max(attribute_score, 10), 25)
+    elif has_breed_conflict:
+        final_score = min(max(attribute_score, 10), 35)
     else:
         final_score = max(min(attribute_score, 98), 10)
 
@@ -351,10 +402,10 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
 
     created_matches = []
 
-    # Compare ONLY against Eligible Registered Pets
+    # Compare ONLY against Eligible Registered Pets (excluding Archived/Inactive/Deceased)
     all_registered_pets = db.query(Pet).options(
         joinedload(Pet.owner)
-    ).all()
+    ).filter(Pet.status.in_(["Active", "Lost", "Found", "Rescued"])).all()
 
     for pet in all_registered_pets:
         # Pre-filter candidate eligibility before AI comparison
@@ -394,10 +445,10 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
             if pet.owner_id and pet.owner_id != report.user_id:
                 notif = Notification(
                     user_id=pet.owner_id,
-                    title="Potential Registered Pet Match Detected",
+                    title=f"🔍 Look-Alike Pet Sighting Detected (Report #{report.report_id})",
                     message=(
-                        f"AI identified a {match_calc['score']}% potential match for your registered pet '{pet.pet_name}' "
-                        f"in Report #{report.report_id}. Review the sighting evidence."
+                        f"AI identified a {match_calc['score']}% look-alike match for your registered pet '{pet.pet_name}' "
+                        f"in Report #{report.report_id}. Please review the sighting and message the reporter to confirm if it is your pet."
                     ),
                     type="potential_match",
                     related_id=report.report_id

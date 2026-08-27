@@ -1,5 +1,6 @@
 import sys
 import os
+import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -19,6 +20,7 @@ from app.models.pet_claim import PetClaim  # noqa: F401 — ensures table is in 
 from app.models.chat import ChatThread, ChatMessage  # noqa: F401
 from app.models.warning import OwnerWarning  # noqa: F401
 from app.models.report_match import ReportMatch  # noqa: F401
+from app.tasks.unassigned_checker import start_unassigned_reports_watcher
 
 
 def ensure_report_media_status_column():
@@ -597,6 +599,34 @@ def ensure_report_matches_tables():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
         """))
 
+def ensure_report_handler_columns():
+    """Ensure assigned_leader_id, claimed_at, and unassigned_notified columns exist on reports table."""
+    with engine.begin() as conn:
+        for col_name, col_def in [
+            ("assigned_leader_id", "INT NULL"),
+            ("claimed_at", "DATETIME NULL"),
+            ("unassigned_notified", "BOOLEAN NOT NULL DEFAULT FALSE"),
+        ]:
+            res = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'reports' "
+                f"AND COLUMN_NAME = '{col_name}'"
+            ))
+            if res.scalar() == 0:
+                conn.execute(text(f"ALTER TABLE reports ADD COLUMN {col_name} {col_def}"))
+        
+        # Check foreign key for assigned_leader_id
+        res_fk = conn.execute(text(
+            "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS "
+            "WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'reports' "
+            "AND CONSTRAINT_NAME = 'fk_reports_assigned_leader'"
+        ))
+        if res_fk.scalar() == 0:
+            try:
+                conn.execute(text("ALTER TABLE reports ADD CONSTRAINT fk_reports_assigned_leader FOREIGN KEY (assigned_leader_id) REFERENCES users(user_id) ON DELETE SET NULL"))
+            except Exception:
+                pass
+
 ensure_announcement_tables_columns()
 ensure_rescue_tables_columns()
 ensure_report_verifications_columns()
@@ -604,8 +634,14 @@ ensure_notification_archived_column()
 ensure_chat_tables()
 ensure_warning_tables()
 ensure_report_matches_tables()
+ensure_report_handler_columns()
 
 app = FastAPI(title="StraySafe API")
+
+@app.on_event("startup")
+async def startup_event():
+    # Start background task that checks for unassigned reports older than 30 minutes
+    asyncio.create_task(start_unassigned_reports_watcher(interval_seconds=60, threshold_minutes=30))
 
 # Configure CORS
 app.add_middleware(

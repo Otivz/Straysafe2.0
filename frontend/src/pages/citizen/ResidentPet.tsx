@@ -554,6 +554,11 @@ const ResidentPet = () => {
     }, [formData.breed, formData.species, breedsData]);
 
     const filteredPets = pets.filter(pet => {
+        const petStatus = (pet.status || '').toLowerCase();
+        if (petStatus === 'archived' || petStatus === 'inactive') {
+            return false;
+        }
+
         const query = searchQuery.toLowerCase();
         const matchesQuery = 
             pet.pet_name.toLowerCase().includes(query) ||
@@ -563,7 +568,7 @@ const ResidentPet = () => {
 
         const matchesStatus = 
             statusFilter === 'All Pets' ||
-            (pet.status || '').toLowerCase() === statusFilter.toLowerCase();
+            petStatus === statusFilter.toLowerCase();
 
         return matchesQuery && matchesStatus;
     });
@@ -2028,6 +2033,10 @@ const ResidentPet = () => {
                             hideRegisteredPets={true} 
                             onEditClick={handleEditPetFromProfile}
                             onReportLostClick={handleReportLostFromProfile}
+                            onDeletePet={() => {
+                                fetchPets();
+                                setSelectedPet(null);
+                            }}
                         />
                     </div>
                 </div>

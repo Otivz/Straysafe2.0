@@ -1,8 +1,54 @@
-"""
-AI Suggestion Utility for generating AI-assisted suggestions for stray animal reports.
-Analyzes text, categories, and image metadata (YOLO outputs, color extraction) to formulate recommendations.
-"""
 from typing import Optional, Dict, Any
+
+AVAILABLE_GEMINI_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-3.6-flash",
+    "gemini-3.7-flash",
+    "gemini-3.5-flash",
+    "gemini-2.5-pro",
+    "gemini-flash-latest"
+]
+
+def call_gemini_with_fallback(contents: Any, generation_config: Optional[Dict[str, Any]] = None):
+    """
+    Executes a Gemini API call with automatic multi-model fallback.
+    If the primary model (gemini-2.5-flash) hits a 429 Rate Limit/Quota Exceeded error,
+    it automatically fails over to gemini-3.6-flash, gemini-3.7-flash, etc.
+    """
+    import os
+    import google.generativeai as genai
+    
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY environment variable is not configured.")
+        
+    genai.configure(api_key=api_key)
+    
+    last_exception = None
+    for model_name in AVAILABLE_GEMINI_MODELS:
+        try:
+            model = genai.GenerativeModel(model_name)
+            kwargs = {}
+            if generation_config:
+                kwargs["generation_config"] = generation_config
+            response = model.generate_content(contents, **kwargs)
+            if response is not None:
+                return response
+            else:
+                last_exception = RuntimeError(f"Model '{model_name}' returned None response.")
+        except Exception as e:
+            last_exception = e
+            err_str = str(e)
+            if "429" in err_str or "Quota" in err_str or "quota" in err_str or "limit" in err_str or "404" in err_str:
+                print(f"[Gemini Fallback] Model '{model_name}' rate limited/failed ({err_str[:60]}...). Trying next model...")
+                continue
+            else:
+                raise e
+                
+    if last_exception:
+        raise last_exception
+    raise RuntimeError("All Gemini models failed to return a response.")
+
 
 def generate_ai_suggestions(
     description: Optional[str] = "",
@@ -22,10 +68,6 @@ def generate_ai_suggestions(
     api_key = os.getenv("GEMINI_API_KEY")
     if api_key:
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-2.5-flash")
-            
             prompt = f"""
             You are the StraySafe Copilot, an AI assistant for a subdivision's stray animal reporting and safety system.
             Analyze the following report information:
@@ -52,11 +94,14 @@ def generate_ai_suggestions(
             Respond ONLY with a valid JSON block.
             """
             
-            response = model.generate_content(
+            response = call_gemini_with_fallback(
                 prompt,
                 generation_config={"response_mime_type": "application/json"}
             )
             
+            if not response or not getattr(response, "text", None):
+                raise ValueError("Gemini API returned an empty or invalid response.")
+
             text_resp = response.text.strip()
             # Handle markdown code blocks
             if text_resp.startswith("```"):

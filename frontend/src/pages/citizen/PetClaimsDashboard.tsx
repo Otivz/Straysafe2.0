@@ -257,7 +257,7 @@ const PetClaimsDashboard = () => {
                         pet_id: c.pet_id,
                         status: c.status,
                         remarks: c.remarks || "",
-                        similarity_score: matchedMock?.similarity_score || 90.0,
+                        similarity_score: c.match_score || matchedMock?.similarity_score || 90.0,
                         reported_date: c.report?.created_at?.slice(0, 10) || "2026-06-06",
                         sighting_location: c.report?.landmark || "Selera Homes",
                         sighting_lat: c.report?.latitude ? parseFloat(c.report.latitude) : 14.8018,

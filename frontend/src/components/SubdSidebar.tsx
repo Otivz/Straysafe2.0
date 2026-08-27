@@ -3,12 +3,14 @@ import { Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import Button from './Button';
 import QRScannerModal from './Modals/QRScannerModal';
+import { api } from '../utils/api';
 
 const SubdSidebar = () => {
     const [isOpen, setIsOpen] = useState(true);
     const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
     const [pendingReportsCount, setPendingReportsCount] = useState<number>(0);
     const [pendingClaimsCount, setPendingClaimsCount] = useState<number>(0);
+    const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
     const location = useLocation();
 
     useEffect(() => {
@@ -43,6 +45,15 @@ const SubdSidebar = () => {
             } catch (e) {
                 console.warn("Could not fetch claims count for sidebar", e);
             }
+
+            try {
+                const chatRes = await api.get('/chat/unread-count');
+                if (chatRes.data && typeof chatRes.data.unread_count === 'number') {
+                    setUnreadMessagesCount(chatRes.data.unread_count);
+                }
+            } catch (e) {
+                // ignore
+            }
         };
 
         fetchCounts();
@@ -67,6 +78,16 @@ const SubdSidebar = () => {
             icon: (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+                </svg>
+            )
+        },
+        {
+            path: '/subd/messages',
+            label: 'Messages',
+            badgeCount: unreadMessagesCount,
+            icon: (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
             )
         },

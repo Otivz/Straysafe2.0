@@ -35,16 +35,17 @@ const PetScanHistoryPage = () => {
     const { petId } = useParams<{ petId: string }>();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const isSubdMode = searchParams.get('mode') === 'subd';
+    const rawStaffUser = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
+    const rawAdminUser = localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user');
+    const rawResidentUser = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
+    const currentUser = JSON.parse(rawStaffUser || rawAdminUser || rawResidentUser || 'null');
+
+    const isSubdMode = searchParams.get('mode') === 'subd' || window.location.pathname.startsWith('/subd') || currentUser?.role_id === 2 || currentUser?.role_id === 3 || currentUser?.role_id === 4;
     
     const [scans, setScans] = useState<ScanRecord[]>([]);
     const [pet, setPet] = useState<PetDetails | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-
-    const currentUser = isSubdMode
-        ? JSON.parse(localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user') || 'null')
-        : JSON.parse(localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user') || 'null');
 
     const backPath = isSubdMode ? '/subd/pet-records' : '/resident/pets';
     const loginPath = isSubdMode ? '/staff/login' : '/login';

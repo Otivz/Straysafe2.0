@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import AIMatchReviewModal from './Modals/AIMatchReviewModal';
+import PetDetailPanel from './PetRecords/PetDetailPanel';
+import { type PetRecord, mapRawPetToPetRecord } from './PetRecords/types';
 import { DEFAULT_AVATAR } from '../utils/avatar';
 
 interface AIPotentialMatchesListProps {
@@ -23,6 +25,27 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
     const [activeMatch, setActiveMatch] = useState<any | null>(null);
     const [statusFilter, setStatusFilter] = useState<string>('ALL');
     const [isScanning, setIsScanning] = useState(false);
+    const [selectedPetRecord, setSelectedPetRecord] = useState<PetRecord | null>(null);
+    const [isLoadingPetRecord, setIsLoadingPetRecord] = useState(false);
+
+    const handleOpenPetDetail = async (petData: any) => {
+        if (!petData) return;
+        setIsLoadingPetRecord(true);
+        try {
+            const petId = petData.pet_id || petData.id;
+            if (petId) {
+                const res = await axios.get(`http://localhost:8000/pets/${petId}`);
+                setSelectedPetRecord(mapRawPetToPetRecord(res.data));
+            } else {
+                setSelectedPetRecord(mapRawPetToPetRecord(petData));
+            }
+        } catch (e) {
+            console.error("Failed to load pet details, using fallback:", e);
+            setSelectedPetRecord(mapRawPetToPetRecord(petData));
+        } finally {
+            setIsLoadingPetRecord(false);
+        }
+    };
 
     const fetchMatches = async () => {
         setLoading(true);
@@ -178,16 +201,32 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                                         <h4 className="text-xs font-extrabold text-gray-900 flex items-center gap-2 flex-wrap">
                                             <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-700">Report #{m.source_report_id}</span>
                                             <span className="text-[#F97316] font-black">↔</span>
-                                            <span className="bg-amber-50 border border-amber-200 text-amber-900 px-2 py-0.5 rounded">
-                                                Registered Pet: {m.matched_pet?.pet_name || `Pet #${m.matched_pet_id}`}
-                                            </span>
+                                            {isPet ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenPetDetail(m.matched_pet)}
+                                                    className="bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 px-2 py-0.5 rounded flex items-center gap-1.5 transition-all cursor-pointer group"
+                                                    title="Click to view full registered animal record"
+                                                >
+                                                    <span>Registered Pet: {m.matched_pet?.pet_name || `Pet #${m.matched_pet_id}`}</span>
+                                                    <span className="text-amber-600 font-bold group-hover:translate-x-0.5 transition-transform text-[10px]">↗</span>
+                                                </button>
+                                            ) : (
+                                                <span className="bg-amber-50 border border-amber-200 text-amber-900 px-2 py-0.5 rounded">
+                                                    Report #{m.matched_report_id}
+                                                </span>
+                                            )}
                                         </h4>
                                         {isPet && (
-                                            <div className="flex items-center gap-2 text-[10px] text-gray-500 font-semibold">
-                                                <span className="inline-flex items-center gap-1 text-emerald-600">
+                                            <div className="flex items-center gap-2 text-[10px] text-gray-500 font-semibold flex-wrap">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenPetDetail(m.matched_pet)}
+                                                    className="inline-flex items-center gap-1 text-emerald-700 hover:text-emerald-800 cursor-pointer font-bold"
+                                                >
                                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                                    Active Registration
-                                                </span>
+                                                    Active Registration ↗
+                                                </button>
                                                 <span>•</span>
                                                 <span>{m.matched_pet?.breed || m.matched_pet?.pet_type}</span>
                                                 {m.matched_pet?.owner?.name && (
@@ -276,6 +315,18 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                         if (onMatchesUpdated) onMatchesUpdated();
                     }}
                 />
+            )}
+
+            {/* Nested Pet Details Modal */}
+            {selectedPetRecord && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 sm:p-10 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="w-full max-w-6xl rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-200 bg-white overflow-hidden flex flex-col max-h-[90vh] border border-gray-100">
+                        <PetDetailPanel
+                            pet={selectedPetRecord}
+                            onClose={() => setSelectedPetRecord(null)}
+                        />
+                    </div>
+                </div>
             )}
         </div>
     );

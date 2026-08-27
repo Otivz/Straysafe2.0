@@ -11,15 +11,15 @@ def rgb_to_color_name(rgb: Tuple[int, int, int]) -> str:
     r, g, b = rgb
     
     # 1. White / Light colors (highly neutral and bright)
-    if r > 180 and g > 180 and b > 180:
+    if r > 185 and g > 185 and b > 185:
         return "White"
     
     # 2. Black / Very dark colors (neutral and dark)
-    if r < 65 and g < 65 and b < 65:
+    if r < 85 and g < 85 and b < 85:
         return "Black"
     
     # 3. Gray (neutral mid-tones where R, G, B are very close)
-    if max(r, g, b) - min(r, g, b) < 25:
+    if max(r, g, b) - min(r, g, b) < 25 and (r + g + b) / 3.0 < 170:
         return "Gray"
     
     # 4. Colored Hues (non-neutral)

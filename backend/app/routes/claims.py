@@ -7,7 +7,9 @@ import uuid
 from app.database import get_db
 from app.models.pet_claim import PetClaim
 from app.models.pet import Pet
+from app.models.user import User
 from app.models.report import Report, StatusHistory
+from app.models.report_match import ReportMatch
 from app.models.notification import Notification
 from app.schemas.pet_claim import PetClaimCreate, PetClaimResponse, PetClaimStatusUpdate
 from app.utils.cloudinary_config import upload_to_cloudinary
@@ -35,7 +37,24 @@ def get_claims(
         # Avoid ambiguous join by specifying join condition or matching Report table
         query = query.join(Report, PetClaim.report_id == Report.report_id).filter(Report.subdivision_id == subdivision_id)
 
-    return query.order_by(PetClaim.created_at.desc()).all()
+    claims = query.order_by(PetClaim.created_at.desc()).all()
+    for c in claims:
+        if not c.match_score:
+            match_rec = db.query(ReportMatch).filter(
+                ReportMatch.source_report_id == c.report_id,
+                ReportMatch.matched_pet_id == c.pet_id
+            ).first()
+            if match_rec:
+                c.match_score = match_rec.similarity_score
+
+        if c.pet and c.pet.owner:
+            if not c.pet.registered_address and c.pet.owner.address:
+                c.pet.registered_address = c.pet.owner.address
+            if not c.pet.registered_latitude and c.pet.owner.latitude:
+                c.pet.registered_latitude = c.pet.owner.latitude
+            if not c.pet.registered_longitude and c.pet.owner.longitude:
+                c.pet.registered_longitude = c.pet.owner.longitude
+    return claims
 
 @router.get("/{claim_id}", response_model=PetClaimResponse)
 def get_claim(claim_id: int, db: Session = Depends(get_db)):
@@ -46,6 +65,23 @@ def get_claim(claim_id: int, db: Session = Depends(get_db)):
 
     if not claim or (claim.pet and claim.pet.status == "Deceased"):
         raise HTTPException(status_code=404, detail="Claim not found or pet is deceased.")
+    
+    if not claim.match_score:
+        match_rec = db.query(ReportMatch).filter(
+            ReportMatch.source_report_id == claim.report_id,
+            ReportMatch.matched_pet_id == claim.pet_id
+        ).first()
+        if match_rec:
+            claim.match_score = match_rec.similarity_score
+
+    if claim.pet and claim.pet.owner:
+        if not claim.pet.registered_address and claim.pet.owner.address:
+            claim.pet.registered_address = claim.pet.owner.address
+        if not claim.pet.registered_latitude and claim.pet.owner.latitude:
+            claim.pet.registered_latitude = claim.pet.owner.latitude
+        if not claim.pet.registered_longitude and claim.pet.owner.longitude:
+            claim.pet.registered_longitude = claim.pet.owner.longitude
+
     return claim
 
 @router.post("/", response_model=PetClaimResponse)
@@ -63,6 +99,13 @@ def create_or_update_claim(claim_in: PetClaimCreate, db: Session = Depends(get_d
             detail="This pet is marked as deceased and cannot be claimed or matched."
         )
 
+    # Fetch corresponding match score from report_matches if available
+    match_rec = db.query(ReportMatch).filter(
+        ReportMatch.source_report_id == claim_in.report_id,
+        ReportMatch.matched_pet_id == claim_in.pet_id
+    ).first()
+    match_score_val = match_rec.similarity_score if match_rec else None
+
     # Check if a claim record already exists (e.g. from automatic matching)
     db_claim = db.query(PetClaim).filter(
         PetClaim.report_id == claim_in.report_id,
@@ -74,6 +117,8 @@ def create_or_update_claim(claim_in: PetClaimCreate, db: Session = Depends(get_d
         db_claim.status = "Pending Review"
         db_claim.remarks = claim_in.remarks
         db_claim.distinctive_markings = claim_in.distinctive_markings
+        if match_score_val and not db_claim.match_score:
+            db_claim.match_score = match_score_val
         db.commit()
         db.refresh(db_claim)
         return db_claim
@@ -84,6 +129,7 @@ def create_or_update_claim(claim_in: PetClaimCreate, db: Session = Depends(get_d
         pet_id=claim_in.pet_id,
         remarks=claim_in.remarks,
         distinctive_markings=claim_in.distinctive_markings,
+        match_score=match_score_val,
         status="Pending Review"
     )
     db.add(new_claim)
