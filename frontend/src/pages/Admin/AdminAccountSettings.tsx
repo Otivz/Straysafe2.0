@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { api } from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
@@ -34,7 +34,7 @@ const AdminAccountSettings = () => {
         position: ''
     });
 
-    const API_URL = 'http://localhost:8000/users';
+    const API_URL = '/users';
 
     const fetchProfile = async () => {
         try {
@@ -42,7 +42,7 @@ const AdminAccountSettings = () => {
             const userStr = localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user');
             if (userStr) {
                 const storedUser = JSON.parse(userStr);
-                const response = await axios.get(`${API_URL}/${storedUser.user_id}`);
+                const response = await api.get(`${API_URL}/${storedUser.user_id}`);
                 const data = response.data;
                 setUserData(data);
                 setFormData({
@@ -77,7 +77,7 @@ const AdminAccountSettings = () => {
                 address: formData.address.trim() || null
             };
 
-            await axios.put(`${API_URL}/${userData.user_id}`, cleanData);
+            await api.put(`${API_URL}/${userData.user_id}`, cleanData);
 
             // Update local storage if email/name changed
             const userStr = localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user');

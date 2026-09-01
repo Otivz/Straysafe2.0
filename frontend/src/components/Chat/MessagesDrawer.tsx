@@ -60,6 +60,10 @@ export default function MessagesDrawer({
         const lastMsgMatch = (t.last_message?.text || '').toLowerCase().includes(q);
 
         return titleMatch || counterpartMatch || petMatch || reportMatch || lastMsgMatch;
+    }).sort((a, b) => {
+        const timeA = new Date(a.last_message?.sent_at || a.updated_at || a.created_at).getTime();
+        const timeB = new Date(b.last_message?.sent_at || b.updated_at || b.created_at).getTime();
+        return timeB - timeA;
     });
 
     const totalUnread = threads.reduce((acc, t) => acc + (t.unread_count || 0), 0);

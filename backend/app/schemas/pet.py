@@ -27,6 +27,7 @@ class PetBase(BaseModel):
     has_bite_history: Optional[bool] = False
     bite_incident_count: Optional[int] = 0
     chase_behavior: Optional[bool] = False
+    chase_incident_count: Optional[int] = 0
     notes: Optional[str] = None
     status: Optional[str] = "Active"
     is_verified: Optional[bool] = False
@@ -72,6 +73,7 @@ class PetUpdate(BaseModel):
     has_bite_history: Optional[bool] = None
     bite_incident_count: Optional[int] = None
     chase_behavior: Optional[bool] = None
+    chase_incident_count: Optional[int] = None
     notes: Optional[str] = None
     status: Optional[str] = None
     is_verified: Optional[bool] = None

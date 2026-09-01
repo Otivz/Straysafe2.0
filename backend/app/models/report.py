@@ -1,10 +1,13 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 from sqlalchemy import Column, Integer, String, Text, DateTime, func, ForeignKey, Numeric, Boolean, Enum
 from sqlalchemy.orm import relationship, backref, Mapped, mapped_column
 from app.database import Base
 from app.models.user import User
+
+if TYPE_CHECKING:
+    from app.models.report_dispute import ReportDispute
 
 
 class ReportCategory(Base):
@@ -59,6 +62,14 @@ class Report(Base):
     ai_suggested_risk_level: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     ai_suggested_priority: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     ai_suggested_priority_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # AI Behavioral Analysis Suggestions (Contextual Understanding)
+    ai_behavior_chasing: Mapped[bool] = mapped_column(Boolean, default=False)
+    ai_behavior_actual_bite: Mapped[bool] = mapped_column(Boolean, default=False)
+    ai_behavior_attempted_bite: Mapped[bool] = mapped_column(Boolean, default=False)
+    ai_behavior_injury: Mapped[bool] = mapped_column(Boolean, default=False)
+    ai_behavior_aggressive: Mapped[bool] = mapped_column(Boolean, default=False)
+    ai_behavior_explanation: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # DB column is current_status_id (not status_id)
     current_status_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("report_status.status_id"), nullable=True)
@@ -66,12 +77,35 @@ class Report(Base):
     assigned_leader_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
     claimed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     unassigned_notified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Verification & Dispute Tracking
+    verification_status: Mapped[Optional[str]] = mapped_column(Enum('unverified', 'verified_true', 'false_alarm', 'disputed'), default='unverified', nullable=True)
+    false_alarm_reason: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    verification_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    verified_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    # Verified Investigation Findings (Ground Truth vs Allegation)
+    verified_actual_bite: Mapped[bool] = mapped_column(Boolean, default=False, nullable=True)
+    verified_chasing: Mapped[bool] = mapped_column(Boolean, default=False, nullable=True)
+    verified_attempted_bite: Mapped[bool] = mapped_column(Boolean, default=False, nullable=True)
+    verified_injury: Mapped[bool] = mapped_column(Boolean, default=False, nullable=True)
+    verified_aggressive: Mapped[bool] = mapped_column(Boolean, default=False, nullable=True)
+    behavior_finding: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # Case Transfer Workflow Fields
+    pending_transfer_to_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    pending_transfer_from_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    pending_transfer_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    pending_transfer_created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # Relationships
     reporter: Mapped[Optional["User"]] = relationship("User", foreign_keys=[user_id], backref="reports")
     assigned_leader: Mapped[Optional["User"]] = relationship("User", foreign_keys=[assigned_leader_id])
+    pending_transfer_to: Mapped[Optional["User"]] = relationship("User", foreign_keys=[pending_transfer_to_id])
+    pending_transfer_from: Mapped[Optional["User"]] = relationship("User", foreign_keys=[pending_transfer_from_id])
+    verified_by_user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[verified_by_user_id])
     category = relationship("ReportCategory")
     status = relationship("ReportStatus")
     subdivision = relationship("Subdivision")
@@ -81,12 +115,15 @@ class Report(Base):
     verifications: Mapped[List["ReportVerification"]] = relationship("ReportVerification", backref="report", cascade="all, delete-orphan")
     history: Mapped[List["StatusHistory"]] = relationship("StatusHistory", back_populates="report", cascade="all, delete-orphan", order_by="StatusHistory.created_at")
     endorsement_letter: Mapped[Optional["EndorsementLetter"]] = relationship("EndorsementLetter", back_populates="report", uselist=False, cascade="all, delete-orphan")
+    disputes: Mapped[List["ReportDispute"]] = relationship("ReportDispute", back_populates="report", cascade="all, delete-orphan", order_by="ReportDispute.created_at.desc()")
 
     # Transient fields populated at runtime (not DB columns)
     reporter_name: Optional[str] = None
     status_id: Optional[int] = None
     assigned_leader_name: Optional[str] = None
     assigned_leader_photo: Optional[str] = None
+    pending_transfer_to_name: Optional[str] = None
+    pending_transfer_from_name: Optional[str] = None
 
 
 class LetterStatus(Base):
@@ -176,8 +213,8 @@ class Rescue(Base):
 
     # Relationships
     report: Mapped[Optional["Report"]] = relationship("Report", back_populates="rescues")
-    staff = relationship("User", foreign_keys=[staff_id])
-    leader = relationship("User", foreign_keys=[leader_id])
+    staff: Mapped[Optional["User"]] = relationship("User", foreign_keys=[staff_id])
+    leader: Mapped[Optional["User"]] = relationship("User", foreign_keys=[leader_id])
     status = relationship("RescueStatus")
     assignments: Mapped[List["RescueAssignment"]] = relationship("RescueAssignment", back_populates="rescue", cascade="all, delete-orphan")
 
@@ -210,20 +247,20 @@ class StatusHistory(Base):
     __tablename__ = "status_history"
     __allow_unmapped__ = True
 
-    history_id = Column(Integer, primary_key=True, index=True)
+    history_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     # DB has both report_id and rescue_id (both nullable)
-    report_id = Column(Integer, ForeignKey("reports.report_id", ondelete="CASCADE"), nullable=True)
-    rescue_id = Column(Integer, ForeignKey("rescues.rescue_id", ondelete="CASCADE"), nullable=True)
+    report_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("reports.report_id", ondelete="CASCADE"), nullable=True)
+    rescue_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("rescues.rescue_id", ondelete="CASCADE"), nullable=True)
     # DB has separate status IDs for report and rescue
-    report_status_id = Column(Integer, ForeignKey("report_status.status_id"), nullable=True)
-    rescue_status_id = Column(Integer, ForeignKey("rescue_status.status_id"), nullable=True)
-    updated_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
-    remarks = Column(Text, nullable=True)
-    created_at = Column(DateTime, server_default=func.now())
+    report_status_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("report_status.status_id"), nullable=True)
+    rescue_status_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("rescue_status.status_id"), nullable=True)
+    updated_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
 
-    report = relationship("Report", back_populates="history")
-    updater = relationship("User")
-    media = relationship("ReportMedia", back_populates="history")
+    report: Mapped[Optional["Report"]] = relationship("Report", back_populates="history")
+    updater: Mapped[Optional["User"]] = relationship("User")
+    media: Mapped[List["ReportMedia"]] = relationship("ReportMedia", back_populates="history")
 
     # Transient fields
     updater_name: Optional[str] = None

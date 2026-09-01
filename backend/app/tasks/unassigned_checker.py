@@ -30,8 +30,8 @@ def check_and_notify_unassigned_reports(threshold_minutes: int = 30) -> int:
         cutoff_time = datetime.now() - timedelta(minutes=threshold_minutes)
         
         # Query unassigned, un-notified active reports created before cutoff
-        # Exclude completed/terminal statuses (6: Resolved, 7: Rejected, 8: Cancelled, 11: Incident Resolved, 12: Deceased)
-        terminal_statuses = [6, 7, 8, 11, 12]
+        # Exclude completed/terminal statuses (3: Rejected, 6: Resolved, 9: Claimed, 10: Released, 11: Incident Resolved, 12: Deceased, 14: False Alarm / Dismissed)
+        terminal_statuses = [3, 6, 7, 8, 9, 10, 11, 12, 14]
         
         unassigned_reports = db.query(Report).filter(
             Report.assigned_leader_id.is_(None),

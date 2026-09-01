@@ -56,7 +56,7 @@ def generate_ai_suggestions(
     media_animal_type: Optional[str] = None,
     media_dominant_color: Optional[str] = None,
     media_estimated_size: Optional[str] = None
-) -> Dict[str, str]:
+) -> Dict[str, Any]:
     """
     Generate AI suggestions based on report text and media metadata.
     Uses Google Gemini API if GEMINI_API_KEY is configured in the environment.
@@ -69,7 +69,8 @@ def generate_ai_suggestions(
     if api_key:
         try:
             prompt = f"""
-            You are the StraySafe Copilot, an AI assistant for a subdivision's stray animal reporting and safety system.
+            You are the StraySafe Copilot, an expert AI safety and animal behavior analyzer for a subdivision's stray animal reporting and incident management system.
+
             Analyze the following report information:
             - User Description: "{description}"
             - Category: "{category_name}"
@@ -78,18 +79,38 @@ def generate_ai_suggestions(
                 * Dominant Color: {media_dominant_color}
                 * Estimated Size: {media_estimated_size}
 
-            Your task is to classify this stray animal sighting and output a JSON object with the following fields:
-            1. "ai_animal_type": Must be "Dog", "Cat", or "Unknown". Prefer media_animal_type if provided (e.g. "Cat"), otherwise infer accurately from user description.
+            ### CRITICAL RULE: WHOLE DESCRIPTION CONTEXTUAL UNDERSTANDING
+            You MUST analyze the entire description as a complete narrative context rather than relying on keyword matching in isolation.
+            Never classify an incident based solely on the appearance of isolated words like "bite", "nangagat", "nakakagat", "chased", "attack", or "sugat".
+            
+            You must evaluate:
+            1. Complete sentence semantics, including preceding and succeeding sentences.
+            2. Negations in English, Tagalog, and Taglish (e.g., "hindi naman nangagat", "wala namang kinagat", "never bit anyone", "hindi nanunugod", "di naman nanghahabol").
+            3. Tense, timing, and hypothetical vs actual events:
+               - Near-miss / Attempted: "muntikan na akong makagat pero hindi ako natamaan" -> Attempted Bite: true, Actual Bite: false, Injury: false.
+               - Actual bite without wound: "talagang nakagat siya pero walang sugat" -> Actual Bite: true, Attempted Bite: false, Injury: false.
+               - General calm statement: "madalas lumapit pero hindi naman nangagat kahit kailan" -> Actual Bite: false, Attempted Bite: false, Aggressive: false.
+            4. Actual Animal Action vs Human Fear: Distinguish between an animal running past vs actively chasing; an animal approaching friendly vs lunging.
+            5. Injury / Harm: Check if the text states an injury occurred or explicitly confirms no injury/wound.
+
+            Output a valid JSON object with the following fields:
+            1. "ai_animal_type": "Dog", "Cat", or "Unknown". Prefer media_animal_type if provided, otherwise infer accurately from user description.
             2. "ai_dominant_color": Dominant color or colors (e.g. "Brown", "Black, White"). Prefer visual detection if provided, otherwise infer from description.
-            3. "ai_estimated_size": Must be "Small", "Medium", "Large", or "Unknown". For cats, default to "Small".
-            4. "ai_coat_pattern": Must be "Solid", "Bicolor", "Tricolor", "Tabby", "Calico", "Tortoiseshell", "Striped", "Spotted", "Brindle", "Merle", "Patched", or "Unknown". Infer from user description (e.g. if description contains "Pattern: Tabby", "Tabby", "Stripes", "Calico", "Two colors", etc.).
-            5. "ai_suggested_risk_level": Must be "Low Risk", "Medium Risk", or "High Risk".
-               - High Risk: Aggressive behaviors (biting, snarling, attacks, foaming) or severe injury/trauma.
-               - Medium Risk: Nuisance behaviors (barking, chasing cars, roaming pack, crying, skinny/sick).
-               - Low Risk: Normal stray animal condition (healthy, calm, not aggressive).
-            6. "ai_suggested_priority": Must be "Low Priority", "Medium Priority", or "High Priority". Matches the risk level or urgency.
-            7. "ai_possible_breed": Likely breed (e.g., "Aspin", "Puspin", "Golden Retriever", "Siamese"). Default to "Puspin" for cats, "Aspin" for dogs.
-            8. "ai_suggested_priority_reason": A short, conversational, warm, and helpful explanation (1-2 sentences) of why this priority level was suggested. Explain accurately without inventing unmentioned items (like collars or leashes).
+            3. "ai_estimated_size": "Small", "Medium", "Large", or "Unknown". For cats, default to "Small".
+            4. "ai_coat_pattern": "Solid", "Bicolor", "Tricolor", "Tabby", "Calico", "Tortoiseshell", "Striped", "Spotted", "Brindle", "Merle", "Patched", or "Unknown".
+            5. "ai_suggested_risk_level": "Low Risk", "Medium Risk", or "High Risk".
+               - High Risk: Verified actual bite, aggressive attacks, foaming/rabies symptoms, or severe animal trauma.
+               - Medium Risk: Nuisance behaviors (chasing vehicles/children, barking packs, near-miss snapping, sickly condition).
+               - Low Risk: Calm, non-aggressive, healthy or resting stray.
+            6. "ai_suggested_priority": "Low Priority", "Medium Priority", or "High Priority".
+            7. "ai_possible_breed": Likely breed (e.g., "Aspin", "Puspin", "Golden Retriever", "Siamese"). Default "Puspin" for cats, "Aspin" for dogs.
+            8. "ai_suggested_priority_reason": A concise, clear reason (1-2 sentences) explaining the priority classification based strictly on facts in the report.
+            9. "ai_behavior_chasing": boolean (true if the animal actively chased people, kids, or vehicles; false otherwise).
+            10. "ai_behavior_attempted_bite": boolean (true if the animal lunged or almost bit someone without physical tooth contact; false otherwise).
+            11. "ai_behavior_actual_bite": boolean (true if an actual physical bite occurred; false otherwise).
+            12. "ai_behavior_injury": boolean (true if a human or animal was wounded/injured/bled; false if no injury occurred or explicitly negated).
+            13. "ai_behavior_aggressive": boolean (true if displaying hostile/aggressive temperament like biting, attacking, snarling; false if calm, playful, or negated).
+            14. "ai_behavior_explanation": string (A concise 1-2 sentence explanation for subdivision/barangay staff detailing what behavioral events were identified and why, explicitly highlighting any near-misses, actual bites, or negations).
 
             Respond ONLY with a valid JSON block.
             """
@@ -117,14 +138,20 @@ def generate_ai_suggestions(
             required_keys = ["ai_animal_type", "ai_dominant_color", "ai_estimated_size", "ai_suggested_risk_level", "ai_suggested_priority", "ai_possible_breed", "ai_suggested_priority_reason"]
             if all(k in data for k in required_keys):
                 return {
-                    "ai_animal_type": str(data["ai_animal_type"]),
-                    "ai_dominant_color": str(data["ai_dominant_color"]),
+                    "ai_animal_type": str(data.get("ai_animal_type") or "Unknown"),
+                    "ai_dominant_color": str(data.get("ai_dominant_color") or "Brown"),
                     "ai_coat_pattern": str(data.get("ai_coat_pattern") or "Solid"),
-                    "ai_estimated_size": str(data["ai_estimated_size"]),
-                    "ai_possible_breed": str(data["ai_possible_breed"]),
-                    "ai_suggested_risk_level": str(data["ai_suggested_risk_level"]),
-                    "ai_suggested_priority": str(data["ai_suggested_priority"]),
-                    "ai_suggested_priority_reason": str(data["ai_suggested_priority_reason"])
+                    "ai_estimated_size": str(data.get("ai_estimated_size") or "Medium"),
+                    "ai_possible_breed": str(data.get("ai_possible_breed") or "Aspin"),
+                    "ai_suggested_risk_level": str(data.get("ai_suggested_risk_level") or "Low Risk"),
+                    "ai_suggested_priority": str(data.get("ai_suggested_priority") or "Low Priority"),
+                    "ai_suggested_priority_reason": str(data.get("ai_suggested_priority_reason") or ""),
+                    "ai_behavior_chasing": bool(data.get("ai_behavior_chasing", False)),
+                    "ai_behavior_actual_bite": bool(data.get("ai_behavior_actual_bite", False)),
+                    "ai_behavior_attempted_bite": bool(data.get("ai_behavior_attempted_bite", False)),
+                    "ai_behavior_injury": bool(data.get("ai_behavior_injury", False)),
+                    "ai_behavior_aggressive": bool(data.get("ai_behavior_aggressive", False)),
+                    "ai_behavior_explanation": str(data.get("ai_behavior_explanation") or "Context analyzed from report description.")
                 }
         except Exception as gemini_err:
             print(f"Gemini API error (falling back to heuristics): {gemini_err}")
@@ -337,6 +364,63 @@ def generate_ai_suggestions(
     elif "merle" in text:
         coat_pattern = "Merle"
 
+    # 8. Behavioral Analysis Heuristic Engine (Whole sentence & Negation aware)
+    import re
+    sentences = [s.strip() for s in re.split(r'[.!?\n]+', text) if s.strip()]
+    
+    behavior_chasing = False
+    behavior_attempted_bite = False
+    behavior_actual_bite = False
+    behavior_injury = False
+    behavior_aggressive = False
+    behavior_reasons = []
+
+    chase_terms = r'(habol|nanghahabol|hinahabol|hinabol|chase|chasing|chased)'
+    for s in sentences:
+        if re.search(chase_terms, s):
+            if re.search(r'(hindi\s+(naman\s+)?(nanghahabol|humabol|hinabol)|never\s+chased|not\s+chasing|di\s+naman\s+nanghahabol)', s):
+                pass
+            else:
+                behavior_chasing = True
+                behavior_reasons.append("Chasing behavior detected")
+                break
+
+    near_miss_terms = r'(muntik|muntikan|almost|tinangka|nearly|attempted)'
+    bite_terms = r'(kagat|nangagat|nakagat|kumagat|makagat|bite|biting|bitten|bit)'
+    
+    for s in sentences:
+        has_bite_word = bool(re.search(bite_terms, s))
+        if not has_bite_word:
+            continue
+            
+        if re.search(r'(hindi\s+(naman\s+)?(nangagat|kumagat|nakakagat|nakagat)|never\s+bit|wala\s+(namang\s+)?kinagat|not\s+biting)', s):
+            continue
+            
+        if re.search(near_miss_terms, s) or re.search(r'(hindi\s+naman\s+(ako\s+)?natamaan|muntik\s+nang\s+makagat)', s):
+            behavior_attempted_bite = True
+            behavior_aggressive = True
+            behavior_reasons.append("Near-miss / attempted bite detected")
+        elif re.search(r'(talagang\s+nakagat|nakagat|nangagat|kinagat|bit\s+someone|has\s+bitten|actual\s+bite)', s) and not re.search(r'(hindi\s+nangagat|hindi\s+nakagat)', s):
+            behavior_actual_bite = True
+            behavior_aggressive = True
+            behavior_reasons.append("Confirmed bite incident reported")
+
+    injury_terms = r'(sugat|sugatan|dugo|madugo|bleeding|wound|injured|injury|laceration|bite\s+mark)'
+    for s in sentences:
+        if re.search(injury_terms, s):
+            if re.search(r'(wala\s+naman(g)?\s+(siyang\s+)?(sugat|dugo)|no\s+wound|walang\s+dugo|hindi\s+nasugatan|no\s+injury)', s):
+                pass
+            else:
+                behavior_injury = True
+                behavior_reasons.append("Injury / wound mentioned")
+                break
+
+    if behavior_actual_bite or behavior_attempted_bite or any(re.search(r'(nanunugod|nang-aatake|mabangis|aggressive|snarling|snarl|growling)', s) for s in sentences):
+        if not any(re.search(r'(hindi\s+(naman\s+)?(mabangis|nanunugod|aggressive)|not\s+aggressive)', s) for s in sentences):
+            behavior_aggressive = True
+
+    behavior_explanation = "; ".join(behavior_reasons) if behavior_reasons else "Normal behavior. No aggressive or biting incidents reported."
+
     return {
         "ai_animal_type": animal_type,
         "ai_dominant_color": dominant_color,
@@ -345,5 +429,11 @@ def generate_ai_suggestions(
         "ai_possible_breed": possible_breed,
         "ai_suggested_risk_level": risk_level,
         "ai_suggested_priority": priority,
-        "ai_suggested_priority_reason": reason
+        "ai_suggested_priority_reason": reason,
+        "ai_behavior_chasing": behavior_chasing,
+        "ai_behavior_actual_bite": behavior_actual_bite,
+        "ai_behavior_attempted_bite": behavior_attempted_bite,
+        "ai_behavior_injury": behavior_injury,
+        "ai_behavior_aggressive": behavior_aggressive,
+        "ai_behavior_explanation": behavior_explanation
     }

@@ -11,13 +11,17 @@ from app.models.notification import Notification
 from app.models.pet import Pet
 from app.models.pet_qr import PetQRCode
 from app.models.pet_claim import PetClaim
+from app.models.report_dispute import ReportDispute
 from app.models.report_match import ReportMatch
 from app.models.warning import OwnerWarning
 from app.models.chat import ChatThread
 from app.schemas.report import (
     ReportCreate, ReportResponse, ReportStatusUpdate, ReportUpdate, 
     ReportMediaResponse, CommentCreate, CommentResponse,
-    ReportClaimRequest, ReportTakeoverRequest
+    ReportClaimRequest, ReportTakeoverRequest,
+    ReportTransferRequest, ReportTransferActionRequest, ReportTransferRejectRequest,
+    ReportDisputeCreate, ReportDisputeResponse, ReportDisputeReviewRequest,
+    ReportFalseAlarmRequest, ReportVerifyRequest
 )
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.color_detection import extract_dominant_colors
@@ -31,7 +35,7 @@ router = APIRouter(
 
 
 def populate_handler_info(rep_data: ReportResponse, rep: Report):
-    """Populates current handler officer details on ReportResponse."""
+    """Populates current handler officer and pending transfer details on ReportResponse."""
     if rep.assigned_leader:
         rep_data.assigned_leader_id = rep.assigned_leader_id
         rep_data.assigned_leader_name = rep.assigned_leader.name
@@ -45,6 +49,76 @@ def populate_handler_info(rep_data: ReportResponse, rep: Report):
         rep_data.assigned_leader_name = None
         rep_data.assigned_leader_photo = None
     rep_data.claimed_at = rep.claimed_at
+
+    # Pending Transfer
+    rep_data.pending_transfer_to_id = rep.pending_transfer_to_id
+    rep_data.pending_transfer_from_id = rep.pending_transfer_from_id
+    rep_data.pending_transfer_notes = rep.pending_transfer_notes
+    rep_data.pending_transfer_created_at = rep.pending_transfer_created_at
+
+    if rep.pending_transfer_to:
+        rep_data.pending_transfer_to_name = rep.pending_transfer_to.name
+        rep_data.pending_transfer_to_photo = rep.pending_transfer_to.profile_picture
+    elif rep.pending_transfer_to_id:
+        rep_data.pending_transfer_to_name = f"Officer #{rep.pending_transfer_to_id}"
+        rep_data.pending_transfer_to_photo = None
+    else:
+        rep_data.pending_transfer_to_name = None
+        rep_data.pending_transfer_to_photo = None
+
+    if rep.pending_transfer_from:
+        rep_data.pending_transfer_from_name = rep.pending_transfer_from.name
+    elif rep.pending_transfer_from_id:
+        rep_data.pending_transfer_from_name = f"Officer #{rep.pending_transfer_from_id}"
+    else:
+        rep_data.pending_transfer_from_name = None
+
+    # Takeover Eligibility based on Inactivity
+    compute_takeover_eligibility(rep, rep_data)
+
+
+def compute_takeover_eligibility(rep: Report, rep_data: ReportResponse):
+    """
+    Determines if a claimed report is eligible for takeover due to inactivity.
+    - Urgent / High priority: 2 hours of inactivity
+    - Standard / Medium / Low priority: 24 hours of inactivity
+    """
+    from datetime import datetime, timedelta
+    now = datetime.now()
+
+    if not rep.assigned_leader_id or rep.current_status_id in [11, 12, 14, 3]:
+        rep_data.is_takeover_eligible = True
+        rep_data.takeover_cooldown_remaining_seconds = 0
+        rep_data.takeover_locked_until = None
+        rep_data.last_activity_at = rep.claimed_at or rep.created_at
+        return
+
+    # Determine priority
+    priority = (getattr(rep, 'priority_level', None) or getattr(rep_data, 'ai_suggested_priority', None) or "").lower()
+    is_urgent = any(kw in priority for kw in ["emergency", "high", "urgent", "bite", "severe"])
+    
+    # 2 hours for urgent/high priority, 24 hours for standard
+    hours_threshold = 2 if is_urgent else 24
+    rep_data.takeover_inactivity_hours_threshold = hours_threshold
+
+    latest_activity: datetime = rep.claimed_at or rep.created_at or now
+    if rep.history:
+        for hist in rep.history:
+            if hist.created_at and hist.created_at > latest_activity:
+                latest_activity = hist.created_at
+
+    rep_data.last_activity_at = latest_activity
+
+    locked_until = latest_activity + timedelta(hours=hours_threshold)
+    rep_data.takeover_locked_until = locked_until
+
+    if now >= locked_until:
+        rep_data.is_takeover_eligible = True
+        rep_data.takeover_cooldown_remaining_seconds = 0
+    else:
+        rep_data.is_takeover_eligible = False
+        remaining = int((locked_until - now).total_seconds())
+        rep_data.takeover_cooldown_remaining_seconds = max(0, remaining)
 
 
 def get_hist_updater_name(hist, rep) -> str:
@@ -98,6 +172,59 @@ def populate_pet_and_owner_info(rep_data: ReportResponse, rep: Report, db: Sessi
         print(f"Failed to populate pet/owner info for report {rep.report_id}: {err}")
 
 
+def populate_verification_and_disputes(rep_data: ReportResponse, rep: Report, db: Session):
+    """Populates on-site verification status, false alarm findings, and pet owner disputes."""
+    try:
+        rep_data.verification_status = getattr(rep, "verification_status", None) or "unverified"
+        rep_data.false_alarm_reason = getattr(rep, "false_alarm_reason", None)
+        rep_data.verification_notes = getattr(rep, "verification_notes", None)
+        rep_data.verified_by_user_id = getattr(rep, "verified_by_user_id", None)
+        rep_data.verified_at = getattr(rep, "verified_at", None)
+        rep_data.verified_actual_bite = getattr(rep, "verified_actual_bite", False)
+        rep_data.verified_chasing = getattr(rep, "verified_chasing", False)
+        rep_data.verified_attempted_bite = getattr(rep, "verified_attempted_bite", False)
+        rep_data.verified_injury = getattr(rep, "verified_injury", False)
+        rep_data.verified_aggressive = getattr(rep, "verified_aggressive", False)
+        rep_data.behavior_finding = getattr(rep, "behavior_finding", None)
+
+        if hasattr(rep, "verified_by_user") and rep.verified_by_user:
+            rep_data.verified_by_name = rep.verified_by_user.name
+        elif rep.verified_by_user_id:
+            v_user = db.query(User).filter(User.user_id == rep.verified_by_user_id).first()
+            rep_data.verified_by_name = v_user.name if v_user else f"Officer #{rep.verified_by_user_id}"
+
+        # Load disputes
+        disputes_list = []
+        disputes_records = db.query(ReportDispute).options(
+            joinedload(ReportDispute.resident),
+            joinedload(ReportDispute.reviewer),
+            joinedload(ReportDispute.pet)
+        ).filter(ReportDispute.report_id == rep.report_id).order_by(ReportDispute.created_at.desc()).all()
+
+        for d in disputes_records:
+            d_resp = ReportDisputeResponse(
+                dispute_id=d.dispute_id,
+                report_id=d.report_id,
+                resident_user_id=d.resident_user_id,
+                pet_id=d.pet_id,
+                dispute_reason=d.dispute_reason,
+                vaccination_card_url=d.vaccination_card_url,
+                supporting_photo_url=d.supporting_photo_url,
+                status=d.status,
+                reviewer_id=d.reviewer_id,
+                reviewer_notes=d.reviewer_notes,
+                created_at=d.created_at,
+                resolved_at=d.resolved_at,
+                resident_name=d.resident.name if d.resident else None,
+                pet_name=d.pet.pet_name if d.pet else None,
+                reviewer_name=d.reviewer.name if d.reviewer else None
+            )
+            disputes_list.append(d_resp)
+        rep_data.disputes = disputes_list
+    except Exception as err:
+        print(f"Failed to populate verification/dispute info for report {rep.report_id}: {err}")
+
+
 @router.get("/", response_model=List[ReportResponse])
 def get_reports(
     subdivision_id: Optional[int] = None,
@@ -121,6 +248,8 @@ def get_reports(
     reports = query.options(
         joinedload(Report.reporter),
         joinedload(Report.assigned_leader),
+        joinedload(Report.pending_transfer_to),
+        joinedload(Report.pending_transfer_from),
         joinedload(Report.category),
         joinedload(Report.status),
         joinedload(Report.subdivision),
@@ -164,6 +293,13 @@ def get_reports(
                 rep.ai_possible_breed = suggestions["ai_possible_breed"]  # type: ignore
                 rep.ai_suggested_risk_level = suggestions["ai_suggested_risk_level"]  # type: ignore
                 rep.ai_suggested_priority = suggestions["ai_suggested_priority"]  # type: ignore
+                rep.ai_suggested_priority_reason = suggestions.get("ai_suggested_priority_reason")  # type: ignore
+                rep.ai_behavior_chasing = suggestions.get("ai_behavior_chasing", False)  # type: ignore
+                rep.ai_behavior_actual_bite = suggestions.get("ai_behavior_actual_bite", False)  # type: ignore
+                rep.ai_behavior_attempted_bite = suggestions.get("ai_behavior_attempted_bite", False)  # type: ignore
+                rep.ai_behavior_injury = suggestions.get("ai_behavior_injury", False)  # type: ignore
+                rep.ai_behavior_aggressive = suggestions.get("ai_behavior_aggressive", False)  # type: ignore
+                rep.ai_behavior_explanation = suggestions.get("ai_behavior_explanation")  # type: ignore
                 
                 db.commit()
                 db.refresh(rep)
@@ -200,6 +336,9 @@ def get_reports(
 
             # Populate handler details
             populate_handler_info(rep_data, rep)
+
+            # Populate verification & dispute data
+            populate_verification_and_disputes(rep_data, rep, db)
 
             results.append(rep_data)
         except Exception as e:
@@ -753,6 +892,12 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
         db_report.ai_suggested_risk_level = suggestions["ai_suggested_risk_level"]  # type: ignore
         db_report.ai_suggested_priority = suggestions["ai_suggested_priority"]  # type: ignore
         db_report.ai_suggested_priority_reason = suggestions.get("ai_suggested_priority_reason")  # type: ignore
+        db_report.ai_behavior_chasing = suggestions.get("ai_behavior_chasing", False)  # type: ignore
+        db_report.ai_behavior_actual_bite = suggestions.get("ai_behavior_actual_bite", False)  # type: ignore
+        db_report.ai_behavior_attempted_bite = suggestions.get("ai_behavior_attempted_bite", False)  # type: ignore
+        db_report.ai_behavior_injury = suggestions.get("ai_behavior_injury", False)  # type: ignore
+        db_report.ai_behavior_aggressive = suggestions.get("ai_behavior_aggressive", False)  # type: ignore
+        db_report.ai_behavior_explanation = suggestions.get("ai_behavior_explanation")  # type: ignore
 
         # Create initial history entry for status 1 (Reported)
         initial_history = StatusHistory(
@@ -840,6 +985,7 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
         # Populate pet & owner contact info for lost pet reports
         populate_pet_and_owner_info(rep_data, db_report, db)
         populate_handler_info(rep_data, db_report)
+        populate_verification_and_disputes(rep_data, db_report, db)
 
         return rep_data
     except HTTPException:
@@ -855,6 +1001,8 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
     report = db.query(Report).options(
         joinedload(Report.reporter),
         joinedload(Report.assigned_leader),
+        joinedload(Report.pending_transfer_to),
+        joinedload(Report.pending_transfer_from),
         joinedload(Report.category),
         joinedload(Report.status),
         joinedload(Report.subdivision),
@@ -902,6 +1050,13 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
             report.ai_possible_breed = suggestions["ai_possible_breed"]  # type: ignore
             report.ai_suggested_risk_level = suggestions["ai_suggested_risk_level"]  # type: ignore
             report.ai_suggested_priority = suggestions["ai_suggested_priority"]  # type: ignore
+            report.ai_suggested_priority_reason = suggestions.get("ai_suggested_priority_reason")  # type: ignore
+            report.ai_behavior_chasing = suggestions.get("ai_behavior_chasing", False)  # type: ignore
+            report.ai_behavior_actual_bite = suggestions.get("ai_behavior_actual_bite", False)  # type: ignore
+            report.ai_behavior_attempted_bite = suggestions.get("ai_behavior_attempted_bite", False)  # type: ignore
+            report.ai_behavior_injury = suggestions.get("ai_behavior_injury", False)  # type: ignore
+            report.ai_behavior_aggressive = suggestions.get("ai_behavior_aggressive", False)  # type: ignore
+            report.ai_behavior_explanation = suggestions.get("ai_behavior_explanation")  # type: ignore
             db.commit()
             db.refresh(report)
 
@@ -932,6 +1087,7 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
         # Populate pet & owner contact info for lost pet reports
         populate_pet_and_owner_info(rep_data, report, db)
         populate_handler_info(rep_data, report)
+        populate_verification_and_disputes(rep_data, report, db)
 
         return rep_data
     except Exception as e:
@@ -1187,6 +1343,12 @@ async def upload_report_media(
                 report.ai_suggested_risk_level = suggestions["ai_suggested_risk_level"]  # type: ignore
                 report.ai_suggested_priority = suggestions["ai_suggested_priority"]  # type: ignore
                 report.ai_suggested_priority_reason = suggestions.get("ai_suggested_priority_reason")  # type: ignore
+                report.ai_behavior_chasing = suggestions.get("ai_behavior_chasing", False)  # type: ignore
+                report.ai_behavior_actual_bite = suggestions.get("ai_behavior_actual_bite", False)  # type: ignore
+                report.ai_behavior_attempted_bite = suggestions.get("ai_behavior_attempted_bite", False)  # type: ignore
+                report.ai_behavior_injury = suggestions.get("ai_behavior_injury", False)  # type: ignore
+                report.ai_behavior_aggressive = suggestions.get("ai_behavior_aggressive", False)  # type: ignore
+                report.ai_behavior_explanation = suggestions.get("ai_behavior_explanation")  # type: ignore
 
                 # Dynamically set suggestion fields on db_media to be serialized in ReportMediaResponse
                 db_media.ai_animal_type = suggestions.get("ai_animal_type")  # type: ignore
@@ -1304,6 +1466,22 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
             related_id=report_id
         )
         db.add(new_notif)
+
+    # Notify Barangay staff and admins if status is escalated to Barangay (Status 4)
+    if status_update.status_id == 4:
+        try:
+            barangay_officials = db.query(User).filter(User.role_id.in_([3, 4])).all()
+            for official in barangay_officials:
+                b_notif = Notification(
+                    user_id=official.user_id,
+                    title=f"New Escalated Report #{report_id}",
+                    message=f"Report #{report_id} has been escalated to Barangay.",
+                    type="alert",
+                    related_id=report_id
+                )
+                db.add(b_notif)
+        except Exception as notif_err:
+            print(f"Notice: Failed to notify barangay of escalation: {notif_err}")
         
     db.commit()
     db.refresh(report)
@@ -1430,8 +1608,45 @@ def link_pet_to_report(report_id: int, pet_id: int, req: Request, db: Session = 
         raise HTTPException(status_code=404, detail="Pet not found")
 
     report.pet_id = pet_id
+    db.flush()
+
+    # Sync pet behavioral traits with verified reports
+    has_verified_bites = db.query(Report).filter(
+        Report.pet_id == pet.pet_id,
+        Report.verification_status == 'verified_true',
+        Report.verified_actual_bite == True
+    ).count() > 0
+
+    bite_count = db.query(Report).filter(
+        Report.pet_id == pet.pet_id,
+        Report.verification_status == 'verified_true',
+        Report.verified_actual_bite == True
+    ).count()
+
+    chase_count = db.query(Report).filter(
+        Report.pet_id == pet.pet_id,
+        Report.verification_status == 'verified_true',
+        Report.verified_chasing == True
+    ).count()
+
+    has_verified_aggression = db.query(Report).filter(
+        Report.pet_id == pet.pet_id,
+        Report.verification_status == 'verified_true',
+        Report.verified_aggressive == True
+    ).count() > 0
+
+    pet.has_bite_history = (bite_count > 0)
+    pet.bite_incident_count = bite_count
+    pet.chase_behavior = (chase_count > 0)
+    pet.chase_incident_count = chase_count
+    if has_verified_aggression or (bite_count > 0):
+        pet.temperament = 'Aggressive'
+    else:
+        pet.temperament = 'Friendly'
+
     db.commit()
     db.refresh(report)
+    db.refresh(pet)
 
     log_activity(
         db=db,
@@ -1618,9 +1833,33 @@ def takeover_report(report_id: int, takeover_in: ReportTakeoverRequest, req: Req
         populate_pet_and_owner_info(rep_data, report, db)
         return rep_data
 
-    # 3. Update handler
-    from datetime import datetime
+    # Check inactivity / response window for non-admins
+    from datetime import datetime, timedelta
     now = datetime.now()
+
+    if new_officer.role_id != 4 and prev_handler_id:
+        priority = (report.priority_level or "").lower()
+        is_urgent = any(kw in priority for kw in ["emergency", "high", "urgent", "bite", "severe"])
+        hours_threshold = 2 if is_urgent else 24
+
+        latest_activity = report.claimed_at or report.created_at or now
+        if report.history:
+            for hist in report.history:
+                if hist.created_at and hist.created_at > latest_activity:
+                    latest_activity = hist.created_at
+
+        locked_until = latest_activity + timedelta(hours=hours_threshold)
+        if now < locked_until:
+            rem_seconds = int((locked_until - now).total_seconds())
+            hrs = rem_seconds // 3600
+            mins = (rem_seconds % 3600) // 60
+            time_str = f"{hrs}h {mins}m" if hrs > 0 else f"{mins}m"
+            raise HTTPException(
+                status_code=400,
+                detail=f"Takeover is currently locked. The assigned handler is within the active response window ({time_str} remaining). Takeover will unlock if no progress is made after {hours_threshold} hours of inactivity."
+            )
+
+    # 3. Update handler
     report.assigned_leader_id = new_officer.user_id
     report.claimed_at = now
 
@@ -1770,4 +2009,873 @@ def unclaim_report(report_id: int, unclaim_in: ReportClaimRequest, req: Request,
 
     populate_handler_info(rep_data, report)
     populate_pet_and_owner_info(rep_data, report, db)
+    populate_verification_and_disputes(rep_data, report, db)
     return rep_data
+
+
+# ==============================================================================
+# REPORT TRANSFER WORKFLOW ENDPOINTS (Between Subdivision Officers)
+# ==============================================================================
+
+@router.post("/{report_id}/transfer/request", response_model=ReportResponse)
+def request_transfer_report(report_id: int, transfer_in: ReportTransferRequest, req: Request, db: Session = Depends(get_db)):
+    """Initiate a transfer request from the current handler to another subdivision leader."""
+    sender = db.query(User).filter(User.user_id == transfer_in.user_id).first()
+    if not sender:
+        raise HTTPException(status_code=404, detail="Sender user not found")
+
+    target = db.query(User).filter(User.user_id == transfer_in.target_user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Target officer not found")
+
+    if target.role_id not in [2, 4]:
+        raise HTTPException(status_code=400, detail="Transfers can only be proposed to Subdivision Leaders / Officers.")
+
+    if sender.user_id == target.user_id:
+        raise HTTPException(status_code=400, detail="You cannot transfer a report to yourself.")
+
+    report = db.query(Report).options(
+        joinedload(Report.assigned_leader),
+        joinedload(Report.pending_transfer_to),
+        joinedload(Report.pending_transfer_from),
+        selectinload(Report.history).joinedload(StatusHistory.updater),
+        selectinload(Report.history).selectinload(StatusHistory.media),
+        joinedload(Report.reporter),
+        joinedload(Report.category),
+        joinedload(Report.status),
+        joinedload(Report.subdivision),
+        selectinload(Report.media),
+        selectinload(Report.comments).joinedload(Comment.user),
+        joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
+    ).filter(Report.report_id == report_id).with_for_update().first()
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if report.assigned_leader_id != sender.user_id and sender.role_id != 4:
+        raise HTTPException(status_code=403, detail="Only the currently assigned handler can transfer this report.")
+
+    if target.role_id == 2 and report.subdivision_id and target.subdivision_id:
+        if target.subdivision_id != report.subdivision_id:
+            raise HTTPException(status_code=400, detail="Target officer must be assigned to the same subdivision.")
+
+    from datetime import datetime
+    now = datetime.now()
+    notes_clean = transfer_in.notes.strip() if transfer_in.notes else None
+
+    report.pending_transfer_to_id = target.user_id
+    report.pending_transfer_from_id = sender.user_id
+    report.pending_transfer_notes = notes_clean
+    report.pending_transfer_created_at = now
+
+    notes_str = f" Reason/Notes: '{notes_clean}'" if notes_clean else ""
+    status_hist = StatusHistory(
+        report_id=report.report_id,
+        report_status_id=report.current_status_id,
+        updated_by=sender.user_id,
+        remarks=f"Officer {sender.name} initiated a case transfer request to Officer {target.name}.{notes_str}"
+    )
+    db.add(status_hist)
+
+    log_activity(
+        db=db,
+        action="REQUEST_TRANSFER_REPORT",
+        target_table="reports",
+        target_id=report.report_id,
+        description=f"Officer {sender.name} requested to transfer report #{report.report_id} to Officer {target.name}",
+        user_id=sender.user_id,
+        log_type="operation",
+        old_values={"assigned_leader_id": sender.user_id},
+        new_values={"pending_transfer_to_id": target.user_id, "notes": notes_clean},
+        request=req
+    )
+
+    # Notify target officer
+    try:
+        notif = Notification(
+            user_id=target.user_id,
+            title=f"🔄 Transfer Request: Report #{report.report_id}",
+            message=f"Officer {sender.name} requested to transfer Report #{report.report_id} to you.{f' Notes: {notes_clean}' if notes_clean else ''}",
+            type="report_transfer_request",
+            related_id=report.report_id
+        )
+        db.add(notif)
+    except Exception as err:
+        print(f"Notice: Failed to create transfer notification: {err}")
+
+    db.commit()
+    db.refresh(report)
+
+    rep_data = ReportResponse.model_validate(report)
+    rep_data.status_id = report.current_status_id
+    rep_data.reporter_name = report.reporter.name if report.reporter else "Unknown User"
+    rep_data.reporter_photo = report.reporter.profile_picture if report.reporter else None
+
+    if report.history:
+        for i, hist in enumerate(report.history):
+            if rep_data.history and i < len(rep_data.history):
+                rep_data.history[i].updater_name = get_hist_updater_name(hist, report)
+                rep_data.history[i].updater_photo = hist.updater.profile_picture if hist.updater else None
+
+    populate_handler_info(rep_data, report)
+    populate_pet_and_owner_info(rep_data, report, db)
+    populate_verification_and_disputes(rep_data, report, db)
+    return rep_data
+
+
+@router.post("/{report_id}/transfer/accept", response_model=ReportResponse)
+def accept_transfer_report(report_id: int, action_in: ReportTransferActionRequest, req: Request, db: Session = Depends(get_db)):
+    """Accept an incoming transfer request and assume primary handling of the report."""
+    recipient = db.query(User).filter(User.user_id == action_in.user_id).first()
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Recipient user not found")
+
+    report = db.query(Report).options(
+        joinedload(Report.assigned_leader),
+        joinedload(Report.pending_transfer_to),
+        joinedload(Report.pending_transfer_from),
+        selectinload(Report.history).joinedload(StatusHistory.updater),
+        selectinload(Report.history).selectinload(StatusHistory.media),
+        joinedload(Report.reporter),
+        joinedload(Report.category),
+        joinedload(Report.status),
+        joinedload(Report.subdivision),
+        selectinload(Report.media),
+        selectinload(Report.comments).joinedload(Comment.user),
+        joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
+    ).filter(Report.report_id == report_id).with_for_update().first()
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if report.pending_transfer_to_id != recipient.user_id and recipient.role_id != 4:
+        raise HTTPException(status_code=403, detail="You are not the designated recipient of this transfer request.")
+
+    prev_sender_id = report.pending_transfer_from_id
+    prev_sender = report.pending_transfer_from
+    sender_name = prev_sender.name if prev_sender else (f"Officer #{prev_sender_id}" if prev_sender_id else "Previous Handler")
+
+    from datetime import datetime
+    now = datetime.now()
+
+    # Reassign handler
+    report.assigned_leader_id = recipient.user_id
+    report.claimed_at = now
+
+    # Clear pending transfer fields
+    report.pending_transfer_to_id = None
+    report.pending_transfer_from_id = None
+    report.pending_transfer_notes = None
+    report.pending_transfer_created_at = None
+
+    # Record in StatusHistory with explicit wording required by user
+    status_hist = StatusHistory(
+        report_id=report.report_id,
+        report_status_id=report.current_status_id,
+        updated_by=recipient.user_id,
+        remarks=f"{sender_name} transferred report to {recipient.name}. This report is now being handled by {recipient.name}."
+    )
+    db.add(status_hist)
+
+    log_activity(
+        db=db,
+        action="ACCEPT_TRANSFER_REPORT",
+        target_table="reports",
+        target_id=report.report_id,
+        description=f"Officer {recipient.name} accepted transfer of report #{report.report_id} from {sender_name}",
+        user_id=recipient.user_id,
+        log_type="operation",
+        old_values={"assigned_leader_id": prev_sender_id},
+        new_values={"assigned_leader_id": recipient.user_id},
+        request=req
+    )
+
+    # Notify original sender
+    if prev_sender_id and prev_sender_id != recipient.user_id:
+        try:
+            notif = Notification(
+                user_id=prev_sender_id,
+                title=f"✅ Transfer Accepted: Report #{report.report_id}",
+                message=f"Officer {recipient.name} ACCEPTED your transfer request for Report #{report.report_id}. The report is now assigned to {recipient.name}.",
+                type="report_transfer_accepted",
+                related_id=report.report_id
+            )
+            db.add(notif)
+        except Exception as err:
+            print(f"Notice: Failed to notify sender of acceptance: {err}")
+
+    db.commit()
+    db.refresh(report)
+
+    rep_data = ReportResponse.model_validate(report)
+    rep_data.status_id = report.current_status_id
+    rep_data.reporter_name = report.reporter.name if report.reporter else "Unknown User"
+    rep_data.reporter_photo = report.reporter.profile_picture if report.reporter else None
+
+    if report.history:
+        for i, hist in enumerate(report.history):
+            if rep_data.history and i < len(rep_data.history):
+                rep_data.history[i].updater_name = get_hist_updater_name(hist, report)
+                rep_data.history[i].updater_photo = hist.updater.profile_picture if hist.updater else None
+
+    populate_handler_info(rep_data, report)
+    populate_pet_and_owner_info(rep_data, report, db)
+    populate_verification_and_disputes(rep_data, report, db)
+    return rep_data
+
+
+@router.post("/{report_id}/transfer/reject", response_model=ReportResponse)
+def reject_transfer_report(report_id: int, reject_in: ReportTransferRejectRequest, req: Request, db: Session = Depends(get_db)):
+    """Decline an incoming transfer request with reason, keeping the original handler responsible."""
+    recipient = db.query(User).filter(User.user_id == reject_in.user_id).first()
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Recipient user not found")
+
+    report = db.query(Report).options(
+        joinedload(Report.assigned_leader),
+        joinedload(Report.pending_transfer_to),
+        joinedload(Report.pending_transfer_from),
+        selectinload(Report.history).joinedload(StatusHistory.updater),
+        selectinload(Report.history).selectinload(StatusHistory.media),
+        joinedload(Report.reporter),
+        joinedload(Report.category),
+        joinedload(Report.status),
+        joinedload(Report.subdivision),
+        selectinload(Report.media),
+        selectinload(Report.comments).joinedload(Comment.user),
+        joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
+    ).filter(Report.report_id == report_id).with_for_update().first()
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if report.pending_transfer_to_id != recipient.user_id and recipient.role_id != 4:
+        raise HTTPException(status_code=403, detail="You are not the designated recipient of this transfer request.")
+
+    prev_sender_id = report.pending_transfer_from_id
+    prev_sender = report.pending_transfer_from
+    sender_name = prev_sender.name if prev_sender else (f"Officer #{prev_sender_id}" if prev_sender_id else "Current Handler")
+
+    rejection_reason = reject_in.reason.strip() if reject_in.reason else None
+
+    # Clear pending transfer fields, keep original handler
+    report.pending_transfer_to_id = None
+    report.pending_transfer_from_id = None
+    report.pending_transfer_notes = None
+    report.pending_transfer_created_at = None
+
+    reason_str = f" Reason: '{rejection_reason}'." if rejection_reason else ""
+    status_hist = StatusHistory(
+        report_id=report.report_id,
+        report_status_id=report.current_status_id,
+        updated_by=recipient.user_id,
+        remarks=f"Officer {recipient.name} declined the case transfer request from {sender_name}.{reason_str} Report remains handled by {sender_name}."
+    )
+    db.add(status_hist)
+
+    log_activity(
+        db=db,
+        action="REJECT_TRANSFER_REPORT",
+        target_table="reports",
+        target_id=report.report_id,
+        description=f"Officer {recipient.name} declined transfer of report #{report.report_id} from {sender_name}. Reason: {rejection_reason}",
+        user_id=recipient.user_id,
+        log_type="operation",
+        old_values={"pending_transfer_to_id": recipient.user_id},
+        new_values={"pending_transfer_to_id": None, "rejection_reason": rejection_reason},
+        request=req
+    )
+
+    # Notify sender that transfer was rejected and they remain responsible
+    if prev_sender_id:
+        try:
+            reason_msg = f" Reason: '{rejection_reason}'." if rejection_reason else ""
+            notif = Notification(
+                user_id=prev_sender_id,
+                title=f"❌ Transfer Declined: Report #{report.report_id}",
+                message=f"Officer {recipient.name} DECLINED your transfer request for Report #{report.report_id}.{reason_msg} You remain responsible for this report.",
+                type="report_transfer_rejected",
+                related_id=report.report_id
+            )
+            db.add(notif)
+        except Exception as err:
+            print(f"Notice: Failed to notify sender of rejection: {err}")
+
+    db.commit()
+    db.refresh(report)
+
+    rep_data = ReportResponse.model_validate(report)
+    rep_data.status_id = report.current_status_id
+    rep_data.reporter_name = report.reporter.name if report.reporter else "Unknown User"
+    rep_data.reporter_photo = report.reporter.profile_picture if report.reporter else None
+
+    if report.history:
+        for i, hist in enumerate(report.history):
+            if rep_data.history and i < len(rep_data.history):
+                rep_data.history[i].updater_name = get_hist_updater_name(hist, report)
+                rep_data.history[i].updater_photo = hist.updater.profile_picture if hist.updater else None
+
+    populate_handler_info(rep_data, report)
+    populate_pet_and_owner_info(rep_data, report, db)
+    populate_verification_and_disputes(rep_data, report, db)
+    return rep_data
+
+
+@router.post("/{report_id}/transfer/cancel", response_model=ReportResponse)
+def cancel_transfer_report(report_id: int, action_in: ReportTransferActionRequest, req: Request, db: Session = Depends(get_db)):
+    """Withdraw/cancel a pending transfer request before it is accepted."""
+    user = db.query(User).filter(User.user_id == action_in.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    report = db.query(Report).options(
+        joinedload(Report.assigned_leader),
+        joinedload(Report.pending_transfer_to),
+        joinedload(Report.pending_transfer_from),
+        selectinload(Report.history).joinedload(StatusHistory.updater),
+        selectinload(Report.history).selectinload(StatusHistory.media),
+        joinedload(Report.reporter),
+        joinedload(Report.category),
+        joinedload(Report.status),
+        joinedload(Report.subdivision),
+        selectinload(Report.media),
+        selectinload(Report.comments).joinedload(Comment.user),
+        joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
+    ).filter(Report.report_id == report_id).with_for_update().first()
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if report.pending_transfer_from_id != user.user_id and user.role_id != 4:
+        raise HTTPException(status_code=403, detail="You can only cancel transfer requests you initiated.")
+
+    target_id = report.pending_transfer_to_id
+    target_name = report.pending_transfer_to.name if report.pending_transfer_to else (f"Officer #{target_id}" if target_id else "colleague")
+
+    report.pending_transfer_to_id = None
+    report.pending_transfer_from_id = None
+    report.pending_transfer_notes = None
+    report.pending_transfer_created_at = None
+
+    status_hist = StatusHistory(
+        report_id=report.report_id,
+        report_status_id=report.current_status_id,
+        updated_by=user.user_id,
+        remarks=f"Officer {user.name} withdrew the pending case transfer request to {target_name}."
+    )
+    db.add(status_hist)
+
+    log_activity(
+        db=db,
+        action="CANCEL_TRANSFER_REPORT",
+        target_table="reports",
+        target_id=report.report_id,
+        description=f"Officer {user.name} cancelled transfer request for report #{report.report_id}",
+        user_id=user.user_id,
+        log_type="operation",
+        old_values={"pending_transfer_to_id": target_id},
+        new_values={"pending_transfer_to_id": None},
+        request=req
+    )
+
+    db.commit()
+    db.refresh(report)
+
+    rep_data = ReportResponse.model_validate(report)
+    rep_data.status_id = report.current_status_id
+    rep_data.reporter_name = report.reporter.name if report.reporter else "Unknown User"
+    rep_data.reporter_photo = report.reporter.profile_picture if report.reporter else None
+
+    if report.history:
+        for i, hist in enumerate(report.history):
+            if rep_data.history and i < len(rep_data.history):
+                rep_data.history[i].updater_name = get_hist_updater_name(hist, report)
+                rep_data.history[i].updater_photo = hist.updater.profile_picture if hist.updater else None
+
+    populate_handler_info(rep_data, report)
+    populate_pet_and_owner_info(rep_data, report, db)
+    populate_verification_and_disputes(rep_data, report, db)
+    return rep_data
+
+
+# ==============================================================================
+# FALSE REPORT DISMISSAL & ON-SITE VERIFICATION ENDPOINTS
+# ==============================================================================
+
+@router.post("/{report_id}/verify-incident", response_model=ReportResponse)
+def verify_incident_report(report_id: int, verify_in: ReportVerifyRequest, req: Request, db: Session = Depends(get_db)):
+    """Mark an incident report as officially verified on-site after field inspection."""
+    report = db.query(Report).options(
+        joinedload(Report.assigned_leader),
+        joinedload(Report.reporter),
+        selectinload(Report.history),
+        joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
+    ).filter(Report.report_id == report_id).first()
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    user = db.query(User).filter(User.user_id == verify_in.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    from datetime import datetime
+    now = datetime.now()
+
+    report.current_status_id = 2  # Verified
+    report.verification_status = 'verified_true'
+    report.verification_notes = verify_in.notes or "Physical on-site inspection confirmed the reported incident."
+    report.verified_by_user_id = user.user_id
+    report.verified_at = now
+    report.verified_actual_bite = bool(verify_in.verified_actual_bite)
+    report.verified_chasing = bool(verify_in.verified_chasing)
+    report.verified_attempted_bite = bool(verify_in.verified_attempted_bite)
+    report.verified_injury = bool(verify_in.verified_injury)
+    report.verified_aggressive = bool(verify_in.verified_aggressive)
+    report.behavior_finding = verify_in.behavior_finding or (
+        "Substantiated" if (verify_in.verified_actual_bite or verify_in.verified_aggressive) else "Unsubstantiated / Friendly"
+    )
+
+    finding_str = f" [Finding: {report.behavior_finding}]" if report.behavior_finding else ""
+    notes_txt = f" Notes: {verify_in.notes}" if verify_in.notes else ""
+    status_hist = StatusHistory(
+        report_id=report.report_id,
+        report_status_id=2,
+        updated_by=user.user_id,
+        remarks=f"Official on-site investigation confirmed by Officer {user.name}.{finding_str}{notes_txt}"
+    )
+    db.add(status_hist)
+
+    # Sync Pet Behavioral Profile if this report is linked to a registered pet
+    if report.pet_id:
+        db.flush()
+        pet = db.query(Pet).filter(Pet.pet_id == report.pet_id).first()
+        if pet:
+            has_verified_bites = db.query(Report).filter(
+                Report.pet_id == pet.pet_id,
+                Report.verification_status == 'verified_true',
+                Report.verified_actual_bite == True
+            ).count() > 0
+
+            bite_count = db.query(Report).filter(
+                Report.pet_id == pet.pet_id,
+                Report.verification_status == 'verified_true',
+                Report.verified_actual_bite == True
+            ).count()
+
+            chase_count = db.query(Report).filter(
+                Report.pet_id == pet.pet_id,
+                Report.verification_status == 'verified_true',
+                Report.verified_chasing == True
+            ).count()
+
+            has_verified_aggression = db.query(Report).filter(
+                Report.pet_id == pet.pet_id,
+                Report.verification_status == 'verified_true',
+                Report.verified_aggressive == True
+            ).count() > 0
+
+            pet.has_bite_history = (bite_count > 0)
+            pet.bite_incident_count = bite_count
+            pet.chase_behavior = (chase_count > 0)
+            pet.chase_incident_count = chase_count
+            if has_verified_aggression or (bite_count > 0):
+                pet.temperament = 'Aggressive'
+            else:
+                pet.temperament = 'Friendly'
+
+    # Notify reporter
+    if report.user_id and report.user_id != user.user_id:
+        notif = Notification(
+            user_id=report.user_id,
+            title=f"Report #{report.report_id} Verified",
+            message=f"Your report #{report.report_id} was verified on-site by Subdivision Officer {user.name} ({report.behavior_finding}).",
+            type="status_update",
+            related_id=report.report_id
+        )
+        db.add(notif)
+
+    log_activity(
+        db=db,
+        action="VERIFY_REPORT",
+        target_table="reports",
+        target_id=report.report_id,
+        description=f"Officer {user.name} verified report #{report.report_id} on-site ({report.behavior_finding})",
+        user_id=user.user_id,
+        log_type="operation",
+        old_values={"verification_status": "unverified", "status_id": report.current_status_id},
+        new_values={
+            "verification_status": "verified_true",
+            "status_id": 2,
+            "behavior_finding": report.behavior_finding,
+            "verified_actual_bite": report.verified_actual_bite,
+            "verified_chasing": report.verified_chasing,
+            "verified_aggressive": report.verified_aggressive,
+            "notes": verify_in.notes
+        },
+        request=req
+    )
+
+    db.commit()
+    db.refresh(report)
+
+    rep_data = ReportResponse.model_validate(report)
+    rep_data.status_id = report.current_status_id
+    rep_data.reporter_name = report.reporter.name if report.reporter else "Unknown User"
+    rep_data.reporter_photo = report.reporter.profile_picture if report.reporter else None
+    populate_handler_info(rep_data, report)
+    populate_pet_and_owner_info(rep_data, report, db)
+    populate_verification_and_disputes(rep_data, report, db)
+    return rep_data
+
+
+@router.post("/{report_id}/mark-false-alarm", response_model=ReportResponse)
+def mark_report_false_alarm(report_id: int, false_in: ReportFalseAlarmRequest, req: Request, db: Session = Depends(get_db)):
+    """Dismiss a report as a false alarm / invalid claim with documented investigation findings."""
+    report = db.query(Report).options(
+        joinedload(Report.assigned_leader),
+        joinedload(Report.reporter),
+        selectinload(Report.history),
+        joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
+    ).filter(Report.report_id == report_id).first()
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    user = db.query(User).filter(User.user_id == false_in.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    from datetime import datetime
+    now = datetime.now()
+
+    report.current_status_id = 14  # False Alarm / Dismissed
+    report.verification_status = 'false_alarm'
+    report.false_alarm_reason = false_in.reason
+    report.verification_notes = false_in.notes or f"Investigation concluded report is invalid: {false_in.reason}"
+    report.verified_by_user_id = user.user_id
+    report.verified_at = now
+
+    notes_snippet = f" | Notes: {false_in.notes}" if false_in.notes else ""
+    status_hist = StatusHistory(
+        report_id=report.report_id,
+        report_status_id=14,
+        updated_by=user.user_id,
+        remarks=f"Report dismissed as False Alarm / Invalid. Reason: {false_in.reason}{notes_snippet}"
+    )
+    db.add(status_hist)
+
+    # Notify reporter about the dismissal
+    if report.user_id and report.user_id != user.user_id:
+        notif = Notification(
+            user_id=report.user_id,
+            title=f"Report #{report.report_id} Dismissed",
+            message=f"Your report #{report.report_id} was reviewed and dismissed by Subdivision Officer {user.name} ({false_in.reason}).",
+            type="status_update",
+            related_id=report.report_id
+        )
+        db.add(notif)
+
+    log_activity(
+        db=db,
+        action="DISMISS_FALSE_ALARM",
+        target_table="reports",
+        target_id=report.report_id,
+        description=f"Officer {user.name} dismissed report #{report.report_id} as false alarm ({false_in.reason})",
+        user_id=user.user_id,
+        log_type="operation",
+        old_values={"verification_status": "unverified", "status_id": report.current_status_id},
+        new_values={"verification_status": "false_alarm", "status_id": 14, "reason": false_in.reason, "notes": false_in.notes},
+        request=req
+    )
+
+    db.commit()
+    db.refresh(report)
+
+    rep_data = ReportResponse.model_validate(report)
+    rep_data.status_id = report.current_status_id
+    rep_data.reporter_name = report.reporter.name if report.reporter else "Unknown User"
+    rep_data.reporter_photo = report.reporter.profile_picture if report.reporter else None
+    populate_handler_info(rep_data, report)
+    populate_pet_and_owner_info(rep_data, report, db)
+    populate_verification_and_disputes(rep_data, report, db)
+    return rep_data
+
+
+# ==============================================================================
+# PET OWNER DISPUTE ENDPOINTS
+# ==============================================================================
+
+@router.post("/{report_id}/disputes", response_model=ReportDisputeResponse)
+async def create_report_dispute(
+    report_id: int,
+    req: Request,
+    resident_user_id: int = Form(...),
+    dispute_reason: str = Form(...),
+    pet_id: Optional[int] = Form(None),
+    vaccination_card: Optional[UploadFile] = File(None),
+    supporting_photo: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    """Lodge a formal dispute against a report targeting a resident's pet, uploading vaccination card and home confinement photos."""
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    resident = db.query(User).filter(User.user_id == resident_user_id).first()
+    if not resident:
+        raise HTTPException(status_code=404, detail="Resident user not found")
+
+    vaccine_url = None
+    if vaccination_card and vaccination_card.filename:
+        v_content = await vaccination_card.read()
+        v_ext = os.path.splitext(vaccination_card.filename)[1] or ".jpg"
+        v_name = f"dispute_vax_{uuid.uuid4()}{v_ext}"
+        vaccine_url = upload_to_cloudinary(v_content, filename=v_name)
+
+    photo_url = None
+    if supporting_photo and supporting_photo.filename:
+        p_content = await supporting_photo.read()
+        p_ext = os.path.splitext(supporting_photo.filename)[1] or ".jpg"
+        p_name = f"dispute_proof_{uuid.uuid4()}{p_ext}"
+        photo_url = upload_to_cloudinary(p_content, filename=p_name)
+
+    # Check if a pending dispute already exists for this user/report
+    existing_dispute = db.query(ReportDispute).filter(
+        ReportDispute.report_id == report_id,
+        ReportDispute.resident_user_id == resident_user_id,
+        ReportDispute.status == "Pending"
+    ).first()
+
+    if existing_dispute:
+        # Update existing pending dispute
+        existing_dispute.dispute_reason = dispute_reason
+        if pet_id:
+            existing_dispute.pet_id = pet_id
+        if vaccine_url:
+            existing_dispute.vaccination_card_url = vaccine_url
+        if photo_url:
+            existing_dispute.supporting_photo_url = photo_url
+        dispute_record = existing_dispute
+    else:
+        dispute_record = ReportDispute(
+            report_id=report_id,
+            resident_user_id=resident_user_id,
+            pet_id=pet_id,
+            dispute_reason=dispute_reason,
+            vaccination_card_url=vaccine_url,
+            supporting_photo_url=photo_url,
+            status="Pending"
+        )
+        db.add(dispute_record)
+
+    # Update report status to Disputed
+    report.current_status_id = 15  # Disputed
+    report.verification_status = 'disputed'
+
+    status_hist = StatusHistory(
+        report_id=report.report_id,
+        report_status_id=15,
+        updated_by=resident.user_id,
+        remarks=f"Formal dispute lodged by resident {resident.name}. Animal control operations paused pending verification of vaccination certificate."
+    )
+    db.add(status_hist)
+
+    # Notify Subdivision Leader(s)
+    if report.subdivision_id:
+        try:
+            leaders = db.query(User).filter(
+                User.subdivision_id == report.subdivision_id,
+                User.role_id == 2
+            ).all()
+            for l in leaders:
+                d_notif = Notification(
+                    user_id=l.user_id,
+                    title=f"Dispute Lodged: Report #{report.report_id}",
+                    message=f"Resident {resident.name} has formally disputed Report #{report.report_id} with proof of vaccination.",
+                    type="alert",
+                    related_id=report.report_id
+                )
+                db.add(d_notif)
+        except Exception as notif_err:
+            print(f"Notice: Failed to notify leaders about dispute: {notif_err}")
+
+    log_activity(
+        db=db,
+        action="LODGE_DISPUTE",
+        target_table="report_disputes",
+        target_id=report.report_id,
+        description=f"Resident {resident.name} lodged dispute against report #{report.report_id}",
+        user_id=resident.user_id,
+        log_type="operation",
+        new_values={"report_id": report.report_id, "reason": dispute_reason},
+        request=req
+    )
+
+    db.commit()
+    db.refresh(dispute_record)
+
+    return ReportDisputeResponse(
+        dispute_id=dispute_record.dispute_id,
+        report_id=dispute_record.report_id,
+        resident_user_id=dispute_record.resident_user_id,
+        pet_id=dispute_record.pet_id,
+        dispute_reason=dispute_record.dispute_reason,
+        vaccination_card_url=dispute_record.vaccination_card_url,
+        supporting_photo_url=dispute_record.supporting_photo_url,
+        status=dispute_record.status,
+        reviewer_id=dispute_record.reviewer_id,
+        reviewer_notes=dispute_record.reviewer_notes,
+        created_at=dispute_record.created_at,
+        resolved_at=dispute_record.resolved_at,
+        resident_name=resident.name,
+        pet_name=dispute_record.pet.pet_name if dispute_record.pet else None,
+        reviewer_name=None
+    )
+
+
+@router.get("/{report_id}/disputes", response_model=List[ReportDisputeResponse])
+def get_report_disputes(report_id: int, db: Session = Depends(get_db)):
+    """Fetch all disputes lodged for a specific report."""
+    disputes = db.query(ReportDispute).options(
+        joinedload(ReportDispute.resident),
+        joinedload(ReportDispute.reviewer),
+        joinedload(ReportDispute.pet)
+    ).filter(ReportDispute.report_id == report_id).order_by(ReportDispute.created_at.desc()).all()
+
+    return [
+        ReportDisputeResponse(
+            dispute_id=d.dispute_id,
+            report_id=d.report_id,
+            resident_user_id=d.resident_user_id,
+            pet_id=d.pet_id,
+            dispute_reason=d.dispute_reason,
+            vaccination_card_url=d.vaccination_card_url,
+            supporting_photo_url=d.supporting_photo_url,
+            status=d.status,
+            reviewer_id=d.reviewer_id,
+            reviewer_notes=d.reviewer_notes,
+            created_at=d.created_at,
+            resolved_at=d.resolved_at,
+            resident_name=d.resident.name if d.resident else None,
+            pet_name=d.pet.pet_name if d.pet else None,
+            reviewer_name=d.reviewer.name if d.reviewer else None
+        )
+        for d in disputes
+    ]
+
+
+@router.patch("/{report_id}/disputes/{dispute_id}/review", response_model=ReportResponse)
+def review_report_dispute(
+    report_id: int,
+    dispute_id: int,
+    review_in: ReportDisputeReviewRequest,
+    req: Request,
+    db: Session = Depends(get_db)
+):
+    """Staff review of a citizen dispute (Accept and dismiss false alarm, or Reject)."""
+    dispute = db.query(ReportDispute).filter(
+        ReportDispute.dispute_id == dispute_id,
+        ReportDispute.report_id == report_id
+    ).first()
+
+    if not dispute:
+        raise HTTPException(status_code=404, detail="Dispute record not found")
+
+    report = db.query(Report).options(
+        joinedload(Report.assigned_leader),
+        joinedload(Report.reporter),
+        selectinload(Report.history),
+        joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
+    ).filter(Report.report_id == report_id).first()
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    reviewer = db.query(User).filter(User.user_id == review_in.reviewer_id).first()
+    if not reviewer:
+        raise HTTPException(status_code=404, detail="Reviewer not found")
+
+    from datetime import datetime
+    now = datetime.now()
+
+    dispute.status = review_in.status
+    dispute.reviewer_id = reviewer.user_id
+    dispute.reviewer_notes = review_in.reviewer_notes
+    dispute.resolved_at = now
+
+    if review_in.status == "Accepted":
+        # Owner dispute accepted -> Mark report as False Alarm / Dismissed
+        report.current_status_id = 14  # False Alarm / Dismissed
+        report.verification_status = 'false_alarm'
+        report.false_alarm_reason = 'Pet Safely Owned / False Accusation'
+        report.verification_notes = f"Owner dispute verified and accepted by Officer {reviewer.name}: {review_in.reviewer_notes or 'Vaccination & ownership verified'}"
+        report.verified_by_user_id = reviewer.user_id
+        report.verified_at = now
+
+        status_hist = StatusHistory(
+            report_id=report.report_id,
+            report_status_id=14,
+            updated_by=reviewer.user_id,
+            remarks=f"Resident dispute approved by Officer {reviewer.name}. Vaccination proof verified. Report dismissed as False Alarm."
+        )
+        db.add(status_hist)
+
+        # Notify resident pet owner
+        notif_owner = Notification(
+            user_id=dispute.resident_user_id,
+            title="Dispute Approved: Pet Cleared",
+            message=f"Your dispute for Report #{report.report_id} has been APPROVED by Officer {reviewer.name}. The report is dismissed.",
+            type="status_update",
+            related_id=report.report_id
+        )
+        db.add(notif_owner)
+
+    else:
+        # Dispute rejected -> Restore to Under Investigation / Reported
+        report.current_status_id = 16  # Under Investigation
+        report.verification_status = 'unverified'
+        report.verification_notes = f"Dispute rejected by Officer {reviewer.name}: {review_in.reviewer_notes or 'Evidence insufficient'}"
+
+        status_hist = StatusHistory(
+            report_id=report.report_id,
+            report_status_id=16,
+            updated_by=reviewer.user_id,
+            remarks=f"Resident dispute rejected by Officer {reviewer.name}. Protocol and field verification continue."
+        )
+        db.add(status_hist)
+
+        # Notify resident pet owner
+        notif_owner = Notification(
+            user_id=dispute.resident_user_id,
+            title="Dispute Review Update",
+            message=f"Your dispute for Report #{report.report_id} was reviewed and not accepted. Notes: {review_in.reviewer_notes or 'Please consult subdivision office.'}",
+            type="status_update",
+            related_id=report.report_id
+        )
+        db.add(notif_owner)
+
+    log_activity(
+        db=db,
+        action="REVIEW_DISPUTE",
+        target_table="report_disputes",
+        target_id=dispute.dispute_id,
+        description=f"Officer {reviewer.name} reviewed dispute #{dispute.dispute_id} ({review_in.status})",
+        user_id=reviewer.user_id,
+        log_type="operation",
+        new_values={"dispute_id": dispute.dispute_id, "status": review_in.status, "notes": review_in.reviewer_notes},
+        request=req
+    )
+
+    db.commit()
+    db.refresh(report)
+
+    rep_data = ReportResponse.model_validate(report)
+    rep_data.status_id = report.current_status_id
+    rep_data.reporter_name = report.reporter.name if report.reporter else "Unknown User"
+    rep_data.reporter_photo = report.reporter.profile_picture if report.reporter else None
+    populate_handler_info(rep_data, report)
+    populate_pet_and_owner_info(rep_data, report, db)
+    populate_verification_and_disputes(rep_data, report, db)
+    return rep_data
+

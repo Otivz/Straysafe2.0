@@ -6,28 +6,28 @@ from app.database import Base
 
 class Role(Base):
     __tablename__ = "roles"
-    role_id = Column(Integer, primary_key=True, index=True)
-    role_name = Column(String(50), unique=True, nullable=False)
+    role_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    role_name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
 
 class Position(Base):
     __tablename__ = "positions"
-    position_id = Column(Integer, primary_key=True, index=True)
-    position_name = Column(String(100), unique=True, nullable=False)
+    position_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    position_name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
 
 class Barangay(Base):
     __tablename__ = "barangays"
-    barangay_id = Column(Integer, primary_key=True, index=True)
-    barangay_name = Column(String(100), unique=True, nullable=False)
-    city = Column(String(100), nullable=False)
-    contact_no = Column(String(20), nullable=True)
+    barangay_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    barangay_name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    city: Mapped[str] = mapped_column(String(100), nullable=False)
+    contact_no: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
 class Subdivision(Base):
     __tablename__ = "subdivisions"
-    subdivision_id = Column(Integer, primary_key=True, index=True)
-    barangay_id = Column(Integer, ForeignKey("barangays.barangay_id"), nullable=False)
-    subdivision_name = Column(String(100), nullable=False)
+    subdivision_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    barangay_id: Mapped[int] = mapped_column(Integer, ForeignKey("barangays.barangay_id"), nullable=False)
+    subdivision_name: Mapped[str] = mapped_column(String(100), nullable=False)
     
-    barangay = relationship("Barangay")
+    barangay: Mapped[Optional[Barangay]] = relationship("Barangay")
 
 class User(Base):
     __tablename__ = "users"
@@ -54,6 +54,6 @@ class User(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     # Relationships
-    role = relationship("Role")
-    position = relationship("Position")
-    subdivision = relationship("Subdivision")
+    role: Mapped[Optional[Role]] = relationship("Role")
+    position: Mapped[Optional[Position]] = relationship("Position")
+    subdivision: Mapped[Optional[Subdivision]] = relationship("Subdivision")

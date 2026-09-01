@@ -1,6 +1,7 @@
 import sys
 import os
 import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -17,6 +18,7 @@ from app.routes import audit_logs as audit_logs_router
 from app.models.pet_qr import PetQRCode, PetQRScan
 from app.models.audit_log import AuditLog  # noqa: F401 — ensures table is in Base.metadata
 from app.models.pet_claim import PetClaim  # noqa: F401 — ensures table is in Base.metadata
+from app.models.report_dispute import ReportDispute  # noqa: F401
 from app.models.chat import ChatThread, ChatMessage  # noqa: F401
 from app.models.warning import OwnerWarning  # noqa: F401
 from app.models.report_match import ReportMatch  # noqa: F401
@@ -127,6 +129,9 @@ def ensure_report_status_rows():
         11: 'Incident Resolved',
         12: 'Deceased',
         13: 'Approved by Barangay',
+        14: 'False Alarm / Dismissed',
+        15: 'Disputed',
+        16: 'Under Investigation',
     }
     with engine.begin() as conn:
         for status_id, status_name in required_statuses.items():
@@ -255,7 +260,7 @@ def ensure_pet_claims_status_enum():
         try:
             conn.execute(text(
                 "ALTER TABLE pet_claims MODIFY COLUMN status "
-                "ENUM('Potential Owner Match', 'Possible Match Found', 'Pending Review', 'Approved', 'Rejected', 'Evidence Requested') "
+                "ENUM('Potential Owner Match', 'Possible Match Found', 'Pending Review', 'Approved', 'Rejected', 'Evidence Requested', 'Handover Complete', 'Pet Received') "
                 "DEFAULT 'Potential Owner Match' NOT NULL"
             ))
             print("Successfully migrated pet_claims.status ENUM values.")
@@ -263,7 +268,7 @@ def ensure_pet_claims_status_enum():
             print(f"Error migrating pet_claims.status ENUM: {e}")
 
 def ensure_pet_side_photos_columns():
-    """Add photo_front_url, photo_left_url, photo_right_url columns to pets table if missing."""
+    """Add photo_front_url, photo_left_url, photo_right_url, chase_incident_count columns to pets table if missing."""
     with engine.begin() as conn:
         for col_name in ["photo_front_url", "photo_left_url", "photo_right_url"]:
             result = conn.execute(text(
@@ -273,6 +278,13 @@ def ensure_pet_side_photos_columns():
             ))
             if result.scalar() == 0:
                 conn.execute(text(f"ALTER TABLE pets ADD COLUMN {col_name} VARCHAR(255) NULL"))
+
+        res = conn.execute(text(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pets' AND COLUMN_NAME = 'chase_incident_count'"
+        ))
+        if res.scalar() == 0:
+            conn.execute(text("ALTER TABLE pets ADD COLUMN chase_incident_count INT DEFAULT 0 AFTER chase_behavior"))
 
 def ensure_user_default_address_columns():
     """Add latitude and longitude columns to the users table if missing."""
@@ -627,6 +639,92 @@ def ensure_report_handler_columns():
             except Exception:
                 pass
 
+def ensure_report_verification_columns():
+    with engine.begin() as conn:
+        for col_name, col_def in [
+            ("verification_status", "ENUM('unverified', 'verified_true', 'false_alarm', 'disputed') DEFAULT 'unverified'"),
+            ("false_alarm_reason", "VARCHAR(100) NULL"),
+            ("verification_notes", "TEXT NULL"),
+            ("verified_by_user_id", "INT NULL"),
+            ("verified_at", "DATETIME NULL"),
+            ("verified_actual_bite", "TINYINT(1) DEFAULT 0"),
+            ("verified_chasing", "TINYINT(1) DEFAULT 0"),
+            ("verified_attempted_bite", "TINYINT(1) DEFAULT 0"),
+            ("verified_injury", "TINYINT(1) DEFAULT 0"),
+            ("verified_aggressive", "TINYINT(1) DEFAULT 0"),
+            ("behavior_finding", "VARCHAR(100) NULL"),
+        ]:
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'reports' "
+                f"AND COLUMN_NAME = '{col_name}'"
+            ))
+            if result.scalar() == 0:
+                try:
+                    conn.execute(text(f"ALTER TABLE reports ADD COLUMN {col_name} {col_def}"))
+                except Exception as e:
+                    print(f"Error adding {col_name} to reports: {e}")
+        
+        # Check foreign key for verified_by_user_id
+        res_fk = conn.execute(text(
+            "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS "
+            "WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'reports' "
+            "AND CONSTRAINT_NAME = 'fk_reports_verified_by'"
+        ))
+        if res_fk.scalar() == 0:
+            try:
+                conn.execute(text("ALTER TABLE reports ADD CONSTRAINT fk_reports_verified_by FOREIGN KEY (verified_by_user_id) REFERENCES users(user_id) ON DELETE SET NULL"))
+            except Exception:
+                pass
+
+def ensure_report_disputes_table():
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS report_disputes (
+                dispute_id INT NOT NULL AUTO_INCREMENT,
+                report_id INT NOT NULL,
+                resident_user_id INT NOT NULL,
+                pet_id INT DEFAULT NULL,
+                dispute_reason TEXT NOT NULL,
+                vaccination_card_url VARCHAR(255) DEFAULT NULL,
+                supporting_photo_url VARCHAR(255) DEFAULT NULL,
+                status ENUM('Pending', 'Accepted', 'Rejected') NOT NULL DEFAULT 'Pending',
+                reviewer_id INT DEFAULT NULL,
+                reviewer_notes TEXT NULL,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                resolved_at TIMESTAMP NULL DEFAULT NULL,
+                PRIMARY KEY (dispute_id),
+                KEY fk_disputes_report (report_id),
+                KEY fk_disputes_resident (resident_user_id),
+                KEY fk_disputes_pet (pet_id),
+                KEY fk_disputes_reviewer (reviewer_id),
+                FOREIGN KEY (report_id) REFERENCES reports(report_id) ON DELETE CASCADE,
+                FOREIGN KEY (resident_user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+                FOREIGN KEY (pet_id) REFERENCES pets(pet_id) ON DELETE SET NULL,
+                FOREIGN KEY (reviewer_id) REFERENCES users(user_id) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+        """))
+
+def ensure_report_transfer_columns():
+    """Ensure pending_transfer columns exist on reports table."""
+    with engine.begin() as conn:
+        for col_name, col_def in [
+            ("pending_transfer_to_id", "INT NULL"),
+            ("pending_transfer_from_id", "INT NULL"),
+            ("pending_transfer_notes", "TEXT NULL"),
+            ("pending_transfer_created_at", "DATETIME NULL"),
+        ]:
+            res = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'reports' "
+                f"AND COLUMN_NAME = '{col_name}'"
+            ))
+            if res.scalar() == 0:
+                try:
+                    conn.execute(text(f"ALTER TABLE reports ADD COLUMN {col_name} {col_def}"))
+                except Exception as e:
+                    print(f"Error adding {col_name} to reports: {e}")
+
 ensure_announcement_tables_columns()
 ensure_rescue_tables_columns()
 ensure_report_verifications_columns()
@@ -635,13 +733,25 @@ ensure_chat_tables()
 ensure_warning_tables()
 ensure_report_matches_tables()
 ensure_report_handler_columns()
+ensure_report_verification_columns()
+ensure_report_transfer_columns()
+ensure_report_disputes_table()
 
-app = FastAPI(title="StraySafe API")
-
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     # Start background task that checks for unassigned reports older than 30 minutes
-    asyncio.create_task(start_unassigned_reports_watcher(interval_seconds=60, threshold_minutes=30))
+    watcher_task = asyncio.create_task(
+        start_unassigned_reports_watcher(interval_seconds=60, threshold_minutes=30)
+    )
+    yield
+    # Clean up background task on application shutdown
+    watcher_task.cancel()
+    try:
+        await watcher_task
+    except asyncio.CancelledError:
+        pass
+
+app = FastAPI(title="StraySafe API", lifespan=lifespan)
 
 # Configure CORS
 app.add_middleware(

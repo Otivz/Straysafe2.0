@@ -7,6 +7,7 @@ from app.models.report import (
     StatusHistory, RescueAssignment, FacilityStatus, HoldingAnimal, HoldingTimeline
 )
 from app.models.pet_claim import PetClaim
+from app.models.report_dispute import ReportDispute
 from app.models.report_match import ReportMatch
 from app.models.warning import OwnerWarning
 from app.models.chat import ChatThread, ChatMessage
@@ -25,6 +26,7 @@ __all__ = [
     "ReportMedia", "Comment", "RescueStatus", "Rescue", "ReportVerification",
     "StatusHistory", "RescueAssignment", "FacilityStatus", "HoldingAnimal", "HoldingTimeline",
     "PetClaim",
+    "ReportDispute",
     "ReportMatch",
     "OwnerWarning",
     "ChatThread", "ChatMessage",

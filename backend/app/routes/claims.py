@@ -225,7 +225,7 @@ def update_claim_status(
             history_entry = StatusHistory(
                 report_id=claim.report_id,
                 report_status_id=9,
-                remarks=f"Claim approved. Owner identified: {claim.pet.pet_name} owned by user #{claim.pet.owner_id}."
+                remarks=f"Claim approved. Owner identified: {claim.pet.pet_name if claim.pet else 'Pet'}. Coordinate handover with owner."
             )
             db.add(history_entry)
 
@@ -233,15 +233,78 @@ def update_claim_status(
         if claim.pet:
             claim.pet.status = "Active"
 
+    elif status_update.status in ["Handover Complete", "Pet Received"]:
+        # 1. Update report status to 'Incident Resolved' (ID 11)
+        if claim.report:
+            claim.report.current_status_id = 11
+            history_entry = StatusHistory(
+                report_id=claim.report_id,
+                report_status_id=11,
+                remarks=f"Pet handover/receipt completed. {claim.pet.pet_name if claim.pet else 'Pet'} has been safely reunited with owner."
+            )
+            db.add(history_entry)
+
+        if claim.pet:
+            claim.pet.status = "Active"
+
+        # 2. Close match inquiry chat threads for this report/match
+        try:
+            from app.models.chat import ChatThread
+            from app.models.report_match import ReportMatch
+            matches = db.query(ReportMatch).filter(ReportMatch.source_report_id == claim.report_id).all()
+            match_ids = [m.match_id for m in matches]
+            if match_ids:
+                db.query(ChatThread).filter(
+                    ChatThread.thread_type == "Direct",
+                    ChatThread.related_id.in_(match_ids)
+                ).update({"is_closed": True}, synchronize_session=False)
+            
+            # Also close report thread
+            db.query(ChatThread).filter(
+                ChatThread.thread_type == "Report",
+                ChatThread.related_id == claim.report_id
+            ).update({"is_closed": True}, synchronize_session=False)
+        except Exception as chat_err:
+            print(f"Notice: Failed to close chat thread on handover complete: {chat_err}")
+
+        # 3. Notify leaders
+        try:
+            leader_ids = []
+            if claim.report and claim.report.assigned_leader_id:
+                leader_ids.append(claim.report.assigned_leader_id)
+            elif claim.report and claim.report.subdivision_id:
+                leaders = db.query(User).filter(User.subdivision_id == claim.report.subdivision_id, User.role_id == 2).all()
+                leader_ids.extend([l.user_id for l in leaders])
+            
+            for lid in set(leader_ids):
+                db.add(Notification(
+                    user_id=lid,
+                    title="🤝 Pet Handover Complete",
+                    message=f"Pet '{claim.pet.pet_name if claim.pet else 'Pet'}' on Report #{claim.report_id} is marked as received/reunited. Case is now resolved.",
+                    type="status_update",
+                    related_id=claim.report_id
+                ))
+        except Exception as l_err:
+            print(f"Notice: Failed to notify leader on handover: {l_err}")
+
     # Create a notification for the pet owner
     if claim.pet and claim.pet.owner_id:
-        notif_msg = f"Your claim for pet '{claim.pet.pet_name}' on report #{claim.report_id} has been {status_update.status.lower()}."
+        if status_update.status == "Approved":
+            notif_title = "🎉 Pet Claim Approved!"
+            notif_msg = f"Your claim for pet '{claim.pet.pet_name}' on report #{claim.report_id} has been approved! You can coordinate pickup directly with your subdivision leader."
+        elif status_update.status in ["Handover Complete", "Pet Received"]:
+            notif_title = "✅ Pet Safely Reunited"
+            notif_msg = f"Pet handover/receipt has been completed for '{claim.pet.pet_name}'. Case #{claim.report_id} is now officially closed. Thank you!"
+        else:
+            notif_title = f"Pet Claim {status_update.status}"
+            notif_msg = f"Your claim for pet '{claim.pet.pet_name}' on report #{claim.report_id} has been {status_update.status.lower()}."
+        
         if status_update.remarks:
             notif_msg += f" Remarks: {status_update.remarks}"
 
         new_notif = Notification(
             user_id=claim.pet.owner_id,
-            title=f"Pet Claim {status_update.status}",
+            title=notif_title,
             message=notif_msg,
             type="status_update",
             related_id=claim.report_id

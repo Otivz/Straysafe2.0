@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { DEFAULT_AVATAR, getProfilePicture } from '../utils/avatar';
 
 interface Media {
     media_id: number;
@@ -234,9 +235,10 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
                                                 <div className="flex items-center gap-3 mb-6 p-3 bg-gray-50/50 rounded-2xl border border-gray-50/50">
                                                     {entry.updater_photo ? (
                                                         <img
-                                                            src={entry.updater_photo}
+                                                            src={getProfilePicture(entry.updater_photo)}
                                                             className="w-6 h-6 rounded-lg object-cover border border-gray-100 shadow-sm"
                                                             alt={handler}
+                                                            onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
                                                         />
                                                     ) : (
                                                         <div className="w-6 h-6 rounded-lg bg-orange-100 flex items-center justify-center text-[10px] font-black text-orange-600 border border-orange-200 shadow-sm">

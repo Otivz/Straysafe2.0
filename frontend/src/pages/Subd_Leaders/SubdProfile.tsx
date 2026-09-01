@@ -1,9 +1,59 @@
 import { useState, useEffect } from 'react';
+import axios from 'axios';
 import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import Button from '../../components/Button';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+
+const DefaultIcon = L.icon({
+    iconUrl: markerIcon,
+    iconRetinaUrl: markerIconRetina,
+    shadowUrl: markerShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
+
+const LocationPicker = ({ onLocationSelect, position, addressLabel }: { onLocationSelect: (lat: number, lng: number) => void, position: [number, number] | null, addressLabel?: string }) => {
+    useMapEvents({
+        click(e) {
+            onLocationSelect(e.latlng.lat, e.latlng.lng);
+        },
+    });
+    return (position && position[0] && position[1]) ? (
+        <Marker position={position}>
+            <Popup>
+                <div className="p-2 text-center text-xs min-w-[140px]">
+                    <p className="font-black text-[#B35D25] uppercase tracking-wide">📍 Home Pinpoint</p>
+                    <p className="text-[11px] text-gray-700 mt-1 font-semibold leading-tight">
+                        {addressLabel || `${position[0].toFixed(5)}, ${position[1].toFixed(5)}`}
+                    </p>
+                </div>
+            </Popup>
+        </Marker>
+    ) : null;
+};
+
+const RecenterMap = ({ position }: { position: [number, number] | null }) => {
+    const map = useMap();
+    useEffect(() => {
+        if (position && position[0] && position[1]) {
+            map.setView(position, map.getZoom());
+        }
+    }, [position, map]);
+    return null;
+};
 
 interface UserProfile {
     user_id: number;
@@ -11,6 +61,8 @@ interface UserProfile {
     email: string;
     phone: string;
     address: string;
+    latitude?: number | string | null;
+    longitude?: number | string | null;
     status: string;
     role_id: number;
     subdivision_id: number;
@@ -27,9 +79,14 @@ const SubdProfile = () => {
     const [name, setName] = useState(initialUserObj?.name || '');
     const [phone, setPhone] = useState(initialUserObj?.phone || '');
     const [address, setAddress] = useState(initialUserObj?.address || '');
+    const [latitude, setLatitude] = useState<number | string | null>(initialUserObj?.latitude || null);
+    const [longitude, setLongitude] = useState<number | string | null>(initialUserObj?.longitude || null);
+    const [resolvedAddress, setResolvedAddress] = useState<string>('');
+    const [isGeocoding, setIsGeocoding] = useState<boolean>(false);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [uploadingPic, setUploadingPic] = useState(false);
+    const [gettingLocation, setGettingLocation] = useState(false);
     const [successMsg, setSuccessMsg] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
 
@@ -49,6 +106,8 @@ const SubdProfile = () => {
                 setName(userData.name || '');
                 setPhone(userData.phone || '');
                 setAddress(userData.address || '');
+                setLatitude(userData.latitude || null);
+                setLongitude(userData.longitude || null);
             }
         } catch (err) {
             console.error('Error fetching user profile details:', err);
@@ -61,6 +120,57 @@ const SubdProfile = () => {
     useEffect(() => {
         fetchUserProfile();
     }, []);
+
+    // Reverse geocode when coordinates change
+    useEffect(() => {
+        if (!latitude || !longitude) {
+            setResolvedAddress('');
+            return;
+        }
+
+        const latNum = parseFloat(latitude.toString());
+        const lngNum = parseFloat(longitude.toString());
+        if (isNaN(latNum) || isNaN(lngNum)) return;
+
+        let isMounted = true;
+        const fetchGeocodeAddress = async () => {
+            setIsGeocoding(true);
+            try {
+                const response = await axios.get('https://nominatim.openstreetmap.org/reverse', {
+                    params: {
+                        format: 'jsonv2',
+                        lat: latNum,
+                        lon: lngNum,
+                        addressdetails: 1
+                    },
+                    headers: { 'Accept-Language': 'en' }
+                });
+                if (isMounted && response.data && response.data.address) {
+                    const addr = response.data.address;
+                    const parts: string[] = [];
+                    if (addr.house_number) parts.push(`No. ${addr.house_number}`);
+                    if (addr.road || addr.street) parts.push(addr.road || addr.street);
+                    if (addr.neighbourhood || addr.subdivision || addr.residential) parts.push(addr.neighbourhood || addr.subdivision || addr.residential);
+                    if (addr.village || addr.suburb) parts.push(addr.village || addr.suburb || 'San Vicente');
+                    if (addr.city || addr.town || addr.municipality) parts.push(addr.city || addr.town || addr.municipality || 'Santa Maria');
+                    if (addr.province || addr.state) parts.push(addr.province || addr.state || 'Bulacan');
+
+                    const fullFormatted = parts.filter(Boolean).join(', ') || response.data.display_name;
+                    setResolvedAddress(fullFormatted);
+                }
+            } catch (err) {
+                console.warn('Reverse geocoding error:', err);
+            } finally {
+                if (isMounted) setIsGeocoding(false);
+            }
+        };
+
+        const timer = setTimeout(fetchGeocodeAddress, 400);
+        return () => {
+            isMounted = false;
+            clearTimeout(timer);
+        };
+    }, [latitude, longitude]);
 
     // Update local storage helper so navbar reflects change instantly
     const updateLocalStorageUser = (updatedData: Partial<UserProfile>) => {
@@ -80,6 +190,30 @@ const SubdProfile = () => {
         }
     };
 
+    const handleGetCurrentLocation = () => {
+        if (!("geolocation" in navigator)) {
+            setErrorMsg("Geolocation is not supported by your browser.");
+            return;
+        }
+
+        setGettingLocation(true);
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                setLatitude(pos.coords.latitude);
+                setLongitude(pos.coords.longitude);
+                setGettingLocation(false);
+                setSuccessMsg("Location pinpointed from your current GPS position!");
+                setTimeout(() => setSuccessMsg(''), 3000);
+            },
+            (err) => {
+                console.error("GPS error:", err);
+                setErrorMsg("Unable to retrieve your current location. Please click on the map manually.");
+                setGettingLocation(false);
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
+        );
+    };
+
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user) return;
@@ -92,7 +226,9 @@ const SubdProfile = () => {
             const payload = {
                 name,
                 phone: phone || null,
-                address: address || null
+                address: address || null,
+                latitude: latitude ? parseFloat(latitude.toString()) : null,
+                longitude: longitude ? parseFloat(longitude.toString()) : null
             };
 
             const response = await api.put(`/users/${user.user_id}`, payload);
@@ -101,9 +237,11 @@ const SubdProfile = () => {
                 updateLocalStorageUser({
                     name: response.data.name,
                     phone: response.data.phone,
-                    address: response.data.address
+                    address: response.data.address,
+                    latitude: response.data.latitude,
+                    longitude: response.data.longitude
                 });
-                setSuccessMsg("Profile details updated successfully!");
+                setSuccessMsg("Profile details and location updated successfully!");
                 setTimeout(() => setSuccessMsg(''), 4000);
             }
         } catch (err: any) {
@@ -152,6 +290,13 @@ const SubdProfile = () => {
         ? new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
         : 'N/A';
 
+    const defaultLat = 14.806906;
+    const defaultLng = 121.0039297;
+    const currentMapCenter: [number, number] = [
+        latitude ? parseFloat(latitude.toString()) : defaultLat,
+        longitude ? parseFloat(longitude.toString()) : defaultLng
+    ];
+
     return (
         <div className="min-h-screen w-full flex bg-[#FDFDFD] font-sans text-gray-800 relative overflow-hidden">
             {/* Decorative Background Elements */}
@@ -170,14 +315,14 @@ const SubdProfile = () => {
                     leftContent={
                         <div className="flex flex-col">
                             <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Account Profile</h1>
-                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">View and manage your subdivision leader user information</p>
+                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">View and manage your subdivision leader user information and location</p>
                         </div>
                     }
                 />
 
                 {/* Main Content Container */}
-                <div className="flex-1 overflow-y-auto p-10 flex flex-col items-center justify-start scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-                    <div className="w-full max-w-4xl space-y-8 animate-in fade-in duration-500">
+                <div className="flex-1 overflow-y-auto p-8 lg:p-10 flex flex-col items-center justify-start scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                    <div className="w-full max-w-5xl space-y-8 animate-in fade-in duration-500 pb-16">
                         {loading ? (
                             <div className="flex flex-col items-center justify-center py-20 gap-3">
                                 <div className="w-12 h-12 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin"></div>
@@ -190,7 +335,7 @@ const SubdProfile = () => {
                                 <p className="text-xs text-red-700/80 mt-1.5 leading-relaxed">{errorMsg}</p>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                                 
                                 {/* Left Column: Profile Card */}
                                 <div className="bg-white border border-gray-100 shadow-xl rounded-[2.5rem] p-8 flex flex-col items-center text-center relative overflow-hidden group">
@@ -242,6 +387,20 @@ const SubdProfile = () => {
                                             <span className="text-gray-800 font-bold">{memberSinceDate}</span>
                                         </div>
                                         <div className="flex items-center justify-between">
+                                            <span className="text-gray-400">Address</span>
+                                            <span className="text-gray-800 font-bold truncate max-w-[140px] text-right" title={user?.address || 'Not specified'}>
+                                                {user?.address || 'Not specified'}
+                                            </span>
+                                        </div>
+                                        {user?.latitude && user?.longitude && (
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-gray-400">Pinpoint</span>
+                                                <span className="text-[#B35D25] font-black text-[11px] bg-orange-50 px-2 py-0.5 rounded-lg border border-orange-100">
+                                                    📍 {parseFloat(user.latitude.toString()).toFixed(4)}, {parseFloat(user.longitude.toString()).toFixed(4)}
+                                                </span>
+                                            </div>
+                                        )}
+                                        <div className="flex items-center justify-between">
                                             <span className="text-gray-400">Verified Leader</span>
                                             <span className="text-blue-600 font-extrabold flex items-center gap-1">
                                                 🛡️ Verified
@@ -250,8 +409,8 @@ const SubdProfile = () => {
                                     </div>
                                 </div>
 
-                                {/* Right Column: Edit Profile Form */}
-                                <div className="md:col-span-2 bg-white border border-gray-100 shadow-xl rounded-[2.5rem] p-10 flex flex-col relative overflow-hidden">
+                                {/* Right Column: Edit Profile Form & Location Picker */}
+                                <div className="lg:col-span-2 bg-white border border-gray-100 shadow-xl rounded-[2.5rem] p-8 lg:p-10 flex flex-col relative overflow-hidden">
 
                                     {/* Success & Error Alert Banners */}
                                     {successMsg && (
@@ -267,7 +426,7 @@ const SubdProfile = () => {
                                         </div>
                                     )}
 
-                                    <form onSubmit={saveForm => handleSave(saveForm)} className="space-y-5">
+                                    <form onSubmit={saveForm => handleSave(saveForm)} className="space-y-6">
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                                             {/* Full Name */}
                                             <div className="flex flex-col gap-1.5">
@@ -307,16 +466,146 @@ const SubdProfile = () => {
                                                 />
                                             </div>
 
-                                            {/* Subdivision / Address */}
+                                            {/* Subdivision / Street Address */}
                                             <div className="flex flex-col gap-1.5">
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Subdivision / Area</label>
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Subdivision / Street Address</label>
                                                 <input 
                                                     type="text" 
                                                     value={address} 
                                                     onChange={e => setAddress(e.target.value)} 
-                                                    placeholder="e.g. Sector 4, Block 5" 
+                                                    placeholder="e.g. Blk 12 Lot 5, Emerald St, Selera Homes" 
                                                     className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B35D25]/15 focus:border-[#B35D25] focus:bg-white transition-all shadow-sm"
                                                 />
+                                            </div>
+                                        </div>
+
+                                        {/* Pinpoint Location Section */}
+                                        <div className="pt-3 border-t border-gray-100 flex flex-col gap-3.5">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                <div>
+                                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 flex items-center gap-1.5">
+                                                        <span>📍 Pinpoint Exact Home & Subdivision Location</span>
+                                                    </label>
+                                                    <p className="text-[11px] text-gray-500 font-medium pl-1 mt-0.5">
+                                                        Click on the map or use GPS to set your exact house/property location
+                                                    </p>
+                                                </div>
+
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleGetCurrentLocation}
+                                                        disabled={gettingLocation}
+                                                        className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#B35D25] border border-orange-200 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50"
+                                                    >
+                                                        {gettingLocation ? (
+                                                            <span className="w-3 h-3 border-2 border-[#B35D25] border-t-transparent rounded-full animate-spin"></span>
+                                                        ) : (
+                                                            <span>🎯</span>
+                                                        )}
+                                                        <span>Use Current GPS</span>
+                                                    </button>
+                                                    {(latitude || longitude) && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setLatitude(null);
+                                                                setLongitude(null);
+                                                                setResolvedAddress('');
+                                                            }}
+                                                            className="px-2.5 py-1.5 text-gray-400 hover:text-red-500 rounded-xl text-[11px] font-bold transition-all"
+                                                        >
+                                                            Clear
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Map Container */}
+                                            <div className="w-full h-72 rounded-2xl overflow-hidden border border-gray-200 relative shadow-inner z-0">
+                                                <MapContainer
+                                                    center={currentMapCenter}
+                                                    zoom={16}
+                                                    className="h-full w-full"
+                                                >
+                                                    <TileLayer
+                                                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                                                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                                    />
+                                                    <LocationPicker
+                                                        position={(latitude && longitude) ? [parseFloat(latitude.toString()), parseFloat(longitude.toString())] : null}
+                                                        addressLabel={resolvedAddress || address}
+                                                        onLocationSelect={(latVal, lngVal) => {
+                                                            setLatitude(latVal);
+                                                            setLongitude(lngVal);
+                                                        }}
+                                                    />
+                                                    <RecenterMap
+                                                        position={(latitude && longitude) ? [parseFloat(latitude.toString()), parseFloat(longitude.toString())] : null}
+                                                    />
+                                                </MapContainer>
+                                            </div>
+
+                                            {/* Exact Home Location Details Card */}
+                                            <div className="bg-orange-50/70 border border-orange-200/80 rounded-2xl p-4 flex flex-col gap-2.5 shadow-xs">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="w-6 h-6 rounded-lg bg-[#B35D25]/10 text-[#B35D25] flex items-center justify-center text-xs font-black">🏠</span>
+                                                        <span className="text-[11px] font-black text-gray-800 uppercase tracking-wide">Exact Home Location Details</span>
+                                                    </div>
+                                                    {isGeocoding ? (
+                                                        <span className="text-[10px] text-orange-600 font-bold flex items-center gap-1.5 animate-pulse">
+                                                            <span className="w-3 h-3 border-2 border-orange-600 border-t-transparent rounded-full animate-spin"></span>
+                                                            Resolving street address...
+                                                        </span>
+                                                    ) : (latitude && longitude) ? (
+                                                        <span className="text-[10px] font-extrabold text-green-700 bg-green-100 px-2 py-0.5 rounded-md border border-green-200">
+                                                            ✓ Pinned
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[10px] font-bold text-gray-400 italic">
+                                                            No pinpoint set
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {(latitude && longitude) ? (
+                                                    <div className="space-y-2 pt-2 border-t border-orange-200/60">
+                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                                                            <div className="flex-1">
+                                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Detected Exact Street & Barangay</p>
+                                                                <p className="text-xs font-black text-gray-900 mt-0.5">
+                                                                    {resolvedAddress || `${parseFloat(latitude.toString()).toFixed(5)}, ${parseFloat(longitude.toString()).toFixed(5)}`}
+                                                                </p>
+                                                            </div>
+                                                            {resolvedAddress && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setAddress(resolvedAddress);
+                                                                        setSuccessMsg("Address field filled with detected exact address!");
+                                                                        setTimeout(() => setSuccessMsg(''), 3000);
+                                                                    }}
+                                                                    className="px-3 py-1.5 bg-[#B35D25] hover:bg-[#964E1F] text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-xs shrink-0 self-start sm:self-auto flex items-center gap-1.5"
+                                                                >
+                                                                    <span>📝</span>
+                                                                    <span>Use As Address</span>
+                                                                </button>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="flex items-center justify-between text-[10px] text-gray-600 font-semibold bg-white/80 px-3 py-1.5 rounded-xl border border-orange-100">
+                                                            <span>Pinpoint Coordinates:</span>
+                                                            <span className="font-bold text-[#B35D25]">
+                                                                {parseFloat(latitude.toString()).toFixed(6)}, {parseFloat(longitude.toString()).toFixed(6)}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-[11px] text-gray-500 font-medium italic pt-1 border-t border-orange-100">
+                                                        Click on the map above or tap <strong className="text-gray-700">"Use Current GPS"</strong> to pinpoint your exact home address.
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
 

@@ -6,9 +6,9 @@ import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 export interface ResolveLostPetModalProps {
     isOpen: boolean;
     onClose: () => void;
-    pet: {
-        pet_id: number;
-        pet_name: string;
+    pet?: {
+        pet_id?: number;
+        pet_name?: string;
         photo_url?: string;
         breed?: string;
         pet_type?: string;
@@ -28,10 +28,19 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
     reportId,
     onSuccess
 }) => {
+    const hasRegisteredPet = Boolean(pet?.pet_id && pet.pet_id > 0);
+    const animalName = pet?.pet_name && pet.pet_name !== 'Pet' && pet.pet_name !== 'Animal' 
+        ? pet.pet_name 
+        : (pet?.species || pet?.pet_type || 'Animal');
+
     const [primaryChoice, setPrimaryChoice] = useState<PrimaryChoiceKey>('pet_found');
     const [subChoice, setSubChoice] = useState<SubChoiceKey>('returned_to_owner');
     const [location, setLocation] = useState<string>('');
-    const [remarks, setRemarks] = useState<string>('The lost pet was located alive and safely returned to the owner.');
+    const [remarks, setRemarks] = useState<string>(
+        hasRegisteredPet
+            ? 'The lost pet was located alive and safely returned to the owner.'
+            : 'The animal was located alive and safely reunited with or returned to the owner / caregiver.'
+    );
     const [proofPhoto, setProofPhoto] = useState<File | null>(null);
     const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -46,41 +55,45 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
             return;
         }
 
+        if (!pet?.pet_id && !pet?.pet_name) return;
+
         const fetchPetReport = async () => {
             try {
                 const res = await api.get('/reports/', { params: { limit: 50 } });
                 const reports = res.data?.reports || res.data || [];
                 const matchingReport = reports.find((r: any) => 
-                    r.pet_id === pet.pet_id || 
-                    (r.description && r.description.includes(`pet: ${pet.pet_name}`))
+                    (pet?.pet_id && r.pet_id === pet.pet_id) || 
+                    (pet?.pet_name && r.description && r.description.includes(`pet: ${pet.pet_name}`))
                 );
                 if (matchingReport) {
                     setActiveReportId(matchingReport.report_id);
                 }
             } catch (err) {
-                console.error("Failed to fetch linked report for pet:", err);
+                console.error("Failed to fetch linked report for animal:", err);
             }
         };
 
         fetchPetReport();
-    }, [isOpen, reportId, pet.pet_id, pet.pet_name]);
+    }, [isOpen, reportId, pet?.pet_id, pet?.pet_name]);
 
     // Update remarks automatically when choices change
     const updateRemarks = (primary: PrimaryChoiceKey, sub: SubChoiceKey) => {
         if (primary === 'pet_found') {
             if (sub === 'returned_to_owner') {
-                setRemarks('The lost pet was located alive and safely returned to the owner. Identity and ownership confirmed.');
+                setRemarks(hasRegisteredPet 
+                    ? 'The lost pet was located alive and safely returned to the owner. Identity and ownership confirmed.'
+                    : 'The animal was located alive and safely reunited with or returned to the owner / caregiver.');
             } else if (sub === 'temporary_care') {
-                setRemarks('The pet was found alive and is currently under temporary care by a rescuer/shelter while coordinating with the owner.');
+                setRemarks('The animal was secured alive and is currently under temporary care / shelter while coordinating next steps.');
             } else if (sub === 'owner_not_located') {
-                setRemarks('The pet was found alive in the neighborhood, but the owner has not been located or contacted yet.');
+                setRemarks('The animal was found and secured in the community. Owner or permanent caregiver has not yet been identified or contacted.');
             }
         } else if (primary === 'deceased') {
-            setRemarks('The lost pet was sadly confirmed deceased.');
+            setRemarks('The animal was sadly confirmed deceased.');
         } else if (primary === 'not_found') {
-            setRemarks('A neighborhood search was conducted but the pet could not be located. Active search broadcast concluded.');
+            setRemarks('A neighborhood inspection and search was conducted but the animal could not be located. Case concluded.');
         } else if (primary === 'withdrawn') {
-            setRemarks('The lost pet report was withdrawn and closed upon request by the owner.');
+            setRemarks('The report was withdrawn and closed upon request.');
         }
     };
 
@@ -116,7 +129,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
             if (subChoice === 'returned_to_owner') {
                 return {
                     choiceKey: 'returned_to_owner',
-                    title: 'Returned to Owner',
+                    title: 'Returned to Owner / Reunited',
                     petStatus: 'Active',
                     reportStatusId: 9, // Claimed by Owner / Reunited
                     badgeText: 'Reunited',
@@ -125,7 +138,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
             } else if (subChoice === 'temporary_care') {
                 return {
                     choiceKey: 'temporary_care',
-                    title: 'Found — Under Temporary Care',
+                    title: 'Found — Under Temporary Care / Shelter',
                     petStatus: 'Rescued',
                     reportStatusId: 7, // Under Observation / Care
                     badgeText: 'Temporary Care',
@@ -134,9 +147,9 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
             } else {
                 return {
                     choiceKey: 'owner_not_located',
-                    title: 'Found — Owner Not Yet Located',
+                    title: 'Found — Custody / Owner Pending',
                     petStatus: 'Found',
-                    reportStatusId: 4, // In Progress
+                    reportStatusId: 7, // Under Observation / Care
                     badgeText: 'Pending Owner',
                     badgeColor: 'bg-blue-50 text-blue-700 border-blue-200'
                 };
@@ -153,7 +166,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
         } else if (primaryChoice === 'not_found') {
             return {
                 choiceKey: 'not_found_concluded',
-                title: 'Not Found / Search Concluded',
+                title: 'Not Located / Search Concluded',
                 petStatus: 'Active',
                 reportStatusId: 11, // Resolved
                 badgeText: 'Search Concluded',
@@ -162,7 +175,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
         } else {
             return {
                 choiceKey: 'withdrawn_by_owner',
-                title: 'Report Withdrawn by Owner',
+                title: 'Report Withdrawn / Closed',
                 petStatus: 'Active',
                 reportStatusId: 11, // Resolved
                 badgeText: 'Withdrawn',
@@ -177,10 +190,16 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
 
         setIsSubmitting(true);
         try {
-            // 1. Update pet status in DB
-            await api.put(`/pets/${pet.pet_id}`, {
-                status: meta.petStatus
-            });
+            // 1. Update pet status in DB only if a registered pet exists
+            if (pet?.pet_id && pet.pet_id > 0) {
+                try {
+                    await api.put(`/pets/${pet.pet_id}`, {
+                        status: meta.petStatus
+                    });
+                } catch (petErr) {
+                    console.warn("Could not update registered pet status:", petErr);
+                }
+            }
 
             // 2. Build full remarks including location & notes
             const finalRemarksParts: string[] = [remarks.trim()];
@@ -234,7 +253,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
 
             handleClose();
         } catch (error) {
-            console.error("Failed to resolve lost pet report:", error);
+            console.error("Failed to update animal status:", error);
             alert("Failed to submit resolution. Please check your connection and try again.");
         } finally {
             setIsSubmitting(false);
@@ -256,16 +275,20 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                     <div className="flex items-center gap-4">
                         <div className="relative w-14 h-14 rounded-2xl overflow-hidden border-2 border-white shadow-md bg-stone-100 shrink-0">
                             <img 
-                                src={getPetPicture(pet.photo_url)} 
-                                alt={pet.pet_name} 
+                                src={getPetPicture(pet?.photo_url)} 
+                                alt={animalName} 
                                 className="w-full h-full object-cover"
                                 onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
                             />
                         </div>
                         <div>
                             <div className="flex items-center gap-2">
-                                <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-red-100 text-red-700 border border-red-200">
-                                    Lost Pet Case
+                                <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                                    hasRegisteredPet 
+                                        ? 'bg-red-100 text-red-700 border border-red-200' 
+                                        : 'bg-orange-100 text-orange-700 border border-orange-200'
+                                }`}>
+                                    {hasRegisteredPet ? 'Lost Pet Case' : 'Animal Status Update'}
                                 </span>
                                 {activeReportId && (
                                     <span className="text-[10px] font-bold text-gray-400">
@@ -274,10 +297,12 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                 )}
                             </div>
                             <h2 className="text-xl sm:text-2xl font-black text-[#1a1208] dark:text-white uppercase tracking-tight mt-0.5">
-                                Resolve Lost Report: {pet.pet_name}
+                                {hasRegisteredPet 
+                                    ? `Resolve Lost Report: ${animalName}` 
+                                    : (animalName && animalName !== 'Animal' ? `Update Animal Status: ${animalName}` : 'Update Animal Status')}
                             </h2>
                             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                {pet.breed || pet.pet_type || pet.species || 'Pet'}
+                                {pet?.breed || pet?.pet_type || pet?.species || 'Animal Case'}
                             </p>
                         </div>
                     </div>
@@ -298,14 +323,14 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                     {/* Primary Resolution Choices Grid */}
                     <div className="space-y-3">
                         <label className="text-[11px] font-black text-[#1a1208] dark:text-stone-200 uppercase tracking-widest flex items-center justify-between">
-                            <span>Recommended "Resolve Lost Report" Choices <span className="text-red-500">*</span></span>
+                            <span>Recommended Status & Outcome Choices <span className="text-red-500">*</span></span>
                             <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">
                                 Select Outcome
                             </span>
                         </label>
                         
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {/* 1. 🟢 Pet Found */}
+                            {/* 1. 🟢 Animal Found / Secured */}
                             <div
                                 onClick={() => handlePrimarySelect('pet_found')}
                                 className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-2 ${
@@ -318,7 +343,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                     <div className="flex items-center gap-2">
                                         <span className="text-xl">🟢</span>
                                         <h4 className="text-xs font-black text-[#1a1208] dark:text-stone-100 tracking-tight">
-                                            Pet Found
+                                            {hasRegisteredPet ? 'Pet Found' : 'Animal Found / Secured'}
                                         </h4>
                                     </div>
                                     <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-800 border border-emerald-200">
@@ -326,7 +351,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                     </span>
                                 </div>
                                 <p className="text-[10px] font-bold text-gray-500 dark:text-stone-400 leading-snug">
-                                    The lost pet was located alive in the community.
+                                    The animal was located alive or secured in the community.
                                 </p>
                             </div>
 
@@ -351,11 +376,11 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                     </span>
                                 </div>
                                 <p className="text-[10px] font-bold text-gray-500 dark:text-stone-400 leading-snug">
-                                    The pet was confirmed deceased.
+                                    The animal was confirmed deceased.
                                 </p>
                             </div>
 
-                            {/* 3. ⚫ Not Found / Search Concluded */}
+                            {/* 3. ⚫ Not Located / Search Concluded */}
                             <div
                                 onClick={() => handlePrimarySelect('not_found')}
                                 className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-2 ${
@@ -368,7 +393,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                     <div className="flex items-center gap-2">
                                         <span className="text-xl">⚫</span>
                                         <h4 className="text-xs font-black text-[#1a1208] dark:text-stone-100 tracking-tight">
-                                            Not Found / Search Concluded
+                                            Not Located / Concluded
                                         </h4>
                                     </div>
                                     <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest bg-stone-200 text-stone-800 border border-stone-300">
@@ -376,11 +401,11 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                     </span>
                                 </div>
                                 <p className="text-[10px] font-bold text-gray-500 dark:text-stone-400 leading-snug">
-                                    The search was conducted but the pet could not be located.
+                                    The search was conducted but the animal could not be located.
                                 </p>
                             </div>
 
-                            {/* 4. ⚪ Report Withdrawn by Owner */}
+                            {/* 4. ⚪ Report Withdrawn / Closed */}
                             <div
                                 onClick={() => handlePrimarySelect('withdrawn')}
                                 className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-2 ${
@@ -393,7 +418,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                     <div className="flex items-center gap-2">
                                         <span className="text-xl">⚪</span>
                                         <h4 className="text-xs font-black text-[#1a1208] dark:text-stone-100 tracking-tight">
-                                            Report Withdrawn by Owner
+                                            Report Withdrawn / Closed
                                         </h4>
                                     </div>
                                     <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest bg-gray-100 text-gray-700 border border-gray-300">
@@ -401,13 +426,13 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                     </span>
                                 </div>
                                 <p className="text-[10px] font-bold text-gray-500 dark:text-stone-400 leading-snug">
-                                    The owner asks to close the report or handle recovery privately.
+                                    The report was withdrawn or requested to be closed.
                                 </p>
                             </div>
                         </div>
                     </div>
 
-                    {/* FOLLOW-UP SUB-CHOICES (Shown when 🟢 Pet Found is selected) */}
+                    {/* FOLLOW-UP SUB-CHOICES (Shown when 🟢 Animal Found / Secured is selected) */}
                     {primaryChoice === 'pet_found' && (
                         <div className="p-5 rounded-3xl bg-emerald-50/50 dark:bg-emerald-950/20 border-2 border-emerald-200/80 dark:border-emerald-900 space-y-3.5 animate-in slide-in-from-top-2 duration-300">
                             <div className="flex items-center justify-between">
@@ -433,10 +458,10 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                         <span className="text-xl">🏠</span>
                                         <div>
                                             <h5 className="text-xs font-black text-emerald-950 dark:text-stone-100">
-                                                Returned to Owner
+                                                Returned to Owner / Reunited
                                             </h5>
                                             <p className="text-[10px] font-bold text-emerald-800/80 dark:text-stone-400">
-                                                The pet was found and identity/ownership was confirmed.
+                                                The animal was found and reunited with or returned to the owner / caregiver.
                                             </p>
                                         </div>
                                     </div>
@@ -458,10 +483,10 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                         <span className="text-xl">🟡</span>
                                         <div>
                                             <h5 className="text-xs font-black text-amber-950 dark:text-stone-100">
-                                                Found — Under Temporary Care
+                                                Found — Under Temporary Care / Shelter
                                             </h5>
                                             <p className="text-[10px] font-bold text-amber-800/80 dark:text-stone-400">
-                                                Pet was found alive but is currently cared for by a rescuer, barangay, or facility.
+                                                Animal was secured alive and is currently cared for by a rescuer, barangay, or shelter facility.
                                             </p>
                                         </div>
                                     </div>
@@ -470,7 +495,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                     </span>
                                 </div>
 
-                                {/* Sub 3: 🔵 Found — Owner Not Yet Located */}
+                                {/* Sub 3: 🔵 Found — Custody / Owner Pending */}
                                 <div
                                     onClick={() => handleSubSelect('owner_not_located')}
                                     className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
@@ -483,10 +508,10 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                         <span className="text-xl">🔵</span>
                                         <div>
                                             <h5 className="text-xs font-black text-blue-950 dark:text-stone-100">
-                                                Found — Owner Not Yet Located
+                                                Found — Custody / Owner Pending
                                             </h5>
                                             <p className="text-[10px] font-bold text-blue-800/80 dark:text-stone-400">
-                                                Pet was found, but the owner hasn't been identified/contacted yet.
+                                                Animal was found/secured, but owner or permanent foster has not been determined yet.
                                             </p>
                                         </div>
                                     </div>
@@ -505,7 +530,10 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                             <div>
                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Resulting Status</p>
                                 <p className="font-extrabold text-[#1a1208] dark:text-stone-100 mt-0.5">
-                                    Pet Status: <span className="text-[#F97316] uppercase">{currentMeta.petStatus}</span> • {currentMeta.title}
+                                    {hasRegisteredPet && (
+                                        <>Pet Status: <span className="text-[#F97316] uppercase">{currentMeta.petStatus}</span> • </>
+                                    )}
+                                    {currentMeta.title}
                                 </p>
                             </div>
                         </div>
@@ -523,7 +551,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                             type="text"
                             value={location}
                             onChange={(e) => setLocation(e.target.value)}
-                            placeholder="e.g. Near Block 5 Clubhouse / Home Gate"
+                            placeholder="e.g. Near Block 5 Clubhouse / Main Gate"
                             className="w-full h-13 bg-[#FAFAF9] dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl px-5 text-xs font-bold focus:outline-none focus:border-orange-300 transition-all text-[#1a1208] dark:text-stone-100"
                         />
                     </div>
@@ -590,7 +618,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                     <span>Updating...</span>
                                 </>
                             ) : (
-                                <span>Confirm Resolution</span>
+                                <span>Confirm Status Update</span>
                             )}
                         </button>
                     </div>

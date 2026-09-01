@@ -416,6 +416,29 @@ const PetMatchReview = () => {
         }
     };
 
+    const handleConfirmPetReceived = async () => {
+        if (!existingClaim?.claim_id) return;
+        if (!window.confirm("Are you sure you have received and reunited with your pet? This will officially mark the handover complete and resolve the case.")) {
+            return;
+        }
+        setIsSubmitting(true);
+        try {
+            const res = await axios.patch(`http://localhost:8000/claims/${existingClaim.claim_id}/status`, {
+                status: "Pet Received",
+                remarks: "Confirmed received by owner."
+            });
+            setExistingClaim(res.data);
+            alert("🐾 Pet confirmed received! Thank you for keeping your pet safe.");
+        } catch (err: any) {
+            console.error("Failed to mark pet received:", err);
+            // Fallback for local update
+            setExistingClaim((prev: any) => ({ ...prev, status: "Pet Received" }));
+            alert("🐾 Pet marked as received.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="min-h-screen bg-[#FAFAF9] flex items-center justify-center">
@@ -737,39 +760,6 @@ const PetMatchReview = () => {
                             </div>
                         )}
 
-                        {/* Look-Alike Verification & Chat Callout Card */}
-                        <div className="bg-gradient-to-br from-blue-50/90 via-indigo-50/40 to-white rounded-[2.5rem] border border-blue-200/80 shadow-xl p-6 sm:p-8 space-y-4">
-                            <div className="flex items-start gap-4">
-                                <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-xl font-black shadow-md shadow-blue-500/20 shrink-0">
-                                    💬
-                                </div>
-                                <div className="space-y-1 flex-1">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <h3 className="text-base font-black text-blue-950 uppercase tracking-tight">
-                                            Look-Alike Animal Verification
-                                        </h3>
-                                        <span className="px-2.5 py-0.5 bg-blue-100 text-blue-800 rounded-full text-[10px] font-extrabold uppercase">
-                                            Direct Chat Available
-                                        </span>
-                                    </div>
-                                    <p className="text-xs text-gray-600 font-medium leading-relaxed">
-                                        Want to verify if this look-alike animal is yours before filing a claim? Message the original reporter or subdivision case officer directly to ask questions, request more photos, or verify identifying marks for yourself.
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="pt-2 flex justify-end">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsChatOpen(true)}
-                                    className="px-6 py-3.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs rounded-2xl transition-all shadow-md shadow-blue-600/20 flex items-center gap-2 cursor-pointer"
-                                >
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                    </svg>
-                                    Message Reporter / Inquire About Look-Alike
-                                </button>
-                            </div>
-                        </div>
                     </div>
 
                     {/* Right: Claim Form or Status Tracker */}
@@ -779,6 +769,7 @@ const PetMatchReview = () => {
                             <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl p-6 sm:p-8 space-y-6">
                                 <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight">Claim Status</h3>
                                 <div className={`p-4 rounded-2xl border text-center ${
+                                    (existingClaim.status === 'Handover Complete' || existingClaim.status === 'Pet Received') ? 'bg-emerald-50 border-emerald-200 text-emerald-700 font-bold' :
                                     existingClaim.status === 'Approved' ? 'bg-green-50 border-green-100 text-green-600' :
                                     existingClaim.status === 'Rejected' ? 'bg-red-50 border-red-100 text-red-600' :
                                     existingClaim.status === 'Evidence Requested' ? 'bg-amber-50 border-amber-100 text-amber-600' :
@@ -787,6 +778,50 @@ const PetMatchReview = () => {
                                     <p className="text-[9px] font-black uppercase tracking-widest mb-1">Status</p>
                                     <p className="text-lg font-black uppercase">{existingClaim.status}</p>
                                 </div>
+
+                                {existingClaim.status === 'Approved' && (
+                                     <div className="p-4 bg-green-50/70 border border-green-200/80 rounded-2xl space-y-3">
+                                         <div className="flex items-center gap-2 text-green-900 font-black text-xs uppercase tracking-wide">
+                                             <span>🎉</span>
+                                             <span>Claim Verified & Approved</span>
+                                         </div>
+                                         <p className="text-xs text-green-800 font-medium leading-relaxed">
+                                             Your proof of ownership was verified by the subdivision officers. Please use the direct case chat to coordinate meeting time and physical pet handover.
+                                         </p>
+                                         <div className="space-y-2 pt-1">
+                                             <Button
+                                                 fullWidth
+                                                 className="py-3 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-2"
+                                                 onClick={() => setIsChatOpen(true)}
+                                             >
+                                                 <span>💬</span>
+                                                 <span>Coordinate Pickup via Chat</span>
+                                             </Button>
+                                             
+                                             <Button
+                                                 fullWidth
+                                                 disabled={isSubmitting}
+                                                 className="py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-2 transition-all transform active:scale-95 border-0"
+                                                 onClick={handleConfirmPetReceived}
+                                             >
+                                                 <span>🐾</span>
+                                                 <span>{isSubmitting ? 'Updating...' : 'Mark as Pet Received'}</span>
+                                             </Button>
+                                         </div>
+                                     </div>
+                                )}
+
+                                {(existingClaim.status === 'Handover Complete' || existingClaim.status === 'Pet Received') && (
+                                    <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-2 text-center">
+                                        <div className="flex items-center justify-center gap-1.5 text-emerald-900 font-black text-xs uppercase tracking-wide">
+                                            <span>✅</span>
+                                            <span>Pet Reunited & Safely Received</span>
+                                        </div>
+                                        <p className="text-xs text-emerald-800 font-medium leading-relaxed">
+                                            Your pet has been successfully received and safely returned home. This report is officially closed and archived.
+                                        </p>
+                                    </div>
+                                )}
 
                                 {existingClaim.remarks && (
                                     <div className="bg-gray-50 rounded-2xl p-4">
@@ -807,7 +842,7 @@ const PetMatchReview = () => {
                                         />
                                         <Button
                                             disabled={!evidenceFile || isSubmitting}
-                                            className="w-full py-4 bg-[#F97316] hover:scale-105 transition-all text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-orange-100"
+                                            className="w-full py-4 bg-[#F97316] hover:scale-105 transition-all text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-orange-100 cursor-pointer"
                                             onClick={handleUploadEvidence}
                                         >
                                             {isSubmitting ? 'Uploading...' : 'Submit Evidence'}

@@ -16,6 +16,8 @@ import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import ReturnToSeleraButton from '../../components/MapControls/ReturnToSeleraButton';
+import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
+import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -90,6 +92,7 @@ interface Report {
     created_at: string;
     user_id: number;
     reporter_name?: string;
+    reporter_photo?: string;
     animal_type?: string;
     animal_color?: string | null;
     breed?: string;
@@ -105,23 +108,21 @@ interface Report {
     ai_suggested_priority?: string | null;
     ai_possible_breed?: string | null;
     ai_suggested_priority_reason?: string | null;
+    verification_status?: string | null;
+    verification_notes?: string | null;
+    verified_by_user_id?: number | null;
+    verified_by_name?: string | null;
+    verified_at?: string | null;
+    false_alarm_reason?: string | null;
+    verified_actual_bite?: boolean | null;
+    verified_chasing?: boolean | null;
+    verified_attempted_bite?: boolean | null;
+    verified_injury?: boolean | null;
+    verified_aggressive?: boolean | null;
+    behavior_finding?: string | null;
 }
 
-const statusMap: Record<number, string> = {
-    1: 'Reported',
-    2: 'Verified',
-    3: 'Rejected',
-    4: 'Escalated to Barangay',
-    5: 'Rescue In Progress',
-    6: 'Picked Up',
-    7: 'Under Observation',
-    8: 'Impounded',
-    9: 'Claimed by Owner',
-    10: 'Released',
-    11: 'Resolved',
-    12: 'Deceased',
-    13: 'Approved'
-};
+const statusMap = REPORT_STATUS_MAP;
 const categoryMap: Record<number, string> = {
     1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
     4: 'Roaming Pack', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
@@ -574,8 +575,12 @@ const AdminReport = () => {
                                     key: "reporter",
                                     render: (rep) => (
                                         <div className="flex items-center space-x-2">
-                                            <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] text-gray-500 font-bold border border-gray-200">
-                                                {(rep.reporter_name || 'U').charAt(0).toUpperCase()}
+                                            <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center border border-gray-200 shrink-0">
+                                                {rep.reporter_photo ? (
+                                                    <img src={getProfilePicture(rep.reporter_photo)} alt={rep.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                ) : (
+                                                    <span className="text-[10px] text-gray-500 font-bold">{(rep.reporter_name || 'U').charAt(0).toUpperCase()}</span>
+                                                )}
                                             </div>
                                             <span className="text-xs font-semibold text-gray-700">{rep.reporter_name || `User ${rep.user_id}`}</span>
                                         </div>
@@ -817,6 +822,22 @@ const AdminReport = () => {
                                                  description={viewReport.description}
                                                  categoryName={categoryMap[viewReport.category_id]}
                                                  suggestedPriorityReason={viewReport.ai_suggested_priority_reason}
+                                                 behaviorChasing={(viewReport as any).ai_behavior_chasing}
+                                                 behaviorActualBite={(viewReport as any).ai_behavior_actual_bite}
+                                                 behaviorAttemptedBite={(viewReport as any).ai_behavior_attempted_bite}
+                                                 behaviorInjury={(viewReport as any).ai_behavior_injury}
+                                                 behaviorAggressive={(viewReport as any).ai_behavior_aggressive}
+                                                 behaviorExplanation={(viewReport as any).ai_behavior_explanation}
+                                                 verificationStatus={viewReport.verification_status}
+                                                 verifiedActualBite={(viewReport as any).verified_actual_bite}
+                                                 verifiedChasing={(viewReport as any).verified_chasing}
+                                                 verifiedAttemptedBite={(viewReport as any).verified_attempted_bite}
+                                                 verifiedInjury={(viewReport as any).verified_injury}
+                                                 verifiedAggressive={(viewReport as any).verified_aggressive}
+                                                 behaviorFinding={(viewReport as any).behavior_finding}
+                                                 verificationNotes={viewReport.verification_notes}
+                                                 verifiedByName={viewReport.verified_by_name}
+                                                 verifiedAt={viewReport.verified_at ? String(viewReport.verified_at) : null}
                                              />
 
                                             {/* Behavior Tags */}

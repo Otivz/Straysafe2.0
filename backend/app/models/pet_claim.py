@@ -16,7 +16,7 @@ class PetClaim(Base):
         Integer, ForeignKey("pets.pet_id", ondelete="CASCADE"), nullable=False
     )
     status: Mapped[str] = mapped_column(
-        Enum("Potential Owner Match", "Possible Match Found", "Pending Review", "Approved", "Rejected", "Evidence Requested", name="claim_status"),
+        Enum("Potential Owner Match", "Possible Match Found", "Pending Review", "Approved", "Rejected", "Evidence Requested", "Handover Complete", "Pet Received", name="claim_status"),
         default="Potential Owner Match",
         nullable=False
     )

@@ -105,22 +105,36 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                 const claimsRes = await api.get(ownerId ? `/claims/?owner_id=${ownerId}` : '/claims/');
                 const allClaims = Array.isArray(claimsRes.data) ? claimsRes.data : [];
                 
-                // Strictly filter claims for THIS specific pet ID only
-                const petClaims = allClaims.filter((c: any) => {
-                    const cPetId = c.pet_id || (c.pet && c.pet.pet_id);
-                    return Number(cPetId) === petId;
-                });
+                // Strictly filter claims for THIS specific pet ID only (newest first)
+                const petClaims = allClaims
+                    .filter((c: any) => {
+                        const cPetId = c.pet_id || (c.pet && c.pet.pet_id);
+                        return Number(cPetId) === petId;
+                    })
+                    .sort((a: any, b: any) => {
+                        const timeA = new Date(a.created_at || 0).getTime();
+                        const timeB = new Date(b.created_at || 0).getTime();
+                        if (timeA !== timeB) return timeB - timeA;
+                        return (b.claim_id || 0) - (a.claim_id || 0);
+                    });
 
                 const reportsRes = await api.get('/reports/');
                 const allReports = Array.isArray(reportsRes.data) ? reportsRes.data : [];
                 const claimReportIds = new Set(petClaims.map((c: any) => c.report_id));
 
-                // Strictly filter reports for THIS specific pet only
-                const matchedReports = allReports.filter((r: any) => {
-                    if (r.pet_id && Number(r.pet_id) === petId) return true;
-                    if (claimReportIds.has(r.report_id)) return true;
-                    return false;
-                });
+                // Strictly filter reports for THIS specific pet only, sorted with newest on top
+                const matchedReports = allReports
+                    .filter((r: any) => {
+                        if (r.pet_id && Number(r.pet_id) === petId) return true;
+                        if (claimReportIds.has(r.report_id)) return true;
+                        return false;
+                    })
+                    .sort((a: any, b: any) => {
+                        const timeA = new Date(a.created_at || a.reported_at || 0).getTime();
+                        const timeB = new Date(b.created_at || b.reported_at || 0).getTime();
+                        if (timeA !== timeB) return timeB - timeA;
+                        return (b.report_id || 0) - (a.report_id || 0);
+                    });
 
                 if (isMounted) {
                     setIncidentClaims(petClaims);
@@ -752,7 +766,13 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                             <p className="text-xs font-black text-[#1a1208] uppercase mb-0.5">Temperament Profile</p>
                                             <p className="text-[10px] text-gray-400 font-bold uppercase">Behavioral classification</p>
                                         </div>
-                                        <span className="px-3.5 py-1.5 bg-orange-50 text-[#F97316] border border-orange-100 rounded-full text-[9px] font-black uppercase tracking-widest">
+                                        <span className={`px-3.5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                                            (pet.temperament || '').toLowerCase() === 'aggressive'
+                                                ? 'bg-rose-50 text-rose-600 border-rose-200'
+                                                : (pet.temperament || '').toLowerCase() === 'friendly'
+                                                ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                                                : 'bg-orange-50 text-[#F97316] border-orange-100'
+                                        }`}>
                                             {pet.temperament || 'Friendly'}
                                         </span>
                                     </div>
@@ -762,27 +782,33 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest font-bold">Behavior Triggers</h4>
                                     <div className="space-y-4">
                                         <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
-                                            <span className="text-xs font-bold text-gray-500">Has Bite History?</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-bold text-gray-500">Has Bite History?</span>
+                                                {Boolean(pet.hasBiteHistory ?? pet.has_bite_history) && (
+                                                    <span className="text-[9px] font-bold px-2 py-0.5 bg-rose-100 text-rose-800 rounded-md">
+                                                        {(pet.biteIncidentCount ?? pet.bite_incident_count ?? 1)} incident(s)
+                                                    </span>
+                                                )}
+                                            </div>
                                             <span className={`text-xs font-black uppercase ${
-                                                pet.hasBiteHistory === true ? 'text-red-500' : 
-                                                pet.hasBiteHistory === false ? 'text-green-600' : 
-                                                'text-amber-500'
+                                                Boolean(pet.hasBiteHistory ?? pet.has_bite_history) ? 'text-red-500 font-extrabold' : 'text-green-600 font-extrabold'
                                             }`}>
-                                                {pet.hasBiteHistory === true ? 'Yes' : 
-                                                 pet.hasBiteHistory === false ? 'No' : 
-                                                 'Not Sure'}
+                                                {Boolean(pet.hasBiteHistory ?? pet.has_bite_history) ? 'YES' : 'NO'}
                                             </span>
                                         </div>
                                         <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
-                                            <span className="text-xs font-bold text-gray-500">Chase Behavior?</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-bold text-gray-500">Chase Behavior?</span>
+                                                {Boolean(pet.chaseBehavior ?? pet.chase_behavior) && (
+                                                    <span className="text-[9px] font-bold px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md">
+                                                        {(pet.chaseIncidentCount ?? pet.chase_incident_count ?? 1)} incident(s)
+                                                    </span>
+                                                )}
+                                            </div>
                                             <span className={`text-xs font-black uppercase ${
-                                                pet.chaseBehavior === true ? 'text-red-500' : 
-                                                pet.chaseBehavior === false ? 'text-green-600' : 
-                                                'text-amber-500'
+                                                Boolean(pet.chaseBehavior ?? pet.chase_behavior) ? 'text-red-500 font-extrabold' : 'text-green-600 font-extrabold'
                                             }`}>
-                                                {pet.chaseBehavior === true ? 'Yes' : 
-                                                 pet.chaseBehavior === false ? 'No' : 
-                                                 'Not Sure'}
+                                                {Boolean(pet.chaseBehavior ?? pet.chase_behavior) ? 'YES' : 'NO'}
                                             </span>
                                         </div>
                                     </div>
@@ -882,6 +908,24 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                         <span className="text-xs font-black text-[#F97316] uppercase truncate block">{report.condition || report.priority_level || 'Medium'}</span>
                                                                     </div>
                                                                 </div>
+
+                                                                {report.verification_status === 'verified_true' && (
+                                                                    <div className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-xs ${
+                                                                        (!report.verified_actual_bite && !report.verified_aggressive)
+                                                                            ? 'bg-emerald-50 border-emerald-200 text-emerald-950 font-bold'
+                                                                            : 'bg-rose-50 border-rose-200 text-rose-950 font-bold'
+                                                                    }`}>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span>{(!report.verified_actual_bite && !report.verified_aggressive) ? '🛡️' : '⚠️'}</span>
+                                                                            <span>{(!report.verified_actual_bite && !report.verified_aggressive) ? 'Verified Clean Finding:' : 'Confirmed Incident:'} {report.behavior_finding || 'Verified'}</span>
+                                                                        </div>
+                                                                        {(!report.verified_actual_bite && !report.verified_aggressive) && (
+                                                                            <span className="text-[10px] px-2.5 py-0.5 bg-emerald-200 text-emerald-900 rounded-full uppercase tracking-wider font-extrabold">
+                                                                                Clean Record ✓
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                )}
 
                                                                 {report.description && (
                                                                     <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">

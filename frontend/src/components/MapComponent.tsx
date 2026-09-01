@@ -3,6 +3,7 @@ import 'leaflet/dist/leaflet.css';
 import { useState, useEffect, useRef } from 'react';
 import L from 'leaflet';
 import axios from 'axios';
+import { getProfilePicture, DEFAULT_AVATAR } from '../utils/avatar';
 
 const BrgyIcon = L.divIcon({
     html: `
@@ -128,6 +129,16 @@ style.textContent = `
     @keyframes pulse-ring {
         0% { transform: scale(0.33); }
         80%, 100% { opacity: 0; }
+    }
+    .custom-popup .leaflet-popup-content-wrapper {
+        padding: 0 !important;
+        border-radius: 14px !important;
+        overflow: hidden !important;
+        box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.18) !important;
+    }
+    .custom-popup .leaflet-popup-content {
+        margin: 0 !important;
+        line-height: 1.2 !important;
     }
 `;
 document.head.appendChild(style);
@@ -283,6 +294,37 @@ const ChangeView = ({ center, zoom }: { center: [number, number], zoom: number }
     return null;
 };
 
+// Internal component to handle container resize & initial map layout invalidation
+const MapResizeHandler = () => {
+    const map = useMap();
+    useEffect(() => {
+        map.invalidateSize();
+
+        const t1 = setTimeout(() => map.invalidateSize(), 100);
+        const t2 = setTimeout(() => map.invalidateSize(), 300);
+        const t3 = setTimeout(() => map.invalidateSize(), 600);
+
+        const container = map.getContainer();
+        let observer: ResizeObserver | null = null;
+        if (typeof ResizeObserver !== 'undefined' && container) {
+            observer = new ResizeObserver(() => {
+                map.invalidateSize();
+            });
+            observer.observe(container);
+        }
+
+        return () => {
+            clearTimeout(t1);
+            clearTimeout(t2);
+            clearTimeout(t3);
+            if (observer) {
+                observer.disconnect();
+            }
+        };
+    }, [map]);
+    return null;
+};
+
 // Internal component to handle click-to-pinpoint events on map
 const MapEventsHandler = ({ onLocationChange }: { onLocationChange?: (lat: number, lng: number) => void }) => {
     useMapEvents({
@@ -425,8 +467,10 @@ const MapComponent = ({
             center={center}
             zoom={zoom}
             scrollWheelZoom={false}
-            style={{ height: height, width: '100%' }}
+            style={{ height: height || '100%', width: '100%', minHeight: '340px', position: 'relative', zIndex: 1 }}
+            className="w-full h-full"
         >
+            <MapResizeHandler />
             <ChangeView center={center} zoom={zoom} />
             <MapEventsHandler onLocationChange={onLocationChange} />
             <TileLayer
@@ -515,98 +559,177 @@ const MapComponent = ({
                     }}
                 >
                     <Popup className="custom-popup">
-                        <div className="p-3 min-w-[200px]">
+                        <div className="p-2 w-[200px] max-w-[210px] text-gray-800 flex flex-col gap-1.5 select-none">
                             {marker.rawData ? (
-                                <div className="flex flex-col gap-1.5 text-xs text-gray-700">
-                                    <div className="flex justify-between items-center border-b border-gray-100 pb-1.5 mb-1.5">
-                                        <span className="font-black text-gray-900">Report #{marker.id}</span>
-                                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${
-                                            marker.priority === 'High' ? 'bg-red-50 text-red-500' : 
-                                            (marker.priority === 'Medium' || marker.priority === 'Regular') ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-500'
-                                        }`}>
-                                            {marker.priority || 'Medium'}
+                                <>
+                                    {/* Resident Card Top Header */}
+                                    <div className="flex items-center justify-between gap-1.5 pb-1 border-b border-gray-100">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            <img
+                                                src={getProfilePicture(marker.rawData.reporter_photo || marker.rawData.user?.profile_picture)}
+                                                alt={marker.rawData.reporterName || 'Citizen'}
+                                                className="w-5 h-5 rounded-full object-cover shrink-0 border border-gray-200 shadow-2xs"
+                                                onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                            />
+                                            <div className="min-w-0">
+                                                <p className="text-[10px] font-black text-gray-900 truncate leading-none">
+                                                    {marker.rawData.reporterName || 'Citizen'}
+                                                </p>
+                                                <p className="text-[7.5px] font-bold text-gray-400 mt-0.5 leading-none">
+                                                    {marker.time}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <span className={`shrink-0 px-1.5 py-0.2 rounded-full text-[7px] font-black uppercase tracking-wider border shadow-2xs ${marker.rawData.status_id === 2 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                marker.rawData.status_id === 4 ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                                    marker.rawData.status_id === 5 ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                        'bg-gray-100 text-gray-700 border-gray-200'
+                                            }`}>
+                                            {marker.rawData.statusName || 'Active'}
                                         </span>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase">Animal:</span>
-                                        <span className="font-semibold text-gray-900">{marker.category || 'Stray'}</span>
 
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase">Status:</span>
-                                        <span className="font-semibold text-gray-900">{marker.rawData.statusName || 'Active'}</span>
+                                    {/* Report Image Thumbnail with Badges */}
+                                    {(marker.rawData?.media?.[0]?.file_url || marker.rawData?.image_url || marker.rawData?.media?.[0]?.url) ? (
+                                        <div className="w-full h-22 rounded-lg overflow-hidden border border-gray-100 bg-gray-50 shrink-0 shadow-2xs relative">
+                                            <img
+                                                src={marker.rawData?.media?.[0]?.file_url || marker.rawData?.image_url || marker.rawData?.media?.[0]?.url}
+                                                alt={`Report #${marker.id}`}
+                                                className="w-full h-full object-cover"
+                                            />
+                                            <div className="absolute top-1 left-1 px-1.5 py-0.2 rounded bg-black/60 backdrop-blur-xs text-white text-[7.5px] font-black tracking-tight">
+                                                #{marker.id.toString().padStart(4, '0')}
+                                            </div>
+                                            <div className="absolute top-1 right-1">
+                                                <span className={`text-[6.5px] font-black uppercase px-1 py-0.2 rounded shadow-xs ${marker.priority === 'High' ? 'bg-red-500 text-white' :
+                                                        (marker.priority === 'Medium' || marker.priority === 'Regular') ? 'bg-amber-500 text-white' : 'bg-blue-500 text-white'
+                                                    }`}>
+                                                    {marker.priority || 'Medium'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center justify-between px-0.5">
+                                            <span className="font-black text-gray-900 text-[10px]">#{marker.id.toString().padStart(4, '0')}</span>
+                                            <span className={`text-[7px] font-black uppercase px-1 py-0.2 rounded ${marker.priority === 'High' ? 'bg-red-50 text-red-500 border border-red-200' :
+                                                    (marker.priority === 'Medium' || marker.priority === 'Regular') ? 'bg-amber-50 text-amber-500 border border-amber-200' : 'bg-blue-50 text-blue-500 border border-blue-200'
+                                                }`}>
+                                                {marker.priority || 'Medium'}
+                                            </span>
+                                        </div>
+                                    )}
 
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase">Reporter:</span>
-                                        <span className="font-semibold text-gray-900 truncate">{marker.rawData.reporterName || 'Citizen'}</span>
+                                    {/* Lost Pet Emergency Banner if Applicable */}
+                                    {(marker.rawData.pet_id || marker.rawData.category_id === 6 || (marker.rawData.description && marker.rawData.description.includes('[LOST PET REPORT]'))) && (
+                                        <div className="p-1 rounded-lg bg-amber-50/90 border border-amber-200">
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-[9px]">🐾</span>
+                                                <span className="text-[7px] font-black text-amber-900 uppercase tracking-wider">Lost Pet</span>
+                                                {marker.rawData.pet_name && (
+                                                    <span className="text-[8px] font-black text-[#1a1208] uppercase ml-auto truncate max-w-[70px]">
+                                                        {marker.rawData.pet_name}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {marker.rawData.owner_name && (
+                                                <p className="text-[7.5px] font-bold text-amber-950 truncate mt-0.5">
+                                                    Owner: <span className="font-extrabold">{marker.rawData.owner_name}</span>
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
 
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase">Date:</span>
-                                        <span className="font-semibold text-gray-900 truncate">{marker.time}</span>
+                                    {/* Chips Overview (like Residents Report card) */}
+                                    <div className="flex flex-wrap items-center gap-1">
+                                        <div className="inline-flex items-center gap-0.5 px-1.5 py-0.2 bg-stone-100 border border-stone-200/80 rounded text-stone-800 text-[8px] font-bold">
+                                            <span>{(marker.rawData.animal_type || marker.category || '').toLowerCase().includes('cat') ? '🐱' : '🐕'}</span>
+                                            <span className="font-extrabold">{marker.rawData.animal_type || marker.category || 'Stray'}</span>
+                                            {marker.rawData.animal_breed && marker.rawData.animal_breed.toLowerCase() !== 'unknown' && (
+                                                <>
+                                                    <span className="text-stone-300">•</span>
+                                                    <span className="truncate max-w-[60px]">{marker.rawData.animal_breed}</span>
+                                                </>
+                                            )}
+                                        </div>
 
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase">Location:</span>
-                                        <span className="font-semibold text-gray-900 truncate">{marker.rawData.landmark || 'Selera Homes'}</span>
+                                        {marker.rawData.animal_color && marker.rawData.animal_color.toLowerCase() !== 'unknown' && (
+                                            <div className="inline-flex items-center gap-0.5 px-1.5 py-0.2 bg-stone-50 border border-stone-200/60 rounded text-stone-700 text-[8px] font-bold">
+                                                <span>🎨</span>
+                                                <span className="truncate max-w-[75px]">{marker.rawData.animal_color}</span>
+                                            </div>
+                                        )}
+
+                                        {marker.rawData.landmark && (
+                                            <div className="inline-flex items-center gap-0.5 px-1.5 py-0.2 bg-blue-50 border border-blue-200/70 text-blue-800 rounded text-[8px] font-bold">
+                                                <span>📍</span>
+                                                <span className="truncate max-w-[90px]">{marker.rawData.landmark}</span>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="pt-2 border-t border-gray-100 mt-1 flex flex-col gap-2">
+
+                                    {/* Action Buttons */}
+                                    <div className="pt-1 border-t border-gray-100 flex flex-col gap-1">
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 if (onViewDetails) onViewDetails(marker);
                                             }}
-                                            className="w-full py-2 bg-[#1A4543] text-white text-[9px] font-black uppercase rounded-lg hover:bg-[#112d2b] transition-colors shadow-sm"
+                                            className="w-full py-1 bg-[#1A4543] text-white text-[8px] font-black uppercase rounded-lg hover:bg-[#112d2b] transition-colors shadow-2xs tracking-wider"
                                         >
                                             View Full Details
                                         </button>
 
-                                        <div className="grid grid-cols-2 gap-2 mt-0.5">
+                                        <div className="grid grid-cols-2 gap-1">
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     if (onMarkerClick) onMarkerClick({ ...marker, source: 'brgy' });
                                                 }}
-                                                className="py-1.5 bg-[#F97316] text-white text-[8px] font-black uppercase rounded hover:bg-[#EA580C] transition-colors"
+                                                className="py-1 px-1 bg-[#F97316] hover:bg-[#EA580C] text-white text-[8px] font-black uppercase rounded-lg transition-colors text-center shadow-2xs"
                                             >
-                                                Directions (HQ)
+                                                From HQ
                                             </button>
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     if (onMarkerClick) onMarkerClick({ ...marker, source: 'current' });
                                                 }}
-                                                className="py-1.5 bg-[#F97316] text-white text-[8px] font-black uppercase rounded hover:bg-[#EA580C] transition-colors"
+                                                className="py-1 px-1 bg-blue-600 hover:bg-blue-700 text-white text-[8px] font-black uppercase rounded-lg transition-colors text-center shadow-2xs"
                                             >
-                                                Directions (Me)
+                                                From Me
                                             </button>
                                         </div>
                                     </div>
-                                </div>
+                                </>
                             ) : (
                                 <>
                                     <div className="flex justify-between items-start mb-2">
-                                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${
-                                            marker.priority === 'High' ? 'bg-red-50 text-red-500' : 
-                                            (marker.priority === 'Medium' || marker.priority === 'Regular') ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-500'
-                                        }`}>
+                                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${marker.priority === 'High' ? 'bg-red-50 text-red-500' :
+                                                (marker.priority === 'Medium' || marker.priority === 'Regular') ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-500'
+                                            }`}>
                                             {marker.priority || 'Medium'}
                                         </span>
                                         <span className="text-[8px] font-bold text-gray-400 uppercase">{marker.time}</span>
                                     </div>
                                     <h3 className="font-black text-xs uppercase text-[#1a1208] mb-1">{marker.category || 'Stray Animal'}</h3>
                                     <p className="text-[10px] text-gray-500 leading-tight mb-2 italic">"{marker.title}"</p>
-                                    <div className="pt-2 border-t border-gray-100 flex flex-col gap-2">
-                                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest text-center mt-1">Get Directions</p>
-                                        <div className="grid grid-cols-2 gap-2">
+                                    <div className="pt-1.5 border-t border-gray-100 flex flex-col gap-1">
+                                        <div className="grid grid-cols-2 gap-1">
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     if (onMarkerClick) onMarkerClick({ ...marker, source: 'brgy' });
                                                 }}
-                                                className="py-2 bg-[#F97316] text-[#FAFAF9] text-[9px] font-black uppercase rounded-lg hover:bg-[#EA580C] transition-colors shadow-sm border border-orange-500/20"
+                                                className="py-1 px-1 bg-[#F97316] text-white text-[8px] font-black uppercase rounded-lg hover:bg-[#EA580C] transition-colors text-center"
                                             >
-                                                From Office
+                                                From HQ
                                             </button>
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     if (onMarkerClick) onMarkerClick({ ...marker, source: 'current' });
                                                 }}
-                                                className="py-2 bg-[#F97316] text-[#FAFAF9] text-[9px] font-black uppercase rounded-lg hover:bg-[#EA580C] transition-colors shadow-sm border border-orange-500/20"
+                                                className="py-1 px-1 bg-blue-600 text-white text-[8px] font-black uppercase rounded-lg hover:bg-blue-700 transition-colors text-center"
                                             >
                                                 From Me
                                             </button>
@@ -640,6 +763,10 @@ const MapComponent = ({
                         Location: {center[0].toFixed(4)}, {center[1].toFixed(4)}
                     </Popup>
                 </Marker>
+            )}
+
+            {showHeatmap && heatmapPoints && heatmapPoints.length > 0 && (
+                <HeatmapLayer points={heatmapPoints} />
             )}
 
             <ReturnToSeleraButton />

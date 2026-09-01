@@ -47,6 +47,7 @@ class Pet(Base):
     has_bite_history: Mapped[bool] = mapped_column(Boolean, default=False)
     bite_incident_count: Mapped[int] = mapped_column(Integer, default=0)
     chase_behavior: Mapped[bool] = mapped_column(Boolean, default=False)
+    chase_incident_count: Mapped[int] = mapped_column(Integer, default=0)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     status: Mapped[Optional[str]] = mapped_column(

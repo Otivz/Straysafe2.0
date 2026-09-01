@@ -26,11 +26,9 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
     const [statusFilter, setStatusFilter] = useState<string>('ALL');
     const [isScanning, setIsScanning] = useState(false);
     const [selectedPetRecord, setSelectedPetRecord] = useState<PetRecord | null>(null);
-    const [isLoadingPetRecord, setIsLoadingPetRecord] = useState(false);
 
     const handleOpenPetDetail = async (petData: any) => {
         if (!petData) return;
-        setIsLoadingPetRecord(true);
         try {
             const petId = petData.pet_id || petData.id;
             if (petId) {
@@ -42,8 +40,6 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
         } catch (e) {
             console.error("Failed to load pet details, using fallback:", e);
             setSelectedPetRecord(mapRawPetToPetRecord(petData));
-        } finally {
-            setIsLoadingPetRecord(false);
         }
     };
 

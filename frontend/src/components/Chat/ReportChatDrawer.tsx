@@ -87,7 +87,8 @@ const statusNameMap: Record<number, string> = {
     10: 'Released',
     11: 'Resolved',
     12: 'Deceased',
-    13: 'Approved'
+    13: 'Approved',
+    14: 'False Alarm / Dismissed'
 };
 
 export default function ReportChatDrawer({
@@ -117,13 +118,18 @@ export default function ReportChatDrawer({
     const [localMatchedPet, setLocalMatchedPet] = useState<MatchedPetInfo | null>(matchedPet || null);
 
     const reportId = report?.report_id || 0;
-    const isResolved = report?.status_id && [9, 10, 11, 12].includes(report.status_id);
-
-    const shouldHighlightMatch = highlightMatch || threadMode === 'match' || (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('highlightMatch') === 'true');
-
+    const rawStatusId = (report as any)?.current_status_id || report?.status_id;
     const effectiveMatchId = autoMatchId || matchId || 0;
     const isReporter = currentUser && report && currentUser.user_id === report.user_id;
     const isMatchMode = (threadMode === 'match') || (threadMode !== 'report' && effectiveMatchId > 0 && !isReporter);
+
+    // If match mode: match chat remains open for coordination during Claimed by Owner (ID 9). Only closes on 3, 11, 12, 14.
+    const isResolved = isMatchMode 
+        ? Boolean(rawStatusId && [3, 11, 12, 14].includes(Number(rawStatusId)))
+        : Boolean(rawStatusId && [3, 9, 10, 11, 12, 14].includes(Number(rawStatusId)));
+    const isClaimApprovedPendingPickup = isMatchMode && Number(rawStatusId) === 9;
+
+    const shouldHighlightMatch = highlightMatch || threadMode === 'match' || (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('highlightMatch') === 'true');
 
     const storageKey = isMatchMode 
         ? `straysafe_match_chat_${effectiveMatchId}` 
@@ -301,7 +307,7 @@ export default function ReportChatDrawer({
         if (e) e.preventDefault();
         const trimmed = inputText.trim();
         if (!trimmed && !selectedImagePreview) return;
-        if (!isMatchMode && isResolved) return;
+        if (isResolved) return;
 
         const now = new Date();
         const timeFormatted = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -447,6 +453,17 @@ export default function ReportChatDrawer({
                             {isMatchMode ? 'Direct Match Chat' : 'Case Chat'}
                         </span>
                     </div>
+
+                    {isClaimApprovedPendingPickup && (
+                        <div className="bg-green-500/10 border-b border-green-200 px-4 py-2 flex items-center justify-between gap-2 shrink-0">
+                            <div className="flex items-center gap-2 text-xs text-green-950 font-bold min-w-0">
+                                <span>🐾</span>
+                                <p className="text-[11px] text-green-900 truncate">
+                                    <strong>Claim Approved:</strong> Chat is open to coordinate meeting time & pet pickup.
+                                </p>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Messages Body */}
                     <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-slate-50/60 custom-scrollbar">
@@ -845,9 +862,11 @@ export default function ReportChatDrawer({
                     {/* Input Footer */}
                     <div className="p-3 sm:p-3.5 bg-white border-t border-gray-200 shrink-0 pb-6 sm:pb-3.5">
                         {isResolved ? (
-                            <div className="p-3 bg-gray-100 rounded-2xl border border-gray-200 text-center">
-                                <p className="text-xs font-bold text-gray-700">🔒 Case Solved & Archived</p>
-                                <p className="text-[10px] text-gray-400 mt-0.5">This report is resolved. Messages are archived in read-only mode.</p>
+                            <div className="p-3 bg-gray-50 rounded-2xl border border-gray-200 text-center space-y-1">
+                                <p className="text-xs font-bold text-gray-700">🔒 Case Resolved & Archived</p>
+                                <p className="text-[10px] text-gray-500 leading-relaxed">
+                                    This report has been resolved and direct messaging is in read-only mode. If you need any further assistance, please contact the subdivision office directly.
+                                </p>
                             </div>
                         ) : (
                             <form onSubmit={handleSendMessage} className="flex items-center gap-2">

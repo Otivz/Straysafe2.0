@@ -2,50 +2,18 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
-import { MapContainer, TileLayer, Marker } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
-
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+import MapComponent from '../../components/MapComponent';
 
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import RescueTimeline from '../../components/RescueTimeline';
-import ReturnToSeleraButton from '../../components/MapControls/ReturnToSeleraButton';
 import ResolveLostPetModal from '../../components/Modals/ResolveLostPetModal';
 
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import { useReportChatCount } from '../../utils/chatUtils';
+import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 
-const DefaultIcon = L.icon({
-    iconUrl: markerIcon,
-    iconRetinaUrl: markerIconRetina,
-    shadowUrl: markerShadow,
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
-});
-
-L.Marker.prototype.options.icon = DefaultIcon;
-
-const reportStatusMap: Record<number, string> = {
-    1: 'Reported',
-    2: 'Verified',
-    3: 'Rejected',
-    4: 'Escalated to Barangay',
-    5: 'Rescue In Progress',
-    6: 'Picked Up',
-    7: 'Under Observation',
-    8: 'Impounded',
-    9: 'Claimed by Owner',
-    10: 'Released',
-    11: 'Resolved',
-    12: 'Deceased',
-    13: 'Approved'
-};
+const reportStatusMap = REPORT_STATUS_MAP;
 
 const categoryMap: Record<number, string> = {
     1: 'Injured Animal',
@@ -157,6 +125,16 @@ const ResiViewReport = () => {
     const [isResolveLostModalOpen, setIsResolveLostModalOpen] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [userMatch, setUserMatch] = useState<any | null>(null);
+
+    // Resident Dispute Submission State
+    const [isDisputeModalOpen, setIsDisputeModalOpen] = useState(false);
+    const [userPets, setUserPets] = useState<any[]>([]);
+    const [selectedDisputePetId, setSelectedDisputePetId] = useState<string>('');
+    const [disputeReason, setDisputeReason] = useState('');
+    const [vaccineCardFile, setVaccineCardFile] = useState<File | null>(null);
+    const [supportingPhotoFile, setSupportingPhotoFile] = useState<File | null>(null);
+    const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
+    const [disputeSuccessAlert, setDisputeSuccessAlert] = useState(false);
 
     const userStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -275,6 +253,69 @@ const ResiViewReport = () => {
             navigate(-1);
         } else {
             navigate('/resident-home');
+        }
+    };
+
+    const handleOpenDisputeModal = async () => {
+        if (!currentUser) {
+            alert("Please log in to submit a formal report dispute.");
+            return;
+        }
+        setIsDisputeModalOpen(true);
+        try {
+            const res = await axios.get(`http://localhost:8000/pets/user/${currentUser.user_id}`);
+            if (Array.isArray(res.data)) {
+                setUserPets(res.data);
+                if (userMatch?.matched_pet?.pet_id) {
+                    setSelectedDisputePetId(String(userMatch.matched_pet.pet_id));
+                } else if (res.data.length > 0) {
+                    setSelectedDisputePetId(String(res.data[0].pet_id));
+                }
+            }
+        } catch (e) {
+            console.error("Error fetching user pets for dispute:", e);
+        }
+    };
+
+    const handleSubmitDispute = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!report || !currentUserId) return;
+        if (!disputeReason.trim()) {
+            alert("Please provide a reason or statement for your dispute.");
+            return;
+        }
+
+        try {
+            setIsSubmittingDispute(true);
+            const formData = new FormData();
+            formData.append('resident_user_id', String(currentUserId));
+            if (selectedDisputePetId) {
+                formData.append('pet_id', selectedDisputePetId);
+            }
+            formData.append('dispute_reason', disputeReason);
+            if (vaccineCardFile) {
+                formData.append('vaccination_card', vaccineCardFile);
+            }
+            if (supportingPhotoFile) {
+                formData.append('supporting_photo', supportingPhotoFile);
+            }
+
+            await axios.post(`http://localhost:8000/reports/${report.report_id}/disputes`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            setDisputeSuccessAlert(true);
+            setIsDisputeModalOpen(false);
+            setDisputeReason('');
+            setVaccineCardFile(null);
+            setSupportingPhotoFile(null);
+            await fetchReportDetails();
+            setTimeout(() => setDisputeSuccessAlert(false), 6000);
+        } catch (err: any) {
+            console.error("Error submitting dispute:", err);
+            alert(err.response?.data?.detail || "Failed to submit dispute. Please check your attachments and try again.");
+        } finally {
+            setIsSubmittingDispute(false);
         }
     };
 
@@ -415,6 +456,18 @@ const ResiViewReport = () => {
                             </button>
                         )}
 
+                        {/* Dispute Counter-Claim Button for Pet Owners / Residents */}
+                        {currentUser && ![11, 12, 14].includes(report.status_id) && (
+                            <button
+                                type="button"
+                                onClick={handleOpenDisputeModal}
+                                className="px-5 py-3.5 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-amber-500/20 hover:scale-105 active:scale-95 flex items-center gap-2"
+                                title="Submit vaccination proof & counter-claim that your pet is innocent or at home"
+                            >
+                                <span>⚖️</span> Dispute / Submit Proof
+                            </button>
+                        )}
+
                         {((report.category_id === 6 || report.pet_id || (report.description && report.description.includes('[LOST PET REPORT]'))) && ![9, 10, 11, 12].includes(report.status_id)) && (
                             <button
                                 onClick={() => setIsResolveLostModalOpen(true)}
@@ -519,7 +572,9 @@ const ResiViewReport = () => {
                                         <div className="grid grid-cols-2 gap-4 pb-6 border-b border-gray-50">
                                             <div>
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Rescue Status</p>
-                                                <p className="text-sm font-black text-orange-600 uppercase">{reportStatusMap[report.status_id] || 'Unknown'}</p>
+                                                <p className="text-sm font-black text-orange-600 uppercase">
+                                                    {reportStatusMap[report.status_id ?? report.current_status_id ?? report.status?.status_id ?? 1] || 'Reported'}
+                                                </p>
                                             </div>
                                             <div>
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Date Reported</p>
@@ -528,6 +583,34 @@ const ResiViewReport = () => {
                                                 </p>
                                             </div>
                                         </div>
+
+                                        {/* Verified Record / Investigation Finding Banner */}
+                                        {report.verification_status === 'verified_true' && (
+                                            <div className={`p-4 rounded-3xl border flex items-start gap-3.5 shadow-xs ${
+                                                (!report.verified_actual_bite && !report.verified_aggressive)
+                                                    ? 'bg-emerald-50/90 border-emerald-200 text-emerald-950'
+                                                    : 'bg-rose-50/90 border-rose-200 text-rose-950'
+                                            }`}>
+                                                <span className="text-2xl shrink-0">{(!report.verified_actual_bite && !report.verified_aggressive) ? '🛡️' : '⚠️'}</span>
+                                                <div className="space-y-1">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="text-[10px] font-black uppercase tracking-wider">
+                                                            {(!report.verified_actual_bite && !report.verified_aggressive) ? 'On-Site Staff Verification: Clean Record' : 'On-Site Staff Verification: Confirmed'}
+                                                        </span>
+                                                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                                                            (!report.verified_actual_bite && !report.verified_aggressive) ? 'bg-white text-emerald-700 border-emerald-300' : 'bg-white text-rose-700 border-rose-300'
+                                                        }`}>
+                                                            {report.behavior_finding || 'Verified'}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs font-medium leading-relaxed">
+                                                        {(!report.verified_actual_bite && !report.verified_aggressive)
+                                                            ? 'Field inspection confirmed the animal is friendly and non-aggressive. Initial biting/chasing claims were marked unsubstantiated.'
+                                                            : (report.verification_notes || 'Incident confirmed by subdivision officer.')}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
 
                                         {/* Lost Pet Owner Contact & Digital QR Tag Card */}
                                         {(report.pet_id || report.owner_phone || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
@@ -833,12 +916,28 @@ const ResiViewReport = () => {
                                 </p>
                             </div>
                         </div>
-                        <div className="w-full h-[500px] rounded-2xl overflow-hidden border border-white/10 grayscale-[0.5] hover:grayscale-0 transition-all duration-500">
-                            <MapContainer center={[report.latitude, report.longitude]} zoom={16} className="h-full w-full">
-                                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                                <Marker position={[report.latitude, report.longitude]} />
-                                <ReturnToSeleraButton />
-                            </MapContainer>
+                        <div className="w-full h-[500px] rounded-2xl overflow-hidden border border-white/10 relative">
+                            <MapComponent
+                                height="100%"
+                                center={[parseFloat(report.latitude), parseFloat(report.longitude)]}
+                                zoom={17}
+                                showHeatmap={false}
+                                showGeofence={true}
+                                showLandmarks={false}
+                                markers={[
+                                    {
+                                        id: report.report_id,
+                                        lat: parseFloat(report.latitude),
+                                        lng: parseFloat(report.longitude),
+                                        title: report.landmark || 'Incident Location',
+                                        category: report.animal_type || 'Stray Animal',
+                                        color: (report.status_id === 6 || report.status_id === 11) ? 'green' : (report.status_id === 4 || report.status_id === 13) ? 'orange' : (report.status_id === 5) ? 'yellow' : 'red',
+                                        priority: report.priority_level || 'Medium',
+                                        time: report.created_at ? new Date(report.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Live',
+                                        rawData: report
+                                    }
+                                ]}
+                            />
                         </div>
                     </div>
                 </div>
@@ -1028,6 +1127,114 @@ const ResiViewReport = () => {
                             </span>
                         )}
                     </button>
+                </div>
+            )}
+            {/* Dispute Submission Success Alert */}
+            {disputeSuccessAlert && (
+                <div className="fixed top-24 right-6 z-[9999] max-w-md bg-emerald-600 text-white p-5 rounded-3xl shadow-2xl animate-in slide-in-from-top-4 flex items-center gap-3">
+                    <span className="text-2xl">✓</span>
+                    <div>
+                        <p className="text-xs font-black uppercase tracking-wider">Dispute Submitted</p>
+                        <p className="text-[11px] text-emerald-100 font-medium">Your counter-claim & vaccination proof were sent to subdivision officers for immediate review.</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Resident Dispute Counter-Claim Modal */}
+            {isDisputeModalOpen && report && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-300 border border-amber-100">
+                        <div className="px-8 py-6 border-b border-gray-150 flex justify-between items-center bg-amber-50/60">
+                            <div className="flex items-center gap-3">
+                                <span className="text-3xl">⚖️</span>
+                                <div>
+                                    <h3 className="text-xl font-black text-amber-950 uppercase tracking-tight">Dispute Report / Counter-Claim</h3>
+                                    <p className="text-xs text-amber-800/80 mt-0.5 font-medium">Submit vaccination card and home confinement proof to clear false accusations.</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsDisputeModalOpen(false)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-900 rounded-full hover:bg-gray-100 transition-all cursor-pointer">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                        <form onSubmit={handleSubmitDispute} className="p-8 space-y-5 max-h-[80vh] overflow-y-auto custom-scrollbar">
+                            {userPets.length > 0 && (
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Select Registered Pet (Optional)</label>
+                                    <select
+                                        value={selectedDisputePetId}
+                                        onChange={(e) => setSelectedDisputePetId(e.target.value)}
+                                        className="w-full px-5 py-3.5 bg-gray-50 border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-amber-100 focus:border-amber-500 outline-none transition-all"
+                                    >
+                                        <option value="">-- Unspecified / None --</option>
+                                        {userPets.map((pet: any) => (
+                                            <option key={pet.pet_id} value={pet.pet_id}>
+                                                {pet.pet_name} ({pet.species || pet.animal_type || 'Pet'} • {pet.breed || 'Breed'})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Dispute Statement & Explanation</label>
+                                <textarea
+                                    rows={4}
+                                    required
+                                    value={disputeReason}
+                                    onChange={(e) => setDisputeReason(e.target.value)}
+                                    placeholder="Explain why this report is inaccurate (e.g. My pet was inside our fenced gate all afternoon; no bite occurred; anti-rabies up to date)..."
+                                    className="w-full px-5 py-3.5 bg-white border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-amber-100 focus:border-amber-500 outline-none transition-all resize-none"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                                    <span>💉</span> Anti-Rabies Vaccination Card (Photo or PDF)
+                                </label>
+                                <input
+                                    type="file"
+                                    accept=".pdf,.jpg,.jpeg,.png"
+                                    onChange={(e) => setVaccineCardFile(e.target.files?.[0] || null)}
+                                    className="w-full text-xs text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:cursor-pointer"
+                                />
+                                {vaccineCardFile && <p className="text-[10px] text-blue-700 font-bold ml-1">Attached: {vaccineCardFile.name}</p>}
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                                    <span>📸</span> Supporting Photo (Pet Safe at Home / In Enclosure)
+                                </label>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => setSupportingPhotoFile(e.target.files?.[0] || null)}
+                                    className="w-full text-xs text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 file:cursor-pointer"
+                                />
+                                {supportingPhotoFile && <p className="text-[10px] text-emerald-700 font-bold ml-1">Attached: {supportingPhotoFile.name}</p>}
+                            </div>
+
+                            <div className="p-3.5 bg-blue-50 rounded-2xl border border-blue-200 text-[11px] text-blue-950 font-medium leading-relaxed">
+                                <strong>ℹ️ Resident Protection:</strong> Submitting this counter-claim will place the report into <em>Disputed</em> status and alert subdivision officers to evaluate your evidence before taking any capture action.
+                            </div>
+
+                            <div className="flex gap-4 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsDisputeModalOpen(false)}
+                                    className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all cursor-pointer"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmittingDispute || !disputeReason.trim()}
+                                    className="flex-1 py-3.5 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all shadow-md shadow-amber-500/20 cursor-pointer flex items-center justify-center gap-2"
+                                >
+                                    {isSubmittingDispute ? 'Submitting...' : 'SUBMIT COUNTER-CLAIM'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             )}
         </div>

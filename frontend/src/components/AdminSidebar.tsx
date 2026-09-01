@@ -16,10 +16,10 @@ const AdminSidebar = () => {
                 const viewed = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_admin_reports') || '[]'));
                 const res = await axios.get('http://localhost:8000/reports/');
                 if (Array.isArray(res.data)) {
-                    // Active non-closed reports (status_id != 3, 9, 10, 11, 12) that have not been viewed yet
+                    // Active non-closed reports (status_id != 3, 9, 10, 11, 12, 14) that have not been viewed yet
                     const unviewedActive = res.data.filter((r: any) => {
                         const sid = r.current_status_id || r.status_id;
-                        return ![3, 9, 10, 11, 12].includes(sid) && !viewed.has(r.report_id);
+                        return ![3, 9, 10, 11, 12, 14].includes(sid) && !viewed.has(r.report_id);
                     }).length;
                     setActiveReportsCount(unviewedActive);
                 }

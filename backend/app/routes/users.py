@@ -20,6 +20,7 @@ router = APIRouter(
 def get_users(
     role_id: Optional[int] = None,
     position_id: Optional[int] = None,
+    subdivision_id: Optional[int] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -28,6 +29,8 @@ def get_users(
         query = query.filter(User.role_id == role_id)
     if position_id:
         query = query.filter(User.position_id == position_id)
+    if subdivision_id:
+        query = query.filter(User.subdivision_id == subdivision_id)
     return query.all()
 
 @router.get("/{user_id}", response_model=UserResponse)
