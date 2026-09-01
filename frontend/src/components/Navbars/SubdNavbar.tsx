@@ -24,6 +24,7 @@ interface SubdNavbarProps {
     leftContent?: ReactNode;
     notifications?: NotificationItem[];
     onNotificationClick?: (notif: NotificationItem) => void;
+    onMenuToggle?: () => void;
 }
 
 const formatRelativeTime = (dateStr: string) => {
@@ -48,7 +49,7 @@ const formatRelativeTime = (dateStr: string) => {
     }
 };
 
-const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificationClick }: SubdNavbarProps) => {
+const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificationClick, onMenuToggle }: SubdNavbarProps) => {
     const navigate = useNavigate();
 
     // Get user from storage
@@ -217,7 +218,13 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
             } else {
                 navigate('/subd/reports?openChat=true', { state: { openChat: true } });
             }
-        } else if (typeStr.includes('claim') || titleStr.includes('claim') || msgStr.includes('claim')) {
+        } else if (typeStr.includes('transfer') || titleStr.includes('transfer') || msgStr.includes('transfer')) {
+            if (notif.related_id) {
+                navigate(`/subd/reports/${notif.related_id}`);
+            } else {
+                navigate('/subd/reports');
+            }
+        } else if (typeStr.includes('pet_claim') || (typeStr.includes('claim') && !titleStr.includes('report'))) {
             navigate('/subd/pet-claims');
         } else if (typeStr.includes('hazard') || titleStr.includes('hazard') || titleStr.includes('warning') || msgStr.includes('hazard')) {
             navigate('/subd/hazard-alert');
@@ -244,6 +251,30 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
     const renderNotificationIcon = (notif: NotificationItem) => {
         const typeStr = (notif.type || '').toLowerCase();
         const titleStr = (notif.title || '').toLowerCase();
+
+        if (typeStr.includes('accepted') || titleStr.includes('accepted')) {
+            return (
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 border-2 border-emerald-300 font-black text-base shadow-xs animate-in zoom-in-95">
+                    ✅
+                </div>
+            );
+        }
+
+        if (typeStr.includes('rejected') || titleStr.includes('declined') || titleStr.includes('rejected')) {
+            return (
+                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 border-2 border-rose-300 font-black text-base shadow-xs animate-in zoom-in-95">
+                    ❌
+                </div>
+            );
+        }
+
+        if (typeStr.includes('transfer') || titleStr.includes('transfer')) {
+            return (
+                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 border-2 border-purple-300 font-black text-base shadow-xs animate-in zoom-in-95">
+                    🔄
+                </div>
+            );
+        }
 
         if (typeStr.includes('message') || titleStr.includes('message') || typeStr.includes('comment') || titleStr.includes('comment')) {
             return (
@@ -295,11 +326,26 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
     };
 
     return (
-        <header className="h-20 bg-white/95 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-6 lg:px-8 sticky top-0 z-40 w-full shadow-sm">
+        <header className="h-16 sm:h-20 bg-white/95 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-4 sm:px-6 lg:px-8 sticky top-0 z-40 w-full shadow-sm">
 
             {/* Left Content Area */}
-            <div className="flex flex-col justify-center min-w-0">
-                {leftContent}
+            <div className="flex items-center gap-3 min-w-0">
+                {onMenuToggle && (
+                    <button
+                        type="button"
+                        onClick={onMenuToggle}
+                        className="md:hidden p-2 -ml-1 text-gray-700 hover:text-gray-900 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
+                        title="Toggle Navigation Menu"
+                        aria-label="Toggle Menu"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                    </button>
+                )}
+                <div className="flex flex-col justify-center min-w-0">
+                    {leftContent}
+                </div>
             </div>
 
             {/* Right Side Actions */}
@@ -464,74 +510,136 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                                         </p>
                                     </div>
                                 ) : (
-                                    filteredNotifications.map((notif) => (
-                                        <div
-                                            key={notif.notification_id}
-                                            onClick={() => handleNotificationClick(notif)}
-                                            className={`p-4 flex items-start gap-3.5 cursor-pointer transition-all duration-200 group relative ${
-                                                !notif.is_read
-                                                    ? 'bg-orange-50/30 hover:bg-orange-50/60'
-                                                    : 'bg-white hover:bg-gray-50/80'
-                                            }`}
-                                        >
-                                            {/* Unread indicator bar */}
-                                            {!notif.is_read && (
-                                                <span className="absolute left-0 top-0 bottom-0 w-1 bg-[#F97316] rounded-r" />
-                                            )}
+                                    filteredNotifications.map((notif) => {
+                                        const typeStr = (notif.type || '').toLowerCase();
+                                        const titleStr = (notif.title || '').toLowerCase();
+                                        const isTransferAccepted = typeStr.includes('accepted') || titleStr.includes('accepted');
+                                        const isTransferRejected = typeStr.includes('rejected') || titleStr.includes('declined') || titleStr.includes('rejected');
+                                        const isTransferRequest = typeStr.includes('transfer_request') || (typeStr.includes('transfer') && titleStr.includes('request'));
 
-                                            {/* Type Icon */}
-                                            {renderNotificationIcon(notif)}
+                                        let cardBg = notif.is_read ? 'bg-white hover:bg-gray-50/80' : 'bg-orange-50/30 hover:bg-orange-50/60';
+                                        let barColor = 'bg-[#F97316]';
 
-                                            {/* Notification Content */}
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <h4 className={`text-xs tracking-tight truncate ${
-                                                        !notif.is_read ? 'font-black text-gray-900' : 'font-bold text-gray-700'
+                                        if (isTransferAccepted) {
+                                            cardBg = notif.is_read ? 'bg-emerald-50/20 hover:bg-emerald-50/50' : 'bg-emerald-50/50 hover:bg-emerald-50/80';
+                                            barColor = 'bg-emerald-500';
+                                        } else if (isTransferRejected) {
+                                            cardBg = notif.is_read ? 'bg-rose-50/20 hover:bg-rose-50/50' : 'bg-rose-50/50 hover:bg-rose-50/80';
+                                            barColor = 'bg-rose-500';
+                                        } else if (isTransferRequest) {
+                                            cardBg = notif.is_read ? 'bg-purple-50/20 hover:bg-purple-50/50' : 'bg-purple-50/50 hover:bg-purple-50/80';
+                                            barColor = 'bg-purple-500';
+                                        }
+
+                                        return (
+                                            <div
+                                                key={notif.notification_id}
+                                                onClick={() => handleNotificationClick(notif)}
+                                                className={`p-4 flex items-start gap-3.5 cursor-pointer transition-all duration-200 group relative border-b border-gray-100/60 ${cardBg}`}
+                                            >
+                                                {/* Unread / Status indicator bar */}
+                                                {!notif.is_read && (
+                                                    <span className={`absolute left-0 top-0 bottom-0 w-1.5 ${barColor} rounded-r`} />
+                                                )}
+
+                                                {/* Type Icon */}
+                                                {renderNotificationIcon(notif)}
+
+                                                {/* Notification Content */}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                                            {isTransferAccepted && (
+                                                                <span className="px-2 py-0.5 rounded-md bg-emerald-600 text-white font-black text-[9px] uppercase tracking-wider shadow-xs shrink-0 flex items-center gap-1">
+                                                                    <span>✅</span>
+                                                                    <span>ACCEPTED</span>
+                                                                </span>
+                                                            )}
+                                                            {isTransferRejected && (
+                                                                <span className="px-2 py-0.5 rounded-md bg-rose-600 text-white font-black text-[9px] uppercase tracking-wider shadow-xs shrink-0 flex items-center gap-1">
+                                                                    <span>❌</span>
+                                                                    <span>DECLINED</span>
+                                                                </span>
+                                                            )}
+                                                            {isTransferRequest && (
+                                                                <span className="px-2 py-0.5 rounded-md bg-purple-600 text-white font-black text-[9px] uppercase tracking-wider shadow-xs shrink-0 flex items-center gap-1">
+                                                                    <span>🔄</span>
+                                                                    <span>TRANSFER REQUEST</span>
+                                                                </span>
+                                                            )}
+                                                            <h4 className={`text-xs tracking-tight truncate ${
+                                                                isTransferAccepted
+                                                                    ? 'font-black text-emerald-950'
+                                                                    : isTransferRejected
+                                                                    ? 'font-black text-rose-950'
+                                                                    : isTransferRequest
+                                                                    ? 'font-black text-purple-950'
+                                                                    : !notif.is_read
+                                                                    ? 'font-black text-gray-900'
+                                                                    : 'font-bold text-gray-700'
+                                                            }`}>
+                                                                {notif.title}
+                                                            </h4>
+                                                        </div>
+                                                        <span className="text-[10px] font-semibold text-gray-400 shrink-0">
+                                                            {formatRelativeTime(notif.created_at)}
+                                                        </span>
+                                                    </div>
+
+                                                    <p className={`text-xs mt-1 leading-relaxed line-clamp-2 ${
+                                                        isTransferAccepted
+                                                            ? 'font-bold text-emerald-900'
+                                                            : isTransferRejected
+                                                            ? 'font-bold text-rose-900'
+                                                            : isTransferRequest
+                                                            ? 'font-bold text-purple-900'
+                                                            : 'text-gray-600'
                                                     }`}>
-                                                        {notif.title}
-                                                    </h4>
-                                                    <span className="text-[10px] font-semibold text-gray-400 shrink-0">
-                                                        {formatRelativeTime(notif.created_at)}
-                                                    </span>
-                                                </div>
+                                                        {notif.message}
+                                                    </p>
 
-                                                <p className="text-xs text-gray-600 mt-1 leading-relaxed line-clamp-2">
-                                                    {notif.message}
-                                                </p>
-
-                                                {/* Action Row */}
-                                                <div className="flex items-center justify-between mt-2 pt-1 border-t border-gray-100/50">
-                                                    <span className="text-[10px] font-bold text-[#F97316] group-hover:underline flex items-center gap-1">
-                                                        View details
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                        </svg>
-                                                    </span>
-
-                                                    <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100">
-                                                        <button
-                                                            onClick={(e) => handleToggleRead(e, notif)}
-                                                            className="p-1 text-gray-400 hover:text-[#F97316] hover:bg-orange-100/50 rounded-md transition-colors"
-                                                            title={notif.is_read ? "Mark as unread" : "Mark as read"}
-                                                        >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                    {/* Action Row */}
+                                                    <div className="flex items-center justify-between mt-2 pt-1 border-t border-gray-100/50">
+                                                        <span className={`text-[10px] font-bold group-hover:underline flex items-center gap-1 ${
+                                                            isTransferAccepted
+                                                                ? 'text-emerald-700 font-black'
+                                                                : isTransferRejected
+                                                                ? 'text-rose-700 font-black'
+                                                                : isTransferRequest
+                                                                ? 'text-purple-700 font-black'
+                                                                : 'text-[#F97316]'
+                                                        }`}>
+                                                            View details
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                                             </svg>
-                                                        </button>
-                                                        <button
-                                                            onClick={(e) => handleDeleteNotification(e, notif.notification_id)}
-                                                            className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                                                            title="Delete notification"
-                                                        >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                            </svg>
-                                                        </button>
+                                                        </span>
+
+                                                        <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100">
+                                                            <button
+                                                                onClick={(e) => handleToggleRead(e, notif)}
+                                                                className="p-1 text-gray-400 hover:text-[#F97316] hover:bg-orange-100/50 rounded-md transition-colors"
+                                                                title={notif.is_read ? "Mark as unread" : "Mark as read"}
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                                </svg>
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => handleDeleteNotification(e, notif.notification_id)}
+                                                                className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                                                                title="Delete notification"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                </svg>
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))
+                                        );
+                                    })
                                 )}
                             </div>
 

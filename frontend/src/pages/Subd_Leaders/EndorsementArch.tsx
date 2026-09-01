@@ -3,6 +3,7 @@ import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import Button from '../../components/Button';
 import axios from 'axios';
+import { getCachedData, setCachedData } from '../../utils/cache';
 
 interface EndorsementDocument {
     doc_id: string;
@@ -21,8 +22,8 @@ const EndorsementArch = () => {
     const [selectedDoc, setSelectedDoc] = useState<EndorsementDocument | null>(null);
     const [missionData, setMissionData] = useState<any | null>(null);
     const [loadingMission, setLoadingMission] = useState(false);
-    const [docs, setDocs] = useState<EndorsementDocument[]>([]);
-    const [loadingDocs, setLoadingDocs] = useState(true);
+    const [docs, setDocs] = useState<EndorsementDocument[]>(() => getCachedData<EndorsementDocument[]>('subd_endorsement_docs') || []);
+    const [loadingDocs, setLoadingDocs] = useState<boolean>(() => !getCachedData<EndorsementDocument[]>('subd_endorsement_docs'));
 
 
 
@@ -149,7 +150,7 @@ const EndorsementArch = () => {
 
     const fetchDocs = async (showLoading = true) => {
         try {
-            if (showLoading) setLoadingDocs(true);
+            if (showLoading && !getCachedData('subd_endorsement_docs')) setLoadingDocs(true);
             const response = await axios.get('http://localhost:8000/rescue-requests/');
             if (response.data && response.data.length > 0) {
                 const mapped: EndorsementDocument[] = response.data.map((m: any) => {
@@ -188,12 +189,15 @@ const EndorsementArch = () => {
                     };
                 });
                 setDocs(mapped);
+                setCachedData('subd_endorsement_docs', mapped);
             } else {
                 setDocs([]);
             }
         } catch (error) {
             console.error('Error fetching endorsement documents:', error);
-            setDocs([]);
+            if (!getCachedData('subd_endorsement_docs')) {
+                setDocs([]);
+            }
         } finally {
             if (showLoading) setLoadingDocs(false);
         }

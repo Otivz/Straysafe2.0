@@ -173,7 +173,7 @@ def get_or_create_report_thread(report_id: int, current_user: User, db: Session)
             created_by=reporter_id,
             recipient_id=recipient_id,
             title=f"Incident Report #{report_id}",
-            is_closed=report.status_id in [9, 10, 11, 12]
+            is_closed=report.status_id in [3, 9, 10, 11, 12, 14]
         )
         db.add(thread)
         db.commit()
@@ -189,8 +189,8 @@ def get_or_create_report_thread(report_id: int, current_user: User, db: Session)
         db.add(welcome_msg)
         db.commit()
 
-    # Update is_closed if report status changed to resolved
-    is_resolved = (report.current_status_id or report.status_id) in [9, 10, 11, 12]
+    # Update is_closed if report status changed to resolved/closed
+    is_resolved = (report.current_status_id or report.status_id) in [3, 9, 10, 11, 12, 14]
     if thread.is_closed != is_resolved:
         thread.is_closed = is_resolved
         db.commit()
@@ -251,6 +251,12 @@ def get_or_create_match_thread(match_id: int, current_user: User, db: Session) -
         ChatThread.related_id == match_id
     ).first()
 
+    is_resolved = False
+    if source_report:
+        # Match threads remain open during "Claimed by Owner" (ID 9) so owner and leader can coordinate handover.
+        # Match threads are only closed on final resolution/dismissal (11, 12, 3, 14).
+        is_resolved = (source_report.current_status_id or source_report.status_id) in [3, 11, 12, 14]
+
     if not thread:
         pet_name = pet.pet_name if pet else "Pet"
         thread = ChatThread(
@@ -259,7 +265,7 @@ def get_or_create_match_thread(match_id: int, current_user: User, db: Session) -
             created_by=current_user.user_id,
             recipient_id=recipient_id,
             title=f"Look-Alike Verification: {pet_name} (Report #{match.source_report_id})",
-            is_closed=False
+            is_closed=is_resolved
         )
         db.add(thread)
         db.commit()
@@ -272,6 +278,9 @@ def get_or_create_match_thread(match_id: int, current_user: User, db: Session) -
             is_system=True
         )
         db.add(welcome_msg)
+        db.commit()
+    elif thread.is_closed != is_resolved:
+        thread.is_closed = is_resolved
         db.commit()
 
     return thread
@@ -387,6 +396,7 @@ async def send_report_message(
         is_system=is_system or False
     )
     db.add(new_msg)
+    thread.updated_at = datetime.now()
 
     # ── Notification Dispatch for Messages ──────────────────────────────────
     try:
@@ -575,6 +585,9 @@ async def send_match_message(
     db: Session = Depends(get_db)
 ):
     thread = get_or_create_match_thread(match_id, current_user, db)
+    if thread.is_closed:
+        raise HTTPException(status_code=400, detail="This pet claim/case has been completed and archived. Chat is in read-only mode.")
+
     if not check_user_match_chat_access(match_id, current_user, thread, db):
         raise HTTPException(status_code=403, detail="Access denied to this match verification chat")
 
@@ -602,6 +615,7 @@ async def send_match_message(
         is_system=is_system or False
     )
     db.add(new_msg)
+    thread.updated_at = datetime.now()
 
     # Targeted Notification dispatch for Match Chat
     try:
@@ -804,7 +818,11 @@ def list_user_threads(
         pet = db.query(Pet).filter(Pet.pet_id == match.matched_pet_id).first() if match.matched_pet_id else None
         owner = db.query(User).filter(User.user_id == pet.owner_id).first() if (pet and pet.owner_id) else None
         reporter = db.query(User).filter(User.user_id == report.user_id).first() if (report and report.user_id) else None
-        assigned_leader = db.query(User).filter(User.user_id == report.assigned_leader_id).first() if (report and report.assigned_leader_id) else None
+        # Match threads remain open for coordination during Claimed by Owner (ID 9)
+        is_resolved = ((report.current_status_id or report.status_id) in [3, 11, 12, 14]) if report else False
+        if t.is_closed != is_resolved:
+            t.is_closed = is_resolved
+            db.commit()
 
         last_msg = db.query(ChatMessage).filter(ChatMessage.thread_id == t.thread_id).order_by(ChatMessage.sent_at.desc()).first()
         unread_count = db.query(ChatMessage).filter(
@@ -877,8 +895,21 @@ def list_user_threads(
             "unread_count": unread_count
         })
 
-    # Sort all threads by latest update
-    results.sort(key=lambda x: x.get("updated_at") or x.get("created_at") or datetime.min, reverse=True)
+    # Sort all threads with newest messages on top
+    def get_thread_sort_key(t_dict):
+        last_msg = t_dict.get("last_message")
+        if last_msg and last_msg.get("sent_at"):
+            sent_at = last_msg.get("sent_at")
+            if isinstance(sent_at, str):
+                try:
+                    return datetime.fromisoformat(sent_at.replace("Z", "+00:00"))
+                except Exception:
+                    pass
+            elif isinstance(sent_at, datetime):
+                return sent_at
+        return t_dict.get("updated_at") or t_dict.get("created_at") or datetime.min
+
+    results.sort(key=get_thread_sort_key, reverse=True)
     return results
 
 

@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import axios from 'axios'
+import 'leaflet/dist/leaflet.css'
 import App from './App.tsx'
 
 // Global Axios interceptor — attaches the logged-in user's ID as X-User-Id

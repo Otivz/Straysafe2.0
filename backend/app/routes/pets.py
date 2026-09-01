@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import List, cast, Any
+from typing import List, cast, Any, Optional
 from app.database import get_db
 from app.models.pet import Pet
 from app.models.user import User
@@ -20,6 +20,20 @@ def get_pets(include_archived: bool = False, db: Session = Depends(get_db)):
     if not include_archived:
         query = query.filter(Pet.status.notin_(["Archived", "Inactive"]))
     return query.all()
+
+@router.get("/removed", response_model=List[PetResponse])
+@router.get("/archived", response_model=List[PetResponse])
+def get_removed_pets(subdivision_id: Optional[int] = None, db: Session = Depends(get_db)):
+    from app.models.user import User
+    from sqlalchemy.orm import joinedload
+    from sqlalchemy import or_
+    
+    query = db.query(Pet).options(joinedload(Pet.owner)).filter(Pet.status.in_(["Archived", "Inactive"]))
+    if subdivision_id is not None:
+        query = query.outerjoin(User, Pet.owner_id == User.user_id).filter(
+            or_(User.subdivision_id == subdivision_id, Pet.owner_id.is_(None))
+        )
+    return query.order_by(Pet.updated_at.desc()).all()
 
 @router.get("/{pet_id}", response_model=PetResponse)
 def get_pet(pet_id: int, db: Session = Depends(get_db)):
@@ -355,6 +369,41 @@ def get_owner_pet_history(owner_id: int, db: Session = Depends(get_db)):
 from pydantic import BaseModel as PyBaseModel
 from typing import Optional as PyOptional
 
+@router.post("/{pet_id}/restore", response_model=PetResponse)
+def restore_pet_by_id(pet_id: int, req: Request, db: Session = Depends(get_db)):
+    from sqlalchemy.orm import joinedload
+    db_pet = db.query(Pet).options(joinedload(Pet.owner)).filter(Pet.pet_id == pet_id).first()
+    if not db_pet:
+        raise HTTPException(status_code=404, detail="Pet not found")
+    
+    old_status = db_pet.status
+    db_pet.status = "Active"
+    db.commit()
+    db.refresh(db_pet)
+    
+    # Auto-ensure QR Code exists
+    try:
+        from app.models.pet_qr import PetQRCode
+        existing_qr = db.query(PetQRCode).filter(PetQRCode.pet_id == pet_id).first()
+        if not existing_qr:
+            from app.routes.pet_qr import generate_qr_for_pet_internal
+            generate_qr_for_pet_internal(pet_id, db)
+    except Exception as e:
+        print(f"Warning checking QR code during pet restore: {e}")
+        
+    log_activity(
+        db=db,
+        action="RESTORE_PET",
+        target_table="pets",
+        target_id=pet_id,
+        description=f"Restored pet record to Active: {db_pet.pet_name} (pet_id={pet_id})",
+        log_type="operation",
+        old_values={"status": old_status},
+        new_values={"status": "Active"},
+        request=req
+    )
+    return db_pet
+
 class PetRestorePayload(PyBaseModel):
     pet_id: PyOptional[int] = None
     log_id: PyOptional[int] = None
@@ -372,6 +421,51 @@ class PetRestorePayload(PyBaseModel):
 def restore_pet(payload: PetRestorePayload, req: Request, db: Session = Depends(get_db)):
     from app.models.audit_log import AuditLog
     
+    # If the pet already exists in database (e.g. archived), reactivate it directly!
+    if payload.pet_id:
+        existing_pet = db.query(Pet).filter(Pet.pet_id == payload.pet_id).first()
+        if existing_pet:
+            old_status = existing_pet.status
+            existing_pet.status = "Active"
+            if payload.pet_name:
+                existing_pet.pet_name = payload.pet_name
+            if payload.photo_url:
+                existing_pet.photo_url = payload.photo_url
+            db.commit()
+            db.refresh(existing_pet)
+            
+            # Ensure QR code exists
+            try:
+                from app.models.pet_qr import PetQRCode
+                existing_qr = db.query(PetQRCode).filter(PetQRCode.pet_id == existing_pet.pet_id).first()
+                if not existing_qr:
+                    from app.routes.pet_qr import generate_qr_for_pet_internal
+                    generate_qr_for_pet_internal(existing_pet.pet_id, db)
+            except Exception as e:
+                print(f"Warning generating QR for restored pet {existing_pet.pet_id}: {e}")
+                
+            log_activity(
+                db=db,
+                action="RESTORE_PET",
+                target_table="pets",
+                target_id=existing_pet.pet_id,
+                description=f"Restored pet record: {existing_pet.pet_name} (pet_id={existing_pet.pet_id})",
+                log_type="operation",
+                old_values={"status": old_status},
+                new_values={"status": "Active"},
+                request=req
+            )
+            return {
+                "message": "Pet restored successfully",
+                "pet": {
+                    "pet_id": existing_pet.pet_id,
+                    "pet_name": existing_pet.pet_name,
+                    "pet_type": existing_pet.pet_type,
+                    "breed": existing_pet.breed,
+                    "status": existing_pet.status
+                }
+            }
+
     pet_data = {
         "pet_name": payload.pet_name or "Restored Pet",
         "pet_type": payload.pet_type or "Dog",
@@ -477,7 +571,7 @@ def restore_pet(payload: PetRestorePayload, req: Request, db: Session = Depends(
 @router.post("/{pet_id}/remove")
 def remove_pet(pet_id: int, req: Request, db: Session = Depends(get_db)):
     """
-    Soft-archives a pet for resident removal.
+    Soft-archives a pet for removal.
     Does NOT hard-delete from the database.
     Preserves all reports, vaccination logs, QR records, and audit history.
     """
@@ -688,7 +782,7 @@ async def upload_pet_photo_right(pet_id: int, file: UploadFile = File(...), db: 
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/{pet_id}")
+@router.delete("/{pet_id}/permanent")
 def delete_pet_record(pet_id: int, db: Session = Depends(get_db)):
     """
     Permanently delete a pet record and safely clean up related references:

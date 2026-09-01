@@ -3,6 +3,10 @@ import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import DataTable from '../../components/DataTable';
 import axios from 'axios';
+import { getCachedData, setCachedData } from '../../utils/cache';
+import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
+import ReportChatBadge from '../../components/Chat/ReportChatBadge';
+import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 
 interface EscalatedMission {
     mission_id: string;
@@ -16,10 +20,10 @@ interface EscalatedMission {
 }
 
 const EscelatedMissions = () => {
-    const [loading, setLoading] = useState(true);
+    const [missions, setMissions] = useState<EscalatedMission[]>(() => getCachedData<EscalatedMission[]>('subd_escalated_missions') || []);
+    const [loading, setLoading] = useState<boolean>(() => !getCachedData<EscalatedMission[]>('subd_escalated_missions'));
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedStatus, setSelectedStatus] = useState('All');
-    const [missions, setMissions] = useState<EscalatedMission[]>([]);
     const [selectedMission, setSelectedMission] = useState<EscalatedMission | null>(null);
     const [selectedStepDetails, setSelectedStepDetails] = useState<{
         label: string;
@@ -35,10 +39,21 @@ const EscelatedMissions = () => {
     const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
     const [resolvedTodayCount, setResolvedTodayCount] = useState(0);
 
+    // Chat Drawer state
+    const [isChatOpen, setIsChatOpen] = useState(false);
+    const [selectedChatReport, setSelectedChatReport] = useState<any | null>(null);
+
+    const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
+    const currentUser = userStr ? JSON.parse(userStr) : null;
+
     const fetchMissions = async (showLoading = true) => {
         try {
-            if (showLoading) setLoading(true);
-            const response = await axios.get('http://localhost:8000/rescue-requests/');
+            if (showLoading && !getCachedData('subd_escalated_missions')) setLoading(true);
+            const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
+            const currentUser = userStr ? JSON.parse(userStr) : null;
+            const subId = currentUser?.subdivision_id;
+            const url = subId ? `http://localhost:8000/rescue-requests/?subdivision_id=${subId}` : 'http://localhost:8000/rescue-requests/';
+            const response = await axios.get(url);
             if (response.data && response.data.length > 0) {
                 // Calculate resolved today
                 const resolvedToday = response.data.filter((m: any) => {
@@ -95,14 +110,18 @@ const EscelatedMissions = () => {
                         raw_data: m
                     };
                 });
-                setMissions(mapped.filter(m => m.barangay_status !== 'Resolved'));
+                const activeMissions = mapped.filter(m => m.barangay_status !== 'Resolved');
+                setMissions(activeMissions);
+                setCachedData('subd_escalated_missions', activeMissions);
             } else {
                 setMissions([]);
                 setResolvedTodayCount(0);
             }
         } catch (error) {
             console.error('Error fetching escalated missions:', error);
-            setMissions([]);
+            if (!getCachedData('subd_escalated_missions')) {
+                setMissions([]);
+            }
             setResolvedTodayCount(0);
         } finally {
             if (showLoading) setLoading(false);
@@ -460,6 +479,15 @@ const EscelatedMissions = () => {
                                         key: "barangay_status",
                                         render: (m) => (
                                             <div className="flex items-center space-x-2">
+                                                <ReportChatBadge
+                                                    reportId={m.report_id}
+                                                    currentUserId={currentUser?.user_id}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedChatReport((m as any).raw_data?.report || { report_id: m.report_id });
+                                                        setIsChatOpen(true);
+                                                    }}
+                                                />
                                                 {m.barangay_status === 'In Progress' && (
                                                     <span className="relative flex h-2 w-2">
                                                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
@@ -520,6 +548,14 @@ const EscelatedMissions = () => {
                     </div>
                 </main>
             </div>
+
+            {/* Case Chat Drawer */}
+            <ReportChatDrawer
+                isOpen={isChatOpen}
+                onClose={() => setIsChatOpen(false)}
+                report={selectedChatReport as any}
+                currentUser={currentUser}
+            />
 
             {/* Mission Tracker Modal */}
             {selectedMission && (() => {
@@ -611,7 +647,8 @@ const EscelatedMissions = () => {
                     const condition = raw.report?.condition || 'No information provided.';
                     const message = matchedHistory.remarks || 'No information provided.';
                     const timestamp = new Date(matchedHistory.created_at).toLocaleString();
-                    const updatedBy = matchedHistory.updater_name || 'System';
+                    const updatedBy = matchedHistory.updater_name || (stepLabel === 'Report Received' ? (raw.report?.reporter_name || 'Resident') : 'System');
+                    const updatedPhoto = matchedHistory.updater_photo || (stepLabel === 'Report Received' ? raw.report?.reporter_photo : null);
 
                     return {
                         image,
@@ -619,7 +656,8 @@ const EscelatedMissions = () => {
                         condition,
                         message,
                         timestamp,
-                        updatedBy
+                        updatedBy,
+                        updatedPhoto
                     };
                 };
 
@@ -780,8 +818,12 @@ const EscelatedMissions = () => {
 
                                                                 {/* Assigned Personnel */}
                                                                 <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-3">
-                                                                    <div className="w-7 h-7 rounded-full bg-orange-100 text-[#F97316] flex items-center justify-center font-bold text-[10px] shrink-0">
-                                                                        {stepDetail.updatedBy.charAt(0)}
+                                                                    <div className="w-7 h-7 rounded-full overflow-hidden bg-orange-100 text-[#F97316] flex items-center justify-center font-bold text-[10px] shrink-0 border border-orange-200">
+                                                                        {stepDetail.updatedPhoto ? (
+                                                                            <img src={getProfilePicture(stepDetail.updatedPhoto)} alt={stepDetail.updatedBy} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                                        ) : (
+                                                                            stepDetail.updatedBy.charAt(0)
+                                                                        )}
                                                                     </div>
                                                                     <div>
                                                                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none">Assigned Personnel</p>

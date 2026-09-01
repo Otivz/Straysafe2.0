@@ -6,6 +6,11 @@ import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import DataTable from '../../components/DataTable';
 import Select from '../../components/Dropdown';
+import { getCachedData, setCachedData } from '../../utils/cache';
+import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
+import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
+import ReportChatBadge from '../../components/Chat/ReportChatBadge';
+import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 
 interface Report {
     report_id: number;
@@ -25,40 +30,31 @@ interface Report {
     created_at: string;
     user_id: number;
     reporter_name?: string;
+    reporter_photo?: string;
     media?: any[];
     comments?: any[];
 }
 
-const statusMap: Record<number, string> = {
-    1: 'Reported',
-    2: 'Verified',
-    3: 'Rejected',
-    4: 'Escalated to Barangay',
-    13: 'Approved',
-    5: 'Rescue In Progress',
-    6: 'Picked Up',
-    7: 'Under Observation',
-    8: 'Impounded',
-    9: 'Claimed by Owner',
-    10: 'Released',
-    11: 'Resolved',
-    12: 'Deceased'
-};
+const statusMap = REPORT_STATUS_MAP;
 
 const categoryMap: Record<number, string> = {
     1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
     4: 'Roaming Pack', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
 };
 
-const HISTORY_STATUSES = [11, 12, 3, 9, 10]; // Resolved (11), Deceased (12), Rejected (3), Claimed by Owner (9), Released (10)
+const HISTORY_STATUSES = [11, 12, 3, 9, 10, 14]; // Resolved (11), Deceased (12), Rejected (3), Claimed by Owner (9), Released (10), False Alarm / Dismissed (14)
 
 const SubdHistoryReport = () => {
     const navigate = useNavigate();
 
-    const [reports, setReports] = useState<Report[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [reports, setReports] = useState<Report[]>(() => getCachedData<Report[]>('subd_history_reports') || []);
+    const [loading, setLoading] = useState<boolean>(() => !getCachedData<Report[]>('subd_history_reports'));
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+
+    // Chat Drawer state
+    const [isChatOpen, setIsChatOpen] = useState(false);
+    const [selectedChatReport, setSelectedChatReport] = useState<Report | null>(null);
 
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -77,18 +73,25 @@ const SubdHistoryReport = () => {
         }
     }, [navigate, userStr, currentUser]);
 
-    const fetchReports = async () => {
+    const fetchReports = async (forceLoading = false) => {
         try {
-            setLoading(true);
-            const response = await axios.get('http://localhost:8000/reports/');
+            if (forceLoading || !getCachedData('subd_history_reports')) {
+                setLoading(true);
+            }
+            const subId = currentUser?.subdivision_id;
+            const url = subId ? `http://localhost:8000/reports/?subdivision_id=${subId}` : 'http://localhost:8000/reports/';
+            const response = await axios.get(url);
             const sortedData = (response.data || []).sort((a: any, b: any) => b.report_id - a.report_id);
             const uniqueReports = sortedData.filter((report: any, index: number, self: any[]) =>
                 index === self.findIndex((t: any) => t.report_id === report.report_id)
             );
             setReports(uniqueReports);
+            setCachedData('subd_history_reports', uniqueReports);
         } catch (error) {
             console.error('Error fetching reports:', error);
-            setReports([]);
+            if (!getCachedData('subd_history_reports')) {
+                setReports([]);
+            }
         } finally {
             setLoading(false);
         }
@@ -120,6 +123,7 @@ const SubdHistoryReport = () => {
     const totalHistory = historyReports.length;
     const resolvedCount = historyReports.filter(r => r.status_id === 11 || r.status_id === 9 || r.status_id === 10).length;
     const deceasedCount = historyReports.filter(r => r.status_id === 12).length;
+    const dismissedCount = historyReports.filter(r => r.status_id === 14).length;
     const rejectedCount = historyReports.filter(r => r.status_id === 3).length;
 
     const getPriorityColor = (priority: string) => {
@@ -143,6 +147,9 @@ const SubdHistoryReport = () => {
                 return 'bg-teal-50 text-teal-700 border-teal-200';
             case 'deceased':
                 return 'bg-gray-100 text-gray-600 border-gray-200';
+            case 'false alarm / dismissed':
+            case 'dismissed':
+                return 'bg-amber-50 text-amber-700 border-amber-200';
             case 'rejected':
                 return 'bg-red-50 text-red-600 border-red-100';
             default:
@@ -161,10 +168,15 @@ const SubdHistoryReport = () => {
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
             </svg>
         );
+        if (statusId === 14) return (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524L13.477 14.89zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+            </svg>
+        );
         // Rejected
         return (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524L13.477 14.89zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
             </svg>
         );
     };
@@ -195,6 +207,18 @@ const SubdHistoryReport = () => {
             )
         },
         {
+            label: 'Dismissed',
+            value: dismissedCount,
+            color: 'bg-amber-500',
+            lightColor: 'bg-amber-50',
+            textColor: 'text-amber-600',
+            icon: (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524L13.477 14.89zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+                </svg>
+            )
+        },
+        {
             label: 'Deceased',
             value: deceasedCount,
             color: 'bg-gray-500',
@@ -214,7 +238,7 @@ const SubdHistoryReport = () => {
             textColor: 'text-red-600',
             icon: (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524L13.477 14.89zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>
             )
         },
@@ -239,7 +263,7 @@ const SubdHistoryReport = () => {
                     <div className="max-w-7xl mx-auto space-y-8">
 
                         {/* Metrics Row */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                             {metrics.map((metric, i) => (
                                 <div
                                     key={i}
@@ -279,13 +303,14 @@ const SubdHistoryReport = () => {
                                     options={[
                                         { value: 'all', label: 'All Status' },
                                         { value: 'Resolved', label: 'Resolved' },
+                                        { value: 'False Alarm / Dismissed', label: 'Dismissed' },
                                         { value: 'Deceased', label: 'Deceased' },
                                         { value: 'Rejected', label: 'Rejected' },
                                     ]}
                                     className="w-[140px]"
                                 />
                                 <button
-                                    onClick={fetchReports}
+                                    onClick={() => fetchReports(true)}
                                     className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-all"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -348,6 +373,15 @@ const SubdHistoryReport = () => {
                                     key: "status",
                                     render: (rep) => (
                                         <div className="flex items-center gap-2">
+                                            <ReportChatBadge
+                                                reportId={rep.report_id}
+                                                currentUserId={currentUser?.user_id}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedChatReport(rep);
+                                                    setIsChatOpen(true);
+                                                }}
+                                            />
                                             <span className={`${[11, 9, 10].includes(rep.status_id) ? 'text-green-500' : rep.status_id === 12 ? 'text-gray-500' : 'text-red-500'}`}>
                                                 {getStatusIcon(rep.status_id)}
                                             </span>
@@ -370,12 +404,16 @@ const SubdHistoryReport = () => {
                                     header: "Submitted By",
                                     key: "reporter",
                                     render: (rep) => (
-                                        <div className="flex items-center space-x-2">
-                                            <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] text-gray-500 font-bold border border-gray-200">
-                                                {(rep.reporter_name || 'U').charAt(0).toUpperCase()}
-                                            </div>
-                                            <span className="text-xs font-semibold text-gray-700">{rep.reporter_name || `User ${rep.user_id}`}</span>
-                                        </div>
+                                         <div className="flex items-center space-x-2">
+                                             <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center border border-gray-200 shrink-0">
+                                                 {rep.reporter_photo ? (
+                                                     <img src={getProfilePicture(rep.reporter_photo)} alt={rep.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                 ) : (
+                                                     <span className="text-[10px] text-gray-500 font-bold">{(rep.reporter_name || 'U').charAt(0).toUpperCase()}</span>
+                                                 )}
+                                             </div>
+                                             <span className="text-xs font-semibold text-gray-700">{rep.reporter_name || `User ${rep.user_id}`}</span>
+                                         </div>
                                     )
                                 },
                                 {
@@ -411,7 +449,7 @@ const SubdHistoryReport = () => {
                             <div>
                                 <h4 className="text-sm font-bold text-purple-900">History Archive</h4>
                                 <p className="text-xs text-purple-700 mt-1 leading-relaxed">
-                                    This page contains all closed and past incident reports — including Resolved, Deceased, and Rejected cases.
+                                    This page contains all closed and past incident reports — including Resolved, Dismissed (False Alarm), Deceased, and Rejected cases.
                                     These reports are read-only and cannot be modified. Click any row to view the full report details.
                                 </p>
                             </div>
@@ -420,6 +458,14 @@ const SubdHistoryReport = () => {
                     </div>
                 </main>
             </div>
+
+            {/* Case Chat Drawer */}
+            <ReportChatDrawer
+                isOpen={isChatOpen}
+                onClose={() => setIsChatOpen(false)}
+                report={selectedChatReport as any}
+                currentUser={currentUser}
+            />
         </div>
     );
 };

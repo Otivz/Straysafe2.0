@@ -47,8 +47,12 @@ def _populate_rescue_fields(rescue: Optional[Rescue], db: Session) -> Optional[R
         if official_actions:
             # Use the most recent official action
             latest_official = sorted(official_actions, key=lambda x: x.created_at, reverse=True)[0].updater
-            rescue.leader_name = latest_official.name
-            rescue.leader_position = latest_official.position.position_name if latest_official.position else "Subdivision Leader"
+            if latest_official:
+                rescue.leader_name = latest_official.name
+                rescue.leader_position = latest_official.position.position_name if latest_official.position else "Subdivision Leader"
+            else:
+                rescue.leader_name = "Subdivision Leader"
+                rescue.leader_position = "Official"
         else:
             rescue.leader_name = "Subdivision Leader"
             rescue.leader_position = "Official"
@@ -144,6 +148,21 @@ def create_rescue_request(request_in: RescueRequestCreate, db: Session = Depends
                     status_id=2 # Sent
                 )
                 db.add(db_letter)
+
+        # Notify Barangay staff and admins about the newly escalated report
+        try:
+            barangay_officials = db.query(User).filter(User.role_id.in_([3, 4])).all()
+            for official in barangay_officials:
+                b_notif = Notification(
+                    user_id=official.user_id,
+                    title=f"New Escalated Report #{request_in.report_id}",
+                    message=f"Report #{request_in.report_id} has been escalated to Barangay with an Endorsement Letter.",
+                    type="alert",
+                    related_id=request_in.report_id
+                )
+                db.add(b_notif)
+        except Exception as notif_err:
+            print(f"Notice: Failed to create barangay escalation notification: {notif_err}")
 
         # Log activity
         log_activity(

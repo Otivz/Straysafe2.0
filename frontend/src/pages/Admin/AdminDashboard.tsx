@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { api } from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
@@ -36,9 +36,9 @@ const AdminDashboard = () => {
         const fetchDashboardData = async () => {
             try {
                 const [reportsRes, requestsRes, personnelRes] = await Promise.allSettled([
-                    axios.get('http://localhost:8000/reports/'),
-                    axios.get('http://localhost:8000/rescue-requests/'),
-                    axios.get('http://localhost:8000/users/?role_id=3')
+                    api.get('/reports/'),
+                    api.get('/rescue-requests/'),
+                    api.get('/users/?role_id=3')
                 ]);
 
                 if (reportsRes.status === 'fulfilled') {

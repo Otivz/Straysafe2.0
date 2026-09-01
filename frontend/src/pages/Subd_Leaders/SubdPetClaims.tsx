@@ -7,12 +7,13 @@ import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import MapComponent from '../../components/MapComponent';
 import Button from '../../components/Button';
 import Select from '../../components/Dropdown';
-
-
+import { getCachedData, setCachedData } from '../../utils/cache';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const getStatusStyles = (status: string) => {
     switch (status) {
+        case 'Handover Complete':
+        case 'Pet Received': return 'bg-emerald-100 border-emerald-300 text-emerald-800 font-bold';
         case 'Approved': return 'bg-green-50 border-green-200 text-green-700';
         case 'Rejected': return 'bg-red-50 border-red-200 text-red-600';
         case 'Evidence Requested': return 'bg-blue-50 border-blue-200 text-blue-600';
@@ -39,7 +40,7 @@ const docColors: Record<string, string> = {
 const SubdPetClaims = () => {
     const navigate = useNavigate();
 
-    const [claims, setClaims] = useState<any[]>([]);
+    const [claims, setClaims] = useState<any[]>(() => getCachedData<any[]>('subd_pet_claims') || []);
     const [selectedClaim, setSelectedClaim] = useState<any>(null);
     const [remarks, setRemarks] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -250,6 +251,7 @@ const SubdPetClaims = () => {
             if (res.data?.length > 0) {
                 const transformed = res.data.map((bc: any) => transformClaim(bc));
                 setClaims(transformed);
+                setCachedData('subd_pet_claims', transformed);
                 updateWalkingDistances(transformed);
                 
                 // Mark claims as viewed so sidebar notification count clears after viewing
@@ -275,11 +277,13 @@ const SubdPetClaims = () => {
             }
         } catch (err) {
             console.error("Failed to fetch claims", err);
-            setClaims([]);
+            if (!getCachedData('subd_pet_claims')) {
+                setClaims([]);
+            }
         }
     };
 
-    const handleUpdateStatus = async (status: 'Approved' | 'Rejected' | 'Evidence Requested') => {
+    const handleUpdateStatus = async (status: 'Approved' | 'Rejected' | 'Evidence Requested' | 'Handover Complete') => {
         if (!selectedClaim) return;
         setIsSubmitting(true);
         try {
@@ -1093,51 +1097,104 @@ const SubdPetClaims = () => {
                                     {/* G: Review Decision */}
                                     {selectedClaim.status !== 'Potential Owner Match' && selectedClaim.status !== 'Possible Match Found' && (
                                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">G. Review Decision</h4>
-                                            <div className="space-y-2.5">
-                                                <Button
-                                                    fullWidth
-                                                    disabled={isSubmitting || selectedClaim.status === 'Approved'}
-                                                    onClick={() => handleUpdateStatus('Approved')}
-                                                    className="h-12 justify-start gap-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm"
-                                                    variant={'none' as any}
-                                                    size="none"
-                                                >
-                                                    <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                    <div className="text-left">
-                                                        <p className="font-black">Approve Claim</p>
-                                                        <p className="text-[9px] font-medium opacity-80 normal-case tracking-normal">Mark as verified and notify Barangay</p>
+                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">G. Review Decision & Handover</h4>
+                                            
+                                            {selectedClaim.status === 'Handover Complete' || selectedClaim.status === 'Pet Received' ? (
+                                                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
+                                                    <div className="flex items-center gap-2 text-emerald-800 font-black text-xs uppercase tracking-wider">
+                                                        <span>🎉</span>
+                                                        <span>Pet Handover / Receipt Successfully Completed</span>
                                                     </div>
-                                                </Button>
-                                                <Button
-                                                    fullWidth
-                                                    disabled={isSubmitting || selectedClaim.status === 'Evidence Requested'}
-                                                    onClick={() => handleUpdateStatus('Evidence Requested')}
-                                                    className="h-12 justify-start gap-3 bg-[#F97316] hover:bg-[#EA580C] disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm"
-                                                    variant={'none' as any}
-                                                    size="none"
-                                                >
-                                                    <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
-                                                    <div className="text-left">
-                                                        <p className="font-black">Request More Evidence</p>
-                                                        <p className="text-[9px] font-medium opacity-80 normal-case tracking-normal">Ask owner for additional documents</p>
+                                                    <p className="text-[11px] text-emerald-700 font-medium">
+                                                        The animal has been verified, picked up, and safely reunited with its registered owner. The incident report and messaging are now officially archived.
+                                                    </p>
+                                                </div>
+                                            ) : selectedClaim.status === 'Approved' ? (
+                                                <div className="space-y-3">
+                                                    <div className="p-3.5 bg-green-50 border border-green-200 rounded-xl space-y-1.5">
+                                                        <div className="flex items-center gap-1.5 text-green-900 font-black text-xs uppercase tracking-wide">
+                                                            <span>✓</span>
+                                                            <span>Claim Approved — Ready for Pickup / Handover</span>
+                                                        </div>
+                                                        <p className="text-[11px] text-green-800 font-medium leading-relaxed">
+                                                            Direct messaging is active with the owner. Once the resident picks up their pet, click the button below to complete the handover.
+                                                        </p>
                                                     </div>
-                                                </Button>
-                                                <Button
-                                                    fullWidth
-                                                    disabled={isSubmitting || selectedClaim.status === 'Rejected'}
-                                                    onClick={() => handleUpdateStatus('Rejected')}
-                                                    className="h-12 justify-start gap-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm"
-                                                    variant={'none' as any}
-                                                    size="none"
-                                                >
-                                                    <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                    <div className="text-left">
-                                                        <p className="font-black">Reject Claim</p>
-                                                        <p className="text-[9px] font-medium opacity-80 normal-case tracking-normal">Insufficient evidence to approve</p>
+
+                                                    <div className="flex flex-col sm:flex-row gap-2">
+                                                        <Button
+                                                            fullWidth
+                                                            disabled={isSubmitting}
+                                                            onClick={() => handleUpdateStatus('Handover Complete')}
+                                                            className="h-12 justify-start gap-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm flex-1 cursor-pointer"
+                                                            variant={'none' as any}
+                                                            size="none"
+                                                        >
+                                                            <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                                                            <div className="text-left">
+                                                                <p className="font-black">🤝 Mark Handover Complete</p>
+                                                                <p className="text-[9px] font-medium opacity-90 normal-case tracking-normal">Confirm pet is reunited and close report</p>
+                                                            </div>
+                                                        </Button>
+
+                                                        <Button
+                                                            disabled={isSubmitting}
+                                                            onClick={() => navigate(`/subd-messages?reportId=${selectedClaim.report_id}&openMatch=true`)}
+                                                            className="h-12 px-4 justify-center gap-2 bg-orange-50 hover:bg-orange-100 text-[#F97316] border border-orange-200 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-2xs shrink-0 cursor-pointer"
+                                                            variant={'none' as any}
+                                                            size="none"
+                                                        >
+                                                            <span>💬</span>
+                                                            <span>Open Chat</span>
+                                                        </Button>
                                                     </div>
-                                                </Button>
-                                            </div>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-2.5">
+                                                    <Button
+                                                        fullWidth
+                                                        disabled={isSubmitting}
+                                                        onClick={() => handleUpdateStatus('Approved')}
+                                                        className="h-12 justify-start gap-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm cursor-pointer"
+                                                        variant={'none' as any}
+                                                        size="none"
+                                                    >
+                                                        <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                        <div className="text-left">
+                                                            <p className="font-black">Approve Claim</p>
+                                                            <p className="text-[9px] font-medium opacity-80 normal-case tracking-normal">Verify ownership and enable handover coordination</p>
+                                                        </div>
+                                                    </Button>
+                                                    <Button
+                                                        fullWidth
+                                                        disabled={isSubmitting || selectedClaim.status === 'Evidence Requested'}
+                                                        onClick={() => handleUpdateStatus('Evidence Requested')}
+                                                        className="h-12 justify-start gap-3 bg-[#F97316] hover:bg-[#EA580C] disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm cursor-pointer"
+                                                        variant={'none' as any}
+                                                        size="none"
+                                                    >
+                                                        <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                                                        <div className="text-left">
+                                                            <p className="font-black">Request More Evidence</p>
+                                                            <p className="text-[9px] font-medium opacity-80 normal-case tracking-normal">Ask owner for additional documents</p>
+                                                        </div>
+                                                    </Button>
+                                                    <Button
+                                                        fullWidth
+                                                        disabled={isSubmitting || selectedClaim.status === 'Rejected'}
+                                                        onClick={() => handleUpdateStatus('Rejected')}
+                                                        className="h-12 justify-start gap-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm cursor-pointer"
+                                                        variant={'none' as any}
+                                                        size="none"
+                                                    >
+                                                        <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                        <div className="text-left">
+                                                            <p className="font-black">Reject Claim</p>
+                                                            <p className="text-[9px] font-medium opacity-80 normal-case tracking-normal">Insufficient evidence to approve</p>
+                                                        </div>
+                                                    </Button>
+                                                </div>
+                                            )}
 
                                             {/* Footer Reviewer Info */}
                                             <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2 text-[9px] text-gray-400 font-medium">

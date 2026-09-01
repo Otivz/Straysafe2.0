@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import axios from 'axios';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
+import { getCachedData, setCachedData } from '../../utils/cache';
 
 // Announcement type for broadcast module
 interface Announcement {
@@ -52,9 +53,7 @@ const SubdHazardAlert = () => {
     const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
     const [newCommentText, setNewCommentText] = useState('');
 
-    // const categories = ['All', 'Emergency', 'Animal Advisory', 'Vaccination Drive', 'Lost and Found'];
-
-    const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+    const [announcements, setAnnouncements] = useState<Announcement[]>(() => getCachedData<Announcement[]>('subd_announcements') || []);
 
     const formatPostedDate = (raw?: string | null) => {
         if (!raw) return 'Just now';
@@ -95,7 +94,9 @@ const SubdHazardAlert = () => {
         if (!currentUser?.subdivision_id) return;
         try {
             const res = await axios.get(`http://localhost:8000/announcements/subdivision/${currentUser.subdivision_id}`);
-            setAnnouncements(res.data.map(mapApiAnnouncement));
+            const mapped = res.data.map(mapApiAnnouncement);
+            setAnnouncements(mapped);
+            setCachedData('subd_announcements', mapped);
         } catch (err) {
             console.error('Failed to fetch announcements:', err);
         }

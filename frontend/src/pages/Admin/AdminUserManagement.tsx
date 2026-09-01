@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import { api } from '../../utils/api';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import SuccessModal from '../../components/Modals/SuccessModal';
@@ -68,12 +68,12 @@ const AdminUserManagement = () => {
         status: 'Active'
     });
 
-    const API_URL = 'http://localhost:8000/users';
+    const API_URL = '/users';
 
     const fetchUsers = async () => {
         try {
             setLoading(true);
-            const response = await axios.get(API_URL);
+            const response = await api.get(API_URL);
             setUsers(response.data);
         } catch (error) {
             console.error('Error fetching users:', error);
@@ -145,10 +145,10 @@ const AdminUserManagement = () => {
             if (editingUser) {
                 // Update
                 if (!cleanData.password) delete (cleanData as any).password;
-                await axios.put(`${API_URL}/${editingUser.user_id}`, cleanData);
+                await api.put(`${API_URL}/${editingUser.user_id}`, cleanData);
             } else {
                 // Create
-                await axios.post(API_URL, cleanData);
+                await api.post(API_URL, cleanData);
             }
             setIsModalOpen(false);
             setSuccessMessage(editingUser ? 'Successfully Edited User!' : 'Successfully Created User!');
@@ -165,7 +165,7 @@ const AdminUserManagement = () => {
     const handleDelete = async (id: number) => {
         if (window.confirm('Are you sure you want to permanently delete this user?')) {
             try {
-                await axios.delete(`${API_URL}/${id}`);
+                await api.delete(`${API_URL}/${id}`);
                 fetchUsers();
             } catch (error) {
                 console.error('Error deleting user:', error);
@@ -176,7 +176,7 @@ const AdminUserManagement = () => {
     const toggleStatus = async (user: User) => {
         const newStatus = user.status === 'Active' ? 'Inactive' : 'Active';
         try {
-            await axios.patch(`${API_URL}/${user.user_id}/status`, null, {
+            await api.patch(`${API_URL}/${user.user_id}/status`, null, {
                 params: { status_in: newStatus }
             });
             fetchUsers();
@@ -201,7 +201,7 @@ const AdminUserManagement = () => {
 
     const handleVerifyUser = async (user: User) => {
         try {
-            await axios.put(`${API_URL}/${user.user_id}`, {
+            await api.put(`${API_URL}/${user.user_id}`, {
                 ...user,
                 is_verified: true,
                 status: 'Active'

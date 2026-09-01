@@ -29,6 +29,19 @@ class ReportBase(BaseModel):
     ai_suggested_risk_level: Optional[str] = None
     ai_suggested_priority: Optional[str] = None
     ai_suggested_priority_reason: Optional[str] = None
+    ai_behavior_chasing: Optional[bool] = False
+    ai_behavior_actual_bite: Optional[bool] = False
+    ai_behavior_attempted_bite: Optional[bool] = False
+    ai_behavior_injury: Optional[bool] = False
+    ai_behavior_aggressive: Optional[bool] = False
+    ai_behavior_explanation: Optional[str] = None
+    # Verified Investigation Behavioral Findings
+    verified_actual_bite: Optional[bool] = False
+    verified_chasing: Optional[bool] = False
+    verified_attempted_bite: Optional[bool] = False
+    verified_injury: Optional[bool] = False
+    verified_aggressive: Optional[bool] = False
+    behavior_finding: Optional[str] = None
     # Frontend sends "status_id"; we accept it here and map to current_status_id in the route
     status_id: Optional[int] = 1
 
@@ -150,8 +163,91 @@ class ReportResponse(ReportBase):
     claimed_at: Optional[datetime] = None
     unassigned_notified: Optional[bool] = False
 
+    # Pending Transfer Workflow
+    pending_transfer_to_id: Optional[int] = None
+    pending_transfer_to_name: Optional[str] = None
+    pending_transfer_to_photo: Optional[str] = None
+    pending_transfer_from_id: Optional[int] = None
+    pending_transfer_from_name: Optional[str] = None
+    pending_transfer_notes: Optional[str] = None
+    pending_transfer_created_at: Optional[datetime] = None
+
+    # Takeover Eligibility & Inactivity Tracking
+    is_takeover_eligible: Optional[bool] = False
+    takeover_locked_until: Optional[datetime] = None
+    takeover_cooldown_remaining_seconds: Optional[int] = 0
+    takeover_inactivity_hours_threshold: Optional[int] = 24
+    last_activity_at: Optional[datetime] = None
+
+    # Verification & Dispute Tracking
+    verification_status: Optional[str] = 'unverified'
+    false_alarm_reason: Optional[str] = None
+    verification_notes: Optional[str] = None
+    verified_by_user_id: Optional[int] = None
+    verified_by_name: Optional[str] = None
+    verified_at: Optional[datetime] = None
+    verified_actual_bite: Optional[bool] = False
+    verified_chasing: Optional[bool] = False
+    verified_attempted_bite: Optional[bool] = False
+    verified_injury: Optional[bool] = False
+    verified_aggressive: Optional[bool] = False
+    behavior_finding: Optional[str] = None
+    disputes: Optional[list['ReportDisputeResponse']] = []
+
     class Config:
         from_attributes = True
+
+
+class ReportDisputeCreate(BaseModel):
+    resident_user_id: int
+    pet_id: Optional[int] = None
+    dispute_reason: str
+    vaccination_card_url: Optional[str] = None
+    supporting_photo_url: Optional[str] = None
+
+
+class ReportDisputeReviewRequest(BaseModel):
+    reviewer_id: int
+    status: str  # 'Accepted' or 'Rejected'
+    reviewer_notes: Optional[str] = None
+
+
+class ReportDisputeResponse(BaseModel):
+    dispute_id: int
+    report_id: int
+    resident_user_id: int
+    pet_id: Optional[int] = None
+    dispute_reason: str
+    vaccination_card_url: Optional[str] = None
+    supporting_photo_url: Optional[str] = None
+    status: str
+    reviewer_id: Optional[int] = None
+    reviewer_notes: Optional[str] = None
+    created_at: datetime
+    resolved_at: Optional[datetime] = None
+    resident_name: Optional[str] = None
+    pet_name: Optional[str] = None
+    reviewer_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ReportFalseAlarmRequest(BaseModel):
+    user_id: int
+    reason: str  # e.g., 'No Animal Found', 'Exaggerated / No Bite Occurred', 'Neighbor Dispute / Harassment', 'Duplicate Report', 'Other'
+    notes: Optional[str] = None
+
+
+class ReportVerifyRequest(BaseModel):
+    user_id: int
+    notes: Optional[str] = None
+    verified_actual_bite: Optional[bool] = False
+    verified_chasing: Optional[bool] = False
+    verified_attempted_bite: Optional[bool] = False
+    verified_injury: Optional[bool] = False
+    verified_aggressive: Optional[bool] = False
+    behavior_finding: Optional[str] = "Unsubstantiated / Friendly"
 
 
 class ReportClaimRequest(BaseModel):
@@ -162,6 +258,21 @@ class ReportTakeoverRequest(BaseModel):
     user_id: int
     reason: str
     notes: Optional[str] = None
+
+
+class ReportTransferRequest(BaseModel):
+    user_id: int  # The user initiating the transfer (must be current handler)
+    target_user_id: int  # The officer to transfer to
+    notes: Optional[str] = None  # Reason / handover instructions
+
+
+class ReportTransferActionRequest(BaseModel):
+    user_id: int  # The officer accepting or cancelling
+
+
+class ReportTransferRejectRequest(BaseModel):
+    user_id: int  # The officer rejecting the transfer
+    reason: Optional[str] = None  # Rejection explanation note
 
 
 class ReportStatusUpdate(BaseModel):
@@ -187,3 +298,4 @@ class ReportUpdate(BaseModel):
     priority_level: Optional[str] = None
     is_possible_owned: Optional[bool] = None
     status_id: Optional[int] = None
+

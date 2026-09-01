@@ -13,6 +13,7 @@ import RelativeTimestamp from '../../components/RelativeTimestamp';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import { api } from '../../utils/api';
+import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 
 interface RescueRequest {
     rescue_id: number;
@@ -56,6 +57,18 @@ interface RescueRequest {
             issued_at?: string;
             file_url?: string;
         };
+        verification_status?: string | null;
+        verification_notes?: string | null;
+        verified_by_user_id?: number | null;
+        verified_by_name?: string | null;
+        verified_at?: string | null;
+        false_alarm_reason?: string | null;
+        verified_actual_bite?: boolean | null;
+        verified_chasing?: boolean | null;
+        verified_attempted_bite?: boolean | null;
+        verified_injury?: boolean | null;
+        verified_aggressive?: boolean | null;
+        behavior_finding?: string | null;
     };
     leader_name?: string;
     leader_position?: string;
@@ -72,21 +85,7 @@ const statusMap: Record<number, string> = {
     6: 'Resolved'
 };
 
-const reportStatusMap: Record<number, string> = {
-    1: 'Reported',
-    2: 'Verified',
-    3: 'Rejected',
-    4: 'Escalated to Barangay',
-    13: 'Approved',
-    5: 'Rescue In Progress',
-    6: 'Picked Up',
-    7: 'Under Observation',
-    8: 'Impounded',
-    9: 'Claimed by Owner',
-    10: 'Released',
-    11: 'Resolved',
-    12: 'Deceased'
-};
+const reportStatusMap = REPORT_STATUS_MAP;
 
 const categoryMap: Record<number, string> = {
     1: 'Injured Animal',
@@ -1193,6 +1192,22 @@ const BrgyRescueRequests = () => {
                                     description={viewingRequest.report?.description}
                                     categoryName={categoryMap[viewingRequest.report?.category_id || 0]}
                                     suggestedPriorityReason={viewingRequest.report?.ai_suggested_priority_reason}
+                                    behaviorChasing={(viewingRequest.report as any)?.ai_behavior_chasing}
+                                    behaviorActualBite={(viewingRequest.report as any)?.ai_behavior_actual_bite}
+                                    behaviorAttemptedBite={(viewingRequest.report as any)?.ai_behavior_attempted_bite}
+                                    behaviorInjury={(viewingRequest.report as any)?.ai_behavior_injury}
+                                    behaviorAggressive={(viewingRequest.report as any)?.ai_behavior_aggressive}
+                                    behaviorExplanation={(viewingRequest.report as any)?.ai_behavior_explanation}
+                                    verificationStatus={viewingRequest.report?.verification_status}
+                                    verifiedActualBite={(viewingRequest.report as any)?.verified_actual_bite}
+                                    verifiedChasing={(viewingRequest.report as any)?.verified_chasing}
+                                    verifiedAttemptedBite={(viewingRequest.report as any)?.verified_attempted_bite}
+                                    verifiedInjury={(viewingRequest.report as any)?.verified_injury}
+                                    verifiedAggressive={(viewingRequest.report as any)?.verified_aggressive}
+                                    behaviorFinding={(viewingRequest.report as any)?.behavior_finding}
+                                    verificationNotes={viewingRequest.report?.verification_notes}
+                                    verifiedByName={viewingRequest.report?.verified_by_name}
+                                    verifiedAt={viewingRequest.report?.verified_at ? String(viewingRequest.report.verified_at) : null}
                                 />
 
                                 <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">

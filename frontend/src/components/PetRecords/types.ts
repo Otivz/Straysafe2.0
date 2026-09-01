@@ -1,3 +1,5 @@
+import { getPetPicture } from '../../utils/avatar';
+
 export interface PetRecord {
     id: string;
     name: string;
@@ -17,27 +19,47 @@ export interface PetRecord {
     
     // Expanded fields
     primaryColor?: string;
+    primary_color?: string;
     secondaryColor?: string;
+    secondary_color?: string;
     tertiaryColor?: string;
+    tertiary_color?: string;
     colorMarkings?: string;
+    color_markings?: string;
     sizeCategory?: string;
+    size_category?: string;
     isVaccinated?: boolean;
+    is_vaccinated?: boolean;
     vaccinationDate?: string;
+    vaccination_date?: string;
     isNeutered?: boolean;
+    is_neutered?: boolean;
     temperament?: string;
     hasBiteHistory?: boolean;
+    has_bite_history?: boolean;
+    biteIncidentCount?: number;
+    bite_incident_count?: number;
     chaseBehavior?: boolean;
+    chase_behavior?: boolean;
+    chaseIncidentCount?: number;
+    chase_incident_count?: number;
     healthCondition?: string;
+    health_condition?: string;
     notes?: string;
     vaccineCardUrl?: string;
+    vaccine_card_url?: string;
+    photo_url?: string;
+    photo_front_url?: string;
+    photo_left_url?: string;
+    photo_right_url?: string;
+    owner_id?: number | string;
     
     registeredByName?: string;
+    registered_by_name?: string;
     registeredAt?: string;
 
     rawPetObj?: any;
 }
-
-import { getPetPicture } from '../../utils/avatar';
 
 export const mapRawPetToPetRecord = (pet: any): PetRecord => {
     if (!pet) return {} as PetRecord;
@@ -60,17 +82,19 @@ export const mapRawPetToPetRecord = (pet: any): PetRecord => {
         tertiaryColor: pet.tertiary_color || '',
         colorMarkings: pet.color_markings || pet.distinctive_markings || 'None',
         sizeCategory: pet.size_category || 'Medium',
-        isVaccinated: pet.is_vaccinated ?? false,
-        vaccinationDate: pet.vaccination_date || null,
-        isNeutered: pet.is_neutered ?? false,
+        isVaccinated: pet.is_vaccinated ?? pet.isVaccinated ?? false,
+        vaccinationDate: pet.vaccination_date || pet.vaccinationDate || null,
+        isNeutered: pet.is_neutered ?? pet.isNeutered ?? false,
         temperament: pet.temperament || 'Friendly',
-        hasBiteHistory: pet.has_bite_history ?? false,
-        chaseBehavior: pet.chase_behavior ?? false,
-        healthCondition: pet.health_condition || 'Healthy and active',
+        hasBiteHistory: pet.has_bite_history ?? pet.hasBiteHistory ?? false,
+        biteIncidentCount: pet.bite_incident_count ?? pet.biteIncidentCount ?? 0,
+        chaseBehavior: pet.chase_behavior ?? pet.chaseBehavior ?? false,
+        chaseIncidentCount: pet.chase_incident_count ?? pet.chaseIncidentCount ?? 0,
+        healthCondition: pet.health_condition || pet.healthCondition || 'Healthy and active',
         notes: pet.notes || '',
-        vaccineCardUrl: pet.vaccine_card_url || null,
+        vaccineCardUrl: pet.vaccine_card_url || pet.vaccineCardUrl || null,
         registeredByName: pet.registered_by_name || pet.registered_by?.name || (pet.owner?.name ? `${pet.owner.name} (Resident Owner)` : 'Subdivision Leader / Staff'),
-        registeredAt: pet.created_at || null,
+        registeredAt: pet.created_at || pet.registeredAt || null,
         rawPetObj: pet
     };
 };

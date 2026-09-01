@@ -11,6 +11,23 @@ interface AISuggestionPanelProps {
     description?: string | null;
     categoryName?: string | null;
     suggestedPriorityReason?: string | null;
+    behaviorChasing?: boolean | null;
+    behaviorActualBite?: boolean | null;
+    behaviorAttemptedBite?: boolean | null;
+    behaviorInjury?: boolean | null;
+    behaviorAggressive?: boolean | null;
+    behaviorExplanation?: string | null;
+    // Verified Field Investigation Findings
+    verificationStatus?: string | null;
+    verifiedActualBite?: boolean | null;
+    verifiedChasing?: boolean | null;
+    verifiedAttemptedBite?: boolean | null;
+    verifiedInjury?: boolean | null;
+    verifiedAggressive?: boolean | null;
+    behaviorFinding?: string | null;
+    verificationNotes?: string | null;
+    verifiedByName?: string | null;
+    verifiedAt?: string | null;
 }
 
 const getColorHex = (colorName: string): string => {
@@ -49,7 +66,23 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
     possibleBreed,
     description,
     categoryName,
-    suggestedPriorityReason
+    suggestedPriorityReason,
+    behaviorChasing,
+    behaviorActualBite,
+    behaviorAttemptedBite,
+    behaviorInjury,
+    behaviorAggressive,
+    behaviorExplanation,
+    verificationStatus,
+    verifiedActualBite,
+    verifiedChasing,
+    verifiedAttemptedBite,
+    verifiedInjury,
+    verifiedAggressive,
+    behaviorFinding,
+    verificationNotes,
+    verifiedByName,
+    verifiedAt
 }) => {
     // If no suggestions exist yet, display a premium loading state
     const hasData = animalType || dominantColor || coatPattern || estimatedSize || suggestedRiskLevel || suggestedPriority || possibleBreed;
@@ -174,6 +207,8 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
     const risk = getRiskStyles(suggestedRiskLevel);
     const animal = getAnimalStyles(animalType);
     const sizeStyle = getSizeStyles(estimatedSize);
+    const isVerifiedTrue = verificationStatus === 'verified_true';
+    const isCleanRecord = isVerifiedTrue && !verifiedActualBite && !verifiedAggressive && !verifiedInjury;
 
     return (
         <div className="relative overflow-hidden bg-gradient-to-br from-slate-900/90 via-slate-950/95 to-slate-900/90 backdrop-blur-xl p-5 rounded-3xl border border-white/10 shadow-2xl transition-all duration-300 hover:shadow-indigo-500/5 hover:border-white/15">
@@ -190,13 +225,27 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                         </svg>
                     </div>
                     <div>
-                        <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block">StraySafe Copilot</span>
-                        <h4 className="text-xs font-black text-white uppercase tracking-wider -mt-0.5">AI Sighting Intelligence</h4>
+                        <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                            StraySafe Copilot
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[8px] font-black uppercase tracking-widest">
+                                AI Suggestion
+                            </span>
+                        </h4>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Contextual Incident & Sighting Intelligence</p>
                     </div>
                 </div>
-                <span className="text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 shadow-sm animate-pulse">
-                    Real-time Analysis
-                </span>
+
+                {suggestedPriority && (
+                    <span className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest border shadow-sm ${
+                        suggestedPriority.toLowerCase().includes('high')
+                            ? 'bg-rose-500/20 border-rose-500/40 text-rose-300'
+                            : suggestedPriority.toLowerCase().includes('medium')
+                            ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                            : 'bg-blue-500/20 border-blue-500/40 text-blue-300'
+                    }`}>
+                        {suggestedPriority}
+                    </span>
+                )}
             </div>
 
             {/* Grid Container */}
@@ -214,7 +263,6 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                 <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Dominant Color</span>
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border bg-slate-500/10 border-slate-500/20 text-slate-200 w-fit">
-                        {/* Elegant mini color swatch indicator */}
                         <div className="w-2.5 h-2.5 rounded-full border border-white/20 shadow-sm" style={{ 
                             background: getSwatchStyle(dominantColor)
                         }} />
@@ -267,9 +315,174 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                 </div>
             </div>
 
+            {/* STAGE 2: OFFICIAL STAFF INVESTIGATION & FINAL VERIFIED RECORD */}
+            {isVerifiedTrue && (
+                <div className={`mt-3 p-4 rounded-2xl border transition-all ${
+                    isCleanRecord 
+                        ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200 shadow-lg shadow-emerald-950/50' 
+                        : 'bg-rose-950/40 border-rose-500/40 text-rose-200 shadow-lg shadow-rose-950/50'
+                }`}>
+                    <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                        <div className="flex items-center gap-2">
+                            <span className="text-lg">{isCleanRecord ? '🛡️' : '🚨'}</span>
+                            <div>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-white flex items-center gap-2">
+                                    FINAL VERIFIED RECORD (Ground Truth Investigation)
+                                    <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider ${
+                                        isCleanRecord ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                                    }`}>
+                                        {isCleanRecord ? 'CLEAN RECORD' : 'CONFIRMED INCIDENT'}
+                                    </span>
+                                </span>
+                                <p className="text-[9px] text-slate-400 font-medium">
+                                    {verifiedByName ? `Inspected on-site by ${verifiedByName}` : 'Verified on-site by Staff'}
+                                    {verifiedAt ? ` • ${new Date(verifiedAt).toLocaleDateString()}` : ''}
+                                </p>
+                            </div>
+                        </div>
+                        <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-xl border ${
+                            isCleanRecord ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300' : 'bg-rose-500/20 border-rose-500/30 text-rose-300'
+                        }`}>
+                            Finding: {behaviorFinding || (isCleanRecord ? 'Unsubstantiated / Friendly' : 'Substantiated')}
+                        </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-3">
+                        <div className="bg-black/30 p-2.5 rounded-xl border border-white/5 text-center">
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Actual Bite</p>
+                            <span className={`text-xs font-black uppercase ${verifiedActualBite ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                {verifiedActualBite ? 'YES 🚨' : 'NO ✓'}
+                            </span>
+                        </div>
+
+                        <div className="bg-black/30 p-2.5 rounded-xl border border-white/5 text-center">
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Actual Chasing</p>
+                            <span className={`text-xs font-black uppercase ${verifiedChasing ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                {verifiedChasing ? 'YES ⚠️' : 'NO ✓'}
+                            </span>
+                        </div>
+
+                        <div className="bg-black/30 p-2.5 rounded-xl border border-white/5 text-center">
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Attempted Bite</p>
+                            <span className={`text-xs font-black uppercase ${verifiedAttemptedBite ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                {verifiedAttemptedBite ? 'YES ⚠️' : 'NO ✓'}
+                            </span>
+                        </div>
+
+                        <div className="bg-black/30 p-2.5 rounded-xl border border-white/5 text-center">
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Injury / Wound</p>
+                            <span className={`text-xs font-black uppercase ${verifiedInjury ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                {verifiedInjury ? 'YES 🩸' : 'NO ✓'}
+                            </span>
+                        </div>
+
+                        <div className="bg-black/30 p-2.5 rounded-xl border border-white/5 text-center">
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Aggression</p>
+                            <span className={`text-xs font-black uppercase ${verifiedAggressive ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                {verifiedAggressive ? 'YES ⚠️' : 'NO ✓'}
+                            </span>
+                        </div>
+                    </div>
+
+                    {isCleanRecord && (
+                        <div className="mt-2.5 bg-emerald-500/10 border border-emerald-500/25 p-2.5 rounded-xl text-[10px] text-emerald-200 flex items-start gap-2">
+                            <span>✨</span>
+                            <p className="leading-relaxed">
+                                <strong>Record Cleared:</strong> Physical inspection confirmed the animal is friendly / non-threatening. The original biting/chasing report was determined to be <strong>unsubstantiated</strong> and will not negatively impact the pet or owner's record.
+                            </p>
+                        </div>
+                    )}
+
+                    {verificationNotes && (
+                        <div className="mt-2 text-[10px] text-slate-300 bg-black/20 p-2.5 rounded-xl border border-white/5">
+                            <strong className="text-slate-100">Officer Investigation Notes: </strong>
+                            {verificationNotes}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* STAGE 1: INITIAL CITIZEN REPORT & AI CONTEXT UNDERSTANDING */}
+            {(behaviorChasing !== undefined || behaviorActualBite !== undefined || behaviorAttemptedBite !== undefined || behaviorAggressive !== undefined) && (
+                <div className="bg-white/3 p-4 rounded-2xl border border-white/5 space-y-3 mt-3">
+                    <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                            <span>🧠</span> Initial Citizen Report (AI Context Parsing)
+                        </span>
+                        <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md ${
+                            isVerifiedTrue 
+                                ? (isCleanRecord ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-700 text-slate-300')
+                                : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
+                        }`}>
+                            {isVerifiedTrue ? 'Overridden by Field Verification' : 'Pending On-Site Inspection'}
+                        </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        <div className="bg-white/5 p-2.5 rounded-xl border border-white/5 text-center">
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Reported Chasing</p>
+                            <span className={`text-xs font-black uppercase ${behaviorChasing ? 'text-amber-400' : 'text-slate-400'}`}>
+                                {behaviorChasing ? 'YES ⚠️' : 'NO'}
+                            </span>
+                        </div>
+
+                        <div className="bg-white/5 p-2.5 rounded-xl border border-white/5 text-center">
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Reported Attempted</p>
+                            <span className={`text-xs font-black uppercase ${behaviorAttemptedBite ? 'text-amber-400' : 'text-slate-400'}`}>
+                                {behaviorAttemptedBite ? 'YES ⚠️' : 'NO'}
+                            </span>
+                        </div>
+
+                        <div className="bg-white/5 p-2.5 rounded-xl border border-white/5 text-center">
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Reported Bite</p>
+                            <span className={`text-xs font-black uppercase ${behaviorActualBite ? 'text-rose-400' : 'text-slate-400'}`}>
+                                {behaviorActualBite ? 'YES 🚨' : 'NO'}
+                            </span>
+                        </div>
+
+                        <div className="bg-white/5 p-2.5 rounded-xl border border-white/5 text-center">
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Reported Injury</p>
+                            <span className={`text-xs font-black uppercase ${behaviorInjury ? 'text-rose-400' : 'text-slate-400'}`}>
+                                {behaviorInjury ? 'YES 🩸' : 'NO'}
+                            </span>
+                        </div>
+
+                        <div className="bg-white/5 p-2.5 rounded-xl border border-white/5 text-center">
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Reported Aggression</p>
+                            <span className={`text-xs font-black uppercase ${behaviorAggressive ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                {behaviorAggressive ? 'YES ⚠️' : 'NO ✓'}
+                            </span>
+                        </div>
+                    </div>
+
+                    {!isVerifiedTrue && (behaviorActualBite || behaviorInjury) && (
+                        <div className="bg-rose-500/10 border border-rose-500/30 p-3 rounded-xl flex items-start gap-2.5">
+                            <span className="text-base flex-shrink-0">⚠️</span>
+                            <div>
+                                <p className="text-[11px] font-bold text-rose-300">
+                                    Physical On-Site Verification Required
+                                </p>
+                                <p className="text-[10px] text-rose-200/80 leading-relaxed mt-0.5">
+                                    Bite or injury was mentioned in the report description. In-person staff verification, witness interview, and rabies risk assessment are required before dispatching animal capture teams to prevent false alarms or neighbor disputes.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {behaviorExplanation && (
+                        <div className="pt-2 border-t border-white/5">
+                            <p className="text-[10px] text-slate-300 font-medium leading-relaxed">
+                                <strong className="text-amber-300 font-bold">Report Context: </strong>
+                                {behaviorExplanation}
+                            </p>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* AI Decision Reasoning */}
             {(suggestedPriorityReason || hasData) && (
-                <div className="mt-3 bg-white/3 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-1.5 transition-all hover:bg-white/5">
+                <div className="bg-white/3 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-1.5 transition-all hover:bg-white/5 mt-3">
                     <div className="flex items-center gap-1.5 text-indigo-400">
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />

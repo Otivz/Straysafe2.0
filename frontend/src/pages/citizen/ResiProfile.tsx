@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
+import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
@@ -165,21 +166,7 @@ const ResiProfile = () => {
         setIsMobileSearchOpen(false);
     };
 
-    const statusMap: Record<number, string> = {
-        1: 'Reported',
-        2: 'Verified',
-        3: 'Rejected',
-        4: 'Escalated to Barangay',
-        5: 'Rescue In Progress',
-        6: 'Picked Up',
-        7: 'Under Observation',
-        8: 'Impounded',
-        9: 'Claimed by Owner',
-        10: 'Released',
-        11: 'Resolved',
-        12: 'Deceased',
-        13: 'Approved'
-    };
+    const statusMap = REPORT_STATUS_MAP;
 
     const filteredReports = reports.filter((r) => {
         const q = searchQuery.toLowerCase();

@@ -20,6 +20,7 @@ import SubdViewHistory from '../pages/Subd_Leaders/SubdViewHistory';
 import SubdPetClaims from '../pages/Subd_Leaders/SubdPetClaims';
 import EndorsementArch from '../pages/Subd_Leaders/EndorsementArch';
 import SubdPetRecords from '../pages/Subd_Leaders/SubdPetRecords';
+import SubdRemovedPetRecords from '../pages/Subd_Leaders/SubdRemovedPetRecords';
 import SubdProfile from '../pages/Subd_Leaders/SubdProfile';
 import SubdHazardAlert from '../pages/Subd_Leaders/SubdHazardAlert';
 import SubdMessages from '../pages/Subd_Leaders/SubdMessages';
@@ -93,6 +94,7 @@ const AppRoutes = () => {
                 <Route path="/subd/pet-claims" element={<SubdPetClaims />} />
                 <Route path="/subd/endorsements" element={<EndorsementArch />} />
                 <Route path="/subd/pet-records" element={<SubdPetRecords />} />
+                <Route path="/subd/removed-pets" element={<SubdRemovedPetRecords />} />
                 <Route path="/subd/hazard-alert" element={<SubdHazardAlert />} />
                 <Route path="/subd/profile" element={<SubdProfile />} />
             </Route>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import { api } from '../../utils/api';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import { Html5Qrcode } from 'html5-qrcode';
 
@@ -246,7 +246,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
 
         try {
             // 1. Fetch public scan info to get the pet_id associated with the secure QR token
-            const scanRes = await axios.get(`http://localhost:8000/pet/scan/${token}`);
+            const scanRes = await api.get(`/pet/scan/${token}`);
             const petId = scanRes.data.pet_id;
 
             if (petId) {
@@ -314,14 +314,14 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
 
         try {
             // 1. Fetch Pet Details
-            const petRes = await axios.get(`http://localhost:8000/pets/${id}`);
+            const petRes = await api.get(`/pets/${id}`);
             const petData = petRes.data;
             setPet(petData);
 
             // 2. Fetch Owner Details (linked to user_id)
             if (petData.owner_id) {
                 try {
-                    const ownerRes = await axios.get(`http://localhost:8000/users/${petData.owner_id}`);
+                    const ownerRes = await api.get(`/users/${petData.owner_id}`);
                     setOwner(ownerRes.data);
                 } catch (ownerErr) {
                     console.error('Error fetching pet owner details:', ownerErr);

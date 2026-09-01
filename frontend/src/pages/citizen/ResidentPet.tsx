@@ -216,11 +216,14 @@ const ResidentPet = () => {
     // Warning Acknowledgment State
     const [pendingWarning, setPendingWarning] = useState<any>(null);
     const [showWarningModal, setShowWarningModal] = useState(false);
+    const [myWarnings, setMyWarnings] = useState<any[]>([]);
 
     const fetchMyWarnings = async () => {
         try {
             const res = await api.get('/warnings/my-warnings');
-            const pending = (res.data || []).filter((w: any) => w.status === 'Pending');
+            const data = res.data || [];
+            setMyWarnings(data);
+            const pending = data.filter((w: any) => w.status === 'Pending');
             if (pending.length > 0) {
                 setPendingWarning(pending[0]);
             } else {
@@ -1098,7 +1101,11 @@ const ResidentPet = () => {
                             </p>
                         </div>
                     ) : (
-                        filteredPets.map((pet) => (
+                        filteredPets.map((pet) => {
+                            const petWarnings = (myWarnings || []).filter((w: any) => Number(w.pet_id) === Number(pet.pet_id));
+                            const hasPendingWarning = petWarnings.some((w: any) => w.status === 'Pending');
+
+                            return (
                             <div key={pet.pet_id} className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden hover:shadow-2xl transition-all duration-300 group flex flex-col justify-between">
                                 <div className="relative h-56 overflow-hidden bg-gray-50">
                                     <img 
@@ -1107,7 +1114,22 @@ const ResidentPet = () => {
                                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
                                         onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
                                     />
-                                    <div className="absolute top-4 right-4 flex gap-2">
+                                    
+                                    {/* Top Left: Warning Badge */}
+                                    {petWarnings.length > 0 && (
+                                        <div className="absolute top-4 left-4 z-10 flex gap-2">
+                                            <span className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest shadow-md border flex items-center gap-1.5 backdrop-blur-md ${
+                                                hasPendingWarning 
+                                                    ? 'bg-red-500/90 text-white border-red-400 animate-pulse' 
+                                                    : 'bg-amber-500/90 text-white border-amber-400'
+                                            }`}>
+                                                <span>⚠️</span>
+                                                <span>{petWarnings.length} {petWarnings.length === 1 ? 'Warning' : 'Warnings'}</span>
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    <div className="absolute top-4 right-4 flex gap-2 z-10">
                                         <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm border ${
                                             pet.status === 'Active' || pet.status === 'Healthy' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                                             pet.status === 'Found' ? 'bg-blue-50 text-blue-700 border-blue-200' :
@@ -1139,6 +1161,37 @@ const ResidentPet = () => {
                                             <p className="text-xs font-black text-[#1a1208] uppercase">{pet.size_category || 'Medium'}</p>
                                         </div>
                                     </div>
+
+                                    {/* Warnings / Citations Banner */}
+                                    {petWarnings.length > 0 && (
+                                        <div className={`p-3 rounded-2xl border flex items-center justify-between gap-3 ${
+                                            hasPendingWarning 
+                                                ? 'bg-red-50/80 border-red-200 text-red-950' 
+                                                : 'bg-amber-50/80 border-amber-200 text-amber-950'
+                                        }`}>
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                <div className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-black shrink-0 ${
+                                                    hasPendingWarning ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                                                }`}>
+                                                    ⚠️
+                                                </div>
+                                                <div className="truncate">
+                                                    <p className="text-[9px] font-black uppercase tracking-widest leading-tight">
+                                                        {petWarnings.length} {petWarnings.length === 1 ? 'Official Warning' : 'Official Warnings'}
+                                                    </p>
+                                                    <p className="text-[9px] font-bold text-gray-500 truncate mt-0.5">
+                                                        Latest: {petWarnings[0].warning_level || 'Notice'} ({petWarnings[0].violation_type || 'Violation'})
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            {hasPendingWarning && (
+                                                <span className="px-2 py-0.5 bg-red-600 text-white text-[8px] font-black uppercase rounded-md shrink-0 shadow-xs">
+                                                    Action Required
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+
                                     <div className="pt-4 flex gap-2 border-t border-gray-50">
                                         <button 
                                             onClick={() => setSelectedPet(transformToPetRecord(pet))}
@@ -1193,8 +1246,9 @@ const ResidentPet = () => {
                                     </div>
                                 </div>
                             </div>
-                        ))
-                    )}
+                        );
+                    })
+                )}
                 </div>
             </main>
 

@@ -11,9 +11,9 @@ interface TakeoverReportModalProps {
 }
 
 const TAKEOVER_REASONS = [
-    'Officer unavailable',
-    'Officer reassigned',
-    'Emergency response required',
+    'Handler Inactive / Stalled (No progress within response window)',
+    'Officer unavailable / offline',
+    'Emergency response dispatch',
     'Workload redistribution',
     'Other'
 ];
@@ -26,7 +26,7 @@ const TakeoverReportModal: React.FC<TakeoverReportModalProps> = ({
     currentUserId,
     onSuccess
 }) => {
-    const [reason, setReason] = useState<string>('Officer unavailable');
+    const [reason, setReason] = useState<string>('Handler Inactive / Stalled (No progress within response window)');
     const [notes, setNotes] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);

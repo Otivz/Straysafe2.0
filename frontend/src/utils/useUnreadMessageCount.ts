@@ -67,8 +67,13 @@ export function useUnreadMessageCount(userId?: number) {
         try {
             const res = await api.get('/chat/threads');
             if (Array.isArray(res.data)) {
-                setThreads(res.data);
-                const totalUnread = res.data.reduce((sum: number, t: any) => sum + (Number(t.unread_count) || 0), 0);
+                const sorted = [...res.data].sort((a, b) => {
+                    const timeA = new Date(a.last_message?.sent_at || a.updated_at || a.created_at).getTime();
+                    const timeB = new Date(b.last_message?.sent_at || b.updated_at || b.created_at).getTime();
+                    return timeB - timeA;
+                });
+                setThreads(sorted);
+                const totalUnread = sorted.reduce((sum: number, t: any) => sum + (Number(t.unread_count) || 0), 0);
                 setUnreadCount(totalUnread);
             }
         } catch {

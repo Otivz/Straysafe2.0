@@ -17,6 +17,8 @@ import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import ReturnToSeleraButton from '../../components/MapControls/ReturnToSeleraButton';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
+import SuccessModal from '../../components/Modals/SuccessModal';
+import { getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -144,22 +146,6 @@ const categoryMap: Record<number, string> = {
     4: 'Roaming Pack',
     5: 'Animal Rescue Needed',
     6: 'Lost Pet'
-};
-
-const reportStatusMap: Record<number, string> = {
-    1: 'Reported',
-    2: 'Verified',
-    3: 'Rejected',
-    4: 'Escalated to Barangay',
-    5: 'Rescue In Progress',
-    6: 'Picked Up',
-    7: 'Under Observation',
-    8: 'Impounded',
-    9: 'Claimed by Owner',
-    10: 'Released',
-    11: 'Resolved',
-    12: 'Deceased',
-    13: 'Approved'
 };
 
 const parseReportDescription = (description: string) => {
@@ -404,6 +390,9 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
     };
 
     const [reportStep, setReportStep] = useState<number>(1);
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [successModalTitle, setSuccessModalTitle] = useState('Report Submitted Successfully!');
+    const [successModalMessage, setSuccessModalMessage] = useState('Your stray animal report has been received and added to the community feed.');
     const [formData, setFormData] = useState<ReportFormData>(INITIAL_FORM_DATA);
     const [aiAnalysisResult, setAiAnalysisResult] = useState<{
         animalDetected: boolean;
@@ -1207,7 +1196,9 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
     };
 
     const handleKeepOriginalInput = () => {
-        alert('Report submitted successfully!');
+        setSuccessModalTitle('Report Submitted Successfully!');
+        setSuccessModalMessage('Your stray animal report has been received and added to the community feed.');
+        setShowSuccessModal(true);
         setRevertAnimalType(false);
         setRevertColors(false);
         setRevertSize(false);
@@ -1455,7 +1446,9 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                 }
 
                 if (!hasWarnings) {
-                    alert(isEditing ? 'Report updated successfully!' : 'Report submitted successfully!');
+                    setSuccessModalTitle(isEditing ? 'Report Updated Successfully!' : 'Report Submitted Successfully!');
+                    setSuccessModalMessage(isEditing ? 'Your report updates have been saved successfully.' : 'Your stray animal report has been received and added to the community feed.');
+                    setShowSuccessModal(true);
                     handleCloseModal();
                     setEditingReportId(null);
                     fetchReports(); // Refresh the feed
@@ -2898,9 +2891,10 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                     <div className="flex items-center gap-3">
                                                         {report.reporter_photo ? (
                                                             <img
-                                                                src={report.reporter_photo}
+                                                                src={getProfilePicture(report.reporter_photo)}
                                                                 className="w-11 h-11 rounded-full object-cover border-2 border-orange-50 shadow-sm"
                                                                 alt={report.reporter_name}
+                                                                onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
                                                             />
                                                         ) : (
                                                             <div className="w-11 h-11 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-black text-sm border-2 border-white shadow-sm">
@@ -2934,34 +2928,36 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                         <span className="px-3 py-1 bg-orange-50 border border-orange-200 text-[#F97316] rounded-full text-[10px] font-black uppercase tracking-wider shadow-2xs">
                                                             {categoryMap[report.category_id] || 'Incident Report'}
                                                         </span>
-                                                        {report.status_id && (
-                                                            <div className="flex items-center gap-1.5">
-                                                                {(() => {
-                                                                    const isAuthorOrStaff = report.user_id === currentUserId || (currentUser && currentUser.role_id && currentUser.role_id !== 1);
-                                                                    if (!isAuthorOrStaff) return null;
+                                                        {(() => {
+                                                            const currentStatusId = report.status_id ?? report.current_status_id ?? report.status?.status_id ?? 1;
+                                                            const statusText = getReportStatusLabel(currentStatusId);
+                                                            const badgeStyle = getReportStatusBadgeStyle(currentStatusId);
 
-                                                                    return (
-                                                                        <ReportChatBadge
-                                                                            reportId={report.report_id}
-                                                                            currentUserId={currentUserId}
-                                                                            size="small"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                setSelectedChatReport(report);
-                                                                                setIsChatOpen(true);
-                                                                            }}
-                                                                        />
-                                                                    );
-                                                                })()}
-                                                                <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-2xs ${
-                                                                    report.status_id === 2 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                                                    report.status_id === 5 ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                                                    'bg-gray-100 text-gray-700 border-gray-200'
-                                                                }`}>
-                                                                    {reportStatusMap[report.status_id] || 'Reported'}
-                                                                </span>
-                                                            </div>
-                                                        )}
+                                                            return (
+                                                                <div className="flex items-center gap-1.5">
+                                                                    {(() => {
+                                                                        const isAuthorOrStaff = report.user_id === currentUserId || (currentUser && currentUser.role_id && currentUser.role_id !== 1);
+                                                                        if (!isAuthorOrStaff) return null;
+
+                                                                        return (
+                                                                            <ReportChatBadge
+                                                                                reportId={report.report_id}
+                                                                                currentUserId={currentUserId}
+                                                                                size="small"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    setSelectedChatReport(report);
+                                                                                    setIsChatOpen(true);
+                                                                                }}
+                                                                            />
+                                                                        );
+                                                                    })()}
+                                                                    <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-2xs ${badgeStyle}`}>
+                                                                        {statusText}
+                                                                    </span>
+                                                                </div>
+                                                            );
+                                                        })()}
                                                     </div>
                                                 </div>
 
@@ -3818,6 +3814,14 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                 }}
                 report={selectedChatReport}
                 currentUser={currentUser}
+            />
+
+            {/* Success Modal */}
+            <SuccessModal
+                isOpen={showSuccessModal}
+                title={successModalTitle}
+                message={successModalMessage}
+                onClose={() => setShowSuccessModal(false)}
             />
         </div>
     );

@@ -12,13 +12,17 @@ import Select from '../../components/Dropdown';
 import MapComponent from '../../components/MapComponent';
 import DataTable from '../../components/DataTable';
 import AISuggestionPanel from '../../components/AISuggestionPanel';
-import AIPotentialMatchesList from '../../components/AIPotentialMatchesList';
+
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import TakeoverReportModal from '../../components/Modals/TakeoverReportModal';
+import ResolveLostPetModal from '../../components/Modals/ResolveLostPetModal';
+import { getCachedData, setCachedData } from '../../utils/cache';
+import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 
 interface Report {
     report_id: number;
+    subdivision_id?: number;
     category_id: number;
     status_id: number;
     priority_level: string;
@@ -36,6 +40,7 @@ interface Report {
     created_at: string;
     user_id: number;
     reporter_name?: string;
+    reporter_photo?: string;
     media?: any[];
     comments?: any[];
     ai_animal_type?: string | null;
@@ -50,23 +55,34 @@ interface Report {
     assigned_leader_name?: string | null;
     assigned_leader_photo?: string | null;
     claimed_at?: string | null;
+    verification_status?: string | null;
+    verification_notes?: string | null;
+    verified_by_user_id?: number | null;
+    verified_by_name?: string | null;
+    verified_at?: string | null;
+    false_alarm_reason?: string | null;
+    verified_actual_bite?: boolean | null;
+    verified_chasing?: boolean | null;
+    verified_attempted_bite?: boolean | null;
+    verified_injury?: boolean | null;
+    verified_aggressive?: boolean | null;
+    behavior_finding?: string | null;
+    is_takeover_eligible?: boolean;
+    takeover_locked_until?: string | null;
+    takeover_cooldown_remaining_seconds?: number;
+    takeover_inactivity_hours_threshold?: number;
+    last_activity_at?: string | null;
 }
 
-const statusMap: Record<number, string> = {
-    1: 'Reported',
-    2: 'Verified',
-    3: 'Rejected',
-    4: 'Escalated to Barangay',
-    13: 'Approved',
-    5: 'Rescue In Progress',
-    6: 'Picked Up',
-    7: 'Under Observation',
-    8: 'Impounded',
-    9: 'Claimed by Owner',
-    10: 'Released',
-    11: 'Resolved',
-    12: 'Deceased'
+const formatCooldownTimer = (seconds?: number): string => {
+    if (!seconds || seconds <= 0) return '0m';
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    if (hrs > 0) return `${hrs}h ${mins}m`;
+    return `${mins}m`;
 };
+
+const statusMap = REPORT_STATUS_MAP;
 const categoryMap: Record<number, string> = {
     1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
     4: 'Roaming Pack', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
@@ -75,12 +91,12 @@ const categoryMap: Record<number, string> = {
 const SubdReports = () => {
     const navigate = useNavigate();
 
-    const [reports, setReports] = useState<Report[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [reports, setReports] = useState<Report[]>(() => getCachedData<Report[]>('subd_reports_list') || []);
+    const [loading, setLoading] = useState<boolean>(() => !getCachedData<Report[]>('subd_reports_list'));
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
-    const [reportQueue, setReportQueue] = useState<'all' | 'unassigned' | 'my_reports'>('all');
-    const [viewMode, setViewMode] = useState<'cards' | 'table' | 'matches'>('cards');
+    const [reportQueue, setReportQueue] = useState<'all' | 'unassigned' | 'my_reports'>('my_reports');
+    const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
     const [takeoverTarget, setTakeoverTarget] = useState<{ id: number; currentHandlerName: string } | null>(null);
     const [claimingReportId, setClaimingReportId] = useState<number | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -96,10 +112,6 @@ const SubdReports = () => {
     const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
     const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
     const [resolvingReportId, setResolvingReportId] = useState<number | null>(null);
-    const [resolveRemarks, setResolveRemarks] = useState('');
-    const [resolveCondition, setResolveCondition] = useState('Healthy');
-    const [resolveMediaFiles, setResolveMediaFiles] = useState<File[]>([]);
-    const [isResolving, setIsResolving] = useState(false);
     
     // Warning Modal state
     const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
@@ -418,10 +430,14 @@ const SubdReports = () => {
 
     const API_URL = 'http://localhost:8000/reports';
 
-    const fetchReports = async () => {
+    const fetchReports = async (forceLoading = false) => {
         try {
-            setLoading(true);
-            const response = await axios.get(`${API_URL}/`);
+            if (forceLoading || !getCachedData('subd_reports_list')) {
+                setLoading(true);
+            }
+            const subId = currentUser?.subdivision_id;
+            const url = subId ? `${API_URL}/?subdivision_id=${subId}` : `${API_URL}/`;
+            const response = await axios.get(url);
             // Sort by report_id descending to show new reports at the top
             const sortedData = (response.data || []).sort((a: any, b: any) => b.report_id - a.report_id);
             // Ensure unique reports by ID to prevent doubling
@@ -429,6 +445,7 @@ const SubdReports = () => {
                 index === self.findIndex((t: any) => t.report_id === report.report_id)
             );
             setReports(uniqueReports);
+            setCachedData('subd_reports_list', uniqueReports);
 
             // Mark current reports as viewed so sidebar notification count clears after viewing
             try {
@@ -442,7 +459,9 @@ const SubdReports = () => {
             }
         } catch (error) {
             console.error('Error fetching reports:', error);
-            setReports([]);
+            if (!getCachedData('subd_reports_list')) {
+                setReports([]);
+            }
         } finally {
             setLoading(false);
         }
@@ -536,61 +555,6 @@ const SubdReports = () => {
         }
     };
 
-    const handleResolveReport = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!resolvingReportId) return;
-
-        try {
-            setIsResolving(true);
-
-            // 1. Update status to 11 (Resolved) and pass the remarks + condition
-            const statusResponse = await axios.patch(`${API_URL}/${resolvingReportId}/status`, {
-                status_id: 11,
-                user_id: currentUserId,
-                remarks: resolveRemarks || "Incident has been resolved by the Subdivision Leader.",
-                animal_condition: resolveCondition
-            });
-
-            // 2. Upload any evidence files if present
-            if (resolveMediaFiles && resolveMediaFiles.length > 0) {
-                // Find the latest history entry ID to associate the media with it
-                // The history list is ordered by created_at, so the last one should be our Resolved update
-                const historyList = statusResponse.data.history || [];
-                const latestHistory = historyList[historyList.length - 1];
-                const historyId = latestHistory ? latestHistory.history_id : undefined;
-
-                for (const file of resolveMediaFiles) {
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    formData.append('is_evidence', 'true'); // Evidence for resolution
-                    formData.append('status_id', '11'); // Status 11 = Resolved
-                    if (historyId) {
-                        formData.append('history_id', historyId.toString());
-                    }
-
-                    await axios.post(`${API_URL}/${resolvingReportId}/media`, formData, {
-                        headers: { 'Content-Type': 'multipart/form-data' }
-                    });
-                }
-            }
-
-            // Cleanup & Reset
-            setIsResolveModalOpen(false);
-            setResolvingReportId(null);
-            setResolveRemarks('');
-            setResolveCondition('Healthy');
-            setResolveMediaFiles([]);
-            setViewingReportId(null); // Close detailed modal too if open
-            setShowSuccess(true);
-            fetchReports();
-            setTimeout(() => setShowSuccess(false), 3000);
-        } catch (error) {
-            console.error('Error resolving report:', error);
-            alert('Failed to resolve report. Please try again.');
-        } finally {
-            setIsResolving(false);
-        }
-    };
 
     const handleDelete = async (id: number) => {
         if (window.confirm('Are you sure you want to delete this incident report?')) {
@@ -694,10 +658,10 @@ const SubdReports = () => {
         }
     };
 
-    // Queue counts (excluding resolved/inactive)
-    const unassignedCount = reports.filter(r => !r.assigned_leader_id && ![11, 12, 3, 9, 10].includes(r.status_id)).length;
-    const myReportsCount = reports.filter(r => r.assigned_leader_id === currentUserId && ![11, 12, 3, 9, 10].includes(r.status_id)).length;
-    const allActiveCount = reports.filter(r => ![11, 12, 3, 9, 10].includes(r.status_id)).length;
+    // Queue counts (excluding resolved/inactive/dismissed)
+    const unassignedCount = reports.filter(r => !r.assigned_leader_id && ![11, 12, 3, 9, 10, 14].includes(r.status_id)).length;
+    const myReportsCount = reports.filter(r => r.assigned_leader_id === currentUserId && ![11, 12, 3, 9, 10, 14].includes(r.status_id)).length;
+    const allActiveCount = reports.filter(r => ![11, 12, 3, 9, 10, 14].includes(r.status_id)).length;
 
     const filteredReports = reports.filter(rep => {
         const catName = categoryMap[rep.category_id]?.toLowerCase() || '';
@@ -722,8 +686,8 @@ const SubdReports = () => {
             matchesQueue = rep.assigned_leader_id === currentUserId;
         }
 
-        // Exclude resolved (11), deceased (12), rejected (3), claimed (9), and released (10) reports from the active ongoing list
-        const isActive = rep.status_id !== 11 && rep.status_id !== 12 && rep.status_id !== 3 && rep.status_id !== 9 && rep.status_id !== 10;
+        // Exclude resolved (11), deceased (12), rejected (3), claimed (9), released (10), and false alarm/dismissed (14) reports from active ongoing list
+        const isActive = rep.status_id !== 11 && rep.status_id !== 12 && rep.status_id !== 3 && rep.status_id !== 9 && rep.status_id !== 10 && rep.status_id !== 14;
 
         return matchesSearch && matchesStatus && matchesQueue && isActive;
     });
@@ -805,7 +769,7 @@ const SubdReports = () => {
                                 {/* Action Toolbar */}
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                                     <div className="flex items-center space-x-3 ml-auto">
-                                        <Button variant="light" className="flex items-center space-x-2" onClick={fetchReports}>
+                                        <Button variant="light" className="flex items-center space-x-2" onClick={() => fetchReports(true)}>
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                             </svg>
@@ -821,12 +785,12 @@ const SubdReports = () => {
                                 </div>
 
                                 {/* Workflow Queues Segmented Tabs */}
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
                                     <button
                                         type="button"
-                                        onClick={() => { setReportQueue('all'); if (viewMode === 'matches') setViewMode('cards'); }}
+                                        onClick={() => setReportQueue('all')}
                                         className={`p-4 rounded-2xl border transition-all text-left flex flex-col justify-between cursor-pointer ${
-                                            reportQueue === 'all' && viewMode !== 'matches'
+                                            reportQueue === 'all'
                                                 ? 'bg-white border-[#F97316] ring-2 ring-orange-500/20 shadow-sm'
                                                 : 'bg-white/80 border-gray-100 hover:bg-white hover:border-gray-200'
                                         }`}
@@ -840,9 +804,9 @@ const SubdReports = () => {
 
                                     <button
                                         type="button"
-                                        onClick={() => { setReportQueue('unassigned'); if (viewMode === 'matches') setViewMode('cards'); }}
+                                        onClick={() => setReportQueue('unassigned')}
                                         className={`p-4 rounded-2xl border transition-all text-left flex flex-col justify-between relative overflow-hidden cursor-pointer ${
-                                            reportQueue === 'unassigned' && viewMode !== 'matches'
+                                            reportQueue === 'unassigned'
                                                 ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/20 shadow-sm'
                                                 : 'bg-white border-gray-100 hover:bg-amber-50/50 hover:border-amber-200'
                                         }`}
@@ -866,9 +830,9 @@ const SubdReports = () => {
 
                                     <button
                                         type="button"
-                                        onClick={() => { setReportQueue('my_reports'); if (viewMode === 'matches') setViewMode('cards'); }}
+                                        onClick={() => setReportQueue('my_reports')}
                                         className={`p-4 rounded-2xl border transition-all text-left flex flex-col justify-between cursor-pointer ${
-                                            reportQueue === 'my_reports' && viewMode !== 'matches'
+                                            reportQueue === 'my_reports'
                                                 ? 'bg-emerald-500/10 border-emerald-500 ring-2 ring-emerald-500/20 shadow-sm'
                                                 : 'bg-white border-gray-100 hover:bg-emerald-50/50 hover:border-emerald-200'
                                         }`}
@@ -883,24 +847,6 @@ const SubdReports = () => {
                                         </div>
                                     </button>
 
-                                    <button
-                                        type="button"
-                                        onClick={() => setViewMode('matches')}
-                                        className={`p-4 rounded-2xl border transition-all text-left flex flex-col justify-between cursor-pointer ${
-                                            viewMode === 'matches'
-                                                ? 'bg-purple-500/10 border-purple-500 ring-2 ring-purple-500/20 shadow-sm'
-                                                : 'bg-white border-gray-100 hover:bg-purple-50/50 hover:border-purple-200'
-                                        }`}
-                                    >
-                                        <span className="text-[10px] font-black text-purple-800 uppercase tracking-widest flex items-center gap-1.5">
-                                            <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                                            AI Sighting Matches
-                                        </span>
-                                        <div className="flex items-baseline justify-between mt-2">
-                                            <span className="text-2xl font-black text-purple-950">AI</span>
-                                            <span className="text-xs text-purple-700 font-bold">Match Review</span>
-                                        </div>
-                                    </button>
                                 </div>
 
                                 {/* Search & Filters */}
@@ -934,6 +880,19 @@ const SubdReports = () => {
                                             className="w-[140px]"
                                         />
 
+                                        <Select
+                                            value={reportQueue}
+                                            onChange={(e) => {
+                                                setReportQueue(e.target.value as 'all' | 'unassigned' | 'my_reports');
+                                            }}
+                                            options={[
+                                                { value: 'all', label: 'All Subdivision Cases' },
+                                                { value: 'my_reports', label: 'My Cases Only' },
+                                                { value: 'unassigned', label: 'Unassigned Cases' }
+                                            ]}
+                                            className="w-[190px]"
+                                        />
+
                                         {/* View Mode Switcher */}
                                         <div className="flex items-center bg-gray-100 p-1 rounded-xl shrink-0">
                                             <button
@@ -964,29 +923,11 @@ const SubdReports = () => {
                                                 </svg>
                                                 <span className="hidden sm:inline">Table</span>
                                             </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setViewMode('matches')}
-                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 ${viewMode === 'matches'
-                                                        ? 'bg-white text-[#F97316] shadow-sm'
-                                                        : 'text-gray-500 hover:text-gray-700'
-                                                    }`}
-                                                title="AI Potential Matches"
-                                            >
-                                                <span className="w-2 h-2 rounded-full bg-[#F97316]"></span>
-                                                <span className="hidden sm:inline">AI Matches</span>
-                                            </button>
                                         </div>
                                     </div>
                                 </div>
 
-                                {viewMode === 'matches' ? (
-                                    <AIPotentialMatchesList
-                                        subdivisionId={currentUser?.subdivision_id}
-                                        isStaff={true}
-                                        onMatchesUpdated={fetchReports}
-                                    />
-                                ) : viewMode === 'cards' ? (
+                                {viewMode === 'cards' ? (
                                     loading ? (
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                             {[1, 2, 3, 4, 5, 6].map((n) => (
@@ -1202,8 +1143,12 @@ const SubdReports = () => {
                                                     {/* Card Footer - Reporter & Timestamp */}
                                                     <div className="pt-3.5 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500 mb-3">
                                                         <div className="flex items-center space-x-2">
-                                                            <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] text-gray-500 font-bold border border-gray-200 shrink-0">
-                                                                {(rep.reporter_name || 'U').charAt(0).toUpperCase()}
+                                                            <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center border border-gray-200 shrink-0">
+                                                                {rep.reporter_photo ? (
+                                                                    <img src={getProfilePicture(rep.reporter_photo)} alt={rep.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                                ) : (
+                                                                    <span className="text-[10px] text-gray-500 font-bold">{(rep.reporter_name || 'U').charAt(0).toUpperCase()}</span>
+                                                                )}
                                                             </div>
                                                             <span className="font-medium text-gray-700 truncate max-w-[110px]">
                                                                 {rep.reporter_name || `User ${rep.user_id}`}
@@ -1255,26 +1200,36 @@ const SubdReports = () => {
                                                                 </span>
                                                             </div>
                                                         ) : (
-                                                            <div className="flex items-center justify-between w-full">
-                                                                <div className="flex items-center gap-1.5 overflow-hidden">
+                                                            <div className="flex items-center justify-between w-full gap-2">
+                                                                <div className="flex items-center gap-1.5 overflow-hidden min-w-0">
                                                                     <span className="text-xs">👤</span>
-                                                                    <span className="text-xs font-black text-gray-700 truncate max-w-[120px]" title={rep.assigned_leader_name || ''}>
+                                                                    <span className="text-xs font-black text-gray-700 truncate max-w-[110px]" title={rep.assigned_leader_name || ''}>
                                                                         {rep.assigned_leader_name || `Officer #${rep.assigned_leader_id}`}
                                                                     </span>
                                                                 </div>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setTakeoverTarget({
-                                                                            id: rep.report_id,
-                                                                            currentHandlerName: rep.assigned_leader_name || `Officer #${rep.assigned_leader_id}`
-                                                                        });
-                                                                    }}
-                                                                    className="px-3 py-1 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-black border border-blue-200 transition-colors cursor-pointer"
-                                                                >
-                                                                    Take Over
-                                                                </button>
+                                                                {rep.is_takeover_eligible ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setTakeoverTarget({
+                                                                                id: rep.report_id,
+                                                                                currentHandlerName: rep.assigned_leader_name || `Officer #${rep.assigned_leader_id}`
+                                                                            });
+                                                                        }}
+                                                                        className="px-2.5 py-1 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black shadow-xs transition-all cursor-pointer shrink-0 animate-in zoom-in-95 hover:scale-105"
+                                                                        title="This case is stalled with no updates. Click to take over."
+                                                                    >
+                                                                        🔄 Take Over
+                                                                    </button>
+                                                                ) : (
+                                                                    <span
+                                                                        className="px-2 py-0.5 rounded-lg bg-gray-100 text-gray-400 text-[10px] font-bold border border-gray-200 shrink-0 cursor-not-allowed"
+                                                                        title={`Locked during handler's response window (${formatCooldownTimer(rep.takeover_cooldown_remaining_seconds)} remaining)`}
+                                                                    >
+                                                                        🔒 {formatCooldownTimer(rep.takeover_cooldown_remaining_seconds)}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         )}
                                                     </div>
@@ -1421,23 +1376,33 @@ const SubdReports = () => {
                                                         );
                                                     }
                                                     return (
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-xs font-bold text-gray-700 truncate max-w-[90px]" title={rep.assigned_leader_name || ''}>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="text-xs font-bold text-gray-700 truncate max-w-[85px]" title={rep.assigned_leader_name || ''}>
                                                                 {rep.assigned_leader_name || `Officer #${rep.assigned_leader_id}`}
                                                             </span>
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setTakeoverTarget({
-                                                                        id: rep.report_id,
-                                                                        currentHandlerName: rep.assigned_leader_name || `Officer #${rep.assigned_leader_id}`
-                                                                    });
-                                                                }}
-                                                                className="px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-black border border-blue-200 transition-colors cursor-pointer"
-                                                            >
-                                                                Take Over
-                                                            </button>
+                                                            {rep.is_takeover_eligible ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setTakeoverTarget({
+                                                                            id: rep.report_id,
+                                                                            currentHandlerName: rep.assigned_leader_name || `Officer #${rep.assigned_leader_id}`
+                                                                        });
+                                                                    }}
+                                                                    className="px-2 py-0.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 text-[10px] font-black border border-amber-300 transition-all cursor-pointer hover:scale-105"
+                                                                    title="Case is stalled. Click to take over."
+                                                                >
+                                                                    🔄 Take Over
+                                                                </button>
+                                                            ) : (
+                                                                <span
+                                                                    className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-400 text-[9px] font-bold border border-gray-200 cursor-not-allowed"
+                                                                    title={`Takeover locked (${formatCooldownTimer(rep.takeover_cooldown_remaining_seconds)} remaining)`}
+                                                                >
+                                                                    🔒 {formatCooldownTimer(rep.takeover_cooldown_remaining_seconds)}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     );
                                                 }
@@ -1447,8 +1412,12 @@ const SubdReports = () => {
                                                 key: "reporter",
                                                 render: (rep) => (
                                                     <div className="flex items-center space-x-2">
-                                                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] text-gray-500 font-bold border border-gray-200">
-                                                            {(rep.reporter_name || 'U').charAt(0).toUpperCase()}
+                                                        <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center border border-gray-200 shrink-0">
+                                                            {rep.reporter_photo ? (
+                                                                <img src={getProfilePicture(rep.reporter_photo)} alt={rep.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                            ) : (
+                                                                <span className="text-[10px] text-gray-500 font-bold">{(rep.reporter_name || 'U').charAt(0).toUpperCase()}</span>
+                                                            )}
                                                         </div>
                                                         <span className="text-xs font-semibold text-gray-700">{rep.reporter_name || `User ${rep.user_id}`}</span>
                                                     </div>
@@ -1570,8 +1539,14 @@ const SubdReports = () => {
                                             <div className="p-8 space-y-8">
                                                 <div className="flex items-start justify-between">
                                                     <div className="flex items-center gap-4">
-                                                        <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-lg text-gray-500 font-bold border border-gray-200">
-                                                            {(viewReport.reporter_name || 'U').charAt(0).toUpperCase()}
+                                                        <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-200 shadow-xs shrink-0 bg-gray-100 flex items-center justify-center">
+                                                            {viewReport.reporter_photo ? (
+                                                                <img src={getProfilePicture(viewReport.reporter_photo)} alt={viewReport.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                            ) : (
+                                                                <div className="w-full h-full flex items-center justify-center text-lg text-gray-500 font-bold bg-orange-50 text-[#F97316]">
+                                                                    {(viewReport.reporter_name || 'U').charAt(0).toUpperCase()}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                         <div>
                                                             <h4 className="text-sm font-bold text-gray-900">{viewReport.reporter_name || `User ${viewReport.user_id}`}</h4>
@@ -1635,6 +1610,22 @@ const SubdReports = () => {
                                                     description={viewReport.description}
                                                     categoryName={categoryMap[viewReport.category_id]}
                                                     suggestedPriorityReason={viewReport.ai_suggested_priority_reason}
+                                                    behaviorChasing={(viewReport as any).ai_behavior_chasing}
+                                                    behaviorActualBite={(viewReport as any).ai_behavior_actual_bite}
+                                                    behaviorAttemptedBite={(viewReport as any).ai_behavior_attempted_bite}
+                                                    behaviorInjury={(viewReport as any).ai_behavior_injury}
+                                                    behaviorAggressive={(viewReport as any).ai_behavior_aggressive}
+                                                    behaviorExplanation={(viewReport as any).ai_behavior_explanation}
+                                                    verificationStatus={viewReport.verification_status}
+                                                    verifiedActualBite={(viewReport as any).verified_actual_bite}
+                                                    verifiedChasing={(viewReport as any).verified_chasing}
+                                                    verifiedAttemptedBite={(viewReport as any).verified_attempted_bite}
+                                                    verifiedInjury={(viewReport as any).verified_injury}
+                                                    verifiedAggressive={(viewReport as any).verified_aggressive}
+                                                    behaviorFinding={(viewReport as any).behavior_finding}
+                                                    verificationNotes={viewReport.verification_notes}
+                                                    verifiedByName={viewReport.verified_by_name}
+                                                    verifiedAt={viewReport.verified_at ? String(viewReport.verified_at) : null}
                                                 />
 
                                                 {/* Map Location */}
@@ -1658,7 +1649,7 @@ const SubdReports = () => {
                                                                     id: -1,
                                                                     lat: BRGY_OFFICE[0],
                                                                     lng: BRGY_OFFICE[1],
-                                                                    title: "Barangay Hall",
+                                                                    title: "Barangay Hall HQ",
                                                                     category: "Barangay Office"
                                                                 },
                                                                 ...(userLocation ? [{
@@ -1669,20 +1660,28 @@ const SubdReports = () => {
                                                                     category: "User Location"
                                                                 }] : [])
                                                             ]}
-                                                            routing={isNavigating ? {
-                                                                start: navSource === 'brgy' ? BRGY_OFFICE : (userLocation || BRGY_OFFICE),
-                                                                end: [viewReport.latitude, viewReport.longitude],
-                                                                waypointNames: [navSource === 'brgy' ? "Barangay Office" : "Your Location", viewReport.landmark],
-                                                                onClose: () => setIsNavigating(false)
-                                                            } : undefined}
-                                                            onMarkerClick={(m) => {
-                                                                if (m.source) {
-                                                                    setNavSource(m.source);
-                                                                    setIsNavigating(true);
+                                                            routing={isNavigating ? (() => {
+                                                                const repLoc: [number, number] = [viewReport.latitude, viewReport.longitude];
+                                                                const destName = viewReport.landmark || 'Incident Location';
+                                                                if (navSource === 'current' && userLocation) {
+                                                                    return {
+                                                                        start: userLocation,
+                                                                        end: repLoc,
+                                                                        waypointNames: ["Your Location", destName] as [string, string],
+                                                                        onClose: () => setIsNavigating(false)
+                                                                    };
                                                                 } else {
-                                                                    setIsNavigating(true);
-                                                                    setNavSource('brgy');
+                                                                    return {
+                                                                        start: BRGY_OFFICE,
+                                                                        end: repLoc,
+                                                                        waypointNames: ["Barangay Office", destName] as [string, string],
+                                                                        onClose: () => setIsNavigating(false)
+                                                                    };
                                                                 }
+                                                            })() : undefined}
+                                                            onMarkerClick={(m) => {
+                                                                setNavSource(m.source || 'brgy');
+                                                                setIsNavigating(true);
                                                             }}
                                                         />
                                                     </div>
@@ -2642,113 +2641,34 @@ const SubdReports = () => {
                 </div>
             )}
 
-            {/* Resolve Incident Modal */}
-            {isResolveModalOpen && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                            <div>
-                                <h3 className="text-xl font-bold text-gray-900">Resolve Incident</h3>
-                                <p className="text-xs text-gray-500 mt-1">Provide resolution details and findings.</p>
-                            </div>
-                            <button onClick={() => { setIsResolveModalOpen(false); setResolvingReportId(null); }} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleResolveReport} className="p-8 space-y-6">
-                            <div className="space-y-4">
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Status Message / Title</label>
-                                    <textarea
-                                        required
-                                        placeholder="Describe the update or findings..."
-                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-[#F97316] outline-none transition-all min-h-[100px]"
-                                        value={resolveRemarks}
-                                        onChange={(e) => setResolveRemarks(e.target.value)}
-                                    />
-                                </div>
-
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Current Animal Condition</label>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {['Healthy', 'Injured', 'Aggressive', 'Thin', 'Nursing', 'Deceased'].map((cond) => (
-                                            <button
-                                                key={cond}
-                                                type="button"
-                                                onClick={() => setResolveCondition(cond)}
-                                                className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all ${resolveCondition === cond
-                                                    ? 'bg-orange-50 border-[#F97316]/30 text-[#F97316] shadow-sm'
-                                                    : 'bg-[#FAFAF9] border-gray-50 text-gray-600 hover:border-orange-200'
-                                                    }`}
-                                            >
-                                                {cond}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-1.5">
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Add Evidence Photos/Videos</label>
-                                    <div
-                                        className={`relative border-2 border-dashed rounded-2xl p-6 transition-all flex flex-col items-center justify-center gap-2 ${resolveMediaFiles.length > 0 ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-orange-300 bg-gray-50'}`}
-                                        onDragOver={(e) => e.preventDefault()}
-                                        onDrop={(e) => {
-                                            e.preventDefault();
-                                            if (e.dataTransfer.files) {
-                                                setResolveMediaFiles(Array.from(e.dataTransfer.files));
-                                            }
-                                        }}
-                                    >
-                                        <input
-                                            type="file"
-                                            multiple
-                                            className="absolute inset-0 opacity-0 cursor-pointer"
-                                            onChange={(e) => {
-                                                if (e.target.files) {
-                                                    setResolveMediaFiles(Array.from(e.target.files));
-                                                }
-                                            }}
-                                        />
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${resolveMediaFiles.length > 0 ? 'bg-orange-500 text-white' : 'bg-white text-gray-400 shadow-sm'}`}>
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                            </svg>
-                                        </div>
-                                        <div className="text-center">
-                                            <p className="text-xs font-bold text-gray-900">
-                                                {resolveMediaFiles.length > 0
-                                                    ? `${resolveMediaFiles.length} file(s) selected`
-                                                    : 'Tap to select multiple'}
-                                            </p>
-                                            <p className="text-[10px] text-gray-500 mt-0.5">Drag & drop or browse files</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-50">
-                                <button
-                                    type="button"
-                                    onClick={() => { setIsResolveModalOpen(false); setResolvingReportId(null); }}
-                                    className="px-6 py-2.5 text-xs font-bold text-gray-500 hover:text-gray-700 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <Button
-                                    variant="primary"
-                                    type="submit"
-                                    disabled={isResolving}
-                                    className="px-10 !bg-[#F97316] hover:!bg-[#EA580C] !border-[#F97316] text-xs font-bold !rounded-2xl"
-                                >
-                                    {isResolving ? 'Resolving...' : 'Submit Resolution'}
-                                </Button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+            {/* Resolve / Update Animal Status Modal */}
+            {isResolveModalOpen && resolvingReportId && (
+                (() => {
+                    const resolvingReport = reports.find(r => r.report_id === resolvingReportId);
+                    if (!resolvingReport) return null;
+                    return (
+                        <ResolveLostPetModal
+                            isOpen={isResolveModalOpen}
+                            pet={{
+                                pet_id: (resolvingReport as any).pet_id || 0,
+                                pet_name: (resolvingReport as any).pet_name || resolvingReport.animal_type || 'Animal',
+                                photo_url: (resolvingReport as any).pet_photo_url || (resolvingReport.media && resolvingReport.media[0]?.file_url),
+                                breed: (resolvingReport as any).pet_breed || (resolvingReport as any).breed || (resolvingReport as any).animal_breed,
+                                species: (resolvingReport as any).pet_type || resolvingReport.animal_type || 'Animal'
+                            }}
+                            reportId={resolvingReport.report_id}
+                            onClose={() => {
+                                setIsResolveModalOpen(false);
+                                setResolvingReportId(null);
+                            }}
+                            onSuccess={() => {
+                                fetchReports();
+                                setIsResolveModalOpen(false);
+                                setResolvingReportId(null);
+                            }}
+                        />
+                    );
+                })()
             )}
 
             <SuccessModal

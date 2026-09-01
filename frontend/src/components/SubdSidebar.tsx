@@ -5,7 +5,12 @@ import Button from './Button';
 import QRScannerModal from './Modals/QRScannerModal';
 import { api } from '../utils/api';
 
-const SubdSidebar = () => {
+interface SubdSidebarProps {
+    mobileOpen?: boolean;
+    onMobileClose?: () => void;
+}
+
+const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
     const [isOpen, setIsOpen] = useState(true);
     const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
     const [pendingReportsCount, setPendingReportsCount] = useState<number>(0);
@@ -16,9 +21,13 @@ const SubdSidebar = () => {
     useEffect(() => {
         const fetchCounts = async () => {
             try {
+                const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
+                const currentUser = userStr ? JSON.parse(userStr) : null;
+                const subId = currentUser?.subdivision_id;
                 // Get set of report IDs that have already been viewed by the leader
                 const viewedReportIds = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_subd_reports') || '[]'));
-                const reportsRes = await axios.get('http://localhost:8000/reports/');
+                const url = subId ? `http://localhost:8000/reports/?subdivision_id=${subId}` : 'http://localhost:8000/reports/';
+                const reportsRes = await axios.get(url);
                 if (Array.isArray(reportsRes.data)) {
                     // Count unviewed new reports with status_id = 1 (Reported)
                     const unviewedPending = reportsRes.data.filter((r: any) => {
@@ -168,28 +177,23 @@ const SubdSidebar = () => {
         }
     ];
 
-    return (
-        <aside className={`${isOpen ? 'w-64' : 'w-20'} relative bg-white border-r border-gray-100 flex flex-col justify-between flex-shrink-0 transition-all duration-300 z-50 h-screen`}>
-
-            {/* Toggle Button */}
-            <Button
-                onClick={() => setIsOpen(!isOpen)}
-                variant="light"
-                size="icon-sm"
-                className="absolute -right-3 top-8 z-50 text-gray-400 w-7 h-7"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform duration-300 ${!isOpen && 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-            </Button>
-
+    const navContent = (
+        <>
             <div className="overflow-hidden flex-1 flex flex-col">
                 {/* Menu Title */}
-                <div className="pt-10 pb-6 px-6 flex items-center h-[88px]">
-                    {isOpen && (
-                        <h2 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest animate-in fade-in duration-300">
-                            OPERATIONS
-                        </h2>
+                <div className="pt-8 pb-4 px-6 flex items-center justify-between h-[80px]">
+                    <h2 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest animate-in fade-in duration-300">
+                        OPERATIONS
+                    </h2>
+                    {onMobileClose && (
+                        <button
+                            onClick={onMobileClose}
+                            className="md:hidden p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100"
+                        >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
                     )}
                 </div>
 
@@ -200,11 +204,14 @@ const SubdSidebar = () => {
                             return (
                                 <div key={item.label} className="relative group overflow-hidden">
                                     <button
-                                        onClick={item.onClick}
-                                        className={`w-full flex items-center py-3 font-bold text-xs uppercase tracking-widest transition-colors text-gray-400 hover:text-[#F97316] hover:bg-orange-50/50 cursor-pointer ${isOpen ? 'px-8' : 'justify-center px-0'}`}
+                                        onClick={() => {
+                                            if (onMobileClose) onMobileClose();
+                                            item.onClick?.();
+                                        }}
+                                        className={`w-full flex items-center py-3 font-bold text-xs uppercase tracking-widest transition-colors text-gray-400 hover:text-[#F97316] hover:bg-orange-50/50 cursor-pointer ${isOpen || mobileOpen ? 'px-8' : 'justify-center px-0'}`}
                                     >
                                         <span className="shrink-0">{item.icon}</span>
-                                        {isOpen && <span className="ml-4 whitespace-nowrap animate-in fade-in duration-300">{item.label}</span>}
+                                        {(isOpen || mobileOpen) && <span className="ml-4 whitespace-nowrap animate-in fade-in duration-300">{item.label}</span>}
                                     </button>
                                 </div>
                             );
@@ -218,20 +225,23 @@ const SubdSidebar = () => {
                                 )}
                                 <Link
                                     to={item.path || '#'}
+                                    onClick={() => {
+                                        if (onMobileClose) onMobileClose();
+                                    }}
                                     className={`flex items-center py-3 font-bold text-xs uppercase tracking-widest transition-colors ${isActive
                                         ? 'bg-orange-50 text-[#F97316]'
                                         : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
-                                        } ${isOpen ? 'px-8' : 'justify-center px-0'}`}
+                                        } ${isOpen || mobileOpen ? 'px-8' : 'justify-center px-0'}`}
                                 >
                                     <div className="relative shrink-0">
                                         {item.icon}
-                                        {!isOpen && hasBadge && (
+                                        {(!isOpen && !mobileOpen) && hasBadge && (
                                             <span className="absolute -top-1.5 -right-2 bg-[#F97316] text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
                                                 {item.badgeCount! > 9 ? '9+' : item.badgeCount}
                                             </span>
                                         )}
                                     </div>
-                                    {isOpen && (
+                                    {(isOpen || mobileOpen) && (
                                         <div className="ml-4 flex-1 flex items-center justify-between overflow-hidden">
                                             <span className="truncate">{item.label}</span>
                                             {hasBadge && (
@@ -249,8 +259,41 @@ const SubdSidebar = () => {
             </div>
 
             <QRScannerModal isOpen={isQRScannerOpen} onClose={() => setIsQRScannerOpen(false)} />
+        </>
+    );
 
-        </aside>
+    return (
+        <>
+            {/* Desktop Sidebar */}
+            <aside className={`hidden md:flex ${isOpen ? 'w-64' : 'w-20'} relative bg-white border-r border-gray-100 flex-col justify-between flex-shrink-0 transition-all duration-300 z-50 h-screen`}>
+                {/* Toggle Button */}
+                <Button
+                    onClick={() => setIsOpen(!isOpen)}
+                    variant="light"
+                    size="icon-sm"
+                    className="absolute -right-3 top-8 z-50 text-gray-400 w-7 h-7"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform duration-300 ${!isOpen && 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                </Button>
+
+                {navContent}
+            </aside>
+
+            {/* Mobile Drawer */}
+            {mobileOpen && (
+                <div className="md:hidden fixed inset-0 z-[999] flex">
+                    <div
+                        className="fixed inset-0 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200"
+                        onClick={onMobileClose}
+                    />
+                    <aside className="relative w-72 max-w-[80vw] bg-white h-full shadow-2xl flex flex-col justify-between z-10 animate-in slide-in-from-left duration-200">
+                        {navContent}
+                    </aside>
+                </div>
+            )}
+        </>
     );
 };
 

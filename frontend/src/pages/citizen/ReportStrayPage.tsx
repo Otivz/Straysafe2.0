@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
+import SuccessModal from '../../components/Modals/SuccessModal';
 import { MapContainer, TileLayer, Marker, useMapEvents, Polygon, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -84,6 +85,7 @@ export default function ReportStrayPage() {
     const [isGeocoding, setIsGeocoding] = useState(false);
     const [resolvedAddress, setResolvedAddress] = useState('');
     const [declaration, setDeclaration] = useState(false);
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
 
     // Live Camera State
     const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -472,8 +474,7 @@ export default function ReportStrayPage() {
                         }
                     }
                 }
-                alert('Report submitted successfully to backend database!');
-                navigate('/resident-home');
+                setShowSuccessModal(true);
             }
         } catch (err: any) {
             console.error('Error submitting report:', err?.response?.data || err);
@@ -1196,6 +1197,17 @@ export default function ReportStrayPage() {
                                 </div>
                             </div>
 
+                            {/* Community Accountability & Anti-Harassment Notice */}
+                            <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
+                                <span className="text-xl flex-shrink-0">⚖️</span>
+                                <div>
+                                    <h4 className="text-xs font-black text-amber-950 uppercase tracking-tight">Community Accountability Notice</h4>
+                                    <p className="text-[11px] text-amber-800 font-semibold mt-0.5 leading-relaxed">
+                                        All bite claims and rabies hazard reports undergo mandatory physical on-site verification and victim interview before dispatch. False reporting, exaggerated claims, or using StraySafe for neighbor disputes violates community bylaws.
+                                    </p>
+                                </div>
+                            </div>
+
                             {/* Declaration Checkbox */}
                             <label className="flex items-center gap-3 p-4 bg-orange-50/50 border border-orange-100 rounded-2xl cursor-pointer">
                                 <input
@@ -1205,7 +1217,7 @@ export default function ReportStrayPage() {
                                     className="accent-[#F97316] w-4 h-4"
                                 />
                                 <span className="text-xs font-black text-[#1a1208]">
-                                    I confirm that the information provided is accurate to the best of my knowledge.
+                                    I confirm that this report is truthful and accurate to the best of my knowledge under subdivision community guidelines.
                                 </span>
                             </label>
                         </div>
@@ -1245,6 +1257,16 @@ export default function ReportStrayPage() {
             </main>
 
             <ResiMobileNav feedTab="reports" onFeedTabChange={() => { }} isNavbarMenuOpen={false} isSearchOpen={false} onSearchClick={() => { }} onAddReportClick={() => navigate('/resident/report/new')} />
+
+            <SuccessModal
+                isOpen={showSuccessModal}
+                title="Report Submitted Successfully!"
+                message="Your stray animal report has been received and dispatched to community responders."
+                onClose={() => {
+                    setShowSuccessModal(false);
+                    navigate('/resident-home');
+                }}
+            />
         </div>
     );
 }

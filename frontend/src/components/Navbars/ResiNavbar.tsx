@@ -59,11 +59,34 @@ const ResiNavbar = ({
     const [user, setUser] = useState(initialUser);
 
     const { unreadCount: unreadMessageCount, threads: messageThreads, loading: isMessagesLoading, refreshThreads } = useUnreadMessageCount(user?.user_id);
+    const [searchReports, setSearchReports] = useState<any[]>([]);
+    const [isSearchingReports, setIsSearchingReports] = useState(false);
+    const [isDesktopSearchFocused, setIsDesktopSearchFocused] = useState(false);
+    const searchRef = useRef<HTMLDivElement>(null);
 
+    useEffect(() => {
+        const fetchSearchReports = async () => {
+            if ((isMobileSearchOpen || isDesktopSearchFocused) && searchReports.length === 0) {
+                setIsSearchingReports(true);
+                try {
+                    const res = await api.get('/reports/');
+                    setSearchReports(Array.isArray(res.data) ? res.data : []);
+                } catch (err) {
+                    console.error("Failed to load reports for search", err);
+                } finally {
+                    setIsSearchingReports(false);
+                }
+            }
+        };
+        fetchSearchReports();
+    }, [isMobileSearchOpen, isDesktopSearchFocused, searchReports.length]);
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (messagesRef.current && !messagesRef.current.contains(event.target as Node)) {
                 setIsMessagesOpen(false);
+            }
+            if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+                setIsDesktopSearchFocused(false);
             }
         };
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -219,10 +242,28 @@ const ResiNavbar = ({
         navigate('/login');
     };
 
-    const handleMobileSearch = (query: string) => {
-        if (onSearch) onSearch(query);
-        if (onCloseSearch) onCloseSearch();
+    const getReportDisplayTitle = (report: any) => {
+        const reportCode = `Report #STR-${(report.report_id || 0).toString().padStart(4, '0')}`;
+        if (report.pet_name && report.pet_name.trim()) {
+            return `${report.pet_name} (${reportCode})`;
+        }
+        return reportCode;
     };
+
+    const getReportDisplayBreed = (report: any) => {
+        const b = report.animal_breed || report.breed || report.ai_possible_breed;
+        if (b && typeof b === 'string' && b.trim()) {
+            const lower = b.toLowerCase().trim();
+            if (lower !== 'unknown' && lower !== (report.animal_type || '').toLowerCase()) {
+                return b;
+            }
+        }
+        if (report.animal_type === 'Dog') return 'Aspin / Mixed Breed';
+        if (report.animal_type === 'Cat') return 'Puspin / Domestic';
+        return 'Mixed / Unknown';
+    };
+
+
 
 
 
@@ -246,7 +287,7 @@ const ResiNavbar = ({
                         <div className="hidden md:flex items-center gap-6">
 
                             {/* SEARCH BAR */}
-                            <div className="relative mr-2">
+                            <div className="relative mr-2" ref={searchRef}>
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <svg className="h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                                         <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
@@ -256,9 +297,97 @@ const ResiNavbar = ({
                                     type="text"
                                     value={searchValue || ''}
                                     onChange={(e) => onSearch && onSearch(e.target.value)}
+                                    onFocus={() => setIsDesktopSearchFocused(true)}
                                     placeholder="Search reports..."
                                     className="w-64 pl-10 pr-4 py-2.5 bg-[#FAFAF9] dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-full text-[#1a1208] dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-[#F97316]/50 focus:bg-white dark:focus:bg-gray-900 transition-all shadow-sm"
                                 />
+
+                                {/* DESKTOP SEARCH DROPDOWN */}
+                                {isDesktopSearchFocused && searchValue && (
+                                    <div className="absolute top-full left-0 mt-2 w-[400px] bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.15)] border border-gray-100 overflow-hidden z-[200]">
+                                        <div className="p-3 max-h-[400px] overflow-y-auto custom-scrollbar">
+                                            {isSearchingReports ? (
+                                                <div className="flex flex-col items-center justify-center py-8">
+                                                    <div className="w-6 h-6 border-2 border-orange-200 border-t-[#F97316] rounded-full animate-spin"></div>
+                                                    <p className="mt-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Searching...</p>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-1">
+                                                    {(() => {
+                                                        const q = searchValue.toLowerCase().trim();
+                                                        const filtered = searchReports.filter((r: any) => {
+                                                            const reportCode = `report #str-${(r.report_id || 0).toString().padStart(4, '0')}`.toLowerCase();
+                                                            const idStr = (r.report_id || '').toString();
+                                                            const petName = (r.pet_name || '').toLowerCase();
+                                                            const breed = (r.animal_breed || r.breed || r.ai_possible_breed || '').toLowerCase();
+                                                            const desc = (r.description || '').toLowerCase();
+                                                            const landmark = (r.landmark || '').toLowerCase();
+                                                            const color = (r.animal_color || r.color || r.ai_dominant_color || '').toLowerCase();
+                                                            const animalType = (r.animal_type || '').toLowerCase();
+
+                                                            return (
+                                                                reportCode.includes(q) ||
+                                                                idStr.includes(q) ||
+                                                                petName.includes(q) ||
+                                                                breed.includes(q) ||
+                                                                desc.includes(q) ||
+                                                                landmark.includes(q) ||
+                                                                color.includes(q) ||
+                                                                animalType.includes(q)
+                                                            );
+                                                        });
+
+                                                        if (filtered.length === 0) {
+                                                            return (
+                                                                <div className="text-center py-6">
+                                                                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">No matching reports found</p>
+                                                                </div>
+                                                            );
+                                                        }
+
+                                                        return filtered.slice(0, 10).map((report: any) => (
+                                                            <button
+                                                                key={report.report_id}
+                                                                onClick={() => {
+                                                                    setIsDesktopSearchFocused(false);
+                                                                    if (onSearch) onSearch(''); // clear search input
+                                                                    navigate(`/resident/reports/${report.report_id}`);
+                                                                }}
+                                                                className="w-full flex items-center p-2.5 bg-white rounded-xl hover:bg-orange-50/70 transition-all text-left group"
+                                                            >
+                                                                <div className="w-12 h-12 bg-gray-50 rounded-lg overflow-hidden shrink-0 mr-3 border border-gray-100">
+                                                                    {report.media && report.media.length > 0 ? (
+                                                                        <img src={report.media[0].file_url} alt="Media" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                                                    ) : (
+                                                                        <div className="w-full h-full flex items-center justify-center text-gray-300">
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                                            </svg>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex-1 min-w-0 py-0.5">
+                                                                    <p className="text-xs font-black text-[#1a1208] truncate group-hover:text-[#F97316] transition-colors mb-0.5">
+                                                                        {getReportDisplayTitle(report)}
+                                                                    </p>
+                                                                    <p className="text-[10px] font-semibold text-gray-700 truncate mb-0.5">
+                                                                        <span className="text-gray-400">Breed:</span> {getReportDisplayBreed(report)} {report.animal_type ? `(${report.animal_type})` : ''}
+                                                                    </p>
+                                                                    <p className="text-[10px] font-medium text-gray-500 truncate mb-0.5">
+                                                                        <span className="text-gray-400">Location:</span> {report.landmark || 'No location provided'}
+                                                                    </p>
+                                                                    <p className="text-[10px] font-medium text-gray-400 truncate">
+                                                                        <span className="text-gray-400">Description:</span> {report.description || 'No description'}
+                                                                    </p>
+                                                                </div>
+                                                            </button>
+                                                        ));
+                                                    })()}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* MESSAGES BUTTON (DESKTOP) */}
@@ -611,78 +740,87 @@ const ResiNavbar = ({
                 </div>
 
                 <div className="px-6 py-8 overflow-y-auto h-[calc(100vh-140px)]">
-                    {/* Recent Searches */}
-                    <div className="mb-8">
-                        <div className="flex justify-between items-end mb-5">
-                            <h3 className="text-[#1a1208] font-black text-xl tracking-tight">Recent</h3>
-                            <button className="text-[#EF4444] text-xs font-bold uppercase tracking-wider hover:underline">Clear all</button>
+                    {isSearchingReports ? (
+                        <div className="flex flex-col items-center justify-center h-40">
+                            <div className="w-8 h-8 border-4 border-orange-200 border-t-[#F97316] rounded-full animate-spin"></div>
+                            <p className="mt-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Loading reports...</p>
                         </div>
-                        <div className="flex flex-wrap gap-2.5">
-                            {['Injured Dog', 'San Jose', 'Stray Cat', 'Rabies Risk', 'Highway'].map((item) => (
-                                <button key={item} onClick={() => handleMobileSearch(item)} className="px-5 py-2.5 bg-[#FAFAF9] border border-gray-100 hover:bg-orange-50 hover:border-orange-200 hover:text-[#F97316] text-[#4a3b28] text-sm font-semibold rounded-full transition-all shadow-sm">
-                                    {item}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {(() => {
+                                const q = (searchValue || '').toLowerCase().trim();
+                                const filtered = searchReports.filter((r: any) => {
+                                    if (!q) return true; // show all when empty
+                                    const reportCode = `report #str-${(r.report_id || 0).toString().padStart(4, '0')}`.toLowerCase();
+                                    const idStr = (r.report_id || '').toString();
+                                    const petName = (r.pet_name || '').toLowerCase();
+                                    const breed = (r.animal_breed || r.breed || r.ai_possible_breed || '').toLowerCase();
+                                    const desc = (r.description || '').toLowerCase();
+                                    const landmark = (r.landmark || '').toLowerCase();
+                                    const color = (r.animal_color || r.color || r.ai_dominant_color || '').toLowerCase();
+                                    const animalType = (r.animal_type || '').toLowerCase();
 
-                    {/* Suggestions */}
-                    <div className="mb-8">
-                        <div className="flex justify-between items-end mb-5">
-                            <h3 className="text-[#1a1208] font-black text-xl tracking-tight">Suggestions</h3>
-                            <button className="text-[#F97316] text-xs font-bold uppercase tracking-wider hover:underline">See all</button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <button onClick={() => handleMobileSearch('Rescue')} className="flex items-center p-3.5 bg-white shadow-sm rounded-[1.25rem] border border-gray-50 text-left active:scale-95 transition-transform group hover:border-[#F97316]/30">
-                                <div className="w-12 h-12 bg-orange-50 rounded-[0.9rem] flex items-center justify-center text-[#F97316] mr-3 shrink-0 group-hover:scale-110 transition-transform">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <p className="font-bold text-[#1a1208] text-[13px] leading-tight mb-0.5">Urgent Rescue</p>
-                                    <p className="text-[11px] text-gray-400 font-medium tracking-wide">High Priority</p>
-                                </div>
-                            </button>
-                            <button onClick={() => handleMobileSearch('Medical')} className="flex items-center p-3.5 bg-white shadow-sm rounded-[1.25rem] border border-gray-50 text-left active:scale-95 transition-transform group hover:border-blue-200">
-                                <div className="w-12 h-12 bg-blue-50 rounded-[0.9rem] flex items-center justify-center text-blue-500 mr-3 shrink-0 group-hover:scale-110 transition-transform">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <p className="font-bold text-[#1a1208] text-[13px] leading-tight mb-0.5">Medical Need</p>
-                                    <p className="text-[11px] text-gray-400 font-medium tracking-wide">Injuries/Sick</p>
-                                </div>
-                            </button>
-                        </div>
-                    </div>
+                                    return (
+                                        reportCode.includes(q) ||
+                                        idStr.includes(q) ||
+                                        petName.includes(q) ||
+                                        breed.includes(q) ||
+                                        desc.includes(q) ||
+                                        landmark.includes(q) ||
+                                        color.includes(q) ||
+                                        animalType.includes(q)
+                                    );
+                                });
 
-                    {/* Top Categories */}
-                    <div>
-                        <div className="flex justify-between items-end mb-5">
-                            <h3 className="text-[#1a1208] font-black text-xl tracking-tight">Top Categories</h3>
-                            <button className="text-[#F97316] text-xs font-bold uppercase tracking-wider hover:underline">See all</button>
+                                if (filtered.length === 0) {
+                                    return (
+                                        <div className="text-center py-20">
+                                            <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">No matching reports found</p>
+                                        </div>
+                                    );
+                                }
+
+                                return filtered.map((report: any) => (
+                                    <button
+                                        key={report.report_id}
+                                        onClick={() => {
+                                            if (onCloseSearch) onCloseSearch();
+                                            navigate(`/resident/reports/${report.report_id}`);
+                                        }}
+                                        className="w-full flex flex-col md:flex-row items-start md:items-center p-4 bg-white rounded-3xl shadow-sm border border-gray-100 hover:border-orange-200 transition-all text-left group gap-4"
+                                    >
+                                        <div className="w-full md:w-20 md:h-20 h-32 bg-gray-50 rounded-2xl overflow-hidden shrink-0">
+                                            {report.media && report.media.length > 0 ? (
+                                                <img src={report.media[0].file_url} alt="Report Media" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-gray-300">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                    </svg>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex-1 min-w-0 w-full py-1">
+                                            <p className="text-[14px] font-black text-[#1a1208] truncate group-hover:text-[#F97316] transition-colors mb-1">
+                                                {getReportDisplayTitle(report)}
+                                            </p>
+                                            <p className="text-[12px] font-semibold text-gray-700 truncate mb-1">
+                                                <span className="text-gray-400">Breed:</span> {getReportDisplayBreed(report)} {report.animal_type ? `(${report.animal_type})` : ''}
+                                            </p>
+                                            <p className="text-[12px] font-semibold text-gray-500 truncate mb-1">
+                                                <span className="text-gray-400">Location:</span> {report.landmark || 'No location provided'}
+                                            </p>
+                                            <p className="text-[11px] text-gray-400 font-medium line-clamp-1">
+                                                <span className="text-gray-400">Description:</span> {report.description || 'No description'}
+                                            </p>
+                                        </div>
+                                    </button>
+                                ));
+                            })()}
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            {[
-                                { name: 'Aggressive', img: 'https://images.unsplash.com/photo-1541882352827-0b16f3d4e73f?q=80&w=300&auto=format&fit=crop', desc: 'Reports' },
-                                { name: 'Roaming Pack', img: 'https://images.unsplash.com/photo-1544568100-847a948585b9?q=80&w=300&auto=format&fit=crop', desc: 'Sightings' },
-                                { name: 'Puppies/Kittens', img: 'https://images.unsplash.com/photo-1543852786-1cf6624b9987?q=80&w=300&auto=format&fit=crop', desc: 'Vulnerable' }
-                            ].map((cat) => (
-                                <button key={cat.name} onClick={() => handleMobileSearch(cat.name)} className="relative flex flex-col items-start bg-[#FAFAF9] rounded-3xl overflow-hidden shadow-sm active:scale-95 transition-all text-left w-full h-40 group border border-gray-100 hover:border-orange-200">
-                                    <img src={cat.img} className="absolute inset-0 w-full h-full object-cover opacity-90 group-hover:scale-110 transition-transform duration-700 ease-out" alt={cat.name} />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
-                                    <div className="absolute bottom-0 left-0 p-4 w-full">
-                                        <p className="font-black text-white text-[15px] leading-tight drop-shadow-md">{cat.name}</p>
-                                        <p className="text-[11px] text-gray-200 font-medium mt-1 tracking-wide uppercase drop-shadow-md">{cat.desc}</p>
-                                    </div>
-                                </button>
-                            ))}
-                    </div>
+                    )}
                 </div>
             </div>
-        </div>
 
             {/* MOBILE NOTIFICATIONS DRAWER */}
             {isMobileNotificationsOpen && (

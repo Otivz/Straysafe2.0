@@ -8,6 +8,9 @@ import { generateMemorableTitle } from '../../utils/chatUtils';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from '../../components/PetRecords/types';
 
+import { getCachedData, setCachedData } from '../../utils/cache';
+import { getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
+
 interface ThreadItem {
     thread_id: number;
     thread_type?: 'Report' | 'Direct' | string;
@@ -29,6 +32,7 @@ interface ThreadItem {
         category_id?: number;
         category_name?: string;
         status_id?: number;
+        current_status_id?: number;
         landmark?: string;
         street_address?: string;
         subdivision_name?: string;
@@ -78,12 +82,14 @@ interface MessageItem {
     sent_at: string;
 }
 
+const HISTORY_STATUS_IDS = [3, 9, 10, 11, 12, 14]; // 3: Rejected, 9: Claimed by Owner, 10: Released, 11: Incident Resolved, 12: Deceased, 14: False Alarm / Dismissed
+
 const SubdMessages: React.FC = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const [threads, setThreads] = useState<ThreadItem[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'my' | 'unassigned' | 'all'>('my');
+    const [threads, setThreads] = useState<ThreadItem[]>(() => getCachedData<ThreadItem[]>('subd_chat_threads') || []);
+    const [loading, setLoading] = useState<boolean>(() => !getCachedData<ThreadItem[]>('subd_chat_threads'));
+    const [activeTab, setActiveTab] = useState<'my' | 'unassigned' | 'past'>('my');
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedThread, setSelectedThread] = useState<ThreadItem | null>(null);
     const [messages, setMessages] = useState<MessageItem[]>([]);
@@ -121,11 +127,17 @@ const SubdMessages: React.FC = () => {
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user') || localStorage.getItem('resident_user');
     const currentUser = userStr ? JSON.parse(userStr) : { user_id: 2, name: 'Subdivision Leader', role_id: 2 };
 
+    const getMessageCacheKey = (thread: ThreadItem) => {
+        const isMatch = thread.thread_mode === 'match' || (thread.match_id !== undefined && thread.match_id !== null && thread.match_id > 0);
+        return isMatch ? `subd_chat_msgs_m_${thread.match_id}` : `subd_chat_msgs_r_${thread.report_id}`;
+    };
+
     const fetchThreads = async () => {
         try {
             const res = await api.get('/chat/threads');
             if (Array.isArray(res.data)) {
                 setThreads(res.data);
+                setCachedData('subd_chat_threads', res.data);
 
                 const reportParam = searchParams.get('reportId');
                 const matchParam = searchParams.get('matchId');
@@ -157,8 +169,16 @@ const SubdMessages: React.FC = () => {
     }, [searchParams]);
 
     const fetchMessagesForThread = async (thread: ThreadItem) => {
-        try {
+        const cacheKey = getMessageCacheKey(thread);
+        const cached = getCachedData<MessageItem[]>(cacheKey);
+        if (cached && cached.length > 0) {
+            setMessages(cached);
+            setMessagesLoading(false);
+        } else {
             setMessagesLoading(true);
+        }
+
+        try {
             const isMatch = thread.thread_mode === 'match' || (thread.match_id !== undefined && thread.match_id !== null && thread.match_id > 0);
             const endpoint = isMatch 
                 ? `/chat/matches/${thread.match_id}/messages` 
@@ -170,6 +190,7 @@ const SubdMessages: React.FC = () => {
             const res = await api.get(endpoint);
             if (Array.isArray(res.data)) {
                 setMessages(res.data);
+                setCachedData(cacheKey, res.data);
             }
             await api.patch(readEndpoint).catch(() => {});
         } catch (err) {
@@ -190,7 +211,10 @@ const SubdMessages: React.FC = () => {
             const msgInterval = setInterval(() => {
                 api.get(endpoint)
                     .then(res => {
-                        if (Array.isArray(res.data)) setMessages(res.data);
+                        if (Array.isArray(res.data)) {
+                            setMessages(res.data);
+                            setCachedData(getMessageCacheKey(selectedThread), res.data);
+                        }
                     })
                     .catch(() => {});
             }, 3000);
@@ -272,28 +296,50 @@ const SubdMessages: React.FC = () => {
         reader.readAsDataURL(file);
     };
 
+    const isPastReport = (t: ThreadItem) => {
+        if (t.is_closed) return true;
+        const isMatch = t.thread_mode === 'match' || !!t.matched_pet;
+        const sId = t.report?.current_status_id || t.report?.status_id;
+        if (!sId) return false;
+        
+        // Match inquiry chats stay active during Claimed by Owner (status 9) for handover coordination
+        if (isMatch) {
+            return [3, 11, 12, 14].includes(Number(sId));
+        }
+        return HISTORY_STATUS_IDS.includes(Number(sId));
+    };
+
     const filteredThreads = threads.filter(thread => {
         const matchesSearch = 
             `report #${thread.report_id}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (thread.report?.reporter_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
             (thread.matched_pet?.pet_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
             (thread.matched_pet?.owner_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (thread.last_message?.text || '').toLowerCase().includes(searchTerm.toLowerCase());
+            (thread.last_message?.text || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (thread.report?.status_id ? getReportStatusLabel(thread.report.status_id).toLowerCase().includes(searchTerm.toLowerCase()) : false);
 
         if (!matchesSearch) return false;
 
         if (activeTab === 'my') {
-            return thread.report?.assigned_leader_id === currentUser.user_id;
+            return thread.report?.assigned_leader_id === currentUser.user_id && !isPastReport(thread);
         } else if (activeTab === 'unassigned') {
-            return !thread.report?.assigned_leader_id;
+            return !thread.report?.assigned_leader_id && !isPastReport(thread);
+        } else if (activeTab === 'past') {
+            return isPastReport(thread);
         }
         return true;
+    }).sort((a, b) => {
+        const timeA = new Date(a.last_message?.sent_at || a.updated_at || a.created_at).getTime();
+        const timeB = new Date(b.last_message?.sent_at || b.updated_at || b.created_at).getTime();
+        return timeB - timeA;
     });
 
-    const myCases = threads.filter(t => t.report?.assigned_leader_id === currentUser.user_id);
-    const unassignedCases = threads.filter(t => !t.report?.assigned_leader_id);
+    const myCases = threads.filter(t => t.report?.assigned_leader_id === currentUser.user_id && !isPastReport(t));
+    const unassignedCases = threads.filter(t => !t.report?.assigned_leader_id && !isPastReport(t));
+    const pastCases = threads.filter(t => isPastReport(t));
     const myUnreadCount = myCases.reduce((acc, t) => acc + t.unread_count, 0);
     const unassignedUnreadCount = unassignedCases.reduce((acc, t) => acc + t.unread_count, 0);
+    const pastUnreadCount = pastCases.reduce((acc, t) => acc + t.unread_count, 0);
 
     return (
         <div className="flex h-screen bg-[#FDFBF7] font-sans antialiased overflow-hidden text-gray-900">
@@ -316,7 +362,7 @@ const SubdMessages: React.FC = () => {
                             <div className="flex bg-gray-100/80 p-1 rounded-2xl gap-1">
                                 <button
                                     onClick={() => setActiveTab('my')}
-                                    className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                    className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
                                         activeTab === 'my' 
                                             ? 'bg-white text-gray-900 shadow-2xs font-extrabold' 
                                             : 'text-gray-500 hover:text-gray-900'
@@ -335,7 +381,7 @@ const SubdMessages: React.FC = () => {
 
                                 <button
                                     onClick={() => setActiveTab('unassigned')}
-                                    className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                    className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
                                         activeTab === 'unassigned' 
                                             ? 'bg-white text-gray-900 shadow-2xs font-extrabold' 
                                             : 'text-gray-500 hover:text-gray-900'
@@ -351,13 +397,32 @@ const SubdMessages: React.FC = () => {
                                         <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
                                     )}
                                 </button>
+
+                                <button
+                                    onClick={() => setActiveTab('past')}
+                                    className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                                        activeTab === 'past' 
+                                            ? 'bg-white text-gray-900 shadow-2xs font-extrabold' 
+                                            : 'text-gray-500 hover:text-gray-900'
+                                    }`}
+                                >
+                                    <span>Past Reports</span>
+                                    <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
+                                        activeTab === 'past' ? 'bg-orange-100 text-[#F97316]' : 'bg-gray-200 text-gray-600'
+                                    }`}>
+                                        {pastCases.length}
+                                    </span>
+                                    {pastUnreadCount > 0 && (
+                                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                                    )}
+                                </button>
                             </div>
 
                             {/* Search */}
                             <div className="relative">
                                 <input
                                     type="text"
-                                    placeholder="Search by Report #, resident, pet..."
+                                    placeholder="Search by Report #, status, resident..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]"
@@ -378,10 +443,18 @@ const SubdMessages: React.FC = () => {
                                 <div className="p-8 text-center text-gray-400 space-y-2">
                                     <span className="text-3xl">📭</span>
                                     <p className="text-xs font-bold text-gray-600">
-                                        {activeTab === 'my' ? 'No handled cases with active chat' : 'No unassigned conversations'}
+                                        {activeTab === 'my' 
+                                            ? 'No handled cases with active chat' 
+                                            : activeTab === 'unassigned' 
+                                                ? 'No unassigned conversations' 
+                                                : 'No past or archived reports'}
                                     </p>
                                     <p className="text-[11px]">
-                                        {activeTab === 'my' ? 'Claim reports in the Unassigned tab to manage them here.' : 'Incoming resident inquiries will appear here.'}
+                                        {activeTab === 'my' 
+                                            ? 'Claim reports in the Unassigned tab to manage them here.' 
+                                            : activeTab === 'unassigned' 
+                                                ? 'Incoming resident inquiries will appear here.' 
+                                                : 'Completed, resolved, or dismissed report messages will appear here.'}
                                     </p>
                                 </div>
                             ) : (
@@ -389,6 +462,7 @@ const SubdMessages: React.FC = () => {
                                 const isSelected = selectedThread?.thread_id === thread.thread_id;
                                 const isMyHandled = thread.report?.assigned_leader_id === currentUser.user_id;
                                 const isMatchThread = thread.thread_mode === 'match' || !!thread.matched_pet;
+                                const isPast = isPastReport(thread);
 
                                 return (
                                     <button
@@ -432,11 +506,19 @@ const SubdMessages: React.FC = () => {
 
                                                 return (
                                                     <div className="flex items-center justify-between gap-1">
-                                                        <div className="flex items-center gap-1.5 min-w-0">
+                                                        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                                                             <h3 className="text-xs font-bold text-gray-900 truncate" title={itemTitle}>
                                                                 {itemTitle}
                                                             </h3>
-                                                            {isMyHandled ? (
+                                                            {thread.report?.status_id ? (
+                                                                <span className={`px-1.5 py-0.2 rounded text-[8px] font-black shrink-0 border ${getReportStatusBadgeStyle(thread.report.status_id)}`}>
+                                                                    {getReportStatusLabel(thread.report.status_id)}
+                                                                </span>
+                                                            ) : isPast ? (
+                                                                <span className="px-1.5 py-0.2 bg-gray-100 text-gray-700 rounded text-[8px] font-black shrink-0 border border-gray-200">
+                                                                    Closed
+                                                                </span>
+                                                            ) : isMyHandled ? (
                                                                 <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded text-[8px] font-black shrink-0">
                                                                     Handled
                                                                 </span>
@@ -518,6 +600,25 @@ const SubdMessages: React.FC = () => {
                                     </div>
                                 )}
 
+                                {(selectedThread.thread_mode === 'match' || !!selectedThread.matched_pet) && 
+                                 ((selectedThread.report?.status_id === 9) || (selectedThread.report?.current_status_id === 9)) && !isPastReport(selectedThread) && (
+                                    <div className="bg-green-500/10 border-b border-green-200 px-4 py-2.5 flex items-center justify-between gap-3 shrink-0">
+                                        <div className="flex items-center gap-2 text-xs text-green-950 font-bold min-w-0">
+                                            <span>🐾</span>
+                                            <p className="text-[11px] text-green-900 truncate">
+                                                <strong>Claim Approved:</strong> Coordinate meeting location and pet handover here with the resident.
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => navigate('/subd-claims')}
+                                            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-[10px] font-black rounded-lg shadow-2xs transition-all uppercase tracking-wider shrink-0 cursor-pointer"
+                                        >
+                                            🤝 Claims & Handover
+                                        </button>
+                                    </div>
+                                )}
+
                                 <div className="p-4 bg-white border-b border-gray-100 flex items-center justify-between shrink-0 shadow-2xs">
                                     <div className="flex items-center gap-3 min-w-0">
                                         <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 shrink-0 border border-gray-200">
@@ -551,6 +652,15 @@ const SubdMessages: React.FC = () => {
                                                         <h2 className="text-sm font-extrabold text-gray-900 truncate" title={headerTitle}>
                                                             {headerTitle}
                                                         </h2>
+                                                        {selectedThread.report?.status_id ? (
+                                                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black border shrink-0 ${getReportStatusBadgeStyle(selectedThread.report.status_id)}`}>
+                                                                {getReportStatusLabel(selectedThread.report.status_id)}
+                                                            </span>
+                                                        ) : isPastReport(selectedThread) && (
+                                                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black border bg-gray-100 text-gray-700 border-gray-200 shrink-0">
+                                                                Archived Case
+                                                            </span>
+                                                        )}
                                                         {selectedThread.matched_pet && (
                                                             <span className="px-2 py-0.5 bg-orange-100 text-[#F97316] rounded-full text-[10px] font-black">
                                                                 {selectedThread.matched_pet.similarity_score || 95}% Match
@@ -914,25 +1024,37 @@ const SubdMessages: React.FC = () => {
                                     <div ref={messagesEndRef} />
                                 </div>
 
-                                <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-gray-100 flex flex-col gap-2 shrink-0">
-                                    {selectedImagePreview && (
-                                        <div className="relative inline-block w-20 h-20 rounded-xl overflow-hidden border border-gray-200 mb-1">
-                                            <img src={selectedImagePreview} alt="Preview" className="w-full h-full object-cover" />
-                                            <button type="button" onClick={() => { setSelectedImageFile(null); setSelectedImagePreview(null); }} className="absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">×</button>
+                                {isPastReport(selectedThread) ? (
+                                    <div className="p-4 bg-gray-50 border-t border-gray-200 text-center shrink-0 flex items-center justify-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-sm font-bold shrink-0">
+                                            🔒
                                         </div>
-                                    )}
-                                    <div className="flex items-center gap-2">
-                                        <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer shrink-0">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                        </button>
-                                        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
-                                        <input type="text" placeholder="Type coordination message..." value={inputText} onChange={(e) => setInputText(e.target.value)} className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]" />
-                                        <button type="submit" disabled={(!inputText.trim() && !selectedImageFile) || isSending} className="px-4 py-2.5 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-xs font-black rounded-2xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
-                                            <span>Send</span>
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
-                                        </button>
+                                        <div className="text-left">
+                                            <p className="text-xs font-bold text-gray-700">Case Resolved & Archived</p>
+                                            <p className="text-[11px] text-gray-500">This report has been resolved and direct messaging is in read-only mode for both officers and residents.</p>
+                                        </div>
                                     </div>
-                                </form>
+                                ) : (
+                                    <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-gray-100 flex flex-col gap-2 shrink-0">
+                                        {selectedImagePreview && (
+                                            <div className="relative inline-block w-20 h-20 rounded-xl overflow-hidden border border-gray-200 mb-1">
+                                                <img src={selectedImagePreview} alt="Preview" className="w-full h-full object-cover" />
+                                                <button type="button" onClick={() => { setSelectedImageFile(null); setSelectedImagePreview(null); }} className="absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">×</button>
+                                            </div>
+                                        )}
+                                        <div className="flex items-center gap-2">
+                                            <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer shrink-0">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                            </button>
+                                            <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+                                            <input type="text" placeholder="Type coordination message..." value={inputText} onChange={(e) => setInputText(e.target.value)} className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]" />
+                                            <button type="submit" disabled={(!inputText.trim() && !selectedImageFile) || isSending} className="px-4 py-2.5 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-xs font-black rounded-2xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
+                                                <span>Send</span>
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                                            </button>
+                                        </div>
+                                    </form>
+                                )}
                             </>
                         ) : (
                             <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-8 text-center space-y-3">

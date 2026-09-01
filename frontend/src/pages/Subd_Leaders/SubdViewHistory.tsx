@@ -5,6 +5,8 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import MapComponent from '../../components/MapComponent';
+import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
+import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 
 interface Report {
     report_id: number;
@@ -25,6 +27,7 @@ interface Report {
     created_at: string;
     user_id: number;
     reporter_name?: string;
+    reporter_photo?: string;
     media?: any[];
     comments?: any[];
     estimated_size?: string | null;
@@ -37,6 +40,12 @@ interface Report {
     ai_suggested_priority_reason?: string | null;
     history?: any[];
     endorsement_letter?: any;
+    verification_status?: string | null;
+    verification_notes?: string | null;
+    verified_at?: string | null;
+    verified_by_user_id?: number | null;
+    verified_by_name?: string | null;
+    false_alarm_reason?: string | null;
 }
 
 interface RescueRequest {
@@ -53,24 +62,11 @@ interface RescueRequest {
     leader_name?: string;
     leader_position?: string;
     assigned_staff_name?: string | null;
+    assigned_staff_photo?: string | null;
     assignments?: any[];
 }
 
-const statusMap: Record<number, string> = {
-    1: 'Reported',
-    2: 'Verified',
-    3: 'Rejected',
-    4: 'Escalated to Barangay',
-    13: 'Approved',
-    5: 'Rescue In Progress',
-    6: 'Picked Up',
-    7: 'Under Observation',
-    8: 'Impounded',
-    9: 'Claimed by Owner',
-    10: 'Released',
-    11: 'Resolved',
-    12: 'Deceased'
-};
+const statusMap = REPORT_STATUS_MAP;
 
 const categoryMap: Record<number, string> = {
     1: 'Injured Animal',
@@ -237,6 +233,9 @@ const SubdViewHistory = () => {
                 return 'bg-teal-50 text-teal-700 border-teal-200';
             case 'deceased':
                 return 'bg-gray-100 text-gray-600 border-gray-200';
+            case 'false alarm / dismissed':
+            case 'dismissed':
+                return 'bg-amber-50 text-amber-700 border-amber-200';
             case 'rejected':
                 return 'bg-red-50 text-red-600 border-red-100';
             default:
@@ -262,6 +261,18 @@ const SubdViewHistory = () => {
             timestamp: report.created_at ? new Date(report.created_at).toLocaleString() : 'N/A',
             note: `Initial report registered successfully by ${report.reporter_name || 'Citizen'}.`
         });
+
+        // If dismissed as false alarm, short circuit
+        if (report.status_id === 14) {
+            const falseAlarmHistory = report.history?.find((h: any) => h.report_status_id === 14);
+            steps.push({
+                label: 'Dismissed (False Alarm)',
+                status: 'Resolved',
+                timestamp: falseAlarmHistory?.created_at ? new Date(falseAlarmHistory.created_at).toLocaleString() : (report.verified_at ? new Date(report.verified_at).toLocaleString() : 'N/A'),
+                note: falseAlarmHistory?.remarks || (report.verification_notes || `Report dismissed as false alarm: ${report.false_alarm_reason || 'Invalid Report'}`)
+            });
+            return steps;
+        }
 
         // If rejected, short circuit
         if (report.status_id === 3) {
@@ -352,6 +363,8 @@ const SubdViewHistory = () => {
             matchedHistory = historyList.find((h: any) => h.report_status_id === 1);
         } else if (stepLabel === 'Report Verified') {
             matchedHistory = historyList.find((h: any) => h.report_status_id === 2);
+        } else if (stepLabel === 'Dismissed (False Alarm)') {
+            matchedHistory = historyList.find((h: any) => h.report_status_id === 14);
         } else if (stepLabel === 'Report Rejected') {
             matchedHistory = historyList.find((h: any) => h.report_status_id === 3);
         } else if (stepLabel === 'Endorsed to Barangay') {
@@ -379,6 +392,7 @@ const SubdViewHistory = () => {
         let stepStatusIds: number[] = [];
         if (stepLabel === 'Report Received') stepStatusIds = [1];
         else if (stepLabel === 'Report Verified') stepStatusIds = [2];
+        else if (stepLabel === 'Dismissed (False Alarm)') stepStatusIds = [14];
         else if (stepLabel === 'Report Rejected') stepStatusIds = [3];
         else if (stepLabel === 'Endorsed to Barangay') stepStatusIds = [4];
         else if (stepLabel === 'Rescue Team Assigned') stepStatusIds = [13];
@@ -391,14 +405,16 @@ const SubdViewHistory = () => {
         const condition = report.condition || 'No information provided.';
         const message = matchedHistory?.remarks || 'No information provided.';
         const timestamp = matchedHistory?.created_at ? new Date(matchedHistory.created_at).toLocaleString() : '-';
-        const updatedBy = matchedHistory?.updater_name || (rescue?.assigned_staff_name && stepLabel === 'Rescue Team Assigned' ? rescue.assigned_staff_name : 'System');
+        const updatedBy = matchedHistory?.updater_name || (stepLabel === 'Report Received' ? (report.reporter_name || 'Resident') : (rescue?.assigned_staff_name && stepLabel === 'Rescue Team Assigned' ? rescue.assigned_staff_name : 'System'));
+        const updatedPhoto = matchedHistory?.updater_photo || (stepLabel === 'Report Received' ? report.reporter_photo : (rescue?.assigned_staff_name && stepLabel === 'Rescue Team Assigned' ? rescue?.assigned_staff_photo : null));
 
         return {
             media: stepMedia,
             condition,
             message,
             timestamp,
-            updatedBy
+            updatedBy,
+            updatedPhoto
         };
     };
 
@@ -459,8 +475,14 @@ const SubdViewHistory = () => {
                                     <div className="bg-white p-8 sm:p-10 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-6">
                                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-50 pb-6">
                                             <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-lg text-gray-500 font-bold border border-gray-200">
-                                                    {(report.reporter_name || 'U').charAt(0).toUpperCase()}
+                                                <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-200 shadow-xs shrink-0 bg-gray-100 flex items-center justify-center">
+                                                    {report.reporter_photo ? (
+                                                        <img src={getProfilePicture(report.reporter_photo)} alt={report.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-lg text-gray-500 font-bold bg-orange-50 text-[#F97316]">
+                                                            {(report.reporter_name || 'U').charAt(0).toUpperCase()}
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <h4 className="text-sm font-bold text-gray-900">{report.reporter_name || `User ${report.user_id}`}</h4>
@@ -638,7 +660,7 @@ const SubdViewHistory = () => {
                                                         id: -1,
                                                         lat: BRGY_OFFICE[0],
                                                         lng: BRGY_OFFICE[1],
-                                                        title: "Barangay Hall",
+                                                        title: "Barangay Hall HQ",
                                                         category: "Barangay Office"
                                                     },
                                                     ...(userLocation ? [{
@@ -649,20 +671,28 @@ const SubdViewHistory = () => {
                                                         category: "User Location"
                                                     }] : [])
                                                 ]}
-                                                routing={isNavigating ? {
-                                                    start: navSource === 'brgy' ? BRGY_OFFICE : (userLocation || BRGY_OFFICE),
-                                                    end: [report.latitude, report.longitude],
-                                                    waypointNames: [navSource === 'brgy' ? "Barangay Office" : "Your Location", report.landmark],
-                                                    onClose: () => setIsNavigating(false)
-                                                } : undefined}
-                                                onMarkerClick={(m) => {
-                                                    if (m.source) {
-                                                        setNavSource(m.source);
-                                                        setIsNavigating(true);
+                                                routing={isNavigating ? (() => {
+                                                    const repLoc: [number, number] = [report.latitude, report.longitude];
+                                                    const destName = report.landmark || 'Incident Location';
+                                                    if (navSource === 'current' && userLocation) {
+                                                        return {
+                                                            start: userLocation,
+                                                            end: repLoc,
+                                                            waypointNames: ["Your Location", destName] as [string, string],
+                                                            onClose: () => setIsNavigating(false)
+                                                        };
                                                     } else {
-                                                        setIsNavigating(true);
-                                                        setNavSource('brgy');
+                                                        return {
+                                                            start: BRGY_OFFICE,
+                                                            end: repLoc,
+                                                            waypointNames: ["Barangay Office", destName] as [string, string],
+                                                            onClose: () => setIsNavigating(false)
+                                                        };
                                                     }
+                                                })() : undefined}
+                                                onMarkerClick={(m) => {
+                                                    setNavSource(m.source || 'brgy');
+                                                    setIsNavigating(true);
                                                 }}
                                             />
                                         </div>
@@ -824,8 +854,12 @@ const SubdViewHistory = () => {
                                                                     <div className="mt-3 rounded-2xl border border-gray-100 bg-gray-50/60 overflow-hidden animate-in slide-in-from-top-2 duration-200">
                                                                         {/* Personnel */}
                                                                         <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2.5">
-                                                                            <div className="w-6.5 h-6.5 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold text-[9px] shrink-0 border border-purple-200">
-                                                                                {(stepDetail.updatedBy || 'S').charAt(0).toUpperCase()}
+                                                                            <div className="w-6.5 h-6.5 rounded-full overflow-hidden bg-purple-100 text-purple-600 flex items-center justify-center font-bold text-[9px] shrink-0 border border-purple-200">
+                                                                                {stepDetail.updatedPhoto ? (
+                                                                                    <img src={getProfilePicture(stepDetail.updatedPhoto)} alt={stepDetail.updatedBy} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                                                ) : (
+                                                                                    (stepDetail.updatedBy || 'S').charAt(0).toUpperCase()
+                                                                                )}
                                                                             </div>
                                                                             <div>
                                                                                 <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest leading-none">Assigned Personnel</p>
@@ -976,7 +1010,7 @@ const SubdViewHistory = () => {
                                         id: -1,
                                         lat: BRGY_OFFICE[0],
                                         lng: BRGY_OFFICE[1],
-                                        title: "Barangay Hall",
+                                        title: "Barangay Hall HQ",
                                         category: "Barangay Office"
                                     },
                                     ...(userLocation ? [{
@@ -987,20 +1021,28 @@ const SubdViewHistory = () => {
                                         category: "User Location"
                                     }] : [])
                                 ]}
-                                routing={isNavigating ? {
-                                    start: navSource === 'brgy' ? BRGY_OFFICE : (userLocation || BRGY_OFFICE),
-                                    end: [report.latitude, report.longitude],
-                                    waypointNames: [navSource === 'brgy' ? "Barangay Office" : "Your Location", report.landmark],
-                                    onClose: () => setIsNavigating(false)
-                                } : undefined}
-                                onMarkerClick={(m) => {
-                                    if (m.source) {
-                                        setNavSource(m.source);
-                                        setIsNavigating(true);
+                                routing={isNavigating ? (() => {
+                                    const repLoc: [number, number] = [report.latitude, report.longitude];
+                                    const destName = report.landmark || 'Incident Location';
+                                    if (navSource === 'current' && userLocation) {
+                                        return {
+                                            start: userLocation,
+                                            end: repLoc,
+                                            waypointNames: ["Your Location", destName] as [string, string],
+                                            onClose: () => setIsNavigating(false)
+                                        };
                                     } else {
-                                        setIsNavigating(true);
-                                        setNavSource('brgy');
+                                        return {
+                                            start: BRGY_OFFICE,
+                                            end: repLoc,
+                                            waypointNames: ["Barangay Office", destName] as [string, string],
+                                            onClose: () => setIsNavigating(false)
+                                        };
                                     }
+                                })() : undefined}
+                                onMarkerClick={(m) => {
+                                    setNavSource(m.source || 'brgy');
+                                    setIsNavigating(true);
                                 }}
                             />
                         </div>

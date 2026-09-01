@@ -15,8 +15,11 @@ import AddPetModal from '../../components/PetRecords/AddPetModal';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import { useReportChatCount } from '../../utils/chatUtils';
 import TakeoverReportModal from '../../components/Modals/TakeoverReportModal';
+import TransferReportModal from '../../components/Modals/TransferReportModal';
+import RejectTransferModal from '../../components/Modals/RejectTransferModal';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from '../../components/PetRecords/types';
+import { getReportStatusLabel, getReportStatusBadgeStyle, REPORT_STATUS_MAP } from '../../utils/reportStatus';
 
 interface Report {
     report_id: number;
@@ -36,9 +39,12 @@ interface Report {
     visibility: string;
     created_at: string;
     user_id: number;
+    subdivision_id?: number;
     reporter_name?: string;
+    reporter_photo?: string;
     media?: any[];
     comments?: any[];
+    history?: any[];
     ai_animal_type?: string | null;
     ai_dominant_color?: string | null;
     ai_estimated_size?: string | null;
@@ -60,23 +66,46 @@ interface Report {
     assigned_leader_name?: string | null;
     assigned_leader_photo?: string | null;
     claimed_at?: string | null;
+    pending_transfer_to_id?: number | null;
+    pending_transfer_to_name?: string | null;
+    pending_transfer_to_photo?: string | null;
+    pending_transfer_from_id?: number | null;
+    pending_transfer_from_name?: string | null;
+    pending_transfer_notes?: string | null;
+    pending_transfer_created_at?: string | null;
+    is_takeover_eligible?: boolean;
+    takeover_locked_until?: string | null;
+    takeover_cooldown_remaining_seconds?: number;
+    takeover_inactivity_hours_threshold?: number;
+    last_activity_at?: string | null;
+    verification_status?: string | null;
+    false_alarm_reason?: string | null;
+    verification_notes?: string | null;
+    verified_by_user_id?: number | null;
+    verified_by_name?: string | null;
+    verified_at?: string | null;
+    disputes?: ReportDispute[];
 }
 
-const statusMap: Record<number, string> = {
-    1: 'Reported',
-    2: 'Verified',
-    3: 'Rejected',
-    4: 'Escalated to Barangay',
-    13: 'Approved',
-    5: 'Rescue In Progress',
-    6: 'Picked Up',
-    7: 'Under Observation',
-    8: 'Impounded',
-    9: 'Claimed by Owner',
-    10: 'Released',
-    11: 'Resolved',
-    12: 'Deceased'
-};
+export interface ReportDispute {
+    dispute_id: number;
+    report_id: number;
+    resident_user_id: number;
+    pet_id?: number | null;
+    dispute_reason: string;
+    vaccination_card_url?: string | null;
+    supporting_photo_url?: string | null;
+    status: string;
+    reviewer_id?: number | null;
+    reviewer_notes?: string | null;
+    created_at: string;
+    resolved_at?: string | null;
+    resident_name?: string | null;
+    pet_name?: string | null;
+    reviewer_name?: string | null;
+}
+
+const statusMap = REPORT_STATUS_MAP;
 
 const categoryMap: Record<number, string> = {
     1: 'Injured Animal', 2: 'Aggressive Stray', 3: 'Possible Rabies Risk',
@@ -97,7 +126,27 @@ const SubdViewReport = () => {
     const [selectedPetDetail, setSelectedPetDetail] = useState<PetRecord | null>(null);
     const [isLoadingPetDetail, setIsLoadingPetDetail] = useState(false);
 
-    const handleOpenPetDetail = async (petId?: number) => {
+    // False Alarm, Verification & Dispute Management State
+    const [isFalseAlarmModalOpen, setIsFalseAlarmModalOpen] = useState(false);
+    const [falseAlarmReason, setFalseAlarmReason] = useState('No Animal Found');
+    const [falseAlarmNotes, setFalseAlarmNotes] = useState('');
+    const [isSubmittingFalseAlarm, setIsSubmittingFalseAlarm] = useState(false);
+
+    const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
+    const [verifyNotes, setVerifyNotes] = useState('');
+    const [verifyBehaviorFinding, setVerifyBehaviorFinding] = useState('Unsubstantiated / Friendly Dog');
+    const [verifyActualBite, setVerifyActualBite] = useState(false);
+    const [verifyChasing, setVerifyChasing] = useState(false);
+    const [verifyAttemptedBite, setVerifyAttemptedBite] = useState(false);
+    const [verifyInjury, setVerifyInjury] = useState(false);
+    const [verifyAggressive, setVerifyAggressive] = useState(false);
+    const [isSubmittingVerify, setIsSubmittingVerify] = useState(false);
+
+    const [reviewingDisputeId, setReviewingDisputeId] = useState<number | null>(null);
+    const [disputeReviewNotes, setDisputeReviewNotes] = useState('');
+    const [isReviewingDispute, setIsReviewingDispute] = useState(false);
+
+    const handleOpenPetDetail = async (petId?: number | null) => {
         if (!petId) return;
         setIsLoadingPetDetail(true);
         try {
@@ -151,11 +200,13 @@ const SubdViewReport = () => {
     // Resolve Modal state
     const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
     const [isResolveLostModalOpen, setIsResolveLostModalOpen] = useState(false);
-    const [resolveRemarks, setResolveRemarks] = useState('');
-    const [resolveCondition, setResolveCondition] = useState('Healthy');
-    const [resolveMediaFiles, setResolveMediaFiles] = useState<File[]>([]);
-    const [isResolving, setIsResolving] = useState(false);
     
+    // Transfer Modal states
+    const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+    const [isRejectTransferModalOpen, setIsRejectTransferModalOpen] = useState(false);
+    const [isAcceptingTransfer, setIsAcceptingTransfer] = useState(false);
+    const [isCancellingTransfer, setIsCancellingTransfer] = useState(false);
+
     // Warning Modal state
     const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
     const [warningOwnerId, setWarningOwnerId] = useState<string>('');
@@ -380,21 +431,6 @@ const SubdViewReport = () => {
         }
     };
 
-    const handleUpdateStatus = async (newStatusId: number) => {
-        if (!report) return;
-        try {
-            await axios.patch(`http://localhost:8000/reports/${report.report_id}/status`, {
-                status_id: newStatusId,
-                user_id: currentUserId,
-                remarks: newStatusId === 2 ? "Incident report has been officially verified by the Subdivision Leader." : undefined
-            });
-            fetchReportDetails();
-        } catch (error) {
-            console.error('Error updating status:', error);
-            alert('Failed to update status. Please try again.');
-        }
-    };
-
     const handleEscalate = async () => {
         if (!report || !endorsementFile) {
             alert('Please select an endorsement letter file.');
@@ -443,59 +479,6 @@ const SubdViewReport = () => {
         }
     };
 
-    const handleResolveReport = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!report) return;
-
-        try {
-            setIsResolving(true);
-
-            // 1. Update status to 11 (Resolved)
-            const statusResponse = await axios.patch(`http://localhost:8000/reports/${report.report_id}/status`, {
-                status_id: 11,
-                user_id: currentUserId,
-                remarks: resolveRemarks || "Incident has been resolved by the Subdivision Leader.",
-                animal_condition: resolveCondition
-            });
-
-            // 2. Upload any evidence files if present
-            if (resolveMediaFiles && resolveMediaFiles.length > 0) {
-                const historyList = statusResponse.data.history || [];
-                const latestHistory = historyList[historyList.length - 1];
-                const historyId = latestHistory ? latestHistory.history_id : undefined;
-
-                for (const file of resolveMediaFiles) {
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    formData.append('is_evidence', 'true');
-                    formData.append('status_id', '11');
-                    if (historyId) {
-                        formData.append('history_id', historyId.toString());
-                    }
-
-                    await axios.post(`http://localhost:8000/reports/${report.report_id}/media`, formData, {
-                        headers: { 'Content-Type': 'multipart/form-data' }
-                    });
-                }
-            }
-
-            setIsResolveModalOpen(false);
-            setResolveRemarks('');
-            setResolveCondition('Healthy');
-            setResolveMediaFiles([]);
-            setShowSuccess(true);
-            await fetchReportDetails();
-            setTimeout(() => {
-                setShowSuccess(false);
-                navigate('/subd/history');
-            }, 1200);
-        } catch (error) {
-            console.error('Error resolving report:', error);
-            alert('Failed to resolve report. Please try again.');
-        } finally {
-            setIsResolving(false);
-        }
-    };
 
     const handleIssueWarning = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -549,6 +532,84 @@ const SubdViewReport = () => {
         }
     };
 
+    const handleMarkFalseAlarm = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!report) return;
+        try {
+            setIsSubmittingFalseAlarm(true);
+            await axios.post(`http://localhost:8000/reports/${report.report_id}/mark-false-alarm`, {
+                user_id: currentUserId,
+                reason: falseAlarmReason,
+                notes: falseAlarmNotes
+            });
+            setIsFalseAlarmModalOpen(false);
+            setFalseAlarmNotes('');
+            setShowSuccess(true);
+            await fetchReportDetails();
+            setTimeout(() => setShowSuccess(false), 3000);
+        } catch (error: any) {
+            console.error('Error dismissing report as false alarm:', error);
+            alert(error.response?.data?.detail || 'Failed to dismiss report.');
+        } finally {
+            setIsSubmittingFalseAlarm(false);
+        }
+    };
+
+    const handleVerifyIncident = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!report) return;
+        try {
+            setIsSubmittingVerify(true);
+            await axios.post(`http://localhost:8000/reports/${report.report_id}/verify-incident`, {
+                user_id: currentUserId,
+                notes: verifyNotes,
+                behavior_finding: verifyBehaviorFinding,
+                verified_actual_bite: verifyActualBite,
+                verified_chasing: verifyChasing,
+                verified_attempted_bite: verifyAttemptedBite,
+                verified_injury: verifyInjury,
+                verified_aggressive: verifyAggressive
+            });
+            setIsVerifyModalOpen(false);
+            setVerifyNotes('');
+            setShowSuccess(true);
+            await fetchReportDetails();
+            setTimeout(() => setShowSuccess(false), 3000);
+        } catch (error: any) {
+            console.error('Error verifying incident report:', error);
+            alert(error.response?.data?.detail || 'Failed to verify report.');
+        } finally {
+            setIsSubmittingVerify(false);
+        }
+    };
+
+    const handleReviewDispute = async (disputeId: number, status: 'Accepted' | 'Rejected') => {
+        if (!report) return;
+        const confirmMsg = status === 'Accepted'
+            ? 'Are you sure you want to ACCEPT this dispute? This will clear the pet and dismiss the report as a false alarm.'
+            : 'Are you sure you want to REJECT this dispute and resume active investigation?';
+        if (!window.confirm(confirmMsg)) return;
+
+        try {
+            setIsReviewingDispute(true);
+            await axios.patch(`http://localhost:8000/reports/${report.report_id}/disputes/${disputeId}/review`, {
+                reviewer_id: currentUserId,
+                status: status,
+                reviewer_notes: disputeReviewNotes || (status === 'Accepted' ? 'Vaccination and pet ownership verified.' : 'Evidence insufficient.')
+            });
+            setReviewingDisputeId(null);
+            setDisputeReviewNotes('');
+            setShowSuccess(true);
+            await fetchReportDetails();
+            setTimeout(() => setShowSuccess(false), 3000);
+        } catch (error: any) {
+            console.error('Error reviewing dispute:', error);
+            alert(error.response?.data?.detail || 'Failed to review dispute.');
+        } finally {
+            setIsReviewingDispute(false);
+        }
+    };
+
     const handleClaimReport = async () => {
         if (!report) return;
         try {
@@ -588,6 +649,49 @@ const SubdViewReport = () => {
         }
     };
 
+    const handleAcceptTransfer = async () => {
+        if (!report) return;
+        try {
+            setIsAcceptingTransfer(true);
+            await api.post(`/reports/${report.report_id}/transfer/accept`, {
+                user_id: currentUserId
+            });
+            setShowSuccess(true);
+            await fetchReportDetails();
+            setTimeout(() => setShowSuccess(false), 3000);
+        } catch (err: any) {
+            console.error('Error accepting transfer:', err);
+            alert(err.response?.data?.detail || 'Failed to accept transfer.');
+        } finally {
+            setIsAcceptingTransfer(false);
+        }
+    };
+
+    const handleCancelTransfer = async () => {
+        if (!report) return;
+        if (!window.confirm('Are you sure you want to withdraw this case transfer request?')) return;
+        try {
+            setIsCancellingTransfer(true);
+            await api.post(`/reports/${report.report_id}/transfer/cancel`, {
+                user_id: currentUserId
+            });
+            await fetchReportDetails();
+        } catch (err: any) {
+            console.error('Error cancelling transfer:', err);
+            alert(err.response?.data?.detail || 'Failed to cancel transfer request.');
+        } finally {
+            setIsCancellingTransfer(false);
+        }
+    };
+
+    const formatCooldownTimer = (seconds?: number): string => {
+        if (!seconds || seconds <= 0) return '0m';
+        const hrs = Math.floor(seconds / 3600);
+        const mins = Math.floor((seconds % 3600) / 60);
+        if (hrs > 0) return `${hrs}h ${mins}m`;
+        return `${mins}m`;
+    };
+
     const getPriorityColor = (priority: string) => {
         switch (priority.toLowerCase()) {
             case 'emergency':
@@ -618,30 +722,7 @@ const SubdViewReport = () => {
         return rep.priority_level || 'Medium';
     };
 
-    const getStatusColor = (status: string) => {
-        switch (status.toLowerCase()) {
-            case 'reported':
-                return 'bg-amber-50 text-amber-600 border-amber-100';
-            case 'verified':
-                return 'bg-blue-50 text-blue-600 border-blue-100';
-            case 'escalated to barangay':
-                return 'bg-purple-50 text-purple-600 border-purple-100';
-            case 'approved':
-                return 'bg-indigo-50 text-indigo-600 border-indigo-100';
-            case 'in action':
-            case 'ongoing':
-            case 'rescue in progress':
-                return 'bg-orange-50 text-orange-600 border-orange-100';
-            case 'resolved':
-                return 'bg-green-50 text-green-600 border-green-100';
-            case 'claimed by owner':
-                return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-            case 'released':
-                return 'bg-teal-50 text-teal-700 border-teal-200';
-            default:
-                return 'bg-gray-50 text-gray-600 border-gray-100';
-        }
-    };
+
 
     return (
         <div className="flex h-screen bg-[#F8FAFC]">
@@ -665,7 +746,7 @@ const SubdViewReport = () => {
                 />
 
                 <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                    <div className="max-w-4xl mx-auto">
+                    <div className="max-w-7xl mx-auto">
                         {loading ? (
                             <div className="py-32 flex flex-col items-center justify-center gap-4">
                                 <div className="w-12 h-12 border-4 border-[#F97316] border-t-transparent rounded-full animate-spin"></div>
@@ -681,7 +762,82 @@ const SubdViewReport = () => {
                                 </Link>
                             </div>
                         ) : (
-                            <div className="space-y-8 bg-white p-8 sm:p-10 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                                {/* LEFT COLUMN: Main Report Card */}
+                                <div className="lg:col-span-2 space-y-8 bg-white p-8 sm:p-10 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                                {/* INCOMING TRANSFER REQUEST: CURRENT USER IS RECIPIENT */}
+                                {report.pending_transfer_to_id === currentUserId && ![11, 12, 14, 3].includes(report.status_id) && (
+                                    <div className="p-6 rounded-3xl bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-orange-500/15 border-2 border-orange-400 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 shadow-lg shadow-orange-500/10 animate-in slide-in-from-top duration-300">
+                                        <div className="flex items-start gap-4">
+                                            <div className="w-12 h-12 rounded-2xl bg-[#F97316] text-white flex items-center justify-center text-2xl font-black shadow-md shadow-orange-500/30 shrink-0">
+                                                📨
+                                            </div>
+                                            <div className="space-y-1">
+                                                <h4 className="text-sm font-black text-gray-900 uppercase tracking-wide flex items-center gap-2">
+                                                    Case Handover Request For You
+                                                    <span className="px-2.5 py-0.5 rounded-full bg-[#F97316] text-white text-[9px] font-black uppercase tracking-wider animate-pulse">Action Required</span>
+                                                </h4>
+                                                <p className="text-xs text-gray-700 font-semibold">
+                                                    <strong className="text-orange-950 font-black">{report.pending_transfer_from_name || 'An officer'}</strong> has requested to transfer Report #{report.report_id} to you.
+                                                </p>
+                                                {report.pending_transfer_notes && (
+                                                    <div className="mt-2 p-2.5 rounded-xl bg-white/90 border border-orange-200 text-xs text-gray-800 font-medium">
+                                                        💬 <span className="text-gray-500 font-bold">Handover Note:</span> "{report.pending_transfer_notes}"
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
+                                            <button
+                                                type="button"
+                                                onClick={handleAcceptTransfer}
+                                                disabled={isAcceptingTransfer}
+                                                className="flex-1 sm:flex-none px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                                            >
+                                                {isAcceptingTransfer ? 'Accepting...' : '✓ Accept Case'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsRejectTransferModalOpen(true)}
+                                                className="flex-1 sm:flex-none px-5 py-3 rounded-2xl bg-white hover:bg-red-50 text-red-600 border border-red-200 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                            >
+                                                ✕ Decline
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* PENDING TRANSFER REQUEST: CURRENT USER WAITING FOR RECIPIENT */}
+                                {report.pending_transfer_from_id === currentUserId && report.pending_transfer_to_id && ![11, 12, 14, 3].includes(report.status_id) && (
+                                    <div className="p-5 rounded-3xl bg-amber-500/10 border border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300">
+                                        <div className="flex items-center gap-3.5">
+                                            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl font-black shadow-md shadow-amber-500/20 shrink-0">
+                                                ⏳
+                                            </div>
+                                            <div>
+                                                <h4 className="text-xs font-black text-amber-950 uppercase tracking-widest flex items-center gap-2">
+                                                    Case Transfer Pending Acceptance
+                                                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                                                </h4>
+                                                <p className="text-xs text-amber-800 font-semibold mt-0.5">
+                                                    Transfer requested to <strong className="font-bold text-amber-950">{report.pending_transfer_to_name || 'Officer'}</strong>. You remain responsible for this report until they accept.
+                                                </p>
+                                                {report.pending_transfer_notes && (
+                                                    <p className="text-[11px] text-amber-700 italic mt-1 font-medium">💬 Note: "{report.pending_transfer_notes}"</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleCancelTransfer}
+                                            disabled={isCancellingTransfer}
+                                            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 font-black text-[11px] uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shrink-0"
+                                        >
+                                            {isCancellingTransfer ? 'Cancelling...' : 'Cancel Request'}
+                                        </button>
+                                    </div>
+                                )}
+
                                 {/* Case Handler Ownership Banner */}
                                 {!report.assigned_leader_id ? (
                                     <div className="p-5 rounded-3xl bg-amber-500/10 border border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -747,39 +903,158 @@ const SubdViewReport = () => {
                                         </button>
                                     </div>
                                 ) : (
-                                    <div className="p-5 rounded-3xl bg-blue-500/10 border border-blue-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                    <div className={`p-5 rounded-3xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
+                                        report.is_takeover_eligible
+                                            ? 'bg-amber-500/10 border-amber-300'
+                                            : 'bg-blue-500/10 border-blue-300'
+                                    }`}>
                                         <div className="flex items-center gap-3.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-xl font-black shadow-md shadow-blue-600/20 shrink-0">
-                                                👤
+                                            <div className={`w-11 h-11 rounded-2xl text-white flex items-center justify-center text-xl font-black shadow-md shrink-0 ${
+                                                report.is_takeover_eligible
+                                                    ? 'bg-amber-600 shadow-amber-600/20'
+                                                    : 'bg-blue-600 shadow-blue-600/20'
+                                            }`}>
+                                                {report.is_takeover_eligible ? '⚠️' : '👤'}
                                             </div>
                                             <div>
-                                                <h4 className="text-xs font-black text-blue-950 uppercase tracking-widest flex items-center gap-2">
-                                                    Handled by {report.assigned_leader_name || `Officer #${report.assigned_leader_id}`}
-                                                </h4>
-                                                <p className="text-xs text-blue-800 font-semibold mt-0.5">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <h4 className={`text-xs font-black uppercase tracking-widest ${
+                                                        report.is_takeover_eligible ? 'text-amber-950' : 'text-blue-950'
+                                                    }`}>
+                                                        Handled by {report.assigned_leader_name || `Officer #${report.assigned_leader_id}`}
+                                                    </h4>
+                                                    {report.is_takeover_eligible ? (
+                                                        <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white font-black text-[9px] uppercase tracking-wider shadow-xs animate-pulse">
+                                                            ⚠️ Inactive / Stalled ({report.takeover_inactivity_hours_threshold || 24}h No Progress)
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold text-[9px] uppercase tracking-wider border border-blue-200">
+                                                            Active Response Window
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className={`text-xs font-semibold mt-0.5 ${
+                                                    report.is_takeover_eligible ? 'text-amber-800' : 'text-blue-800'
+                                                }`}>
                                                     {report.claimed_at ? (
                                                         <>Primary handler since <RelativeTimestamp date={report.claimed_at} />. Actions are reserved for the current handler.</>
                                                     ) : (
                                                         <>Assigned to another subdivision officer.</>
                                                     )}
                                                 </p>
+                                                {!report.is_takeover_eligible && (report.takeover_cooldown_remaining_seconds || 0) > 0 && (
+                                                    <p className="text-[11px] font-bold text-blue-600/90 mt-1 flex items-center gap-1">
+                                                        <span>🔒</span>
+                                                        <span>Takeover unlocks in <strong>{formatCooldownTimer(report.takeover_cooldown_remaining_seconds)}</strong> if no progress is made.</span>
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsTakeoverModalOpen(true)}
-                                            className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
-                                        >
-                                            🔄 Take Over Report
-                                        </button>
+
+                                        {/* Takeover Control */}
+                                        {report.is_takeover_eligible || currentUser?.role_id === 4 ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsTakeoverModalOpen(true)}
+                                                className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 animate-in zoom-in-95 hover:scale-105 active:scale-95"
+                                            >
+                                                <span>🔄 Take Over Report</span>
+                                                {currentUser?.role_id === 4 && !report.is_takeover_eligible && (
+                                                    <span className="text-[9px] bg-amber-700/50 px-1.5 py-0.5 rounded text-white font-normal">Admin Override</span>
+                                                )}
+                                            </button>
+                                        ) : (
+                                            <div className="w-full sm:w-auto px-4 py-2.5 rounded-2xl bg-gray-100 border border-gray-200 text-gray-400 font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-not-allowed opacity-80 shrink-0" title="Takeover is locked while the assigned officer is within the active response period.">
+                                                <span>🔒 Takeover Locked ({formatCooldownTimer(report.takeover_cooldown_remaining_seconds)})</span>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
+
+                                {/* Status Alert Banners: False Alarm / Disputed / Verified */}
+                                {report.status_id === 14 || report.verification_status === 'false_alarm' ? (
+                                    <div className="p-5 rounded-3xl bg-rose-500/10 border border-rose-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300">
+                                        <div className="flex items-start sm:items-center gap-3.5">
+                                            <div className="w-11 h-11 rounded-2xl bg-rose-600 text-white flex items-center justify-center text-xl font-black shadow-md shadow-rose-600/20 shrink-0">
+                                                🚫
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className="text-xs font-black text-rose-950 uppercase tracking-widest">
+                                                        Dismissed as False Alarm
+                                                    </h4>
+                                                    {report.false_alarm_reason && (
+                                                        <span className="px-2 py-0.5 bg-rose-200/80 text-rose-900 rounded-md text-[9px] font-black uppercase">
+                                                            {report.false_alarm_reason}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-rose-900/90 font-medium mt-1 leading-relaxed">
+                                                    {report.verification_notes || 'Investigation concluded that this report was inaccurate, exaggerated, or invalid.'}
+                                                </p>
+                                                {report.verified_by_name && (
+                                                    <p className="text-[10px] text-rose-700 font-bold mt-1">
+                                                        Verified by: {report.verified_by_name} {report.verified_at ? `• ${new Date(report.verified_at).toLocaleDateString()}` : ''}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : report.status_id === 15 || report.verification_status === 'disputed' ? (
+                                    <div className="p-5 rounded-3xl bg-amber-500/15 border-2 border-amber-400 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-pulse">
+                                        <div className="flex items-start sm:items-center gap-3.5">
+                                            <div className="w-11 h-11 rounded-2xl bg-amber-600 text-white flex items-center justify-center text-xl font-black shadow-md shadow-amber-600/20 shrink-0">
+                                                ⚖️
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className="text-xs font-black text-amber-950 uppercase tracking-widest">
+                                                        Report Formally Disputed by Pet Owner
+                                                    </h4>
+                                                    <span className="px-2 py-0.5 bg-amber-300 text-amber-950 rounded-md text-[9px] font-black uppercase">
+                                                        Action Paused
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-amber-900 font-medium mt-1 leading-relaxed">
+                                                    A registered resident pet owner has submitted a counter-claim with proof of anti-rabies vaccination and home confinement. Review the dispute below before proceeding.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : report.verification_status === 'verified_true' ? (
+                                    <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-sm font-black shrink-0">
+                                            ✓
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-xs font-black text-emerald-900 uppercase">
+                                                Officially Verified Incident
+                                            </p>
+                                            <p className="text-[11px] text-emerald-700 font-medium">
+                                                {report.verification_notes || 'Confirmed via field inspection and witness check.'} {report.verified_by_name ? `(by ${report.verified_by_name})` : ''}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ) : null}
 
                                 {/* Header Info */}
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-lg text-gray-500 font-bold border border-gray-200">
-                                            {(report.reporter_name || 'U').charAt(0).toUpperCase()}
+                                        <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-200 shadow-xs shrink-0 bg-gray-100 flex items-center justify-center">
+                                            {report.reporter_photo ? (
+                                                <img
+                                                    src={getProfilePicture(report.reporter_photo)}
+                                                    alt={report.reporter_name || 'Reporter'}
+                                                    className="w-full h-full object-cover"
+                                                    onError={(e) => {
+                                                        e.currentTarget.src = DEFAULT_AVATAR;
+                                                    }}
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-lg text-gray-500 font-bold bg-orange-50 text-[#F97316]">
+                                                    {(report.reporter_name || 'U').charAt(0).toUpperCase()}
+                                                </div>
+                                            )}
                                         </div>
                                         <div>
                                             <h4 className="text-sm font-bold text-gray-900">{report.reporter_name || `User ${report.user_id}`}</h4>
@@ -798,8 +1073,8 @@ const SubdViewReport = () => {
                                             </svg>
                                             <span>Message {chatCount > 0 ? `(${chatCount})` : ''}</span>
                                         </button>
-                                        <span className={`px-4 py-1.5 rounded-full text-xs font-bold border ${getStatusColor(statusMap[report.status_id] || 'Pending')}`}>
-                                            {statusMap[report.status_id] || 'Pending'}
+                                        <span className={`px-4 py-1.5 rounded-full text-xs font-bold border ${getReportStatusBadgeStyle(report.status_id)}`}>
+                                            {getReportStatusLabel(report.status_id)}
                                         </span>
                                     </div>
                                 </div>
@@ -970,6 +1245,22 @@ const SubdViewReport = () => {
                                     description={report.description}
                                     categoryName={categoryMap[report.category_id]}
                                     suggestedPriorityReason={report.ai_suggested_priority_reason}
+                                    behaviorChasing={(report as any).ai_behavior_chasing}
+                                    behaviorActualBite={(report as any).ai_behavior_actual_bite}
+                                    behaviorAttemptedBite={(report as any).ai_behavior_attempted_bite}
+                                    behaviorInjury={(report as any).ai_behavior_injury}
+                                    behaviorAggressive={(report as any).ai_behavior_aggressive}
+                                    behaviorExplanation={(report as any).ai_behavior_explanation}
+                                    verificationStatus={report.verification_status}
+                                    verifiedActualBite={(report as any).verified_actual_bite}
+                                    verifiedChasing={(report as any).verified_chasing}
+                                    verifiedAttemptedBite={(report as any).verified_attempted_bite}
+                                    verifiedInjury={(report as any).verified_injury}
+                                    verifiedAggressive={(report as any).verified_aggressive}
+                                    behaviorFinding={(report as any).behavior_finding}
+                                    verificationNotes={report.verification_notes}
+                                    verifiedByName={report.verified_by_name}
+                                    verifiedAt={report.verified_at ? String(report.verified_at) : null}
                                 />
 
                                 {/* AI Potential Matches Review Section */}
@@ -980,6 +1271,166 @@ const SubdViewReport = () => {
                                         onMatchesUpdated={fetchReportDetails}
                                     />
                                 </div>
+
+                                {/* Pet Owner Formal Dispute Review Panel */}
+                                {report.disputes && report.disputes.length > 0 && (
+                                    <div className="bg-amber-50/50 border-2 border-amber-200 rounded-3xl p-6 sm:p-7 space-y-5 shadow-xs">
+                                        <div className="flex items-center justify-between border-b border-amber-200/80 pb-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl font-black shadow-sm">
+                                                    ⚖️
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-sm font-black text-amber-950 uppercase tracking-tight">
+                                                        Citizen Pet Disputes & Counter-Claims ({report.disputes.length})
+                                                    </h4>
+                                                    <p className="text-xs text-amber-800 font-medium">
+                                                        Review resident vaccination proofs and home confinement evidence to prevent false impoundment.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            {report.disputes.map((dispute) => (
+                                                <div key={dispute.dispute_id} className="bg-white p-5 rounded-2xl border border-amber-100 shadow-xs space-y-4">
+                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+                                                        <div>
+                                                            <span className="text-xs font-black text-gray-900 uppercase">
+                                                                Dispute by {dispute.resident_name || `Resident #${dispute.resident_user_id}`}
+                                                            </span>
+                                                            {dispute.pet_name && (
+                                                                <span className="ml-2 text-xs font-bold text-amber-700">
+                                                                    (Pet: {dispute.pet_name})
+                                                                </span>
+                                                            )}
+                                                            <p className="text-[10px] text-gray-400 font-medium mt-0.5">
+                                                                Submitted <RelativeTimestamp date={dispute.created_at} />
+                                                            </p>
+                                                        </div>
+                                                        <div>
+                                                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                                                dispute.status === 'Accepted'
+                                                                    ? 'bg-emerald-100 text-emerald-800'
+                                                                    : dispute.status === 'Rejected'
+                                                                    ? 'bg-rose-100 text-rose-800'
+                                                                    : 'bg-amber-100 text-amber-800 animate-pulse'
+                                                            }`}>
+                                                                {dispute.status}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                                                            Owner Explanation & Statement:
+                                                        </p>
+                                                        <p className="text-xs font-semibold text-gray-800 leading-relaxed bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+                                                            "{dispute.dispute_reason}"
+                                                        </p>
+                                                    </div>
+
+                                                    {/* Evidence Attachments */}
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                                        {dispute.vaccination_card_url && (
+                                                            <a
+                                                                href={dispute.vaccination_card_url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="flex items-center gap-3 p-3 bg-blue-50/50 hover:bg-blue-50 border border-blue-100 rounded-xl transition-all group"
+                                                            >
+                                                                <span className="text-2xl">💉</span>
+                                                                <div className="overflow-hidden">
+                                                                    <p className="text-[11px] font-black text-blue-900 uppercase tracking-wider group-hover:text-blue-700">
+                                                                        Anti-Rabies Card
+                                                                    </p>
+                                                                    <p className="text-[10px] text-blue-600 truncate">Click to inspect certificate ↗</p>
+                                                                </div>
+                                                            </a>
+                                                        )}
+
+                                                        {dispute.supporting_photo_url && (
+                                                            <a
+                                                                href={dispute.supporting_photo_url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="flex items-center gap-3 p-3 bg-emerald-50/50 hover:bg-emerald-50 border border-emerald-100 rounded-xl transition-all group"
+                                                            >
+                                                                <span className="text-2xl">📸</span>
+                                                                <div className="overflow-hidden">
+                                                                    <p className="text-[11px] font-black text-emerald-900 uppercase tracking-wider group-hover:text-emerald-700">
+                                                                        Home Confinement Photo
+                                                                    </p>
+                                                                    <p className="text-[10px] text-emerald-600 truncate">Click to inspect photo ↗</p>
+                                                                </div>
+                                                            </a>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Review Form if Pending */}
+                                                    {dispute.status === 'Pending' && (
+                                                        <div className="pt-3 border-t border-gray-100 space-y-3">
+                                                            {reviewingDisputeId === dispute.dispute_id ? (
+                                                                <div className="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                                                    <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest block">
+                                                                        Investigation Review Notes:
+                                                                    </label>
+                                                                    <textarea
+                                                                        rows={2}
+                                                                        value={disputeReviewNotes}
+                                                                        onChange={(e) => setDisputeReviewNotes(e.target.value)}
+                                                                        placeholder="State your findings regarding this vaccination/ownership proof..."
+                                                                        className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:border-amber-500"
+                                                                    />
+                                                                    <div className="flex gap-2">
+                                                                        <button
+                                                                            type="button"
+                                                                            disabled={isReviewingDispute}
+                                                                            onClick={() => handleReviewDispute(dispute.dispute_id, 'Accepted')}
+                                                                            className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+                                                                        >
+                                                                            {isReviewingDispute ? 'Processing...' : '✓ Accept Dispute & Clear Pet'}
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            disabled={isReviewingDispute}
+                                                                            onClick={() => handleReviewDispute(dispute.dispute_id, 'Rejected')}
+                                                                            className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+                                                                        >
+                                                                            {isReviewingDispute ? 'Processing...' : '✕ Reject Dispute'}
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => { setReviewingDisputeId(null); setDisputeReviewNotes(''); }}
+                                                                            className="px-4 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl text-xs font-bold cursor-pointer"
+                                                                        >
+                                                                            Cancel
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setReviewingDisputeId(dispute.dispute_id)}
+                                                                    className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-xs cursor-pointer"
+                                                                >
+                                                                    🔍 Review & Resolve This Dispute
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
+
+                                                    {dispute.reviewer_notes && (
+                                                        <div className="text-[11px] text-gray-600 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                                                            <strong className="text-gray-900 font-bold">Reviewer Decision Notes: </strong>
+                                                            {dispute.reviewer_notes} {dispute.reviewer_name ? `(by ${dispute.reviewer_name})` : ''}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Map Location */}
                                 <div>
@@ -1013,7 +1464,7 @@ const SubdViewReport = () => {
                                                     id: -1,
                                                     lat: BRGY_OFFICE[0],
                                                     lng: BRGY_OFFICE[1],
-                                                    title: "Barangay Hall",
+                                                    title: "Barangay Hall HQ",
                                                     category: "Barangay Office"
                                                 },
                                                 ...(userLocation ? [{
@@ -1024,20 +1475,28 @@ const SubdViewReport = () => {
                                                     category: "User Location"
                                                 }] : [])
                                             ]}
-                                            routing={isNavigating ? {
-                                                start: navSource === 'brgy' ? BRGY_OFFICE : (userLocation || BRGY_OFFICE),
-                                                end: [report.latitude, report.longitude],
-                                                waypointNames: [navSource === 'brgy' ? "Barangay Office" : "Your Location", report.landmark],
-                                                onClose: () => setIsNavigating(false)
-                                            } : undefined}
-                                            onMarkerClick={(m) => {
-                                                if (m.source) {
-                                                    setNavSource(m.source);
-                                                    setIsNavigating(true);
+                                            routing={isNavigating ? (() => {
+                                                const repLoc: [number, number] = [report.latitude, report.longitude];
+                                                const destName = report.landmark || 'Incident Location';
+                                                if (navSource === 'current' && userLocation) {
+                                                    return {
+                                                        start: userLocation,
+                                                        end: repLoc,
+                                                        waypointNames: ["Your Location", destName] as [string, string],
+                                                        onClose: () => setIsNavigating(false)
+                                                    };
                                                 } else {
-                                                    setIsNavigating(true);
-                                                    setNavSource('brgy');
+                                                    return {
+                                                        start: BRGY_OFFICE,
+                                                        end: repLoc,
+                                                        waypointNames: ["Barangay Office", destName] as [string, string],
+                                                        onClose: () => setIsNavigating(false)
+                                                    };
                                                 }
+                                            })() : undefined}
+                                            onMarkerClick={(m) => {
+                                                setNavSource(m.source || 'brgy');
+                                                setIsNavigating(true);
                                             }}
                                         />
                                     </div>
@@ -1397,26 +1856,45 @@ const SubdViewReport = () => {
                                 <div className="mt-8 pt-8 border-t border-gray-100">
                                     <div className="flex flex-col gap-3">
                                         {/* CASE NOT HANDLED BY CURRENT USER */}
-                                        {report.assigned_leader_id && report.assigned_leader_id !== currentUserId && ![11, 12].includes(report.status_id) && (
-                                            <div className="p-5 rounded-2xl bg-blue-50/70 border border-blue-200 text-center space-y-2">
-                                                <p className="text-xs font-bold text-blue-900">
-                                                    🔒 Operational controls are reserved for the assigned case officer (<span className="font-black text-blue-700">{report.assigned_leader_name || `Officer #${report.assigned_leader_id}`}</span>).
+                                        {report.assigned_leader_id && report.assigned_leader_id !== currentUserId && ![11, 12, 14, 3].includes(report.status_id) && (
+                                            <div className={`p-5 rounded-2xl border text-center space-y-2.5 ${
+                                                report.is_takeover_eligible ? 'bg-amber-50/80 border-amber-300' : 'bg-blue-50/70 border-blue-200'
+                                            }`}>
+                                                <p className={`text-xs font-bold ${report.is_takeover_eligible ? 'text-amber-950' : 'text-blue-900'}`}>
+                                                    🔒 Operational controls are reserved for the assigned case officer (<span className={`font-black ${report.is_takeover_eligible ? 'text-amber-800' : 'text-blue-700'}`}>{report.assigned_leader_name || `Officer #${report.assigned_leader_id}`}</span>).
                                                 </p>
-                                                <p className="text-[11px] text-blue-700/80">
-                                                    If this officer is unavailable or you need to manage this case, you can take over this report.
-                                                </p>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setIsTakeoverModalOpen(true)}
-                                                    className="mt-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase tracking-wider shadow-sm transition-all cursor-pointer"
-                                                >
-                                                    🔄 Take Over Report
-                                                </button>
+                                                {report.is_takeover_eligible ? (
+                                                    <p className="text-[11px] text-amber-800 font-semibold">
+                                                        ⚠️ This report has had no updates for over {report.takeover_inactivity_hours_threshold || 24} hours. You can take over handling now.
+                                                    </p>
+                                                ) : (
+                                                    <p className="text-[11px] text-blue-700/80 font-medium">
+                                                        Officer is within the active response window. Takeover unlocks in <strong>{formatCooldownTimer(report.takeover_cooldown_remaining_seconds)}</strong> if no progress is made.
+                                                    </p>
+                                                )}
+
+                                                {report.is_takeover_eligible || currentUser?.role_id === 4 ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsTakeoverModalOpen(true)}
+                                                        className="mt-2 px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black uppercase tracking-wider shadow-sm transition-all cursor-pointer hover:scale-105 active:scale-95"
+                                                    >
+                                                        🔄 Take Over Report (Stalled)
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        disabled
+                                                        className="mt-2 px-6 py-2.5 rounded-xl bg-gray-100 border border-gray-200 text-gray-400 text-xs font-black uppercase tracking-wider shadow-xs cursor-not-allowed opacity-80"
+                                                    >
+                                                        🔒 Takeover Locked ({formatCooldownTimer(report.takeover_cooldown_remaining_seconds)})
+                                                    </button>
+                                                )}
                                             </div>
                                         )}
 
                                         {/* CASE IS UNASSIGNED */}
-                                        {!report.assigned_leader_id && ![11, 12].includes(report.status_id) && (
+                                        {!report.assigned_leader_id && ![11, 12, 14, 3].includes(report.status_id) && (
                                             <div className="p-5 rounded-2xl bg-amber-50/80 border border-amber-200 text-center space-y-2">
                                                 <p className="text-xs font-bold text-amber-900">
                                                     ⚠️ Please claim this incident report to unlock verification, warning citations, and resolution actions.
@@ -1433,7 +1911,7 @@ const SubdViewReport = () => {
                                         )}
 
                                         {/* OPERATIONAL CONTROLS - ACTIVE FOR ASSIGNED HANDLER */}
-                                        {report.assigned_leader_id === currentUserId && (
+                                        {report.assigned_leader_id === currentUserId && ![11, 12, 14, 3].includes(report.status_id) && (
                                             <>
                                                 {/* OPTION: ADD PET RECORD IF UNREGISTERED */}
                                                 {!report.pet_id && (
@@ -1448,15 +1926,59 @@ const SubdViewReport = () => {
                                                 )}
 
                                                 {/* STEP 1: VERIFY */}
-                                                {report.status_id === 1 && (
+                                                {(report.status_id === 1 || report.status_id === 2 || report.status_id === 16) && (
                                                     <button
-                                                        onClick={() => handleUpdateStatus(2)}
-                                                        className="w-full py-4 bg-blue-600 text-white rounded-2xl text-xs font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
+                                                        onClick={() => {
+                                                            const isAlreadyVerified = report.verification_status === 'verified_true';
+                                                            
+                                                            const initBite = isAlreadyVerified ? Boolean((report as any).verified_actual_bite) : Boolean((report as any).ai_behavior_actual_bite);
+                                                            const initChasing = isAlreadyVerified ? Boolean((report as any).verified_chasing) : Boolean((report as any).ai_behavior_chasing);
+                                                            const initAttempted = isAlreadyVerified ? Boolean((report as any).verified_attempted_bite) : Boolean((report as any).ai_behavior_attempted_bite);
+                                                            const initInjury = isAlreadyVerified ? Boolean((report as any).verified_injury) : Boolean((report as any).ai_behavior_injury);
+                                                            const initAggressive = isAlreadyVerified ? Boolean((report as any).verified_aggressive) : Boolean((report as any).ai_behavior_aggressive);
+
+                                                            setVerifyNotes(isAlreadyVerified ? (report.verification_notes || '') : '');
+                                                            setVerifyActualBite(initBite);
+                                                            setVerifyChasing(initChasing);
+                                                            setVerifyAttemptedBite(initAttempted);
+                                                            setVerifyInjury(initInjury);
+                                                            setVerifyAggressive(initAggressive);
+
+                                                            if (isAlreadyVerified && (report as any).behavior_finding) {
+                                                                setVerifyBehaviorFinding((report as any).behavior_finding);
+                                                            } else {
+                                                                if (initBite) {
+                                                                    setVerifyBehaviorFinding('Confirmed Physical Bite Incident');
+                                                                } else if (initAggressive || initChasing || initAttempted || initInjury) {
+                                                                    setVerifyBehaviorFinding('Substantiated Aggressive Incident');
+                                                                } else {
+                                                                    setVerifyBehaviorFinding('Unsubstantiated / Friendly Dog');
+                                                                }
+                                                            }
+
+                                                            setIsVerifyModalOpen(true);
+                                                        }}
+                                                        className="w-full py-4 bg-blue-600 text-white rounded-2xl text-xs font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
                                                     >
                                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                         </svg>
                                                         VERIFY INCIDENT REPORT
+                                                    </button>
+                                                )}
+
+                                                {/* FALSE ALARM DISMISSAL BUTTON */}
+                                                {(report.status_id === 1 || report.status_id === 2 || report.status_id === 15 || report.status_id === 16) && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setFalseAlarmReason('No Animal Found');
+                                                            setFalseAlarmNotes('');
+                                                            setIsFalseAlarmModalOpen(true);
+                                                        }}
+                                                        className="w-full py-3.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                                                    >
+                                                        <span>🚫</span>
+                                                        <span>Mark as False Alarm / Dismiss</span>
                                                     </button>
                                                 )}
 
@@ -1501,17 +2023,24 @@ const SubdViewReport = () => {
                                                 {(report.status_id === 1 || report.status_id === 2 || report.status_id === 4 || report.status_id === 7) && (
                                                     <button
                                                         onClick={() => {
-                                                            const isLostPet = report.category_id === 6 || !!report.pet_id || (!!report.description && report.description.includes('[LOST PET REPORT]'));
-                                                            if (isLostPet) {
-                                                                setIsResolveLostModalOpen(true);
-                                                            } else {
-                                                                setIsResolveModalOpen(true);
-                                                            }
+                                                            setIsResolveLostModalOpen(true);
                                                         }}
                                                         className="w-full py-3.5 border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100 text-emerald-700 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
                                                     >
-                                                        <span>{(report.category_id === 6 || !!report.pet_id || (!!report.description && report.description.includes('[LOST PET REPORT]'))) ? '🏠' : '✅'}</span>
-                                                        {(report.category_id === 6 || !!report.pet_id || (!!report.description && report.description.includes('[LOST PET REPORT]'))) ? 'Resolve Lost Pet Report' : 'Mark as Resolved'}
+                                                        <span>{(report.category_id === 6 || !!report.pet_id || (!!report.description && report.description.includes('[LOST PET REPORT]'))) ? '🏠' : '🐾'}</span>
+                                                        Update Animal Status
+                                                    </button>
+                                                )}
+
+                                                {/* STEP 4: TRANSFER CASE TO ANOTHER LEADER */}
+                                                {![11, 12, 14, 3].includes(report.status_id) && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsTransferModalOpen(true)}
+                                                        className="w-full py-3.5 border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 text-purple-800 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs hover:scale-[1.01] active:scale-95"
+                                                    >
+                                                        <span className="text-base">🔄</span>
+                                                        <span>Transfer Report to Another Leader</span>
                                                     </button>
                                                 )}
 
@@ -1547,11 +2076,174 @@ const SubdViewReport = () => {
                                             </div>
                                         )}
 
+                                        {report.status_id === 14 && (
+                                            <div className="w-full p-5 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in duration-300">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-black text-sm shrink-0">
+                                                        🚫
+                                                    </div>
+                                                    <div>
+                                                        <h5 className="text-xs font-black text-amber-800 uppercase tracking-wide">False Alarm / Dismissed</h5>
+                                                        <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">This report was dismissed and is archived in History Reports</p>
+                                                    </div>
+                                                </div>
+                                                <Link 
+                                                    to="/subd/history" 
+                                                    className="px-5 py-2.5 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer shadow-sm hover:scale-105"
+                                                >
+                                                    View History Reports →
+                                                </Link>
+                                            </div>
+                                        )}
+
+                                        {report.status_id === 3 && (
+                                            <div className="w-full p-5 bg-red-50 border border-red-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in duration-300">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center font-black text-sm shrink-0">
+                                                        ✕
+                                                    </div>
+                                                    <div>
+                                                        <h5 className="text-xs font-black text-red-800 uppercase tracking-wide">Report Rejected</h5>
+                                                        <p className="text-[10px] font-bold text-red-600 uppercase tracking-wider">This report was rejected and is archived in History Reports</p>
+                                                    </div>
+                                                </div>
+                                                <Link 
+                                                    to="/subd/history" 
+                                                    className="px-5 py-2.5 bg-red-700 hover:bg-red-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer shadow-sm hover:scale-105"
+                                                >
+                                                    View History Reports →
+                                                </Link>
+                                            </div>
+                                        )}
+
                                         {report.status_id === 12 && (
                                             <div className="w-full py-4 bg-gray-100 text-gray-600 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border border-gray-200">
                                                 Status: Deceased — Archived in History Reports
                                             </div>
                                         )}
+                                    </div>
+                                </div>
+                            </div>
+
+                                {/* RIGHT COLUMN: Report Activity & Handover Timeline */}
+                                <div className="lg:col-span-1 space-y-8 sticky top-0">
+                                    <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 sm:p-10 shadow-sm">
+                                        <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] flex items-center justify-center text-lg font-black shadow-xs">
+                                                    📜
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-sm font-black text-gray-900 uppercase tracking-wide">
+                                                        Report Activity & Handover Timeline
+                                                    </h4>
+                                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                                                        Official Audit Trail & Officer Activity Log
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <span className="text-[10px] font-black text-gray-500 bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
+                                                {(report.history?.length || 0) + 1} Event{((report.history?.length || 0) + 1) > 1 ? 's' : ''}
+                                            </span>
+                                        </div>
+
+                                        <div className="relative pl-6 space-y-5 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-gray-100 max-h-[600px] overflow-y-auto pr-2">
+                                            {/* Initial Report Submission */}
+                                            <div className="relative flex items-start gap-4 group">
+                                                <div className="absolute -left-6 mt-1 w-5 h-5 rounded-full bg-blue-500 border-4 border-white shadow-xs flex items-center justify-center text-white text-[8px]">
+                                                    📝
+                                                </div>
+                                                <div className="flex-1 bg-gray-50/70 hover:bg-gray-50 rounded-2xl p-4 border border-gray-100 transition-all">
+                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                                                        <span className="text-xs font-black text-gray-900 uppercase tracking-wide">
+                                                            Report Submitted by {report.reporter_name || 'Resident'}
+                                                        </span>
+                                                        <span className="text-[10px] font-bold text-gray-400">
+                                                            <RelativeTimestamp date={report.created_at} />
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-gray-600 font-medium mt-1">
+                                                        Incident filed for <strong className="text-gray-900 font-bold">{report.animal_type}</strong> ({report.landmark || 'No landmark specified'}).
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* History / Transfer / Status entries */}
+                                            {report.history && report.history.map((hist: any) => {
+                                                const remarksLower = (hist.remarks || '').toLowerCase();
+                                                const isTransfer = remarksLower.includes('transfer');
+                                                const isClaim = remarksLower.includes('claim');
+                                                const isWarning = remarksLower.includes('warning') || remarksLower.includes('notice');
+                                                const isResolved = remarksLower.includes('resolved') || hist.report_status_id === 11;
+                                                const isVerified = remarksLower.includes('verified') || hist.report_status_id === 2;
+                                                const isFalseAlarm = remarksLower.includes('false alarm') || remarksLower.includes('dismiss');
+                                                const isEscalated = remarksLower.includes('escalat') || hist.report_status_id === 4;
+
+                                                let icon = '📌';
+                                                let dotColor = 'bg-orange-500';
+                                                let cardBg = 'bg-gray-50/70';
+                                                let borderColor = 'border-gray-100';
+
+                                                if (isTransfer) {
+                                                    icon = '🔄';
+                                                    dotColor = 'bg-purple-500';
+                                                    cardBg = 'bg-purple-50/40';
+                                                    borderColor = 'border-purple-100';
+                                                } else if (isClaim) {
+                                                    icon = '🛡️';
+                                                    dotColor = 'bg-emerald-500';
+                                                    cardBg = 'bg-emerald-50/40';
+                                                    borderColor = 'border-emerald-100';
+                                                } else if (isWarning) {
+                                                    icon = '⚠️';
+                                                    dotColor = 'bg-amber-500';
+                                                    cardBg = 'bg-amber-50/40';
+                                                    borderColor = 'border-amber-100';
+                                                } else if (isResolved) {
+                                                    icon = '✅';
+                                                    dotColor = 'bg-green-600';
+                                                    cardBg = 'bg-green-50/40';
+                                                    borderColor = 'border-green-100';
+                                                } else if (isVerified) {
+                                                    icon = '🔍';
+                                                    dotColor = 'bg-blue-500';
+                                                    cardBg = 'bg-blue-50/40';
+                                                    borderColor = 'border-blue-100';
+                                                } else if (isFalseAlarm) {
+                                                    icon = '🚫';
+                                                    dotColor = 'bg-rose-500';
+                                                    cardBg = 'bg-rose-50/40';
+                                                    borderColor = 'border-rose-100';
+                                                } else if (isEscalated) {
+                                                    icon = '🚀';
+                                                    dotColor = 'bg-orange-600';
+                                                    cardBg = 'bg-orange-50/40';
+                                                    borderColor = 'border-orange-100';
+                                                }
+
+                                                return (
+                                                    <div key={hist.history_id} className="relative flex items-start gap-4 group animate-in fade-in duration-300">
+                                                        <div className={`absolute -left-6 mt-1 w-5 h-5 rounded-full ${dotColor} border-4 border-white shadow-xs flex items-center justify-center text-white text-[8px]`}>
+                                                            {icon}
+                                                        </div>
+                                                        <div className={`flex-1 ${cardBg} hover:bg-gray-50 rounded-2xl p-4 border ${borderColor} transition-all`}>
+                                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                                                                <span className="text-xs font-black text-gray-900 flex items-center gap-1.5">
+                                                                    <span>{icon}</span>
+                                                                    <span>{hist.updater_name || 'Subdivision Officer'}</span>
+                                                                </span>
+                                                                <span className="text-[10px] font-bold text-gray-400">
+                                                                    <RelativeTimestamp date={hist.created_at} />
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs text-gray-700 font-semibold mt-1.5 leading-relaxed">
+                                                                {hist.remarks || 'Status updated'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1766,108 +2458,6 @@ const SubdViewReport = () => {
                 </div>
             )}
 
-            {/* Resolve Modal */}
-            {isResolveModalOpen && report && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300">
-                        {/* Title block from the image */}
-                        <div className="pt-10 pb-4 flex flex-col items-center border-b border-gray-100/50 bg-gray-50/20">
-                            <h3 className="text-xl font-black text-gray-900 tracking-tight uppercase leading-none">Update Rescue Status</h3>
-                            <p className="text-[9px] font-extrabold text-[#F97316] uppercase tracking-widest mt-2">
-                                New Status: Resolved
-                            </p>
-                        </div>
-
-                        <form onSubmit={handleResolveReport} className="p-8 flex flex-col gap-6">
-                            {/* Scrollable form body */}
-                            <div className="max-h-[50vh] overflow-y-auto px-1 custom-scrollbar space-y-6">
-                                {/* STATUS MESSAGE / TITLE */}
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Status Message / Title</label>
-                                    <textarea 
-                                        required 
-                                        rows={3}
-                                        className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300 resize-none"
-                                        value={resolveRemarks}
-                                        onChange={(e) => setResolveRemarks(e.target.value)}
-                                        placeholder="Describe the update or findings..."
-                                    />
-                                </div>
-
-                                {/* CURRENT ANIMAL CONDITION */}
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Current Animal Condition</label>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {['Healthy', 'Injured', 'Aggressive', 'Thin', 'Nursing', 'Deceased'].map((cond) => (
-                                            <button
-                                                key={cond}
-                                                type="button"
-                                                onClick={() => setResolveCondition(cond)}
-                                                className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${resolveCondition === cond
-                                                    ? 'bg-orange-50 border-orange-200 text-[#F97316] shadow-sm'
-                                                    : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200 hover:text-gray-600'
-                                                    }`}
-                                            >
-                                                {cond}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* ADD EVIDENCE PHOTOS/VIDEOS */}
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Add Evidence Photos/Videos</label>
-                                    <div className="relative border-2 border-dashed border-gray-200 rounded-3xl bg-white p-8 flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 hover:bg-orange-50/5 transition-all group min-h-[160px]">
-                                        <input
-                                            type="file" 
-                                            multiple 
-                                            accept="image/*,video/*"
-                                            onChange={(e) => {
-                                                if (e.target.files) {
-                                                    setResolveMediaFiles(Array.from(e.target.files));
-                                                }
-                                            }}
-                                            className="absolute inset-0 opacity-0 cursor-pointer"
-                                        />
-                                        <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 group-hover:bg-orange-100 group-hover:text-[#F97316] transition-all mb-3">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                                            </svg>
-                                        </div>
-                                        <span className="text-[9px] font-black text-gray-400 group-hover:text-gray-600 uppercase tracking-widest leading-none">Tap to select multiple</span>
-                                        {resolveMediaFiles.length > 0 && (
-                                            <div className="mt-4 text-center">
-                                                <p className="text-[10px] font-bold text-[#F97316] uppercase tracking-wider">{resolveMediaFiles.length} file(s) selected</p>
-                                                <div className="text-[9px] text-gray-400 truncate max-w-[250px] mt-1">
-                                                    {resolveMediaFiles.map(f => f.name).join(', ')}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Footer Buttons */}
-                            <div className="pt-4 border-t border-gray-100 flex flex-col gap-2">
-                                <button
-                                    type="submit"
-                                    disabled={isResolving}
-                                    className="w-full py-4 bg-[#F97316] hover:bg-[#EA580C] disabled:bg-orange-300 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-orange-100/50 flex items-center justify-center gap-2 cursor-pointer"
-                                >
-                                    {isResolving ? 'Resolving...' : 'Confirm Status Update'}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsResolveModalOpen(false)}
-                                    className="py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-900 transition-colors cursor-pointer mt-2 block mx-auto"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
 
             {/* Media Gallery Overlay */}
             {activeGallery && (
@@ -1950,7 +2540,7 @@ const SubdViewReport = () => {
                                         id: -1,
                                         lat: BRGY_OFFICE[0],
                                         lng: BRGY_OFFICE[1],
-                                        title: "Barangay Hall",
+                                        title: "Barangay Hall HQ",
                                         category: "Barangay Office"
                                     },
                                     ...(userLocation ? [{
@@ -1961,20 +2551,28 @@ const SubdViewReport = () => {
                                         category: "User Location"
                                     }] : [])
                                 ]}
-                                routing={isNavigating ? {
-                                    start: navSource === 'brgy' ? BRGY_OFFICE : (userLocation || BRGY_OFFICE),
-                                    end: [report.latitude, report.longitude],
-                                    waypointNames: [navSource === 'brgy' ? "Barangay Office" : "Your Location", report.landmark],
-                                    onClose: () => setIsNavigating(false)
-                                } : undefined}
-                                onMarkerClick={(m) => {
-                                    if (m.source) {
-                                        setNavSource(m.source);
-                                        setIsNavigating(true);
+                                routing={isNavigating ? (() => {
+                                    const repLoc: [number, number] = [report.latitude, report.longitude];
+                                    const destName = report.landmark || 'Incident Location';
+                                    if (navSource === 'current' && userLocation) {
+                                        return {
+                                            start: userLocation,
+                                            end: repLoc,
+                                            waypointNames: ["Your Location", destName] as [string, string],
+                                            onClose: () => setIsNavigating(false)
+                                        };
                                     } else {
-                                        setIsNavigating(true);
-                                        setNavSource('brgy');
+                                        return {
+                                            start: BRGY_OFFICE,
+                                            end: repLoc,
+                                            waypointNames: ["Barangay Office", destName] as [string, string],
+                                            onClose: () => setIsNavigating(false)
+                                        };
                                     }
+                                })() : undefined}
+                                onMarkerClick={(m) => {
+                                    setNavSource(m.source || 'brgy');
+                                    setIsNavigating(true);
                                 }}
                             />
                         </div>
@@ -2036,19 +2634,22 @@ const SubdViewReport = () => {
                 </div>
             )}
 
-            {/* Resolve Lost Pet Report Modal */}
-            {isResolveLostModalOpen && report && (
+            {/* Resolve / Update Animal Status Modal */}
+            {(isResolveLostModalOpen || isResolveModalOpen) && report && (
                 <ResolveLostPetModal
-                    isOpen={isResolveLostModalOpen}
+                    isOpen={isResolveLostModalOpen || isResolveModalOpen}
                     pet={{
                         pet_id: report.pet_id || 0,
-                        pet_name: report.pet_name || 'Pet',
+                        pet_name: report.pet_name || report.animal_type || 'Animal',
                         photo_url: (report as any).pet_photo_url || (report.media && report.media[0]?.file_url),
                         breed: (report as any).pet_breed || report.breed || (report as any).animal_breed,
-                        species: (report as any).pet_type || report.animal_type
+                        species: (report as any).pet_type || report.animal_type || 'Animal'
                     }}
                     reportId={report.report_id}
-                    onClose={() => setIsResolveLostModalOpen(false)}
+                    onClose={() => {
+                        setIsResolveLostModalOpen(false);
+                        setIsResolveModalOpen(false);
+                    }}
                     onSuccess={() => {
                         window.location.reload();
                     }}
@@ -2093,6 +2694,38 @@ const SubdViewReport = () => {
                 />
             )}
 
+            {/* Transfer Report Modal */}
+            {isTransferModalOpen && report && (
+                <TransferReportModal
+                    isOpen={isTransferModalOpen}
+                    onClose={() => setIsTransferModalOpen(false)}
+                    reportId={report.report_id}
+                    currentUserId={currentUserId}
+                    subdivisionId={report.subdivision_id}
+                    onTransferSuccess={() => {
+                        setShowSuccess(true);
+                        fetchReportDetails();
+                        setTimeout(() => setShowSuccess(false), 3000);
+                    }}
+                />
+            )}
+
+            {/* Reject Transfer Modal */}
+            {isRejectTransferModalOpen && report && (
+                <RejectTransferModal
+                    isOpen={isRejectTransferModalOpen}
+                    onClose={() => setIsRejectTransferModalOpen(false)}
+                    reportId={report.report_id}
+                    currentUserId={currentUserId}
+                    senderName={report.pending_transfer_from_name || undefined}
+                    onRejectSuccess={() => {
+                        setShowSuccess(true);
+                        fetchReportDetails();
+                        setTimeout(() => setShowSuccess(false), 3000);
+                    }}
+                />
+            )}
+
             {/* Success Modal */}
             <SuccessModal
                 isOpen={showSuccess}
@@ -2112,6 +2745,311 @@ const SubdViewReport = () => {
                                 fetchReportDetails();
                             }}
                         />
+                    </div>
+                </div>
+            )}
+
+            {/* False Alarm Dismissal Modal */}
+            {isFalseAlarmModalOpen && report && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-300 border border-rose-100">
+                        <div className="px-8 py-6 border-b border-gray-150 flex justify-between items-center bg-rose-50/50">
+                            <div className="flex items-center gap-3">
+                                <span className="text-3xl">🚫</span>
+                                <div>
+                                    <h3 className="text-xl font-black text-rose-950 uppercase tracking-tight">Dismiss as False Alarm</h3>
+                                    <p className="text-xs text-rose-700/80 mt-0.5 font-medium">Record field inspection findings before closing this report.</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsFalseAlarmModalOpen(false)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-900 rounded-full hover:bg-gray-100 transition-all">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                        <form onSubmit={handleMarkFalseAlarm} className="p-8 space-y-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Dismissal Reason Category</label>
+                                <select
+                                    value={falseAlarmReason}
+                                    onChange={(e) => setFalseAlarmReason(e.target.value)}
+                                    className="w-full px-5 py-4 bg-white border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-rose-100 focus:border-rose-500 outline-none transition-all"
+                                >
+                                    <option value="No Animal Found">No Animal Found at Reported Location</option>
+                                    <option value="Exaggerated / No Bite Occurred">Exaggerated Claim (No Bite / No Injury Occurred)</option>
+                                    <option value="Neighbor Dispute / Harassment">Neighbor Dispute / Malicious Harassment Report</option>
+                                    <option value="Pet Safely at Home">Owned Resident Pet Safely Inside Property</option>
+                                    <option value="Duplicate Report">Duplicate Report Already Being Handled</option>
+                                    <option value="Other">Other Reason (Detailed in Notes)</option>
+                                </select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Staff Field Inspection Notes</label>
+                                <textarea
+                                    rows={4}
+                                    required
+                                    value={falseAlarmNotes}
+                                    onChange={(e) => setFalseAlarmNotes(e.target.value)}
+                                    placeholder="Explain the results of the physical verification or witness interviews that confirm this report is a false alarm..."
+                                    className="w-full px-5 py-4 bg-white border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-rose-100 focus:border-rose-500 outline-none transition-all resize-none"
+                                />
+                            </div>
+
+                            <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-[11px] text-amber-900 font-medium leading-relaxed">
+                                <strong>⚠️ Audit Notice:</strong> This action will update Report #{report.report_id} status to <em>False Alarm / Dismissed</em>, record your officer name in the audit log, and notify the resident reporter.
+                            </div>
+
+                            <div className="flex gap-4 pt-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsFalseAlarmModalOpen(false)}
+                                    className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmittingFalseAlarm || !falseAlarmNotes.trim()}
+                                    className="flex-1 py-3.5 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all shadow-md shadow-rose-600/20 cursor-pointer"
+                                >
+                                    {isSubmittingFalseAlarm ? 'Dismissing...' : 'CONFIRM DISMISSAL'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Verify Incident Modal */}
+            {isVerifyModalOpen && report && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-blue-100 max-h-[92vh] flex flex-col">
+                        <div className="px-8 py-5 border-b border-gray-150 flex justify-between items-center bg-blue-50/60">
+                            <div className="flex items-center gap-3">
+                                <span className="text-3xl">🔍</span>
+                                <div>
+                                    <h3 className="text-xl font-black text-blue-950 uppercase tracking-tight">On-Site Field Verification</h3>
+                                    <p className="text-xs text-blue-700/80 mt-0.5 font-medium">Record ground truth investigation findings to confirm or clear animal records.</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsVerifyModalOpen(false)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-900 rounded-full hover:bg-gray-100 transition-all">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                        <form onSubmit={handleVerifyIncident} className="p-8 space-y-5 overflow-y-auto">
+                            {/* Behavioral Ground Truth Finding Category */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">
+                                    Investigation Behavioral Finding
+                                </label>
+                                <select
+                                    value={verifyBehaviorFinding}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setVerifyBehaviorFinding(val);
+                                        if (val.includes('Friendly') || val.includes('Exaggerated') || val.includes('Normal Stray')) {
+                                            setVerifyActualBite(false);
+                                            setVerifyAggressive(false);
+                                            setVerifyInjury(false);
+                                            setVerifyChasing(false);
+                                            setVerifyAttemptedBite(false);
+                                        } else if (val.includes('Substantiated Aggressive')) {
+                                            setVerifyAggressive(true);
+                                        }
+                                    }}
+                                    className="w-full px-4 py-3 bg-white border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                                >
+                                    <option value="Unsubstantiated / Friendly Dog">🛡️ Unsubstantiated / Friendly Dog (Keep Record Clean)</option>
+                                    <option value="Exaggerated Claim (Playful / No Threat)">🛡️ Exaggerated Claim (Playful / Harmless Behavior)</option>
+                                    <option value="Normal Stray (Docile / No Bite)">🛡️ Normal Stray (Docile / Non-Aggressive)</option>
+                                    <option value="Substantiated Aggressive Incident">⚠️ Substantiated Aggressive Incident (Hostile / Threat Confirmed)</option>
+                                    <option value="Confirmed Physical Bite Incident">🚨 Confirmed Physical Bite Incident (Victim Injured)</option>
+                                </select>
+                            </div>
+
+                            {/* Observable Behavior Checkbox Toggles */}
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">
+                                        Observed Physical Actions (Ground Truth vs Allegation)
+                                    </label>
+                                    <span className="text-[10px] text-blue-600 font-semibold">Pre-filled from AI • Uncheck if False</span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                    <label className={`flex items-center gap-3 p-3 rounded-2xl border transition-all cursor-pointer ${
+                                        verifyActualBite ? 'bg-rose-50 border-rose-300 text-rose-900 font-bold' : 'bg-gray-50/80 border-gray-200 text-gray-700'
+                                    }`}>
+                                        <input
+                                            type="checkbox"
+                                            checked={verifyActualBite}
+                                            onChange={(e) => {
+                                                const checked = e.target.checked;
+                                                setVerifyActualBite(checked);
+                                                if (checked) {
+                                                    setVerifyBehaviorFinding('Confirmed Physical Bite Incident');
+                                                } else if (!verifyAggressive && !verifyInjury && !verifyChasing && !verifyAttemptedBite) {
+                                                    setVerifyBehaviorFinding('Unsubstantiated / Friendly Dog');
+                                                }
+                                            }}
+                                            className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500"
+                                        />
+                                        <div className="flex-1 flex items-center justify-between">
+                                            <span className="text-xs">Actual Physical Bite Confirmed</span>
+                                            {Boolean((report as any).ai_behavior_actual_bite) && (
+                                                <span className="text-[9px] px-1.5 py-0.5 bg-rose-200/80 text-rose-800 rounded font-bold uppercase">AI Flagged</span>
+                                            )}
+                                        </div>
+                                    </label>
+
+                                    <label className={`flex items-center gap-3 p-3 rounded-2xl border transition-all cursor-pointer ${
+                                        verifyChasing ? 'bg-amber-50 border-amber-300 text-amber-900 font-bold' : 'bg-gray-50/80 border-gray-200 text-gray-700'
+                                    }`}>
+                                        <input
+                                            type="checkbox"
+                                            checked={verifyChasing}
+                                            onChange={(e) => {
+                                                const checked = e.target.checked;
+                                                setVerifyChasing(checked);
+                                                if (checked && !verifyActualBite) {
+                                                    setVerifyBehaviorFinding('Substantiated Aggressive Incident');
+                                                } else if (!checked && !verifyActualBite && !verifyAggressive && !verifyInjury && !verifyAttemptedBite) {
+                                                    setVerifyBehaviorFinding('Unsubstantiated / Friendly Dog');
+                                                }
+                                            }}
+                                            className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
+                                        />
+                                        <div className="flex-1 flex items-center justify-between">
+                                            <span className="text-xs">Hostile Chasing Observed</span>
+                                            {Boolean((report as any).ai_behavior_chasing) && (
+                                                <span className="text-[9px] px-1.5 py-0.5 bg-amber-200/80 text-amber-800 rounded font-bold uppercase">AI Flagged</span>
+                                            )}
+                                        </div>
+                                    </label>
+
+                                    <label className={`flex items-center gap-3 p-3 rounded-2xl border transition-all cursor-pointer ${
+                                        verifyAttemptedBite ? 'bg-amber-50 border-amber-300 text-amber-900 font-bold' : 'bg-gray-50/80 border-gray-200 text-gray-700'
+                                    }`}>
+                                        <input
+                                            type="checkbox"
+                                            checked={verifyAttemptedBite}
+                                            onChange={(e) => {
+                                                const checked = e.target.checked;
+                                                setVerifyAttemptedBite(checked);
+                                                if (checked && !verifyActualBite) {
+                                                    setVerifyBehaviorFinding('Substantiated Aggressive Incident');
+                                                } else if (!checked && !verifyActualBite && !verifyAggressive && !verifyInjury && !verifyChasing) {
+                                                    setVerifyBehaviorFinding('Unsubstantiated / Friendly Dog');
+                                                }
+                                            }}
+                                            className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
+                                        />
+                                        <div className="flex-1 flex items-center justify-between">
+                                            <span className="text-xs">Attempted Bite / Lunging</span>
+                                            {Boolean((report as any).ai_behavior_attempted_bite) && (
+                                                <span className="text-[9px] px-1.5 py-0.5 bg-amber-200/80 text-amber-800 rounded font-bold uppercase">AI Flagged</span>
+                                            )}
+                                        </div>
+                                    </label>
+
+                                    <label className={`flex items-center gap-3 p-3 rounded-2xl border transition-all cursor-pointer ${
+                                        verifyInjury ? 'bg-rose-50 border-rose-300 text-rose-900 font-bold' : 'bg-gray-50/80 border-gray-200 text-gray-700'
+                                    }`}>
+                                        <input
+                                            type="checkbox"
+                                            checked={verifyInjury}
+                                            onChange={(e) => {
+                                                const checked = e.target.checked;
+                                                setVerifyInjury(checked);
+                                                if (checked && !verifyActualBite) {
+                                                    setVerifyBehaviorFinding('Substantiated Aggressive Incident');
+                                                } else if (!checked && !verifyActualBite && !verifyAggressive && !verifyChasing && !verifyAttemptedBite) {
+                                                    setVerifyBehaviorFinding('Unsubstantiated / Friendly Dog');
+                                                }
+                                            }}
+                                            className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500"
+                                        />
+                                        <div className="flex-1 flex items-center justify-between">
+                                            <span className="text-xs">Physical Injury / Bleeding</span>
+                                            {Boolean((report as any).ai_behavior_injury) && (
+                                                <span className="text-[9px] px-1.5 py-0.5 bg-rose-200/80 text-rose-800 rounded font-bold uppercase">AI Flagged</span>
+                                            )}
+                                        </div>
+                                    </label>
+
+                                    <label className={`flex items-center gap-3 p-3 rounded-2xl border transition-all cursor-pointer sm:col-span-2 ${
+                                        verifyAggressive ? 'bg-rose-50 border-rose-300 text-rose-900 font-bold' : 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold'
+                                    }`}>
+                                        <input
+                                            type="checkbox"
+                                            checked={verifyAggressive}
+                                            onChange={(e) => {
+                                                const checked = e.target.checked;
+                                                setVerifyAggressive(checked);
+                                                if (checked && !verifyActualBite) {
+                                                    setVerifyBehaviorFinding('Substantiated Aggressive Incident');
+                                                } else if (!checked && !verifyActualBite && !verifyInjury && !verifyChasing && !verifyAttemptedBite) {
+                                                    setVerifyBehaviorFinding('Unsubstantiated / Friendly Dog');
+                                                }
+                                            }}
+                                            className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500"
+                                        />
+                                        <div className="flex-1 flex items-center justify-between">
+                                            <span className="text-xs">
+                                                {verifyAggressive ? '⚠️ Confirmed Hostile / Aggressive Temperament Observed' : '✓ Non-Aggressive / Calm & Friendly Demeanor'}
+                                            </span>
+                                            {Boolean((report as any).ai_behavior_aggressive) && (
+                                                <span className="text-[9px] px-1.5 py-0.5 bg-rose-200/80 text-rose-800 rounded font-bold uppercase">AI Flagged</span>
+                                            )}
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            {/* Clean Record Status Banner */}
+                            {!verifyActualBite && !verifyAggressive && !verifyInjury ? (
+                                <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200 text-xs text-emerald-900 flex items-start gap-2">
+                                    <span className="text-base flex-shrink-0">🛡️</span>
+                                    <p className="leading-relaxed">
+                                        <strong>Clean Record Mode:</strong> No biting or aggression observed. This will record the dog as <em>friendly/unsubstantiated</em>, ensuring the pet or animal's registry remains clean and preventing wrongful penalties.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="p-3.5 bg-rose-50 rounded-2xl border border-rose-200 text-xs text-rose-900 flex items-start gap-2">
+                                    <span className="text-base flex-shrink-0">⚠️</span>
+                                    <p className="leading-relaxed">
+                                        <strong>Substantiated Threat:</strong> Aggression or bite confirmed. This will be recorded on the animal's permanent profile and may escalate dispatch or rabies observation protocols.
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Field Notes */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Officer Field Notes</label>
+                                <textarea
+                                    rows={3}
+                                    value={verifyNotes}
+                                    onChange={(e) => setVerifyNotes(e.target.value)}
+                                    placeholder="Document on-site observations, witness statements, or friendly animal demeanor..."
+                                    className="w-full px-4 py-3 bg-white border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all resize-none"
+                                />
+                            </div>
+
+                            <div className="flex gap-4 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsVerifyModalOpen(false)}
+                                    className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmittingVerify}
+                                    className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all shadow-md shadow-blue-600/20 cursor-pointer"
+                                >
+                                    {isSubmittingVerify ? 'Saving Record...' : 'CONFIRM VERIFIED RECORD'}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
