@@ -18,6 +18,7 @@ import {
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import SuccessModal from '../../components/Modals/SuccessModal';
+import StraySafeLoading from '../../components/StraySafeLoading';
 import { MapContainer, TileLayer, Marker, useMapEvents, Polygon, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -82,6 +83,7 @@ export default function ReportStrayPage() {
     const [currentStep, setCurrentStep] = useState(1);
     const [isAiProcessing, setIsAiProcessing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submittingStepText, setSubmittingStepText] = useState('');
     const [isGeocoding, setIsGeocoding] = useState(false);
     const [resolvedAddress, setResolvedAddress] = useState('');
     const [declaration, setDeclaration] = useState(false);
@@ -404,12 +406,15 @@ export default function ReportStrayPage() {
     };
 
     const handleSubmit = async () => {
+        if (isSubmitting) return;
+
         if (!declaration) {
             alert('Please confirm that the information provided is accurate by checking the declaration.');
             return;
         }
 
         setIsSubmitting(true);
+        setSubmittingStepText('Registering stray animal report...');
         try {
             let compiledColor = formData.primaryColor;
             if (formData.secondaryColor && formData.secondaryColor !== 'None') {
@@ -462,7 +467,10 @@ export default function ReportStrayPage() {
             if (response.status === 200 || response.status === 201) {
                 const actualReportId = response.data.report_id;
                 if (actualReportId && formData.mediaFiles && formData.mediaFiles.length > 0) {
-                    for (const file of formData.mediaFiles) {
+                    const totalFiles = formData.mediaFiles.length;
+                    for (let i = 0; i < totalFiles; i++) {
+                        const file = formData.mediaFiles[i];
+                        setSubmittingStepText(`Uploading evidence media (${i + 1} of ${totalFiles})...`);
                         const mediaData = new FormData();
                         mediaData.append("file", file);
                         mediaData.append("status_id", "1");
@@ -484,11 +492,12 @@ export default function ReportStrayPage() {
             alert(`Failed to submit report: ${detailMsg}`);
         } finally {
             setIsSubmitting(false);
+            setSubmittingStepText('');
         }
     };
 
     return (
-        <div className="min-h-screen bg-[#F7F7F7] font-sans pb-28">
+        <div className="min-h-screen bg-[#F7F7F7] dark:bg-[#0B0F19] font-sans pb-28 transition-colors duration-200">
             <ResiNavbar />
 
             <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-24 sm:pt-28">
@@ -497,22 +506,22 @@ export default function ReportStrayPage() {
                     <div>
                         <button
                             onClick={handleBack}
-                            className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 hover:text-[#F97316] transition-colors mb-2"
+                            className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 hover:text-[#F97316] dark:text-slate-400 dark:hover:text-orange-400 transition-colors mb-2"
                         >
                             <ArrowLeft className="w-4 h-4" /> Back to Feed
                         </button>
-                        <h1 className="text-2xl sm:text-3xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-3">
+                        <h1 className="text-2xl sm:text-3xl font-black text-[#1a1208] dark:text-white uppercase tracking-tight flex items-center gap-3">
                             <span>📝 STRAY-SAFE Report a Stray Animal</span>
                         </h1>
                     </div>
-                    <span className="px-4 py-1.5 rounded-full bg-orange-100 text-[#F97316] text-xs font-black uppercase tracking-widest">
+                    <span className="px-4 py-1.5 rounded-full bg-orange-100 dark:bg-orange-950/60 text-[#F97316] dark:text-orange-400 border border-transparent dark:border-orange-500/30 text-xs font-black uppercase tracking-widest shadow-xs">
                         Step {currentStep} of 9
                     </span>
                 </div>
 
                 {/* Top Stepper Indicator */}
                 <div className="mb-8 overflow-x-auto custom-scrollbar pb-2">
-                    <div className="flex items-center min-w-max space-x-2 sm:space-x-3 bg-white p-3 rounded-3xl border border-gray-100 shadow-sm">
+                    <div className="flex items-center min-w-max space-x-2 sm:space-x-3 bg-white dark:bg-[#151C2C] p-3 rounded-3xl border border-gray-100 dark:border-slate-800/80 shadow-sm">
                         {steps.map((step) => {
                             const isActive = currentStep === step.id;
                             const isCompleted = currentStep > step.id;
@@ -524,18 +533,18 @@ export default function ReportStrayPage() {
                                         }}
                                         disabled={step.id > currentStep}
                                         className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-black transition-all ${isActive
-                                                ? 'bg-[#F97316] text-white shadow-md shadow-orange-100'
+                                                ? 'bg-[#F97316] text-white shadow-md shadow-orange-500/20'
                                                 : isCompleted
-                                                    ? 'bg-orange-50 text-[#F97316] hover:bg-orange-100'
-                                                    : 'bg-gray-50 text-gray-400 opacity-60'
+                                                    ? 'bg-orange-50 dark:bg-orange-950/50 text-[#F97316] dark:text-orange-400 border border-transparent dark:border-orange-500/30 hover:bg-orange-100 dark:hover:bg-orange-900/60'
+                                                    : 'bg-gray-50 dark:bg-slate-800/80 text-gray-400 dark:text-slate-300 border border-transparent dark:border-slate-700/60 opacity-80 hover:opacity-100'
                                             }`}
                                     >
-                                        <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-[10px]">
+                                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${isActive ? 'bg-white/20 text-white' : isCompleted ? 'bg-orange-200/60 dark:bg-orange-800/60 text-[#F97316] dark:text-orange-300' : 'bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-slate-300'}`}>
                                             {isCompleted ? '✓' : step.id}
                                         </span>
                                         <span className="uppercase tracking-wider text-[11px] whitespace-nowrap">{step.title}</span>
                                     </button>
-                                    {step.id < steps.length && <div className="w-3 h-0.5 bg-gray-200" />}
+                                    {step.id < steps.length && <div className="w-3 h-0.5 bg-gray-200 dark:bg-slate-700/80" />}
                                 </div>
                             );
                         })}
@@ -543,38 +552,38 @@ export default function ReportStrayPage() {
                 </div>
 
                 {/* Step Content Cards */}
-                <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden p-6 sm:p-10 mb-8 transition-all duration-300">
+                <div className="bg-white dark:bg-[#151C2C] rounded-[2.5rem] border border-gray-100 dark:border-slate-800/80 shadow-xl overflow-hidden p-6 sm:p-10 mb-8 transition-all duration-300">
 
                     {/* STEP 1: Upload Media */}
                     {currentStep === 1 && (
                         <div className="space-y-6">
                             <div>
-                                <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
+                                <h2 className="text-xl font-black text-[#1a1208] dark:text-white uppercase tracking-tight flex items-center gap-2">
                                     <span>Upload Photos or Videos</span>
                                     <span className="text-red-500 text-sm">*</span>
                                 </h2>
-                                <p className="text-xs font-bold text-gray-400 mt-1">
+                                <p className="text-xs font-bold text-gray-400 dark:text-slate-400 mt-1">
                                     Upload clear photos or videos of the stray animal. The AI will analyze the uploaded media to assist in identifying the animal.
                                 </p>
                             </div>
 
                             {/* Alert Notice */}
-                            <div className="flex items-center gap-3 p-4 bg-orange-50/60 border border-orange-100 rounded-2xl text-xs font-bold text-[#F97316]">
-                                <Sparkles className="w-5 h-5 shrink-0" />
+                            <div className="flex items-center gap-3 p-4 bg-orange-50/60 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-500/30 rounded-2xl text-xs font-bold text-[#F97316] dark:text-orange-300">
+                                <Sparkles className="w-5 h-5 shrink-0 text-[#F97316] dark:text-orange-400" />
                                 <span>AI analysis will begin automatically after media upload.</span>
                             </div>
 
                             {/* Drag & Drop Area */}
                             <div
                                 onClick={() => document.getElementById('media-file-input')?.click()}
-                                className="border-2 border-dashed border-gray-200 hover:border-orange-400 bg-[#FAFAF9] hover:bg-orange-50/20 rounded-[2rem] p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3"
+                                className="border-2 border-dashed border-gray-200 dark:border-slate-700 hover:border-orange-400 dark:hover:border-orange-400 bg-[#FAFAF9] dark:bg-slate-900/60 hover:bg-orange-50/20 dark:hover:bg-slate-800/50 rounded-[2rem] p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3"
                             >
-                                <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center text-[#F97316]">
+                                <div className="w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-transparent dark:border-slate-700 flex items-center justify-center text-[#F97316] dark:text-orange-400">
                                     <Upload className="w-7 h-7" />
                                 </div>
                                 <div>
-                                    <p className="text-xs font-black text-[#1a1208] uppercase tracking-wider">Drag & drop files here or click to browse</p>
-                                    <p className="text-[10px] font-bold text-gray-400 mt-1">Supports PNG, JPG, JPEG, MP4 (Max 10MB per file)</p>
+                                    <p className="text-xs font-black text-[#1a1208] dark:text-slate-200 uppercase tracking-wider">Drag & drop files here or click to browse</p>
+                                    <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 mt-1">Supports PNG, JPG, JPEG, MP4 (Max 10MB per file)</p>
                                 </div>
                             </div>
 
@@ -582,16 +591,16 @@ export default function ReportStrayPage() {
                                 <button
                                     type="button"
                                     onClick={() => document.getElementById('media-file-input')?.click()}
-                                    className="flex-1 py-3.5 px-4 bg-gray-100 hover:bg-gray-200 text-[#1a1208] rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
+                                    className="flex-1 py-3.5 px-4 bg-gray-100 hover:bg-gray-200 text-[#1a1208] dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border dark:border-slate-700 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
                                 >
-                                    <Upload className="w-4 h-4" /> Upload Button
+                                    <Upload className="w-4 h-4 text-[#F97316] dark:text-orange-400" /> Upload Button
                                 </button>
                                 <button
                                     type="button"
                                     onClick={startCamera}
-                                    className="flex-1 py-3.5 px-4 bg-orange-50 hover:bg-orange-100 text-[#F97316] rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-sm active:scale-98"
+                                    className="flex-1 py-3.5 px-4 bg-orange-50 hover:bg-orange-100 text-[#F97316] dark:bg-orange-950/50 dark:hover:bg-orange-900/60 dark:text-orange-300 dark:border dark:border-orange-500/40 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-sm active:scale-98"
                                 >
-                                    <Camera className="w-4 h-4" /> Camera Button
+                                    <Camera className="w-4 h-4 text-[#F97316] dark:text-orange-400" /> Camera Button
                                 </button>
                             </div>
 
@@ -658,12 +667,12 @@ export default function ReportStrayPage() {
                             {/* Previews */}
                             {formData.mediaFiles.length > 0 && (
                                 <div className="space-y-3 pt-2">
-                                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest">
+                                    <p className="text-xs font-black text-gray-400 dark:text-slate-400 uppercase tracking-widest">
                                         Uploaded Files ({formData.mediaFiles.length})
                                     </p>
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                                         {formData.mediaFiles.map((file, idx) => (
-                                            <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden border-2 border-orange-200 group">
+                                            <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden border-2 border-orange-200 dark:border-orange-500/50 group">
                                                 {file.type.startsWith('video/') ? (
                                                     <video src={URL.createObjectURL(file)} className="w-full h-full object-cover" />
                                                 ) : (
@@ -687,11 +696,11 @@ export default function ReportStrayPage() {
                     {currentStep === 2 && (
                         <div className="space-y-6">
                             <div>
-                                <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
+                                <h2 className="text-xl font-black text-[#1a1208] dark:text-white uppercase tracking-tight flex items-center gap-2">
                                     <span>Why are you reporting this animal?</span>
                                     <span className="text-red-500 text-sm">*</span>
                                 </h2>
-                                <p className="text-xs font-bold text-gray-400 mt-1">Select the primary category that best describes the incident.</p>
+                                <p className="text-xs font-bold text-gray-400 dark:text-slate-400 mt-1">Select the primary category that best describes the incident.</p>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -704,25 +713,28 @@ export default function ReportStrayPage() {
                                     'Animal Needs Rescue',
                                     'Dead Animal',
                                     'Other'
-                                ].map((cat, idx) => (
-                                    <label
-                                        key={cat}
-                                        className={`p-4 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${formData.category === cat
-                                                ? 'border-[#F97316] bg-orange-50/50 shadow-sm'
-                                                : 'border-gray-100 bg-[#FAFAF9] hover:border-gray-200'
-                                            }`}
-                                    >
-                                        <input
-                                            type="radio"
-                                            name="catRadio"
-                                            value={cat}
-                                            checked={formData.category === cat}
-                                            onChange={() => setFormData(prev => ({ ...prev, category: cat, category_id: idx + 1 }))}
-                                            className="accent-[#F97316] w-4 h-4"
-                                        />
-                                        <span className="text-xs font-black text-[#1a1208]">{cat}</span>
-                                    </label>
-                                ))}
+                               ].map((cat, idx) => {
+                                    const isSelected = formData.category === cat;
+                                    return (
+                                        <label
+                                            key={cat}
+                                            className={`p-4 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${isSelected
+                                                    ? 'border-[#F97316] bg-orange-50/50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 shadow-sm'
+                                                    : 'border-gray-100 dark:border-slate-800 bg-[#FAFAF9] dark:bg-slate-900/60 hover:border-gray-200 dark:hover:border-slate-700 text-[#1a1208] dark:text-slate-200'
+                                                }`}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name="catRadio"
+                                                value={cat}
+                                                checked={isSelected}
+                                                onChange={() => setFormData(prev => ({ ...prev, category: cat, category_id: idx + 1 }))}
+                                                className="accent-[#F97316] w-4 h-4"
+                                            />
+                                            <span className={`text-xs font-black ${isSelected ? 'text-[#F97316] dark:text-orange-300' : 'text-[#1a1208] dark:text-slate-200'}`}>{cat}</span>
+                                        </label>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}
@@ -731,32 +743,34 @@ export default function ReportStrayPage() {
                     {currentStep === 3 && (
                         <div className="space-y-6">
                             {isAiProcessing ? (
-                                <div className="py-16 flex flex-col items-center justify-center gap-4 text-center">
-                                    <Loader2 className="w-12 h-12 text-[#F97316] animate-spin" />
-                                    <div>
-                                        <h3 className="text-base font-black text-[#1a1208] uppercase tracking-wider">🤖 AI is analyzing your uploaded media...</h3>
-                                        <p className="text-xs font-bold text-gray-400 mt-1">Extracting features, colors, breed likelihood, and collar metrics</p>
-                                    </div>
+                                <div className="py-8 flex flex-col items-center justify-center">
+                                    <StraySafeLoading
+                                        size="md"
+                                        animalType={formData.animalType || 'Dog'}
+                                        badgeText={formData.animalType?.toLowerCase().includes('cat') ? "🐱 STRAY-SAFE Cat Vision AI" : "🐶 STRAY-SAFE Dog Vision AI"}
+                                        message={formData.animalType?.toLowerCase().includes('cat') ? "Analyzing Uploaded Cat Media" : "Analyzing Uploaded Dog Media"}
+                                        subMessage="Extracting animal features, coat pattern, breed likelihood, and collar metrics."
+                                    />
                                 </div>
                             ) : aiAnalysisResult && !aiAnalysisResult.animalDetected ? (
-                                <div className="p-8 bg-red-50/80 border-2 border-red-200 rounded-3xl space-y-5 text-center animate-in fade-in">
-                                    <div className="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto text-2xl shadow-sm border border-red-200">
+                                <div className="p-8 bg-red-50/80 dark:bg-red-950/40 border-2 border-red-200 dark:border-red-800/50 rounded-3xl space-y-5 text-center animate-in fade-in">
+                                    <div className="w-14 h-14 bg-red-100 dark:bg-red-900/60 text-red-600 dark:text-red-400 rounded-2xl flex items-center justify-center mx-auto text-2xl shadow-sm border border-red-200 dark:border-red-700/60">
                                         ⚠️
                                     </div>
                                     <div>
-                                        <h3 className="text-base font-black uppercase tracking-wider text-red-900">
+                                        <h3 className="text-base font-black uppercase tracking-wider text-red-900 dark:text-red-200">
                                             No Animal Detected in Image
                                         </h3>
-                                        <p className="text-xs font-bold text-red-700 mt-1.5 leading-relaxed max-w-lg mx-auto">
+                                        <p className="text-xs font-bold text-red-700 dark:text-red-300 mt-1.5 leading-relaxed max-w-lg mx-auto">
                                             {aiAnalysisResult.message || "No dog or cat was detected in your uploaded media. Please upload a clear photo showing the animal."}
                                         </p>
                                     </div>
 
-                                    <div className="p-4 bg-white rounded-2xl border border-red-100 text-left text-xs space-y-2 max-w-lg mx-auto shadow-xs">
-                                        <p className="font-black text-red-800 flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
+                                    <div className="p-4 bg-white dark:bg-slate-900/80 rounded-2xl border border-red-100 dark:border-red-900/40 text-left text-xs space-y-2 max-w-lg mx-auto shadow-xs">
+                                        <p className="font-black text-red-800 dark:text-red-300 flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
                                             <span>📷</span> Recommendations:
                                         </p>
-                                        <ul className="list-disc list-inside space-y-1 text-gray-600 text-[11px] font-bold pl-1">
+                                        <ul className="list-disc list-inside space-y-1 text-gray-600 dark:text-slate-300 text-[11px] font-bold pl-1">
                                             <li>Make sure the stray dog or cat is centered and clearly visible.</li>
                                             <li>Check that the lighting is sufficient and the camera is in focus.</li>
                                             <li>Avoid uploading images of non-animal objects or surroundings only.</li>
@@ -774,7 +788,7 @@ export default function ReportStrayPage() {
                                         <button
                                             type="button"
                                             onClick={() => setCurrentStep(4)}
-                                            className="px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-black text-xs uppercase tracking-wider rounded-2xl transition-all"
+                                            className="px-6 py-3.5 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-800 dark:text-slate-200 font-black text-xs uppercase tracking-wider rounded-2xl transition-all"
                                         >
                                             Continue Manually →
                                         </button>
@@ -784,62 +798,62 @@ export default function ReportStrayPage() {
                                 <div className="space-y-6 animate-in fade-in duration-300">
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
+                                            <h2 className="text-xl font-black text-[#1a1208] dark:text-white uppercase tracking-tight flex items-center gap-2">
                                                 <span>🤖 AI Suggestions</span>
                                             </h2>
-                                            <p className="text-xs font-bold text-gray-400 mt-1">Review the AI animal analysis predictions generated from your media.</p>
+                                            <p className="text-xs font-bold text-gray-400 dark:text-slate-400 mt-1">Review the AI animal analysis predictions generated from your media.</p>
                                         </div>
                                         {formData.animalType && (
-                                            <span className="px-3.5 py-1.5 bg-emerald-100 text-emerald-700 font-black text-[10px] uppercase tracking-wider rounded-full flex items-center gap-1 border border-emerald-200">
+                                            <span className="px-3.5 py-1.5 bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 font-black text-[10px] uppercase tracking-wider rounded-full flex items-center gap-1 border border-emerald-200 dark:border-emerald-700/60 shadow-xs">
                                                 ✓ {formData.animalType} Detected
                                             </span>
                                         )}
                                     </div>
 
                                     {/* Alert Info */}
-                                    <div className="flex items-start gap-3 p-4 bg-blue-50/80 border border-blue-100 rounded-2xl text-xs font-bold text-blue-700">
-                                        <Info className="w-5 h-5 shrink-0 mt-0.5" />
+                                    <div className="flex items-start gap-3 p-4 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-800/50 rounded-2xl text-xs font-bold text-blue-700 dark:text-blue-300">
+                                        <Info className="w-5 h-5 shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />
                                         <span>AI suggestions are provided to assist reporting. Please review and correct any information before submitting.</span>
                                     </div>
 
                                     {/* Editable AI Suggestions Table */}
-                                    <div className="p-6 bg-[#FAFAF9] border border-gray-100 rounded-3xl space-y-4">
+                                    <div className="p-6 bg-[#FAFAF9] dark:bg-slate-900/50 border border-gray-100 dark:border-slate-800 rounded-3xl space-y-4">
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                            <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
-                                                <span className="text-[10px] font-black text-gray-400 block uppercase">Animal Type</span>
-                                                <span className="text-xs font-black text-[#F97316]">{formData.animalType}</span>
+                                            <div className="bg-white dark:bg-slate-800/90 p-3.5 rounded-2xl border border-gray-100 dark:border-slate-700/80 shadow-xs">
+                                                <span className="text-[10px] font-black text-gray-400 dark:text-slate-400 block uppercase">Animal Type</span>
+                                                <span className="text-xs font-black text-[#F97316] dark:text-orange-400">{formData.animalType}</span>
                                             </div>
-                                            <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
-                                                <span className="text-[10px] font-black text-gray-400 block uppercase">Animal Count</span>
-                                                <span className="text-xs font-black text-[#F97316]">{formData.animalCount}</span>
+                                            <div className="bg-white dark:bg-slate-800/90 p-3.5 rounded-2xl border border-gray-100 dark:border-slate-700/80 shadow-xs">
+                                                <span className="text-[10px] font-black text-gray-400 dark:text-slate-400 block uppercase">Animal Count</span>
+                                                <span className="text-xs font-black text-[#F97316] dark:text-orange-400">{formData.animalCount}</span>
                                             </div>
-                                            <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
-                                                <span className="text-[10px] font-black text-gray-400 block uppercase">Estimated Size</span>
-                                                <span className="text-xs font-black text-[#F97316]">{formData.estimatedSize}</span>
+                                            <div className="bg-white dark:bg-slate-800/90 p-3.5 rounded-2xl border border-gray-100 dark:border-slate-700/80 shadow-xs">
+                                                <span className="text-[10px] font-black text-gray-400 dark:text-slate-400 block uppercase">Estimated Size</span>
+                                                <span className="text-xs font-black text-[#F97316] dark:text-orange-400">{formData.estimatedSize}</span>
                                             </div>
-                                            <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
-                                                <span className="text-[10px] font-black text-gray-400 block uppercase">Primary Color</span>
-                                                <span className="text-xs font-black text-[#F97316]">{formData.primaryColor}</span>
+                                            <div className="bg-white dark:bg-slate-800/90 p-3.5 rounded-2xl border border-gray-100 dark:border-slate-700/80 shadow-xs">
+                                                <span className="text-[10px] font-black text-gray-400 dark:text-slate-400 block uppercase">Primary Color</span>
+                                                <span className="text-xs font-black text-[#F97316] dark:text-orange-400">{formData.primaryColor}</span>
                                             </div>
-                                            <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
-                                                <span className="text-[10px] font-black text-gray-400 block uppercase">Secondary Color</span>
-                                                <span className="text-xs font-black text-[#F97316]">{formData.secondaryColor}</span>
+                                            <div className="bg-white dark:bg-slate-800/90 p-3.5 rounded-2xl border border-gray-100 dark:border-slate-700/80 shadow-xs">
+                                                <span className="text-[10px] font-black text-gray-400 dark:text-slate-400 block uppercase">Secondary Color</span>
+                                                <span className="text-xs font-black text-[#F97316] dark:text-orange-400">{formData.secondaryColor}</span>
                                             </div>
-                                            <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
-                                                <span className="text-[10px] font-black text-gray-400 block uppercase">Third Color</span>
-                                                <span className="text-xs font-black text-[#F97316]">{formData.tertiaryColor || 'None'}</span>
+                                            <div className="bg-white dark:bg-slate-800/90 p-3.5 rounded-2xl border border-gray-100 dark:border-slate-700/80 shadow-xs">
+                                                <span className="text-[10px] font-black text-gray-400 dark:text-slate-400 block uppercase">Third Color</span>
+                                                <span className="text-xs font-black text-[#F97316] dark:text-orange-400">{formData.tertiaryColor || 'None'}</span>
                                             </div>
-                                            <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
-                                                <span className="text-[10px] font-black text-gray-400 block uppercase">Coat Pattern</span>
-                                                <span className="text-xs font-black text-[#F97316]">{formData.coatPattern}</span>
+                                            <div className="bg-white dark:bg-slate-800/90 p-3.5 rounded-2xl border border-gray-100 dark:border-slate-700/80 shadow-xs">
+                                                <span className="text-[10px] font-black text-gray-400 dark:text-slate-400 block uppercase">Coat Pattern</span>
+                                                <span className="text-xs font-black text-[#F97316] dark:text-orange-400">{formData.coatPattern}</span>
                                             </div>
-                                            <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
-                                                <span className="text-[10px] font-black text-gray-400 block uppercase">Possible Breed</span>
-                                                <span className="text-xs font-black text-[#F97316]">{formData.animalBreed || 'Mixed Breed (61%)'}</span>
+                                            <div className="bg-white dark:bg-slate-800/90 p-3.5 rounded-2xl border border-gray-100 dark:border-slate-700/80 shadow-xs">
+                                                <span className="text-[10px] font-black text-gray-400 dark:text-slate-400 block uppercase">Possible Breed</span>
+                                                <span className="text-xs font-black text-[#F97316] dark:text-orange-400">{formData.animalBreed || 'Mixed Breed (61%)'}</span>
                                             </div>
-                                            <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
-                                                <span className="text-[10px] font-black text-gray-400 block uppercase">Collar / QR Tag</span>
-                                                <span className={`text-xs font-black ${formData.collarDetected || formData.qrTagDetected ? 'text-emerald-600' : 'text-gray-500'}`}>
+                                            <div className="bg-white dark:bg-slate-800/90 p-3.5 rounded-2xl border border-gray-100 dark:border-slate-700/80 shadow-xs">
+                                                <span className="text-[10px] font-black text-gray-400 dark:text-slate-400 block uppercase">Collar / QR Tag</span>
+                                                <span className={`text-xs font-black ${formData.collarDetected || formData.qrTagDetected ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-slate-400'}`}>
                                                     {formData.qrTagDetected ? 'QR Tag Detected' : (formData.collarDetected ? 'Collar Detected' : 'None Detected')}
                                                 </span>
                                             </div>
@@ -854,18 +868,18 @@ export default function ReportStrayPage() {
                     {currentStep === 4 && (
                         <div className="space-y-6">
                             <div>
-                                <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
+                                <h2 className="text-xl font-black text-[#1a1208] dark:text-white uppercase tracking-tight flex items-center gap-2">
                                     <span>Animal Details</span>
                                 </h2>
-                                <p className="text-xs font-bold text-gray-400 mt-1">Specify exact attributes for accurate record matching.</p>
+                                <p className="text-xs font-bold text-gray-400 dark:text-slate-400 mt-1">Specify exact attributes for accurate record matching.</p>
                             </div>
 
                             {/* Animal Type */}
                             <div>
-                                <label className="text-xs font-black text-[#1a1208] uppercase tracking-wider mb-2 block">Animal Type</label>
+                                <label className="text-xs font-black text-[#1a1208] dark:text-slate-200 uppercase tracking-wider mb-2 block">Animal Type</label>
                                 <div className="flex gap-4">
                                     {['Dog', 'Cat', 'Unknown'].map((t) => (
-                                        <label key={t} className={`flex-1 p-3.5 rounded-2xl border-2 text-center cursor-pointer font-black text-xs transition-all ${formData.animalType === t ? 'border-[#F97316] bg-orange-50/40 text-[#F97316]' : 'border-gray-100 bg-[#FAFAF9]'}`}>
+                                        <label key={t} className={`flex-1 p-3.5 rounded-2xl border-2 text-center cursor-pointer font-black text-xs transition-all ${formData.animalType === t ? 'border-[#F97316] bg-orange-50/40 dark:bg-orange-950/50 text-[#F97316] dark:text-orange-400 shadow-sm' : 'border-gray-100 dark:border-slate-800 bg-[#FAFAF9] dark:bg-slate-900/60 text-[#1a1208] dark:text-slate-300 hover:border-gray-200 dark:hover:border-slate-700'}`}>
                                             <input type="radio" name="animalType" value={t} checked={formData.animalType === t} onChange={() => setFormData(prev => ({ ...prev, animalType: t }))} className="hidden" />
                                             {t}
                                         </label>
@@ -875,11 +889,11 @@ export default function ReportStrayPage() {
 
                             {/* Animal Count */}
                             <div>
-                                <label className="text-xs font-black text-[#1a1208] uppercase tracking-wider mb-2 block">Animal Count</label>
+                                <label className="text-xs font-black text-[#1a1208] dark:text-slate-200 uppercase tracking-wider mb-2 block">Animal Count</label>
                                 <input
                                     type="number"
                                     min={1}
-                                    className="w-full h-12 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-5 text-xs font-bold text-[#1a1208]"
+                                    className="w-full h-12 bg-[#FAFAF9] dark:bg-slate-900/80 border border-gray-100 dark:border-slate-700 rounded-2xl px-5 text-xs font-bold text-[#1a1208] dark:text-slate-100 focus:outline-none focus:border-orange-400 transition-colors"
                                     value={formData.animalCount}
                                     onChange={(e) => setFormData(prev => ({ ...prev, animalCount: parseInt(e.target.value) || 1 }))}
                                 />
@@ -887,10 +901,10 @@ export default function ReportStrayPage() {
 
                             {/* Estimated Size */}
                             <div>
-                                <label className="text-xs font-black text-[#1a1208] uppercase tracking-wider mb-2 block">Estimated Size</label>
+                                <label className="text-xs font-black text-[#1a1208] dark:text-slate-200 uppercase tracking-wider mb-2 block">Estimated Size</label>
                                 <div className="grid grid-cols-4 gap-2">
                                     {['Small', 'Medium', 'Large', 'Unknown'].map((sz) => (
-                                        <label key={sz} className={`p-3 rounded-2xl border-2 text-center cursor-pointer font-black text-xs transition-all ${formData.estimatedSize === sz ? 'border-[#F97316] bg-orange-50/40 text-[#F97316]' : 'border-gray-100 bg-[#FAFAF9]'}`}>
+                                        <label key={sz} className={`p-3 rounded-2xl border-2 text-center cursor-pointer font-black text-xs transition-all ${formData.estimatedSize === sz ? 'border-[#F97316] bg-orange-50/40 dark:bg-orange-950/50 text-[#F97316] dark:text-orange-400 shadow-sm' : 'border-gray-100 dark:border-slate-800 bg-[#FAFAF9] dark:bg-slate-900/60 text-[#1a1208] dark:text-slate-300 hover:border-gray-200 dark:hover:border-slate-700'}`}>
                                             <input type="radio" name="estimatedSize" value={sz} checked={formData.estimatedSize === sz} onChange={() => setFormData(prev => ({ ...prev, estimatedSize: sz }))} className="hidden" />
                                             {sz}
                                         </label>
@@ -901,38 +915,38 @@ export default function ReportStrayPage() {
                             {/* Colors */}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <div>
-                                    <label className="text-xs font-black text-[#1a1208] uppercase tracking-wider mb-2 block">Primary Color</label>
+                                    <label className="text-xs font-black text-[#1a1208] dark:text-slate-200 uppercase tracking-wider mb-2 block">Primary Color</label>
                                     <select
-                                        className="w-full h-12 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-4 text-xs font-bold text-[#1a1208]"
+                                        className="w-full h-12 bg-[#FAFAF9] dark:bg-slate-900/80 border border-gray-100 dark:border-slate-700 rounded-2xl px-4 text-xs font-bold text-[#1a1208] dark:text-slate-100 focus:outline-none focus:border-orange-400 transition-colors"
                                         value={formData.primaryColor}
                                         onChange={(e) => setFormData(prev => ({ ...prev, primaryColor: e.target.value }))}
                                     >
                                         {VALID_PRIMARY_COLORS.map(c => (
-                                            <option key={c} value={c}>{c}</option>
+                                            <option key={c} value={c} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">{c}</option>
                                         ))}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="text-xs font-black text-[#1a1208] uppercase tracking-wider mb-2 block">Secondary Color</label>
+                                    <label className="text-xs font-black text-[#1a1208] dark:text-slate-200 uppercase tracking-wider mb-2 block">Secondary Color</label>
                                     <select
-                                        className="w-full h-12 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-4 text-xs font-bold text-[#1a1208]"
+                                        className="w-full h-12 bg-[#FAFAF9] dark:bg-slate-900/80 border border-gray-100 dark:border-slate-700 rounded-2xl px-4 text-xs font-bold text-[#1a1208] dark:text-slate-100 focus:outline-none focus:border-orange-400 transition-colors"
                                         value={formData.secondaryColor}
                                         onChange={(e) => setFormData(prev => ({ ...prev, secondaryColor: e.target.value }))}
                                     >
                                         {VALID_SECONDARY_COLORS.map(c => (
-                                            <option key={c} value={c}>{c}</option>
+                                            <option key={c} value={c} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">{c}</option>
                                         ))}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="text-xs font-black text-[#1a1208] uppercase tracking-wider mb-2 block">Third Color (Tertiary)</label>
+                                    <label className="text-xs font-black text-[#1a1208] dark:text-slate-200 uppercase tracking-wider mb-2 block">Third Color (Tertiary)</label>
                                     <select
-                                        className="w-full h-12 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-4 text-xs font-bold text-[#1a1208]"
+                                        className="w-full h-12 bg-[#FAFAF9] dark:bg-slate-900/80 border border-gray-100 dark:border-slate-700 rounded-2xl px-4 text-xs font-bold text-[#1a1208] dark:text-slate-100 focus:outline-none focus:border-orange-400 transition-colors"
                                         value={formData.tertiaryColor}
                                         onChange={(e) => setFormData(prev => ({ ...prev, tertiaryColor: e.target.value }))}
                                     >
                                         {VALID_TERTIARY_COLORS.map(c => (
-                                            <option key={c} value={c}>{c}</option>
+                                            <option key={c} value={c} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">{c}</option>
                                         ))}
                                     </select>
                                 </div>
@@ -941,22 +955,22 @@ export default function ReportStrayPage() {
                             {/* Pattern & Breed */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="text-xs font-black text-[#1a1208] uppercase tracking-wider mb-2 block">Coat Pattern</label>
+                                    <label className="text-xs font-black text-[#1a1208] dark:text-slate-200 uppercase tracking-wider mb-2 block">Coat Pattern</label>
                                     <select
-                                        className="w-full h-12 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-4 text-xs font-bold text-[#1a1208]"
+                                        className="w-full h-12 bg-[#FAFAF9] dark:bg-slate-900/80 border border-gray-100 dark:border-slate-700 rounded-2xl px-4 text-xs font-bold text-[#1a1208] dark:text-slate-100 focus:outline-none focus:border-orange-400 transition-colors"
                                         value={formData.coatPattern}
                                         onChange={(e) => setFormData(prev => ({ ...prev, coatPattern: e.target.value }))}
                                     >
                                         {VALID_COAT_PATTERNS.map(p => (
-                                            <option key={p} value={p}>{p}</option>
+                                            <option key={p} value={p} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">{p}</option>
                                         ))}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="text-xs font-black text-[#1a1208] uppercase tracking-wider mb-2 block">Possible Breed</label>
+                                    <label className="text-xs font-black text-[#1a1208] dark:text-slate-200 uppercase tracking-wider mb-2 block">Possible Breed</label>
                                     <input
                                         type="text"
-                                        className="w-full h-12 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-4 text-xs font-bold text-[#1a1208]"
+                                        className="w-full h-12 bg-[#FAFAF9] dark:bg-slate-900/80 border border-gray-100 dark:border-slate-700 rounded-2xl px-4 text-xs font-bold text-[#1a1208] dark:text-slate-100 focus:outline-none focus:border-orange-400 transition-colors"
                                         placeholder="Default: Unknown"
                                         value={formData.animalBreed}
                                         onChange={(e) => setFormData(prev => ({ ...prev, animalBreed: e.target.value }))}
@@ -966,10 +980,10 @@ export default function ReportStrayPage() {
 
                             {/* Distinctive Markings */}
                             <div>
-                                <label className="text-xs font-black text-[#1a1208] uppercase tracking-wider mb-2 block">Distinctive Markings</label>
+                                <label className="text-xs font-black text-[#1a1208] dark:text-slate-200 uppercase tracking-wider mb-2 block">Distinctive Markings</label>
                                 <textarea
                                     rows={3}
-                                    className="w-full bg-[#FAFAF9] border border-gray-100 rounded-2xl p-4 text-xs font-medium text-[#1a1208] focus:outline-none focus:border-orange-300"
+                                    className="w-full bg-[#FAFAF9] dark:bg-slate-900/80 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 text-xs font-medium text-[#1a1208] dark:text-slate-100 focus:outline-none focus:border-orange-400 transition-colors"
                                     placeholder="Example: White stripe on forehead, black left ear, curled tail, blue collar."
                                     value={formData.distinctiveMarkings}
                                     onChange={(e) => setFormData(prev => ({ ...prev, distinctiveMarkings: e.target.value }))}
@@ -982,11 +996,11 @@ export default function ReportStrayPage() {
                     {currentStep === 5 && (
                         <div className="space-y-6">
                             <div>
-                                <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
+                                <h2 className="text-xl font-black text-[#1a1208] dark:text-white uppercase tracking-tight flex items-center gap-2">
                                     <span>What did you observe?</span>
                                     <span className="text-red-500 text-sm">*</span>
                                 </h2>
-                                <p className="text-xs font-bold text-gray-400 mt-1">Select all conditions that apply to help responders prioritize dispatch.</p>
+                                <p className="text-xs font-bold text-gray-400 dark:text-slate-400 mt-1">Select all conditions that apply to help responders prioritize dispatch.</p>
                             </div>
 
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -1000,7 +1014,7 @@ export default function ReportStrayPage() {
                                     return (
                                         <label
                                             key={cond}
-                                            className={`p-3.5 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${isChecked ? 'border-[#F97316] bg-orange-50/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}
+                                            className={`p-3.5 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${isChecked ? 'border-[#F97316] bg-orange-50/50 dark:bg-orange-950/50 shadow-sm' : 'border-gray-100 dark:border-slate-800 bg-[#FAFAF9] dark:bg-slate-900/60 hover:border-gray-200 dark:hover:border-slate-700'}`}
                                         >
                                             <input
                                                 type="checkbox"
@@ -1013,7 +1027,7 @@ export default function ReportStrayPage() {
                                                 }}
                                                 className="accent-[#F97316] w-4 h-4"
                                             />
-                                            <span className="text-xs font-black text-[#1a1208]">{cond}</span>
+                                            <span className={`text-xs font-black ${isChecked ? 'text-[#F97316] dark:text-orange-300' : 'text-[#1a1208] dark:text-slate-200'}`}>{cond}</span>
                                         </label>
                                     );
                                 })}
@@ -1025,19 +1039,19 @@ export default function ReportStrayPage() {
                     {currentStep === 6 && (
                         <div className="space-y-6">
                             <div>
-                                <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
+                                <h2 className="text-xl font-black text-[#1a1208] dark:text-white uppercase tracking-tight flex items-center gap-2">
                                     <span>Location</span>
                                     <span className="text-red-500 text-sm">*</span>
                                 </h2>
-                                <p className="text-xs font-bold text-gray-400 mt-1">Confirm exact sighting position within the subdivision boundary.</p>
+                                <p className="text-xs font-bold text-gray-400 dark:text-slate-400 mt-1">Confirm exact sighting position within the subdivision boundary.</p>
                             </div>
 
-                            <div className="flex items-center justify-between p-4 bg-orange-50/50 border border-orange-100 rounded-2xl">
+                            <div className="flex items-center justify-between p-4 bg-orange-50/50 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-500/30 rounded-2xl">
                                 <div className="flex items-center gap-3">
-                                    <MapPin className="w-5 h-5 text-[#F97316]" />
+                                    <MapPin className="w-5 h-5 text-[#F97316] dark:text-orange-400" />
                                     <div>
-                                        <span className="text-[10px] font-black text-gray-400 uppercase block">Current GPS Location</span>
-                                        <span className="text-xs font-black text-[#F97316]">
+                                        <span className="text-[10px] font-black text-gray-400 dark:text-slate-400 uppercase block">Current GPS Location</span>
+                                        <span className="text-xs font-black text-[#F97316] dark:text-orange-400">
                                             {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
                                         </span>
                                     </div>
@@ -1045,14 +1059,14 @@ export default function ReportStrayPage() {
                                 <button
                                     type="button"
                                     onClick={handleGetUseCurrentLocation}
-                                    className="px-4 py-2 bg-[#F97316] text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-sm hover:scale-105 transition-all"
+                                    className="px-4 py-2 bg-[#F97316] hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-sm hover:scale-105 transition-all"
                                 >
                                     Use Current Location
                                 </button>
                             </div>
 
                             {/* Interactive Map */}
-                            <div className="relative w-full h-64 rounded-3xl overflow-hidden border border-gray-100 shadow-inner">
+                            <div className="relative w-full h-64 rounded-3xl overflow-hidden border border-gray-100 dark:border-slate-800 shadow-inner">
                                 <MapContainer
                                     center={[formData.latitude, formData.longitude]}
                                     zoom={17}
@@ -1078,20 +1092,20 @@ export default function ReportStrayPage() {
 
                             {/* Fields */}
                             <div>
-                                <label className="text-xs font-black text-[#1a1208] uppercase tracking-wider mb-2 block">Street Address</label>
+                                <label className="text-xs font-black text-[#1a1208] dark:text-slate-200 uppercase tracking-wider mb-2 block">Street Address</label>
                                 <input
                                     type="text"
-                                    className="w-full h-12 bg-white border border-gray-200 rounded-2xl px-4 text-xs font-bold text-[#1a1208]"
+                                    className="w-full h-12 bg-white dark:bg-slate-900/80 border border-gray-200 dark:border-slate-700 rounded-2xl px-4 text-xs font-bold text-[#1a1208] dark:text-slate-100"
                                     value={resolvedAddress || (isGeocoding ? 'Resolving street address...' : 'Selera Homes')}
                                     readOnly
                                 />
                             </div>
 
                             <div>
-                                <label className="text-xs font-black text-[#1a1208] uppercase tracking-wider mb-2 block">Landmark</label>
+                                <label className="text-xs font-black text-[#1a1208] dark:text-slate-200 uppercase tracking-wider mb-2 block">Landmark</label>
                                 <input
                                     type="text"
-                                    className="w-full h-12 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-4 text-xs font-bold text-[#1a1208]"
+                                    className="w-full h-12 bg-[#FAFAF9] dark:bg-slate-900/80 border border-gray-100 dark:border-slate-700 rounded-2xl px-4 text-xs font-bold text-[#1a1208] dark:text-slate-100 focus:outline-none focus:border-orange-400 transition-colors"
                                     placeholder="Near Barangay Hall, beside basketball court, etc."
                                     value={formData.landmark}
                                     onChange={(e) => setFormData(prev => ({ ...prev, landmark: e.target.value }))}
@@ -1104,13 +1118,13 @@ export default function ReportStrayPage() {
                     {currentStep === 7 && (
                         <div className="space-y-6">
                             <div>
-                                <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight">Additional Information</h2>
-                                <p className="text-xs font-bold text-gray-400 mt-1">Optional notes to assist field rescuers.</p>
+                                <h2 className="text-xl font-black text-[#1a1208] dark:text-white uppercase tracking-tight">Additional Information</h2>
+                                <p className="text-xs font-bold text-gray-400 dark:text-slate-400 mt-1">Optional notes to assist field rescuers.</p>
                             </div>
 
                             <textarea
                                 rows={5}
-                                className="w-full bg-[#FAFAF9] border border-gray-100 rounded-3xl p-5 text-xs font-medium text-[#1a1208] focus:outline-none focus:border-orange-300 shadow-inner"
+                                className="w-full bg-[#FAFAF9] dark:bg-slate-900/80 border border-gray-100 dark:border-slate-700 rounded-3xl p-5 text-xs font-medium text-[#1a1208] dark:text-slate-100 focus:outline-none focus:border-orange-400 shadow-inner transition-colors"
                                 placeholder="Tell us anything else that may help rescuers..."
                                 value={formData.description}
                                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
@@ -1122,29 +1136,29 @@ export default function ReportStrayPage() {
                     {currentStep === 8 && (
                         <div className="space-y-6">
                             <div>
-                                <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight">Report Visibility</h2>
-                                <p className="text-xs font-bold text-gray-400 mt-1">Control who can view this sighting report in the subdivision feed.</p>
+                                <h2 className="text-xl font-black text-[#1a1208] dark:text-white uppercase tracking-tight">Report Visibility</h2>
+                                <p className="text-xs font-bold text-gray-400 dark:text-slate-400 mt-1">Control who can view this sighting report in the subdivision feed.</p>
                             </div>
 
                             <div className="space-y-4">
-                                <label className={`p-5 rounded-3xl border-2 flex items-center justify-between cursor-pointer transition-all ${formData.visibility === 'Public' ? 'border-[#F97316] bg-orange-50/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}>
+                                <label className={`p-5 rounded-3xl border-2 flex items-center justify-between cursor-pointer transition-all ${formData.visibility === 'Public' ? 'border-[#F97316] bg-orange-50/50 dark:bg-orange-950/40 shadow-sm' : 'border-gray-100 dark:border-slate-800 bg-[#FAFAF9] dark:bg-slate-900/60'}`}>
                                     <div>
                                         <div className="flex items-center gap-2">
-                                            <Eye className="w-4 h-4 text-blue-500" />
-                                            <span className="text-xs font-black text-[#1a1208]">Public</span>
+                                            <Eye className="w-4 h-4 text-blue-500 dark:text-blue-400" />
+                                            <span className="text-xs font-black text-[#1a1208] dark:text-slate-100">Public</span>
                                         </div>
-                                        <p className="text-[11px] font-semibold text-gray-400 mt-1">Visible to community members in the subdivision feed.</p>
+                                        <p className="text-[11px] font-semibold text-gray-400 dark:text-slate-400 mt-1">Visible to community members in the subdivision feed.</p>
                                     </div>
                                     <input type="radio" name="visibility" value="Public" checked={formData.visibility === 'Public'} onChange={() => setFormData(prev => ({ ...prev, visibility: 'Public' }))} className="accent-[#F97316] w-4 h-4" />
                                 </label>
 
-                                <label className={`p-5 rounded-3xl border-2 flex items-center justify-between cursor-pointer transition-all ${formData.visibility === 'Private' ? 'border-[#F97316] bg-orange-50/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}>
+                                <label className={`p-5 rounded-3xl border-2 flex items-center justify-between cursor-pointer transition-all ${formData.visibility === 'Private' ? 'border-[#F97316] bg-orange-50/50 dark:bg-orange-950/40 shadow-sm' : 'border-gray-100 dark:border-slate-800 bg-[#FAFAF9] dark:bg-slate-900/60'}`}>
                                     <div>
                                         <div className="flex items-center gap-2">
-                                            <Shield className="w-4 h-4 text-amber-600" />
-                                            <span className="text-xs font-black text-[#1a1208]">Private</span>
+                                            <Shield className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                                            <span className="text-xs font-black text-[#1a1208] dark:text-slate-100">Private</span>
                                         </div>
-                                        <p className="text-[11px] font-semibold text-gray-400 mt-1">Visible only to authorized personnel (Leaders, Barangay Staff, Admin).</p>
+                                        <p className="text-[11px] font-semibold text-gray-400 dark:text-slate-400 mt-1">Visible only to authorized personnel (Leaders, Barangay Staff, Admin).</p>
                                     </div>
                                     <input type="radio" name="visibility" value="Private" checked={formData.visibility === 'Private'} onChange={() => setFormData(prev => ({ ...prev, visibility: 'Private' }))} className="accent-[#F97316] w-4 h-4" />
                                 </label>
@@ -1157,66 +1171,66 @@ export default function ReportStrayPage() {
                         <div className="space-y-6">
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
-                                    <span className="px-3 py-0.5 rounded-full bg-orange-100 text-[#F97316] text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
-                                        <Sparkles className="w-3 h-3" /> AI-Assisted Sighting
+                                    <span className="px-3 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950/60 text-[#F97316] dark:text-orange-400 border border-transparent dark:border-orange-500/30 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-xs">
+                                        <Sparkles className="w-3 h-3 text-[#F97316] dark:text-orange-400" /> AI-Assisted Sighting
                                     </span>
                                 </div>
-                                <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight">Review & Submit Report</h2>
-                                <p className="text-xs font-bold text-gray-400 mt-1">Double check all report details before sending to rescuers.</p>
+                                <h2 className="text-xl font-black text-[#1a1208] dark:text-white uppercase tracking-tight">Review & Submit Report</h2>
+                                <p className="text-xs font-bold text-gray-400 dark:text-slate-400 mt-1">Double check all report details before sending to rescuers.</p>
                             </div>
 
                             {/* Summary Card */}
-                            <div className="p-6 bg-[#FAFAF9] border border-gray-100 rounded-3xl space-y-4 text-xs font-bold text-[#1a1208]">
-                                <div className="flex justify-between py-2 border-b border-gray-200">
-                                    <span className="text-gray-400">Uploaded Media:</span>
-                                    <span>{formData.mediaFiles.length} file(s) uploaded</span>
+                            <div className="p-6 bg-[#FAFAF9] dark:bg-slate-900/60 border border-gray-100 dark:border-slate-800 rounded-3xl space-y-4 text-xs font-bold text-[#1a1208] dark:text-slate-200">
+                                <div className="flex justify-between py-2 border-b border-gray-200 dark:border-slate-800">
+                                    <span className="text-gray-400 dark:text-slate-400">Uploaded Media:</span>
+                                    <span className="text-[#1a1208] dark:text-slate-100 font-black">{formData.mediaFiles.length} file(s) uploaded</span>
                                 </div>
-                                <div className="flex justify-between py-2 border-b border-gray-200">
-                                    <span className="text-gray-400">Category:</span>
-                                    <span className="text-[#F97316] font-black">{formData.category}</span>
+                                <div className="flex justify-between py-2 border-b border-gray-200 dark:border-slate-800">
+                                    <span className="text-gray-400 dark:text-slate-400">Category:</span>
+                                    <span className="text-[#F97316] dark:text-orange-400 font-black">{formData.category}</span>
                                 </div>
-                                <div className="flex justify-between py-2 border-b border-gray-200">
-                                    <span className="text-gray-400">Animal Details:</span>
-                                    <span>
+                                <div className="flex justify-between py-2 border-b border-gray-200 dark:border-slate-800">
+                                    <span className="text-gray-400 dark:text-slate-400">Animal Details:</span>
+                                    <span className="text-[#1a1208] dark:text-slate-100 font-black text-right">
                                         {formData.animalType}
                                         {formData.animalBreed && formData.animalBreed !== 'Unknown' ? ` - ${formData.animalBreed}` : ''}
                                         {` (${formData.estimatedSize}, ${formData.primaryColor}${formData.secondaryColor && formData.secondaryColor !== 'None' ? ` and ${formData.secondaryColor}` : ''})`}
                                     </span>
                                 </div>
-                                <div className="flex justify-between py-2 border-b border-gray-200">
-                                    <span className="text-gray-400">Observed Conditions:</span>
-                                    <span>{formData.observedConditions.join(', ') || 'None specified'}</span>
+                                <div className="flex justify-between py-2 border-b border-gray-200 dark:border-slate-800">
+                                    <span className="text-gray-400 dark:text-slate-400">Observed Conditions:</span>
+                                    <span className="text-[#1a1208] dark:text-slate-100 font-black text-right">{formData.observedConditions.join(', ') || 'None specified'}</span>
                                 </div>
-                                <div className="flex justify-between py-2 border-b border-gray-200">
-                                    <span className="text-gray-400">Location:</span>
-                                    <span>{formData.landmark || resolvedAddress || 'Selera Homes'}</span>
+                                <div className="flex justify-between py-2 border-b border-gray-200 dark:border-slate-800">
+                                    <span className="text-gray-400 dark:text-slate-400">Location:</span>
+                                    <span className="text-[#1a1208] dark:text-slate-100 font-black text-right">{formData.landmark || resolvedAddress || 'Selera Homes'}</span>
                                 </div>
-                                <div className="flex justify-between py-2 border-b border-gray-200">
-                                    <span className="text-gray-400">Visibility:</span>
-                                    <span>{formData.visibility}</span>
+                                <div className="flex justify-between py-2 border-b border-gray-200 dark:border-slate-800">
+                                    <span className="text-gray-400 dark:text-slate-400">Visibility:</span>
+                                    <span className="text-[#1a1208] dark:text-slate-100 font-black">{formData.visibility}</span>
                                 </div>
                             </div>
 
                             {/* Community Accountability & Anti-Harassment Notice */}
-                            <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
+                            <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 rounded-2xl flex items-start gap-3">
                                 <span className="text-xl flex-shrink-0">⚖️</span>
                                 <div>
-                                    <h4 className="text-xs font-black text-amber-950 uppercase tracking-tight">Community Accountability Notice</h4>
-                                    <p className="text-[11px] text-amber-800 font-semibold mt-0.5 leading-relaxed">
+                                    <h4 className="text-xs font-black text-amber-950 dark:text-amber-200 uppercase tracking-tight">Community Accountability Notice</h4>
+                                    <p className="text-[11px] text-amber-800 dark:text-amber-300 font-semibold mt-0.5 leading-relaxed">
                                         All bite claims and rabies hazard reports undergo mandatory physical on-site verification and victim interview before dispatch. False reporting, exaggerated claims, or using StraySafe for neighbor disputes violates community bylaws.
                                     </p>
                                 </div>
                             </div>
 
                             {/* Declaration Checkbox */}
-                            <label className="flex items-center gap-3 p-4 bg-orange-50/50 border border-orange-100 rounded-2xl cursor-pointer">
+                            <label className="flex items-center gap-3 p-4 bg-orange-50/50 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-500/30 rounded-2xl cursor-pointer">
                                 <input
                                     type="checkbox"
                                     checked={declaration}
                                     onChange={(e) => setDeclaration(e.target.checked)}
                                     className="accent-[#F97316] w-4 h-4"
                                 />
-                                <span className="text-xs font-black text-[#1a1208]">
+                                <span className="text-xs font-black text-[#1a1208] dark:text-slate-200">
                                     I confirm that this report is truthful and accurate to the best of my knowledge under subdivision community guidelines.
                                 </span>
                             </label>
@@ -1229,7 +1243,7 @@ export default function ReportStrayPage() {
                     <button
                         type="button"
                         onClick={handleBack}
-                        className="px-6 py-4 bg-white border border-gray-100 hover:bg-gray-50 text-gray-700 font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-sm flex items-center gap-2"
+                        className="px-6 py-4 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-200 font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-sm flex items-center gap-2 active:scale-95"
                     >
                         <ArrowLeft className="w-4 h-4" /> Back
                     </button>
@@ -1238,7 +1252,7 @@ export default function ReportStrayPage() {
                         <button
                             type="button"
                             onClick={handleNext}
-                            className="px-8 py-4 bg-[#F97316] hover:bg-orange-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-orange-100 transition-all hover:scale-105 flex items-center gap-2"
+                            className="px-8 py-4 bg-[#F97316] hover:bg-orange-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-orange-500/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
                         >
                             Next <ArrowRight className="w-4 h-4" />
                         </button>
@@ -1247,7 +1261,7 @@ export default function ReportStrayPage() {
                             type="button"
                             disabled={isSubmitting}
                             onClick={handleSubmit}
-                            className={`px-10 py-4 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl transition-all flex items-center gap-2 ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#F97316] hover:scale-105'}`}
+                            className={`px-10 py-4 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl transition-all flex items-center gap-2 ${isSubmitting ? 'bg-gray-400 dark:bg-slate-700 cursor-not-allowed' : 'bg-[#F97316] hover:scale-105 active:scale-95 shadow-orange-500/25'}`}
                         >
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                             {isSubmitting ? 'Submitting...' : 'Submit Report'}
@@ -1257,6 +1271,27 @@ export default function ReportStrayPage() {
             </main>
 
             <ResiMobileNav feedTab="reports" onFeedTabChange={() => { }} isNavbarMenuOpen={false} isSearchOpen={false} onSearchClick={() => { }} onAddReportClick={() => navigate('/resident/report/new')} />
+
+            {/* Reusable Loading Animation Overlay during Report Submission */}
+            {isSubmitting && (
+                <StraySafeLoading
+                    fullScreen
+                    size="lg"
+                    animalType={formData.animalType || aiAnalysisResult?.animalType || 'Dog'}
+                    badgeText={
+                        (formData.animalType || aiAnalysisResult?.animalType)?.toLowerCase().includes('cat')
+                            ? '🐱 Cat Sighting Dispatch'
+                            : '🐶 Dog Sighting Dispatch'
+                    }
+                    message={
+                        (formData.animalType || aiAnalysisResult?.animalType)?.toLowerCase().includes('cat')
+                            ? 'Submitting Cat Report'
+                            : 'Submitting Dog Report'
+                    }
+                    subMessage="Uploading evidence photos and dispatching report to community responders. Please do not close this window."
+                    progressText={submittingStepText}
+                />
+            )}
 
             <SuccessModal
                 isOpen={showSuccessModal}

@@ -182,11 +182,11 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             {/* Timeline List */}
             <div className="relative pl-8 space-y-12">
                 {/* Vertical Line */}
-                <div className="absolute left-[15px] top-2 bottom-2 w-0.5 bg-gradient-to-b from-[#F97316] to-gray-100" />
+                <div className="absolute left-[15px] top-2 bottom-2 w-0.5 bg-gradient-to-b from-[#F97316] to-gray-100 dark:to-slate-800" />
 
                 {filteredHistory.length === 0 ? (
                     <div className="text-center py-12 opacity-50">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">No updates found for this stage</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-slate-500">No updates found for this stage</p>
                     </div>
                 ) : (
                     filteredHistory.map((entry, index) => {
@@ -198,16 +198,16 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
                         return (
                             <div key={entry.history_id} className="relative group animate-in slide-in-from-left-4 duration-500" style={{ animationDelay: `${index * 100}ms` }}>
                                 {/* Timeline Node */}
-                                <div className={`absolute -left-[31px] top-0 w-8 h-8 rounded-2xl bg-white border-4 border-${config.color}-50 flex items-center justify-center text-${config.color}-600 shadow-sm z-10 transition-transform group-hover:scale-110`}>
+                                <div className={`absolute -left-[31px] top-0 w-8 h-8 rounded-2xl bg-white dark:bg-slate-800 border-4 border-${config.color}-50 dark:border-slate-700 flex items-center justify-center text-${config.color}-600 dark:text-orange-400 shadow-sm z-10 transition-transform group-hover:scale-110`}>
                                     {config.icon}
                                 </div>
 
                                 {/* Content Card */}
-                                <div className="bg-white rounded-3xl border border-gray-50 shadow-sm hover:shadow-md transition-all overflow-hidden">
+                                <div className="bg-white dark:bg-[#151C2C] rounded-3xl border border-gray-50 dark:border-slate-800/80 shadow-sm hover:shadow-md transition-all overflow-hidden">
                                     <div className="p-6">
                                         <div className="flex justify-between items-start mb-4">
                                             <div>
-                                                <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-${config.color}-50 text-${config.color}-600 border border-${config.color}-100`}>
+                                                <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-${config.color}-50 dark:bg-slate-800 text-${config.color}-600 dark:text-orange-400 border border-${config.color}-100 dark:border-slate-700`}>
                                                     {displayLabel}
                                                 </span>
                                                 {entry.report_status_id === currentStatusId && index === 0 && (
@@ -215,15 +215,15 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
                                                         Active
                                                     </span>
                                                 )}
-                                                <h4 className="text-sm font-black text-gray-900 mt-2 uppercase tracking-tight">
+                                                <h4 className="text-sm font-black text-gray-900 dark:text-white mt-2 uppercase tracking-tight">
                                                     {entry.remarks}
                                                 </h4>
                                             </div>
                                             <div className="text-right">
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                                                <p className="text-[9px] font-black text-gray-400 dark:text-slate-400 uppercase tracking-widest">
                                                     {new Date(entry.created_at).toLocaleDateString()}
                                                 </p>
-                                                <p className="text-[8px] font-bold text-gray-300 uppercase tracking-widest">
+                                                <p className="text-[8px] font-bold text-gray-300 dark:text-slate-500 uppercase tracking-widest">
                                                     {new Date(entry.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                 </p>
                                             </div>
@@ -232,20 +232,20 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
                                         {(() => {
                                             const handler = resolveHandlerName(entry);
                                             return (
-                                                <div className="flex items-center gap-3 mb-6 p-3 bg-gray-50/50 rounded-2xl border border-gray-50/50">
+                                                <div className="flex items-center gap-3 mb-6 p-3 bg-gray-50/50 dark:bg-slate-900/60 rounded-2xl border border-gray-50/50 dark:border-slate-800">
                                                     {entry.updater_photo ? (
                                                         <img
                                                             src={getProfilePicture(entry.updater_photo)}
-                                                            className="w-6 h-6 rounded-lg object-cover border border-gray-100 shadow-sm"
+                                                            className="w-6 h-6 rounded-lg object-cover border border-gray-100 dark:border-slate-700 shadow-sm"
                                                             alt={handler}
                                                             onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
                                                         />
                                                     ) : (
-                                                        <div className="w-6 h-6 rounded-lg bg-orange-100 flex items-center justify-center text-[10px] font-black text-orange-600 border border-orange-200 shadow-sm">
+                                                        <div className="w-6 h-6 rounded-lg bg-orange-100 dark:bg-orange-950/60 flex items-center justify-center text-[10px] font-black text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-500/30 shadow-sm">
                                                             {handler.charAt(0).toUpperCase()}
                                                         </div>
                                                     )}
-                                                    <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest">
+                                                    <span className="text-[10px] font-black text-gray-700 dark:text-slate-300 uppercase tracking-widest">
                                                         Handled by {handler}
                                                     </span>
                                                 </div>

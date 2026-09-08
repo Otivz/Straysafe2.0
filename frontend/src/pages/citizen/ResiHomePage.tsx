@@ -18,6 +18,7 @@ import ReturnToSeleraButton from '../../components/MapControls/ReturnToSeleraBut
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import SuccessModal from '../../components/Modals/SuccessModal';
+import StraySafeLoading from '../../components/StraySafeLoading';
 import { getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
 
 const DefaultIcon = L.icon({
@@ -2906,18 +2907,18 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                             <div className="flex items-center gap-2">
                                                                 <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none">{date}</span>
                                                                 <span className="text-gray-300 font-bold text-[9px] leading-none">•</span>
-                                                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[#FAFAF9] border border-gray-100 rounded-md w-fit">
+                                                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[#FAFAF9] dark:bg-slate-800/90 border border-gray-100 dark:border-slate-700/80 rounded-md w-fit">
                                                                     {report.visibility === 'Private' ? (
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                                                         </svg>
                                                                     ) : (
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-blue-500 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                                                         </svg>
                                                                     )}
-                                                                    <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest leading-none">{report.visibility}</span>
+                                                                    <span className="text-[8px] font-black text-gray-500 dark:text-slate-300 uppercase tracking-widest leading-none">{report.visibility}</span>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -2925,7 +2926,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
 
                                                     {/* Category & Status Badges */}
                                                     <div className="flex items-center gap-2 flex-wrap">
-                                                        <span className="px-3 py-1 bg-orange-50 border border-orange-200 text-[#F97316] rounded-full text-[10px] font-black uppercase tracking-wider shadow-2xs">
+                                                        <span className="px-3 py-1 bg-orange-50 dark:bg-orange-950/50 border border-orange-200 dark:border-orange-500/40 text-[#F97316] dark:text-orange-400 rounded-full text-[10px] font-black uppercase tracking-wider shadow-2xs">
                                                             {categoryMap[report.category_id] || 'Incident Report'}
                                                         </span>
                                                         {(() => {
@@ -2978,12 +2979,12 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                     return (
                                                         <div className="mb-3.5 flex flex-wrap items-center gap-1.5">
                                                             {/* Animal Type & Breed */}
-                                                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-stone-100/90 border border-stone-200/80 rounded-xl text-stone-800 text-[11px] font-bold shadow-2xs">
+                                                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-stone-100/90 dark:bg-slate-800 border border-stone-200/80 dark:border-slate-700 rounded-xl text-stone-800 dark:text-slate-200 text-[11px] font-bold shadow-2xs">
                                                                 <span>{displayType.toLowerCase() === 'cat' ? '🐱' : '🐕'}</span>
-                                                                <span className="font-extrabold text-[#1a1208]">{displayType}</span>
+                                                                <span className="font-extrabold text-[#1a1208] dark:text-white">{displayType}</span>
                                                                 {displayBreed && (
                                                                     <>
-                                                                        <span className="text-stone-400">•</span>
+                                                                        <span className="text-stone-400 dark:text-slate-500">•</span>
                                                                         <span>{displayBreed}</span>
                                                                     </>
                                                                 )}
@@ -2991,7 +2992,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
 
                                                             {/* Color */}
                                                             {displayColor && (
-                                                                <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-stone-50 border border-stone-200/60 rounded-xl text-stone-700 text-[11px] font-bold shadow-2xs">
+                                                                <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-stone-50 dark:bg-slate-800/80 border border-stone-200/60 dark:border-slate-700 rounded-xl text-stone-700 dark:text-slate-200 text-[11px] font-bold shadow-2xs">
                                                                     <span>🎨</span>
                                                                     <span>{displayColor}</span>
                                                                 </div>
@@ -2999,7 +3000,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
 
                                                             {/* Pattern */}
                                                             {displayPattern && displayPattern.toLowerCase() !== 'unknown' && (
-                                                                <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-stone-50 border border-stone-200/60 rounded-xl text-stone-700 text-[11px] font-bold shadow-2xs">
+                                                                <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-stone-50 dark:bg-slate-800/80 border border-stone-200/60 dark:border-slate-700 rounded-xl text-stone-700 dark:text-slate-200 text-[11px] font-bold shadow-2xs">
                                                                     <span>✨</span>
                                                                     <span>{displayPattern}</span>
                                                                 </div>
@@ -3007,7 +3008,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
 
                                                             {/* Size */}
                                                             {displaySize && (
-                                                                <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-stone-50 border border-stone-200/60 rounded-xl text-stone-700 text-[11px] font-bold shadow-2xs">
+                                                                <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-stone-50 dark:bg-slate-800/80 border border-stone-200/60 dark:border-slate-700 rounded-xl text-stone-700 dark:text-slate-200 text-[11px] font-bold shadow-2xs">
                                                                     <span>📏</span>
                                                                     <span>{displaySize}</span>
                                                                 </div>
@@ -3018,7 +3019,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                                 const trimmed = cond.trim();
                                                                 if (!trimmed || trimmed.toLowerCase() === 'none' || trimmed.toLowerCase() === 'none specified') return null;
                                                                 return (
-                                                                    <div key={i} className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 border border-amber-200/80 text-amber-800 rounded-xl text-[11px] font-bold shadow-2xs">
+                                                                    <div key={i} className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 dark:bg-amber-950/50 border border-amber-200/80 dark:border-amber-700/60 text-amber-800 dark:text-amber-300 rounded-xl text-[11px] font-bold shadow-2xs">
                                                                         <span>🩹</span>
                                                                         <span>{trimmed}</span>
                                                                     </div>
@@ -3027,7 +3028,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
 
                                                             {/* Landmark */}
                                                             {report.landmark && (
-                                                                <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 border border-blue-200/70 text-blue-800 rounded-xl text-[11px] font-bold shadow-2xs">
+                                                                <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 dark:bg-blue-950/50 border border-blue-200/70 dark:border-blue-700/60 text-blue-800 dark:text-blue-300 rounded-xl text-[11px] font-bold shadow-2xs">
                                                                     <span>📍</span>
                                                                     <span className="truncate max-w-[200px]">{report.landmark}</span>
                                                                 </div>
@@ -3038,29 +3039,29 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
 
                                                 {/* Lost Pet Owner Contact & QR Code Emergency Box */}
                                                 {(report.pet_id || report.owner_phone || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
-                                                    <div className="mb-5 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50/80 border-2 border-amber-200 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                                    <div className="mb-5 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50/80 dark:from-amber-950/40 dark:to-orange-950/30 border-2 border-amber-200 dark:border-amber-700/50 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                                         <div className="flex items-start sm:items-center gap-3.5">
                                                             <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-600 to-orange-500 text-white flex items-center justify-center font-black text-xl shadow-md shrink-0">
                                                                 🐾
                                                             </div>
                                                             <div>
                                                                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                                                    <span className="px-2 py-0.5 bg-amber-200/90 text-amber-900 rounded-md text-[9px] font-black uppercase tracking-wider">
+                                                                    <span className="px-2 py-0.5 bg-amber-200/90 dark:bg-amber-800 dark:text-amber-100 text-amber-900 rounded-md text-[9px] font-black uppercase tracking-wider">
                                                                         Lost Registered Pet
                                                                     </span>
                                                                     {report.pet_name && (
-                                                                        <span className="text-xs font-black text-[#1a1208] uppercase">
+                                                                        <span className="text-xs font-black text-[#1a1208] dark:text-amber-200 uppercase">
                                                                             {report.pet_name}
                                                                         </span>
                                                                     )}
                                                                 </div>
-                                                                <p className="text-xs font-bold text-amber-950">
+                                                                <p className="text-xs font-bold text-amber-950 dark:text-amber-200">
                                                                     Owner: <span className="font-extrabold">{report.owner_name ? report.owner_name : 'No Registered Owner (Community Animal)'}</span>
-                                                                    {report.owner_phone && <span className="text-amber-800 font-bold ml-1.5">• 📞 {report.owner_phone}</span>}
+                                                                    {report.owner_phone && <span className="text-amber-800 dark:text-amber-300 font-bold ml-1.5">• 📞 {report.owner_phone}</span>}
                                                                 </p>
                                                                 {report.pet_qr_code_hash && (
-                                                                    <p className="text-[10px] font-bold text-amber-800/90 tracking-tight mt-1 flex items-center gap-1">
-                                                                        Pet QR Tag: <span className="font-mono bg-white/90 px-1.5 py-0.5 rounded border border-amber-300 font-bold text-amber-900">{report.pet_qr_code_hash}</span>
+                                                                    <p className="text-[10px] font-bold text-amber-800/90 dark:text-amber-300 tracking-tight mt-1 flex items-center gap-1">
+                                                                        Pet QR Tag: <span className="font-mono bg-white/90 dark:bg-slate-900 px-1.5 py-0.5 rounded border border-amber-300 dark:border-amber-700 font-bold text-amber-900 dark:text-amber-200">{report.pet_qr_code_hash}</span>
                                                                     </p>
                                                                 )}
                                                             </div>
@@ -3086,7 +3087,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                                         ownerName: report.owner_name || undefined,
                                                                         ownerPhone: report.owner_phone
                                                                     })}
-                                                                    className="flex-1 sm:flex-initial px-3.5 py-2.5 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                                                                    className="flex-1 sm:flex-initial px-3.5 py-2.5 bg-white hover:bg-amber-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
                                                                 >
                                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
@@ -3348,19 +3349,19 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                     {/* Right Column: Sidebar (Notifications & Announcements Summary) */}
                     <div className="lg:col-span-4 space-y-6 hidden lg:block">
                         {/* Notifications Card */}
-                        <div className="bg-white rounded-[2rem] border border-gray-100 shadow-xl overflow-hidden p-6 sm:p-8 animate-in fade-in slide-in-from-bottom-5 duration-500 h-[450px] flex flex-col">
-                            <div className="flex items-center justify-between border-b border-gray-50 pb-4 mb-4">
+                        <div className="bg-white dark:bg-[#151C2C] rounded-[2rem] border border-gray-100 dark:border-slate-800 shadow-xl overflow-hidden p-6 sm:p-8 animate-in fade-in slide-in-from-bottom-5 duration-500 h-[450px] flex flex-col">
+                            <div className="flex items-center justify-between border-b border-gray-50 dark:border-slate-800 pb-4 mb-4">
                                 <div className="flex items-center gap-2.5">
-                                    <div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center text-[#F97316]">
+                                    <div className="w-8 h-8 rounded-xl bg-orange-50 dark:bg-orange-950/60 flex items-center justify-center text-[#F97316] dark:text-orange-400">
                                         <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
                                         </svg>
                                     </div>
                                     <div>
-                                        <h3 className="text-sm font-black uppercase tracking-widest text-[#1a1208]">
+                                        <h3 className="text-sm font-black uppercase tracking-widest text-[#1a1208] dark:text-white">
                                             Notifications
                                         </h3>
-                                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                                        <p className="text-[9px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-widest mt-0.5">
                                             {activeNotifications.filter(n => !n.is_read).length} unread
                                         </p>
                                     </div>
@@ -3374,7 +3375,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                     if (displayedNotifications.length === 0) {
                                         return (
                                             <div className="text-center py-8">
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic">
+                                                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-widest italic">
                                                     No notifications
                                                 </p>
                                             </div>
@@ -3402,9 +3403,9 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                             <div
                                                 key={notif.notification_id}
                                                 onClick={() => handleNotificationClick(notif)}
-                                                className={`relative p-4 rounded-2xl border transition-all duration-300 cursor-pointer hover:border-orange-300 active:scale-[0.99] ${notif.is_read
-                                                    ? 'bg-[#FAFAF9]/50 border-gray-50'
-                                                    : 'bg-orange-50/20 border-orange-100/50 shadow-sm'
+                                                className={`relative p-4 rounded-2xl border transition-all duration-300 cursor-pointer hover:border-orange-300 dark:hover:border-orange-500 active:scale-[0.99] ${notif.is_read
+                                                    ? 'bg-[#FAFAF9]/50 dark:bg-slate-800/40 border-gray-50 dark:border-slate-800'
+                                                    : 'bg-orange-50/20 dark:bg-orange-950/30 border-orange-100/50 dark:border-orange-900/40 shadow-sm'
                                                     }`}
                                             >
                                                 {/* Unread indicator */}
@@ -3415,14 +3416,14 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                 <div className={!notif.is_read ? 'pl-4' : ''}>
                                                     <div className="flex items-start justify-between gap-2">
                                                         <div className="flex-1">
-                                                            <h4 className="text-xs font-black text-[#1a1208]">
+                                                            <h4 className="text-xs font-black text-[#1a1208] dark:text-white">
                                                                 {notif.title}
                                                             </h4>
-                                                            <p className="text-[11px] font-semibold text-gray-650 mt-1 leading-relaxed">
+                                                            <p className="text-[11px] font-semibold text-gray-650 dark:text-slate-300 mt-1 leading-relaxed">
                                                                 {notif.message}
                                                             </p>
                                                             <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                                                <span className="text-[9px] font-bold text-gray-400 block uppercase tracking-widest">
+                                                                <span className="text-[9px] font-bold text-gray-400 dark:text-slate-400 block uppercase tracking-widest">
                                                                     {formatTimestamp(notif.created_at)}
                                                                 </span>
                                                                 {(isMatch || isMatchInquiry || typeStr.includes('message') || titleStr.includes('message') || titleStr.includes('💬') || titleStr.includes('inquiry') || msgStr.includes('look-alike')) && notif.related_id && (
@@ -3443,7 +3444,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                         <div className="flex items-center gap-1 shrink-0">
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleDismissNotification(notif.notification_id); }}
-                                                                className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                                                                className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"
                                                                 title="Dismiss"
                                                             >
                                                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
@@ -3460,10 +3461,10 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                             </div>
 
                             {/* Bottom Footer: Mark All Read & View All / View More Notifications */}
-                            <div className="pt-3.5 mt-2 border-t border-gray-100/80 flex items-center justify-between shrink-0">
+                            <div className="pt-3.5 mt-2 border-t border-gray-100/80 dark:border-slate-800 flex items-center justify-between shrink-0">
                                 <button
                                     onClick={handleMarkAllNotificationsRead}
-                                    className="text-xs font-semibold text-gray-500 hover:text-gray-900 underline underline-offset-2 transition-colors cursor-pointer"
+                                    className="text-xs font-semibold text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white underline underline-offset-2 transition-colors cursor-pointer"
                                 >
                                     Mark All Read
                                 </button>
@@ -3473,7 +3474,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                             setVisibleNotifLimit(prev => prev + 10);
                                             setHasClickedViewAll(true);
                                         }}
-                                        className="text-xs font-bold text-[#F97316] hover:text-orange-600 transition-colors flex items-center gap-1 font-sans cursor-pointer"
+                                        className="text-xs font-bold text-[#F97316] dark:text-orange-400 hover:text-orange-600 dark:hover:text-orange-300 transition-colors flex items-center gap-1 font-sans cursor-pointer"
                                     >
                                         {hasClickedViewAll ? 'View More Notifications →' : 'View All Notifications →'}
                                     </button>
@@ -3482,19 +3483,19 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                         </div>
 
                         {/* Announcements Card */}
-                        <div className="bg-white rounded-[2rem] border border-gray-100 shadow-xl overflow-hidden p-6 sm:p-8 animate-in fade-in slide-in-from-bottom-5 duration-500 delay-75 h-[450px] flex flex-col">
-                            <div className="flex items-center justify-between border-b border-gray-50 pb-4 mb-4">
+                        <div className="bg-white dark:bg-[#151C2C] rounded-[2rem] border border-gray-100 dark:border-slate-800 shadow-xl overflow-hidden p-6 sm:p-8 animate-in fade-in slide-in-from-bottom-5 duration-500 delay-75 h-[450px] flex flex-col">
+                            <div className="flex items-center justify-between border-b border-gray-50 dark:border-slate-800 pb-4 mb-4">
                                 <div className="flex items-center gap-2.5">
-                                    <div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center text-[#F97316]">
+                                    <div className="w-8 h-8 rounded-xl bg-orange-50 dark:bg-orange-950/60 flex items-center justify-center text-[#F97316] dark:text-orange-400">
                                         <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
                                         </svg>
                                     </div>
                                     <div>
-                                        <h3 className="text-sm font-black uppercase tracking-widest text-[#1a1208]">
+                                        <h3 className="text-sm font-black uppercase tracking-widest text-[#1a1208] dark:text-white">
                                             Announcements
                                         </h3>
-                                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                                        <p className="text-[9px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-widest mt-0.5">
                                             Latest bulletins
                                         </p>
                                     </div>
@@ -3502,7 +3503,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                 {feedTab !== 'announcements' && (
                                     <button
                                         onClick={() => setFeedTab('announcements')}
-                                        className="text-[9px] font-black uppercase tracking-widest text-[#F97316] hover:text-orange-600 transition-colors"
+                                        className="text-[9px] font-black uppercase tracking-widest text-[#F97316] dark:text-orange-400 hover:text-orange-600 dark:hover:text-orange-300 transition-colors"
                                     >
                                         View All
                                     </button>
@@ -3512,7 +3513,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                             <div className="space-y-4 overflow-y-auto custom-scrollbar pr-1 flex-1">
                                 {announcements.length === 0 ? (
                                     <div className="text-center py-8">
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic">
+                                        <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-widest italic">
                                             No announcements yet
                                         </p>
                                     </div>
@@ -3529,7 +3530,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                     }
                                                 }, 100);
                                             }}
-                                            className="p-4 bg-[#FAFAF9]/40 hover:bg-orange-50/10 border border-gray-50 hover:border-orange-100 rounded-2xl cursor-pointer transition-all duration-300 shadow-sm hover:shadow-md"
+                                            className="p-4 bg-[#FAFAF9]/40 dark:bg-slate-800/40 hover:bg-orange-50/10 dark:hover:bg-slate-800/80 border border-gray-50 dark:border-slate-800 hover:border-orange-100 dark:hover:border-slate-700 rounded-2xl cursor-pointer transition-all duration-300 shadow-sm hover:shadow-md"
                                         >
                                             <div className="flex items-center justify-between mb-1.5">
                                                 <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
@@ -3815,6 +3816,26 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                 report={selectedChatReport}
                 currentUser={currentUser}
             />
+
+            {/* Loading Animation Overlay */}
+            {isSubmitting && (
+                <StraySafeLoading
+                    fullScreen
+                    size="lg"
+                    animalType={formData.animalType || aiAnalysisResult?.animalType || 'Dog'}
+                    badgeText={
+                        (formData.animalType || aiAnalysisResult?.animalType)?.toLowerCase().includes('cat')
+                            ? '🐱 Cat Sighting Dispatch'
+                            : '🐶 Dog Sighting Dispatch'
+                    }
+                    message={
+                        (formData.animalType || aiAnalysisResult?.animalType)?.toLowerCase().includes('cat')
+                            ? (editingReportId ? "Updating Cat Report" : "Submitting Cat Report")
+                            : (editingReportId ? "Updating Dog Report" : "Submitting Dog Report")
+                    }
+                    subMessage="Uploading media and updating community records. Please keep this window open."
+                />
+            )}
 
             {/* Success Modal */}
             <SuccessModal

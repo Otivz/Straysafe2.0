@@ -762,11 +762,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create uploads directory if it doesn't exist
+# Create uploads and assets directory if they don't exist
 os.makedirs("uploads", exist_ok=True)
+assets_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
+os.makedirs(assets_path, exist_ok=True)
 
-# Mount the uploads directory to serve static files
+# Mount the uploads and assets directory to serve static files
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+
+@app.get("/api/loading-animation")
+def get_loading_animation():
+    """Returns metadata and URLs for the STRAY-SAFE dog loading animation."""
+    return {
+        "status": "success",
+        "title": "STRAY-SAFE Dog Loading Animation",
+        "frames_count": 8,
+        "gif_url": "/assets/straysafe_loading.gif",
+        "webp_url": "/assets/straysafe_loading.webp",
+        "frames": [f"/assets/loading_frame_{i}.png" for i in range(1, 9)],
+    }
 
 # Include routes
 app.include_router(auth.router)

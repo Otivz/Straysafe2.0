@@ -93,15 +93,17 @@
     border-color: #1E293B !important;
   }
 
-  /* Text Colors - Bright High-Contrast White for Headings & Branding */
+  /* Text Colors - Bright High-Contrast White for Headings & Text */
   html.dark .text-\[\#1a1208\],
   html.dark .text-\[\#4a3b28\],
   html.dark .text-gray-900,
   html.dark .text-gray-800,
-  html.dark .text-gray-700,
-  html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5, html.dark h6,
-  html.dark span.font-black {
+  html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5, html.dark h6 {
     color: #FFFFFF !important;
+  }
+
+  html.dark .text-gray-700 {
+    color: #E2E8F0 !important;
   }
 
   html.dark .text-gray-600,
@@ -109,6 +111,67 @@
   html.dark .text-gray-400,
   html.dark .text-\[\#4a3b28\]\/85 {
     color: #94A3B8 !important;
+  }
+
+  /* Specific fix for STRAYSAFE brand logo in nav */
+  html.dark nav a .font-black {
+    color: #FFFFFF !important;
+  }
+
+  /* Badge & Chip Colors in Dark Mode - High Contrast, Vibrant & Readable */
+  html.dark .bg-orange-50 {
+    background-color: rgba(124, 45, 18, 0.35) !important;
+    border-color: rgba(249, 115, 22, 0.4) !important;
+    color: #FB923C !important;
+  }
+  html.dark .bg-orange-100 {
+    background-color: rgba(124, 45, 18, 0.5) !important;
+    border-color: rgba(249, 115, 22, 0.5) !important;
+    color: #FB923C !important;
+  }
+  html.dark .bg-emerald-50,
+  html.dark .bg-emerald-100 {
+    background-color: rgba(6, 78, 59, 0.4) !important;
+    border-color: rgba(16, 185, 129, 0.4) !important;
+    color: #34D399 !important;
+  }
+  html.dark .bg-blue-50,
+  html.dark .bg-blue-100 {
+    background-color: rgba(30, 58, 138, 0.4) !important;
+    border-color: rgba(59, 130, 246, 0.4) !important;
+    color: #60A5FA !important;
+  }
+  html.dark .bg-amber-50,
+  html.dark .bg-amber-100 {
+    background-color: rgba(120, 53, 15, 0.4) !important;
+    border-color: rgba(245, 158, 11, 0.4) !important;
+    color: #FBBF24 !important;
+  }
+  html.dark .bg-rose-50,
+  html.dark .bg-rose-100,
+  html.dark .bg-red-50,
+  html.dark .bg-red-100 {
+    background-color: rgba(136, 19, 55, 0.4) !important;
+    border-color: rgba(244, 63, 94, 0.4) !important;
+    color: #FB7185 !important;
+  }
+  html.dark .bg-purple-50,
+  html.dark .bg-purple-100 {
+    background-color: rgba(88, 28, 135, 0.4) !important;
+    border-color: rgba(168, 85, 247, 0.4) !important;
+    color: #C084FC !important;
+  }
+  html.dark .bg-slate-100 {
+    background-color: #1E293B !important;
+    border-color: #334155 !important;
+    color: #CBD5E1 !important;
+  }
+  html.dark .bg-stone-50,
+  html.dark .bg-stone-100,
+  html.dark .bg-stone-100\/90 {
+    background-color: #1E293B !important;
+    border-color: #334155 !important;
+    color: #E2E8F0 !important;
   }
 
   /* Hover Overrides in Dark Mode */
@@ -125,16 +188,11 @@
     color: #F97316 !important;
   }
 
-  /* Specific fix for STRAYSAFE logo text in navbar */
-  html.dark nav a span,
-  html.dark nav span {
-    color: #FFFFFF !important;
-  }
-
   /* Form Elements */
   html.dark input[type="text"],
   html.dark input[type="email"],
   html.dark input[type="password"],
+  html.dark input[type="number"],
   html.dark input[type="tel"],
   html.dark input[type="search"],
   html.dark input[type="date"],

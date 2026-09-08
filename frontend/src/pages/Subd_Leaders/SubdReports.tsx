@@ -112,7 +112,7 @@ const SubdReports = () => {
     const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
     const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
     const [resolvingReportId, setResolvingReportId] = useState<number | null>(null);
-    
+
     // Warning Modal state
     const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
     const [warningOwnerId, setWarningOwnerId] = useState<string>('');
@@ -152,7 +152,7 @@ const SubdReports = () => {
             }
             const history = res.data || [];
             setPriorWarnings(history);
-            
+
             // Calculate next tier in progression: Notice -> 1st Warning -> 2nd Warning -> Final Notice / Escalation
             if (history.length === 0) {
                 setWarningTier('Notice');
@@ -194,7 +194,7 @@ const SubdReports = () => {
             if (!targetUserId) {
                 throw new Error("Cannot issue warning: The owner of this animal has not been identified.");
             }
-            
+
             await api.post('/warnings/', {
                 user_id: targetUserId,
                 pet_id: (selectedWarningReport as any).pet_id || null,
@@ -283,7 +283,7 @@ const SubdReports = () => {
                 if (reportAddresses[r.report_id]) continue;
 
                 // Priority 1: If report already has a descriptive landmark, use it directly
-                if (r.landmark && r.landmark.trim() && 
+                if (r.landmark && r.landmark.trim() &&
                     !r.landmark.toLowerCase().includes('no landmark') &&
                     r.landmark.trim().length > 3) {
                     setReportAddresses(prev => ({ ...prev, [r.report_id]: r.landmark! }));
@@ -789,11 +789,10 @@ const SubdReports = () => {
                                     <button
                                         type="button"
                                         onClick={() => setReportQueue('all')}
-                                        className={`p-4 rounded-2xl border transition-all text-left flex flex-col justify-between cursor-pointer ${
-                                            reportQueue === 'all'
+                                        className={`p-4 rounded-2xl border transition-all text-left flex flex-col justify-between cursor-pointer ${reportQueue === 'all'
                                                 ? 'bg-white border-[#F97316] ring-2 ring-orange-500/20 shadow-sm'
                                                 : 'bg-white/80 border-gray-100 hover:bg-white hover:border-gray-200'
-                                        }`}
+                                            }`}
                                     >
                                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">All Active Reports</span>
                                         <div className="flex items-baseline justify-between mt-2">
@@ -805,11 +804,10 @@ const SubdReports = () => {
                                     <button
                                         type="button"
                                         onClick={() => setReportQueue('unassigned')}
-                                        className={`p-4 rounded-2xl border transition-all text-left flex flex-col justify-between relative overflow-hidden cursor-pointer ${
-                                            reportQueue === 'unassigned'
+                                        className={`p-4 rounded-2xl border transition-all text-left flex flex-col justify-between relative overflow-hidden cursor-pointer ${reportQueue === 'unassigned'
                                                 ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/20 shadow-sm'
                                                 : 'bg-white border-gray-100 hover:bg-amber-50/50 hover:border-amber-200'
-                                        }`}
+                                            }`}
                                     >
                                         <div className="flex items-center justify-between">
                                             <span className="text-[10px] font-black text-amber-800 uppercase tracking-widest flex items-center gap-1.5">
@@ -831,11 +829,10 @@ const SubdReports = () => {
                                     <button
                                         type="button"
                                         onClick={() => setReportQueue('my_reports')}
-                                        className={`p-4 rounded-2xl border transition-all text-left flex flex-col justify-between cursor-pointer ${
-                                            reportQueue === 'my_reports'
+                                        className={`p-4 rounded-2xl border transition-all text-left flex flex-col justify-between cursor-pointer ${reportQueue === 'my_reports'
                                                 ? 'bg-emerald-500/10 border-emerald-500 ring-2 ring-emerald-500/20 shadow-sm'
                                                 : 'bg-white border-gray-100 hover:bg-emerald-50/50 hover:border-emerald-200'
-                                        }`}
+                                            }`}
                                     >
                                         <span className="text-[10px] font-black text-emerald-800 uppercase tracking-widest flex items-center gap-1.5">
                                             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
@@ -899,8 +896,8 @@ const SubdReports = () => {
                                                 type="button"
                                                 onClick={() => setViewMode('cards')}
                                                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 ${viewMode === 'cards'
-                                                        ? 'bg-white text-[#F97316] shadow-sm'
-                                                        : 'text-gray-500 hover:text-gray-700'
+                                                    ? 'bg-white text-[#F97316] shadow-sm'
+                                                    : 'text-gray-500 hover:text-gray-700'
                                                     }`}
                                                 title="Card View"
                                             >
@@ -913,8 +910,8 @@ const SubdReports = () => {
                                                 type="button"
                                                 onClick={() => setViewMode('table')}
                                                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 ${viewMode === 'table'
-                                                        ? 'bg-white text-[#F97316] shadow-sm'
-                                                        : 'text-gray-500 hover:text-gray-700'
+                                                    ? 'bg-white text-[#F97316] shadow-sm'
+                                                    : 'text-gray-500 hover:text-gray-700'
                                                     }`}
                                                 title="Table View"
                                             >
