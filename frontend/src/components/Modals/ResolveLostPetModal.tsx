@@ -2,6 +2,73 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import api from '../../utils/api';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
+import { getLandmarkCategory } from '../../utils/landmarkIcons';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+
+const DefaultIcon = L.icon({
+    iconUrl: markerIcon,
+    iconRetinaUrl: markerIconRetina,
+    shadowUrl: markerShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+});
+L.Marker.prototype.options.icon = DefaultIcon;
+
+const RecenterMap = ({ position }: { position: [number, number] | null }) => {
+    const map = useMap();
+    useEffect(() => {
+        if (position && position[0] && position[1]) {
+            map.flyTo(position, 16, { animate: true, duration: 0.8 });
+        }
+        const timer = setTimeout(() => {
+            map.invalidateSize();
+        }, 250);
+        return () => clearTimeout(timer);
+    }, [position, map]);
+    return null;
+};
+
+const createFacilityMarkerIcon = (fac: any, isSelected: boolean) => {
+    const cat = getLandmarkCategory(fac?.category, fac?.is_holding_facility ?? true);
+    const borderColor = isSelected ? '#f59e0b' : cat.color;
+    const shadow = isSelected 
+        ? 'box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.45), 0 4px 14px rgba(0,0,0,0.35);' 
+        : `box-shadow: 0 3px 10px rgba(0,0,0,0.25), 0 0 0 2px ${cat.color};`;
+    const transform = isSelected ? 'transform: scale(1.15);' : '';
+
+    return L.divIcon({
+        className: 'custom-facility-pin',
+        html: `
+            <div style="
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                background: white;
+                ${shadow}
+                border: 2px solid ${borderColor};
+                font-size: 18px;
+                cursor: pointer;
+                ${transform}
+                transition: transform 0.15s ease;
+            ">
+                <span>${cat.emoji}</span>
+            </div>
+        `,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+        popupAnchor: [0, -20]
+    });
+};
 
 export interface ResolveLostPetModalProps {
     isOpen: boolean;
@@ -15,6 +82,8 @@ export interface ResolveLostPetModalProps {
         species?: string;
     };
     reportId?: number | null;
+    isEscalated?: boolean;
+    subdivisionName?: string;
     onSuccess?: (resolution: { choiceKey: string; petStatus: string; remarks: string }) => void;
 }
 
@@ -26,6 +95,8 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
     onClose,
     pet,
     reportId,
+    isEscalated,
+    subdivisionName,
     onSuccess
 }) => {
     const hasRegisteredPet = Boolean(pet?.pet_id && pet.pet_id > 0);
@@ -45,6 +116,38 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
     const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
     const [activeReportId, setActiveReportId] = useState<number | null>(reportId || null);
+    const [reportDetails, setReportDetails] = useState<any>(null);
+    const [facilities, setFacilities] = useState<any[]>([]);
+    const [selectedFacilityId, setSelectedFacilityId] = useState<number | null>(null);
+    const [isLoadingFacilities, setIsLoadingFacilities] = useState<boolean>(false);
+    const [isMapExpanded, setIsMapExpanded] = useState<boolean>(false);
+
+    // Fetch holding facilities when modal opens
+    useEffect(() => {
+        if (!isOpen) return;
+        const fetchFacilities = async () => {
+            setIsLoadingFacilities(true);
+            try {
+                const subdId = reportDetails?.subdivision_id || (reportDetails?.subdivision?.subdivision_id) || undefined;
+                const res = await api.get('/landmarks', {
+                    params: {
+                        is_holding_facility: true,
+                        subdivision_id: subdId
+                    }
+                });
+                const facList = res.data || [];
+                setFacilities(facList);
+                if (facList.length > 0 && !selectedFacilityId) {
+                    setSelectedFacilityId(facList[0].landmark_id);
+                }
+            } catch (err) {
+                console.warn("Could not fetch holding facilities:", err);
+            } finally {
+                setIsLoadingFacilities(false);
+            }
+        };
+        fetchFacilities();
+    }, [isOpen, reportDetails?.subdivision_id]);
 
     // Look for linked active report if reportId is not supplied
     useEffect(() => {
@@ -76,17 +179,55 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
         fetchPetReport();
     }, [isOpen, reportId, pet?.pet_id, pet?.pet_name]);
 
+    // Fetch report details to dynamically know escalation / subdivision context
+    useEffect(() => {
+        if (!isOpen || !activeReportId) return;
+        const fetchDetails = async () => {
+            try {
+                const res = await api.get(`/reports/${activeReportId}`);
+                if (res.data) {
+                    setReportDetails(res.data);
+                }
+            } catch (err) {
+                console.warn("Could not fetch detailed report for resolution modal:", err);
+            }
+        };
+        fetchDetails();
+    }, [isOpen, activeReportId]);
+
+    const isEscalatedEffective = Boolean(
+        isEscalated ||
+        reportDetails?.endorsement_letter ||
+        reportDetails?.status_id === 4 ||
+        reportDetails?.status_id === 5 ||
+        (reportDetails?.status?.status_name && reportDetails.status.status_name.toLowerCase().includes('escalat'))
+    );
+
+    const effectiveSubdivisionName = subdivisionName || reportDetails?.subdivision?.subdivision_name || reportDetails?.subdivision_name;
+    const selectedFacility = facilities.find(f => f.landmark_id === selectedFacilityId) || (facilities.length > 0 ? facilities[0] : null);
+
+    const isBrgyFacility = selectedFacility 
+        ? selectedFacility.subdivision_id == null 
+        : isEscalatedEffective;
+
+    const facilityTitle = isBrgyFacility
+        ? 'Barangay Holding Facility / Shelter'
+        : (effectiveSubdivisionName ? `${effectiveSubdivisionName} Facility / Shelter` : 'Subdivision Facility / Shelter');
+    const facilityBadge = isBrgyFacility ? 'In Brgy Facility' : 'In Subd Facility';
+
     // Update remarks automatically when choices change
-    const updateRemarks = (primary: PrimaryChoiceKey, sub: SubChoiceKey) => {
+    const updateRemarks = (primary: PrimaryChoiceKey, sub: SubChoiceKey, facObj: any = selectedFacility) => {
         if (primary === 'pet_found') {
             if (sub === 'returned_to_owner') {
                 setRemarks(hasRegisteredPet 
                     ? 'The lost pet was located alive and safely returned to the owner. Identity and ownership confirmed.'
                     : 'The animal was located alive and safely reunited with or returned to the owner / caregiver.');
             } else if (sub === 'temporary_care') {
-                setRemarks('The animal was secured alive and is currently under temporary care / shelter while coordinating next steps.');
+                const facName = facObj?.name || (isBrgyFacility ? 'Barangay Holding Facility' : 'Subdivision Holding Facility');
+                const caretakerInfo = facObj?.contact_person ? ` (Caretaker: ${facObj.contact_person}${facObj.contact_number ? `, ${facObj.contact_number}` : ''})` : '';
+                setRemarks(`The animal was secured alive and is currently held at ${facName}${caretakerInfo} while coordinating next steps.`);
             } else if (sub === 'owner_not_located') {
-                setRemarks('The animal was found and secured in the community. Owner or permanent caregiver has not yet been identified or contacted.');
+                setRemarks('The animal was found and secured by a resident in the community. Awaiting responder / team pickup.');
             }
         } else if (primary === 'deceased') {
             setRemarks('The animal was sadly confirmed deceased.');
@@ -138,19 +279,19 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
             } else if (subChoice === 'temporary_care') {
                 return {
                     choiceKey: 'temporary_care',
-                    title: 'Found — Under Temporary Care / Shelter',
+                    title: `Secured in ${facilityTitle}`,
                     petStatus: 'Rescued',
-                    reportStatusId: 7, // Under Observation / Care
-                    badgeText: 'Temporary Care',
+                    reportStatusId: isEscalatedEffective ? (reportDetails?.status_id === 5 ? 5 : 4) : 7, // Keep Escalated status if already escalated, else Under Observation
+                    badgeText: facilityBadge,
                     badgeColor: 'bg-amber-50 text-amber-700 border-amber-200'
                 };
             } else {
                 return {
                     choiceKey: 'owner_not_located',
-                    title: 'Found — Custody / Owner Pending',
+                    title: 'Secured by Resident (Awaiting Pickup)',
                     petStatus: 'Found',
-                    reportStatusId: 7, // Under Observation / Care
-                    badgeText: 'Pending Owner',
+                    reportStatusId: isEscalatedEffective ? (reportDetails?.status_id === 5 ? 5 : 4) : 7, // Keep Escalated status if already escalated
+                    badgeText: 'Awaiting Pickup',
                     badgeColor: 'bg-blue-50 text-blue-700 border-blue-200'
                 };
             }
@@ -214,12 +355,29 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                 try {
                     const userStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user') || localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
                     const currentUser = userStr ? JSON.parse(userStr) : null;
-                    const statusRes = await api.patch(`/reports/${activeReportId}/status`, {
+                    
+                    const existingCond = reportDetails?.condition || (reportDetails?.description?.toLowerCase().includes('injured') ? 'Injured' : undefined);
+                    const payload: any = {
                         status_id: meta.reportStatusId,
                         remarks: finalRemarks,
                         user_id: currentUser?.user_id || currentUser?.id,
-                        animal_condition: primaryChoice === 'deceased' ? 'Deceased' : 'Healthy'
-                    });
+                        ...(primaryChoice === 'deceased' ? { animal_condition: 'Deceased' } : (existingCond ? { animal_condition: existingCond } : {}))
+                    };
+
+                    // If moving to facility, include facility metadata & coordinates
+                    if (subChoice === 'temporary_care' && selectedFacility) {
+                        payload.facility_id = selectedFacility.landmark_id;
+                        payload.latitude = parseFloat(selectedFacility.latitude);
+                        payload.longitude = parseFloat(selectedFacility.longitude);
+                        payload.landmark = selectedFacility.name;
+                        payload.custody_status = selectedFacility.subdivision_id == null ? 'In Barangay Facility' : 'In Subdivision Facility';
+                    } else if (subChoice === 'owner_not_located') {
+                        payload.custody_status = 'Secured by Resident';
+                    } else if (subChoice === 'returned_to_owner') {
+                        payload.custody_status = 'Reunited';
+                    }
+
+                    const statusRes = await api.patch(`/reports/${activeReportId}/status`, payload);
 
                     // 4. Upload proof / reunion photo if provided
                     if (proofPhoto) {
@@ -470,7 +628,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                     </span>
                                 </div>
 
-                                {/* Sub 2: 🟡 Found — Under Temporary Care */}
+                                {/* Sub 2: 🟡 Secured in Facility / Shelter */}
                                 <div
                                     onClick={() => handleSubSelect('temporary_care')}
                                     className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
@@ -483,19 +641,172 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                         <span className="text-xl">🟡</span>
                                         <div>
                                             <h5 className="text-xs font-black text-amber-950 dark:text-stone-100">
-                                                Found — Under Temporary Care / Shelter
+                                                Secured in {facilityTitle}
                                             </h5>
                                             <p className="text-[10px] font-bold text-amber-800/80 dark:text-stone-400">
-                                                Animal was secured alive and is currently cared for by a rescuer, barangay, or shelter facility.
+                                                {isBrgyFacility
+                                                    ? 'Animal was secured and is currently held at the Barangay Holding Facility.'
+                                                    : 'Animal was secured and is currently held at the Subdivision holding area / facility.'}
                                             </p>
                                         </div>
                                     </div>
                                     <span className="px-2.5 py-1 rounded-xl text-[8px] font-black uppercase tracking-widest bg-amber-100 text-amber-800 shrink-0">
-                                        Under Foster/Care
+                                        {facilityBadge}
                                     </span>
                                 </div>
 
-                                {/* Sub 3: 🔵 Found — Custody / Owner Pending */}
+                                {/* Facility Picker Card (Shown when Secured in Facility is selected) */}
+                                {subChoice === 'temporary_care' && (
+                                    <div className="p-4 rounded-2xl bg-amber-100/60 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 space-y-3 animate-in fade-in duration-200">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black text-amber-950 dark:text-amber-200 uppercase tracking-widest flex items-center gap-1.5">
+                                                <span>🏢</span> Select Holding Facility / Shelter
+                                            </span>
+                                            <span className="text-[9px] font-bold text-amber-800 dark:text-amber-300 uppercase">
+                                                {isLoadingFacilities ? 'Loading...' : `${facilities.length} available`}
+                                            </span>
+                                        </div>
+
+                                        {facilities.length > 0 ? (
+                                            <div className="space-y-2">
+                                                <select
+                                                    value={selectedFacilityId || ''}
+                                                    onChange={(e) => {
+                                                        const id = Number(e.target.value);
+                                                        setSelectedFacilityId(id);
+                                                        const facObj = facilities.find(f => f.landmark_id === id);
+                                                        updateRemarks('pet_found', 'temporary_care', facObj);
+                                                    }}
+                                                    className="w-full px-3.5 py-2.5 bg-white dark:bg-stone-900 border border-amber-300 dark:border-amber-700 rounded-xl text-xs font-bold text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-amber-400 outline-none"
+                                                >
+                                                    {facilities.map((fac) => {
+                                                        const cat = getLandmarkCategory(fac.category, fac.is_holding_facility);
+                                                        return (
+                                                            <option key={fac.landmark_id} value={fac.landmark_id}>
+                                                                {cat.emoji} {fac.name} {fac.contact_person ? `(Caretaker: ${fac.contact_person})` : ''}
+                                                            </option>
+                                                        );
+                                                    })}
+                                                </select>
+
+                                                {selectedFacility && (
+                                                    <div className="p-3 bg-white/80 dark:bg-stone-900/80 rounded-xl border border-amber-200/80 dark:border-amber-800/80 text-[11px] text-stone-700 dark:text-stone-300 space-y-2">
+                                                        <div className="flex items-center justify-between font-bold text-amber-900 dark:text-amber-300">
+                                                            <span>{getLandmarkCategory(selectedFacility.category, selectedFacility.is_holding_facility).emoji} {selectedFacility.name}</span>
+                                                            {selectedFacility.capacity && (
+                                                                <span className="text-[9px] px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md font-extrabold">
+                                                                    Cap: {selectedFacility.capacity}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {selectedFacility.contact_person && (
+                                                            <p className="text-[10px] text-stone-600 dark:text-stone-400">
+                                                                👤 Caretaker: <strong className="text-stone-900 dark:text-stone-200">{selectedFacility.contact_person}</strong>
+                                                                {selectedFacility.contact_number && ` • 📞 ${selectedFacility.contact_number}`}
+                                                            </p>
+                                                        )}
+
+                                                        {/* Facility Interactive Map */}
+                                                        {selectedFacility.latitude && selectedFacility.longitude && !isNaN(parseFloat(String(selectedFacility.latitude))) && !isNaN(parseFloat(String(selectedFacility.longitude))) && (
+                                                            <div className="space-y-1.5 pt-1">
+                                                                <div className="h-44 w-full rounded-xl overflow-hidden border border-amber-300 dark:border-amber-700 relative z-0 shadow-inner group">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setIsMapExpanded(true);
+                                                                        }}
+                                                                        className="absolute top-2 right-2 z-[400] px-2.5 py-1 bg-white/95 dark:bg-stone-900/95 hover:bg-white text-stone-700 dark:text-stone-200 text-[10px] font-bold rounded-lg shadow-md border border-amber-200 dark:border-amber-800 flex items-center gap-1.5 transition-all hover:scale-105 cursor-pointer backdrop-blur-sm"
+                                                                        title="Expand Map"
+                                                                    >
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                                                                        </svg>
+                                                                        <span>Expand</span>
+                                                                    </button>
+                                                                    <MapContainer
+                                                                        center={[parseFloat(String(selectedFacility.latitude)), parseFloat(String(selectedFacility.longitude))]}
+                                                                        zoom={16}
+                                                                        scrollWheelZoom={false}
+                                                                        className="h-full w-full"
+                                                                    >
+                                                                        <TileLayer
+                                                                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                                                                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                                                        />
+                                                                        <RecenterMap
+                                                                            position={[parseFloat(String(selectedFacility.latitude)), parseFloat(String(selectedFacility.longitude))]}
+                                                                        />
+                                                                        {facilities.map((fac) => {
+                                                                            const lat = fac.latitude ? parseFloat(String(fac.latitude)) : null;
+                                                                            const lng = fac.longitude ? parseFloat(String(fac.longitude)) : null;
+                                                                            if (lat === null || isNaN(lat) || lng === null || isNaN(lng)) return null;
+                                                                            const isSelected = fac.landmark_id === selectedFacility.landmark_id;
+                                                                            const facCat = getLandmarkCategory(fac.category, fac.is_holding_facility);
+                                                                            return (
+                                                                                <Marker
+                                                                                    key={fac.landmark_id}
+                                                                                    position={[lat, lng]}
+                                                                                    icon={createFacilityMarkerIcon(fac, isSelected)}
+                                                                                    eventHandlers={{
+                                                                                        click: () => {
+                                                                                            setSelectedFacilityId(fac.landmark_id);
+                                                                                            updateRemarks('pet_found', 'temporary_care', fac);
+                                                                                        }
+                                                                                    }}
+                                                                                >
+                                                                                    <Popup>
+                                                                                        <div className="p-1 text-center text-xs min-w-[130px]">
+                                                                                            <p className="font-bold text-amber-800 dark:text-amber-300">
+                                                                                                {facCat.emoji} {fac.name}
+                                                                                            </p>
+                                                                                            {fac.contact_person && (
+                                                                                                <p className="text-[10px] text-stone-600 mt-0.5">
+                                                                                                    Caretaker: {fac.contact_person}
+                                                                                                </p>
+                                                                                            )}
+                                                                                            {fac.capacity && (
+                                                                                                <p className="text-[10px] text-amber-700 font-semibold">
+                                                                                                    Capacity: {fac.capacity}
+                                                                                                </p>
+                                                                                            )}
+                                                                                            {isSelected && (
+                                                                                                <span className="inline-block mt-1 text-[9px] font-bold px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded">
+                                                                                                    ✓ Selected
+                                                                                                </span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </Popup>
+                                                                                </Marker>
+                                                                            );
+                                                                        })}
+                                                                    </MapContainer>
+                                                                </div>
+                                                                <div className="flex items-center justify-between text-[9px] text-amber-900/70 dark:text-amber-300/70 px-1 font-mono">
+                                                                    <span>Lat: {parseFloat(String(selectedFacility.latitude)).toFixed(5)}</span>
+                                                                    <span>Lng: {parseFloat(String(selectedFacility.longitude)).toFixed(5)}</span>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        <p className="text-[9px] text-amber-800 dark:text-amber-400 font-semibold pt-1 border-t border-amber-100 dark:border-amber-900/50">
+                                                            ✨ <strong>Auto-Location Update:</strong> The animal's live position on the map will move to this facility. Original found coordinates are preserved in location history.
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="p-3 bg-white/80 dark:bg-stone-900/80 rounded-xl border border-amber-200 text-xs text-stone-600 dark:text-stone-300">
+                                                <p className="font-semibold text-amber-900">Standard Subdivision Holding Area</p>
+                                                <p className="text-[10px] text-stone-500 mt-0.5">
+                                                    No custom landmarks registered as holding facilities yet. The report will update custody to Subdivision Holding.
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Sub 3: 🔵 Secured by Resident (Awaiting Pickup) */}
                                 <div
                                     onClick={() => handleSubSelect('owner_not_located')}
                                     className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
@@ -508,15 +819,15 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                         <span className="text-xl">🔵</span>
                                         <div>
                                             <h5 className="text-xs font-black text-blue-950 dark:text-stone-100">
-                                                Found — Custody / Owner Pending
+                                                Secured by Resident (Awaiting Pickup)
                                             </h5>
                                             <p className="text-[10px] font-bold text-blue-800/80 dark:text-stone-400">
-                                                Animal was found/secured, but owner or permanent foster has not been determined yet.
+                                                Animal was secured by a resident/rescuer, awaiting team dispatch or pickup.
                                             </p>
                                         </div>
                                     </div>
                                     <span className="px-2.5 py-1 rounded-xl text-[8px] font-black uppercase tracking-widest bg-blue-100 text-blue-800 shrink-0">
-                                        Pending Owner
+                                        Awaiting Pickup
                                     </span>
                                 </div>
                             </div>
@@ -624,6 +935,166 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                     </div>
                 </form>
             </div>
+
+            {/* ENLARGED FULLSCREEN HOLDING FACILITY MAP MODAL */}
+            {isMapExpanded && selectedFacility && selectedFacility.latitude && selectedFacility.longitude && (
+                <div className="fixed inset-0 z-[10000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-stone-900 rounded-3xl shadow-2xl w-[95%] max-w-4xl h-[85vh] flex flex-col p-5 border border-amber-200 dark:border-amber-800 animate-in zoom-in-95 duration-200">
+                        {/* Header */}
+                        <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-stone-800 shrink-0">
+                            <div className="flex items-center gap-3">
+                                <span className="text-2xl">
+                                    {getLandmarkCategory(selectedFacility.category, selectedFacility.is_holding_facility).emoji}
+                                </span>
+                                <div>
+                                    <h4 className="text-base font-black text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                                        {selectedFacility.name}
+                                        {selectedFacility.capacity && (
+                                            <span className="text-[10px] px-2 py-0.5 bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 rounded-md font-extrabold">
+                                                Cap: {selectedFacility.capacity}
+                                            </span>
+                                        )}
+                                    </h4>
+                                    <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                                        {selectedFacility.contact_person ? `Caretaker: ${selectedFacility.contact_person}` : 'Subdivision Holding Facility'}
+                                        {selectedFacility.contact_number && ` • 📞 ${selectedFacility.contact_number}`}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsMapExpanded(false)}
+                                className="p-2 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-full transition-colors text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 cursor-pointer"
+                                title="Close expanded map"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Expanded Map View */}
+                        <div className="flex-1 rounded-2xl overflow-hidden relative border border-amber-200 dark:border-amber-800 my-3 min-h-0 shadow-inner">
+                            <MapContainer
+                                center={[parseFloat(String(selectedFacility.latitude)), parseFloat(String(selectedFacility.longitude))]}
+                                zoom={17}
+                                scrollWheelZoom={true}
+                                className="h-full w-full"
+                            >
+                                <TileLayer
+                                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                />
+                                <RecenterMap
+                                    position={[parseFloat(String(selectedFacility.latitude)), parseFloat(String(selectedFacility.longitude))]}
+                                />
+                                {facilities.map((fac) => {
+                                    const lat = fac.latitude ? parseFloat(String(fac.latitude)) : null;
+                                    const lng = fac.longitude ? parseFloat(String(fac.longitude)) : null;
+                                    if (lat === null || isNaN(lat) || lng === null || isNaN(lng)) return null;
+                                    const isSelected = fac.landmark_id === selectedFacility.landmark_id;
+                                    const facCat = getLandmarkCategory(fac.category, fac.is_holding_facility);
+                                    return (
+                                        <Marker
+                                            key={`expanded-${fac.landmark_id}`}
+                                            position={[lat, lng]}
+                                            icon={createFacilityMarkerIcon(fac, isSelected)}
+                                            eventHandlers={{
+                                                click: () => {
+                                                    setSelectedFacilityId(fac.landmark_id);
+                                                    updateRemarks('pet_found', 'temporary_care', fac);
+                                                }
+                                            }}
+                                        >
+                                            <Popup>
+                                                <div className="p-1.5 text-center text-xs min-w-[140px]">
+                                                    <p className="font-bold text-amber-800 dark:text-amber-300 text-sm">
+                                                        {facCat.emoji} {fac.name}
+                                                    </p>
+                                                    {fac.contact_person && (
+                                                        <p className="text-[11px] text-stone-600 mt-1">
+                                                            Caretaker: <strong>{fac.contact_person}</strong>
+                                                        </p>
+                                                    )}
+                                                    {fac.contact_number && (
+                                                        <p className="text-[11px] text-stone-500">
+                                                            📞 {fac.contact_number}
+                                                        </p>
+                                                    )}
+                                                    {fac.capacity && (
+                                                        <p className="text-[10px] text-amber-700 font-semibold mt-0.5">
+                                                            Capacity: {fac.capacity} animals
+                                                        </p>
+                                                    )}
+                                                    {isSelected ? (
+                                                        <span className="inline-block mt-2 text-[10px] font-bold px-2 py-0.5 bg-amber-100 text-amber-800 rounded">
+                                                            ✓ Current Selection
+                                                        </span>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setSelectedFacilityId(fac.landmark_id);
+                                                                updateRemarks('pet_found', 'temporary_care', fac);
+                                                            }}
+                                                            className="mt-2 w-full py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[10px] font-bold cursor-pointer transition-colors"
+                                                        >
+                                                            Select Facility
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </Popup>
+                                        </Marker>
+                                    );
+                                })}
+                            </MapContainer>
+                        </div>
+
+                        {/* Footer with Facility Quick Switcher & Coordinates */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 text-xs shrink-0">
+                            <div className="flex items-center gap-2">
+                                <span className="text-[11px] font-black uppercase tracking-wider text-stone-500">Facilities:</span>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {facilities.map((fac) => {
+                                        const isSelected = fac.landmark_id === selectedFacility.landmark_id;
+                                        const facCat = getLandmarkCategory(fac.category, fac.is_holding_facility);
+                                        return (
+                                            <button
+                                                key={`btn-${fac.landmark_id}`}
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedFacilityId(fac.landmark_id);
+                                                    updateRemarks('pet_found', 'temporary_care', fac);
+                                                }}
+                                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                                    isSelected
+                                                        ? 'bg-amber-600 text-white shadow-sm ring-2 ring-amber-400/30'
+                                                        : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700'
+                                                }`}
+                                            >
+                                                <span>{facCat.emoji}</span>
+                                                <span>{fac.name}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <span className="text-[10px] font-mono text-stone-500">
+                                    Lat: {parseFloat(String(selectedFacility.latitude)).toFixed(6)}, Lng: {parseFloat(String(selectedFacility.longitude)).toFixed(6)}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsMapExpanded(false)}
+                                    className="px-4 py-1.5 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-xl font-bold text-xs hover:opacity-90 transition-opacity cursor-pointer"
+                                >
+                                    Done
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

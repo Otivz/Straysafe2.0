@@ -1,26 +1,28 @@
 import { useEffect, useState } from 'react';
 
 interface RelativeTimestampProps {
-  date: string | number | Date;
+  date?: string | number | Date;
+  timestamp?: string | number | Date;
 }
 
-export default function RelativeTimestamp({ date }: RelativeTimestampProps) {
+export default function RelativeTimestamp({ date, timestamp }: RelativeTimestampProps) {
   const [relativeTime, setRelativeTime] = useState('');
+  const actualDate = date ?? timestamp;
 
   useEffect(() => {
     const getRelativeTime = () => {
-      if (!date) return 'Unknown date';
+      if (!actualDate) return 'Unknown date';
       
       let parsedDate: Date;
-      if (typeof date === 'string') {
+      if (typeof actualDate === 'string') {
         // Handle MySQL format "YYYY-MM-DD HH:MM:SS" by replacing space with T
-        let normalized = date.trim();
+        let normalized = actualDate.trim();
         if (normalized.includes(' ') && !normalized.includes('T')) {
           normalized = normalized.replace(' ', 'T');
         }
         parsedDate = new Date(normalized);
       } else {
-        parsedDate = new Date(date);
+        parsedDate = new Date(actualDate);
       }
 
       if (isNaN(parsedDate.getTime())) {
@@ -61,7 +63,7 @@ export default function RelativeTimestamp({ date }: RelativeTimestampProps) {
     };
 
     setRelativeTime(getRelativeTime());
-  }, [date]);
+  }, [actualDate]);
 
   return <span>{relativeTime}</span>;
 }

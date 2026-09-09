@@ -208,7 +208,8 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
     const animal = getAnimalStyles(animalType);
     const sizeStyle = getSizeStyles(estimatedSize);
     const isVerifiedTrue = verificationStatus === 'verified_true';
-    const isCleanRecord = isVerifiedTrue && !verifiedActualBite && !verifiedAggressive && !verifiedInjury;
+    const isAggressiveIncident = Boolean(verifiedActualBite || verifiedAggressive || verifiedAttemptedBite || verifiedChasing);
+    const isCleanRecord = isVerifiedTrue && !isAggressiveIncident;
 
     return (
         <div className="relative overflow-hidden bg-gradient-to-br from-slate-900/90 via-slate-950/95 to-slate-900/90 backdrop-blur-xl p-5 rounded-3xl border border-white/10 shadow-2xl transition-all duration-300 hover:shadow-indigo-500/5 hover:border-white/15">

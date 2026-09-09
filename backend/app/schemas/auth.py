@@ -12,6 +12,11 @@ class LoginResponse(BaseModel):
     name: Optional[str] = None
     role_id: int
     subdivision_id: Optional[int] = None
+    barangay_id: Optional[int] = None
+    is_head_officer: Optional[bool] = False
+    position_id: Optional[int] = None
+    position_name: Optional[str] = None
+    barangay_name: Optional[str] = None
     profile_picture: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
@@ -26,3 +31,4 @@ class LoginResponse(BaseModel):
     model_config = {
         "from_attributes": True
     }
+

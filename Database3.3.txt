@@ -86,6 +86,41 @@ CREATE TABLE `subdivisions` (
 INSERT INTO `subdivisions` (`subdivision_id`, `barangay_id`, `subdivision_name`, `boundary_polygon`) VALUES (1, 1, 'Selera Homes', '[{"lat": 14.801496, "lng": 121.005174}, {"lat": 14.799577, "lng": 121.003911}, {"lat": 14.800634, "lng": 121.002228}, {"lat": 14.802461, "lng": 121.00328}]');
 
 -- =========================================
+-- TABLE: LANDMARKS & HOLDING FACILITIES
+-- =========================================
+DROP TABLE IF EXISTS `landmarks`;
+CREATE TABLE `landmarks` (
+  `landmark_id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(150) NOT NULL,
+  `category` varchar(50) NOT NULL DEFAULT 'general',
+  `description` text DEFAULT NULL,
+  `subdivision_id` int DEFAULT NULL,
+  `barangay_id` int NOT NULL DEFAULT 1,
+  `latitude` decimal(10,8) NOT NULL,
+  `longitude` decimal(11,8) NOT NULL,
+  `is_holding_facility` tinyint(1) NOT NULL DEFAULT '0',
+  `facility_type` varchar(50) DEFAULT NULL,
+  `capacity` int DEFAULT NULL,
+  `contact_person` varchar(100) DEFAULT NULL,
+  `contact_number` varchar(20) DEFAULT NULL,
+  `status` enum('Active','Inactive') NOT NULL DEFAULT 'Active',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`landmark_id`),
+  KEY `fk_landmarks_subdivision` (`subdivision_id`),
+  KEY `fk_landmarks_barangay` (`barangay_id`),
+  CONSTRAINT `fk_landmarks_subdivision` FOREIGN KEY (`subdivision_id`) REFERENCES `subdivisions` (`subdivision_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_landmarks_barangay` FOREIGN KEY (`barangay_id`) REFERENCES `barangays` (`barangay_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- SEED DATA: landmarks
+INSERT INTO `landmarks` (`landmark_id`, `name`, `category`, `description`, `subdivision_id`, `barangay_id`, `latitude`, `longitude`, `is_holding_facility`, `facility_type`, `capacity`, `contact_person`, `contact_number`, `status`) VALUES
+(1, 'Selera Homes Main Entrance Gate', 'gate', 'Main guardhouse and security station at the entrance of Selera Homes', 1, 1, '14.80149600', '121.00517400', 0, NULL, NULL, 'Chief Guard Reyes', '09171112233', 'Active'),
+(2, 'Selera Homes Temporary Holding Pen', 'facility', 'Community temporary animal shelter and kennel cages near HOA office', 1, 1, '14.80180000', '121.00280000', 1, 'Temporary Holding Pen', 6, 'Kyla Joy Arriola', '09192223344', 'Active'),
+(3, 'Selera Community Park & Clubhouse', 'park', 'Recreation grounds and event center', 1, 1, '14.80063400', '121.00222800', 0, NULL, NULL, 'HOA Secretariat', '09172223344', 'Active'),
+(4, 'Barangay San Vicente Animal Impound Facility', 'facility', 'Official municipal holding shelter and veterinary holding cages', NULL, 1, '14.80690600', '121.00392970', 1, 'Barangay Main Shelter', 20, 'Barangay Animal Welfare Desk', '09123456789', 'Active');
+
+-- =========================================
 -- TABLE: USERS
 -- =========================================
 DROP TABLE IF EXISTS `users`;
@@ -98,6 +133,8 @@ CREATE TABLE `users` (
   `role_id` int NOT NULL,
   `position_id` int DEFAULT NULL,
   `subdivision_id` int DEFAULT NULL,
+  `barangay_id` int DEFAULT NULL,
+  `is_head_officer` tinyint(1) DEFAULT '0',
   `address` varchar(255) DEFAULT NULL,
   `latitude` decimal(10,8) DEFAULT NULL,
   `longitude` decimal(11,8) DEFAULT NULL,
@@ -112,17 +149,20 @@ CREATE TABLE `users` (
   KEY `fk_users_role` (`role_id`),
   KEY `fk_users_position` (`position_id`),
   KEY `fk_users_subdivision` (`subdivision_id`),
+  KEY `fk_users_barangay` (`barangay_id`),
   CONSTRAINT `fk_users_position` FOREIGN KEY (`position_id`) REFERENCES `positions` (`position_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_users_role` FOREIGN KEY (`role_id`) REFERENCES `roles` (`role_id`),
-  CONSTRAINT `fk_users_subdivision` FOREIGN KEY (`subdivision_id`) REFERENCES `subdivisions` (`subdivision_id`) ON DELETE SET NULL
+  CONSTRAINT `fk_users_subdivision` FOREIGN KEY (`subdivision_id`) REFERENCES `subdivisions` (`subdivision_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_users_barangay` FOREIGN KEY (`barangay_id`) REFERENCES `barangays` (`barangay_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- SEED DATA: users
-INSERT INTO `users` (`user_id`, `name`, `email`, `password`, `phone`, `role_id`, `position_id`, `subdivision_id`, `address`, `latitude`, `longitude`, `profile_picture`, `status`, `is_verified`, `last_login`, `created_at`, `updated_at`) VALUES (1, 'Emmanuel Vito Cruz', 'emmanuelvitocruz@gmail.com', '$2b$12$hoysmjmbSQPBW2VHDsnOKuXVqn/SY6BPBgRWd61pFck79VPLBTiqe', '09171234567', 1, NULL, 1, 'Block 5 Lot 12, Selera Homes, San Vicente, Santa Maria, Bulacan', '14.80131300', '121.00310900', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop', 'Active', 1, NULL, '2026-07-31 18:05:02', '2026-07-31 18:05:02');
-INSERT INTO `users` (`user_id`, `name`, `email`, `password`, `phone`, `role_id`, `position_id`, `subdivision_id`, `address`, `latitude`, `longitude`, `profile_picture`, `status`, `is_verified`, `last_login`, `created_at`, `updated_at`) VALUES (2, 'Maria Clara Santos', 'resident2@straysafe.com', '$2b$12$hoysmjmbSQPBW2VHDsnOKuXVqn/SY6BPBgRWd61pFck79VPLBTiqe', '09189876543', 1, NULL, 1, 'Block 8 Lot 24, Selera Homes, San Vicente, Santa Maria, Bulacan', '14.80095000', '121.00355000', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&auto=format&fit=crop', 'Active', 1, NULL, '2026-07-31 18:05:02', '2026-07-31 18:05:02');
-INSERT INTO `users` (`user_id`, `name`, `email`, `password`, `phone`, `role_id`, `position_id`, `subdivision_id`, `address`, `latitude`, `longitude`, `profile_picture`, `status`, `is_verified`, `last_login`, `created_at`, `updated_at`) VALUES (3, 'Kyla Joy Arriola', 'kylajoyarriola@gmail.com', '$2b$12$hoysmjmbSQPBW2VHDsnOKuXVqn/SY6BPBgRWd61pFck79VPLBTiqe', '09192223344', 2, 1, 1, 'Block 1 Lot 2, Selera Homes, San Vicente, Santa Maria, Bulacan', '14.80180000', '121.00280000', 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&auto=format&fit=crop', 'Active', 1, NULL, '2026-07-31 18:05:02', '2026-07-31 18:05:02');
-INSERT INTO `users` (`user_id`, `name`, `email`, `password`, `phone`, `role_id`, `position_id`, `subdivision_id`, `address`, `latitude`, `longitude`, `profile_picture`, `status`, `is_verified`, `last_login`, `created_at`, `updated_at`) VALUES (4, 'Kyla Bianca Frias', 'kylabiancafrias@gmail.com', '$2b$12$hoysmjmbSQPBW2VHDsnOKuXVqn/SY6BPBgRWd61pFck79VPLBTiqe', '09205556677', 3, 6, NULL, 'Barangay Hall, San Vicente, Santa Maria, Bulacan', '14.80690600', '121.00392970', 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop', 'Active', 1, NULL, '2026-07-31 18:05:02', '2026-07-31 18:05:02');
-INSERT INTO `users` (`user_id`, `name`, `email`, `password`, `phone`, `role_id`, `position_id`, `subdivision_id`, `address`, `latitude`, `longitude`, `profile_picture`, `status`, `is_verified`, `last_login`, `created_at`, `updated_at`) VALUES (5, 'System Admin', 'admin@straysafe.com', '$2b$12$Jit8Rt3VRPeBzx50QHGPleUKwKbed4RxHUlljimADwKHtj116Iu.e', '09110001111', 4, NULL, NULL, 'StraySafe HQ, Santa Maria, Bulacan', '14.80690600', '121.00392970', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop', 'Active', 1, NULL, '2026-07-31 18:05:02', '2026-07-31 18:05:02');
+INSERT INTO `users` (`user_id`, `name`, `email`, `password`, `phone`, `role_id`, `position_id`, `subdivision_id`, `barangay_id`, `is_head_officer`, `address`, `latitude`, `longitude`, `profile_picture`, `status`, `is_verified`, `last_login`, `created_at`, `updated_at`) VALUES (1, 'Emmanuel Vito Cruz', 'emmanuelvitocruz@gmail.com', '$2b$12$hoysmjmbSQPBW2VHDsnOKuXVqn/SY6BPBgRWd61pFck79VPLBTiqe', '09171234567', 1, NULL, 1, NULL, 0, 'Block 5 Lot 12, Selera Homes, San Vicente, Santa Maria, Bulacan', '14.80131300', '121.00310900', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop', 'Active', 1, NULL, '2026-07-31 18:05:02', '2026-07-31 18:05:02');
+INSERT INTO `users` (`user_id`, `name`, `email`, `password`, `phone`, `role_id`, `position_id`, `subdivision_id`, `barangay_id`, `is_head_officer`, `address`, `latitude`, `longitude`, `profile_picture`, `status`, `is_verified`, `last_login`, `created_at`, `updated_at`) VALUES (2, 'Maria Clara Santos', 'resident2@straysafe.com', '$2b$12$hoysmjmbSQPBW2VHDsnOKuXVqn/SY6BPBgRWd61pFck79VPLBTiqe', '09189876543', 1, NULL, 1, NULL, 0, 'Block 8 Lot 24, Selera Homes, San Vicente, Santa Maria, Bulacan', '14.80095000', '121.00355000', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&auto=format&fit=crop', 'Active', 1, NULL, '2026-07-31 18:05:02', '2026-07-31 18:05:02');
+INSERT INTO `users` (`user_id`, `name`, `email`, `password`, `phone`, `role_id`, `position_id`, `subdivision_id`, `barangay_id`, `is_head_officer`, `address`, `latitude`, `longitude`, `profile_picture`, `status`, `is_verified`, `last_login`, `created_at`, `updated_at`) VALUES (3, 'Kyla Joy Arriola', 'kylajoyarriola@gmail.com', '$2b$12$hoysmjmbSQPBW2VHDsnOKuXVqn/SY6BPBgRWd61pFck79VPLBTiqe', '09192223344', 2, 1, 1, NULL, 0, 'Block 1 Lot 2, Selera Homes, San Vicente, Santa Maria, Bulacan', '14.80180000', '121.00280000', 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&auto=format&fit=crop', 'Active', 1, NULL, '2026-07-31 18:05:02', '2026-07-31 18:05:02');
+INSERT INTO `users` (`user_id`, `name`, `email`, `password`, `phone`, `role_id`, `position_id`, `subdivision_id`, `barangay_id`, `is_head_officer`, `address`, `latitude`, `longitude`, `profile_picture`, `status`, `is_verified`, `last_login`, `created_at`, `updated_at`) VALUES (4, 'Kyla Bianca Frias', 'kylabiancafrias@gmail.com', '$2b$12$hoysmjmbSQPBW2VHDsnOKuXVqn/SY6BPBgRWd61pFck79VPLBTiqe', '09205556677', 3, 6, NULL, 1, 1, 'Barangay Hall, San Vicente, Santa Maria, Bulacan', '14.80690600', '121.00392970', 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop', 'Active', 1, NULL, '2026-07-31 18:05:02', '2026-07-31 18:05:02');
+INSERT INTO `users` (`user_id`, `name`, `email`, `password`, `phone`, `role_id`, `position_id`, `subdivision_id`, `barangay_id`, `is_head_officer`, `address`, `latitude`, `longitude`, `profile_picture`, `status`, `is_verified`, `last_login`, `created_at`, `updated_at`) VALUES (5, 'System Admin', 'admin@straysafe.com', '$2b$12$Jit8Rt3VRPeBzx50QHGPleUKwKbed4RxHUlljimADwKHtj116Iu.e', '09110001111', 4, NULL, NULL, NULL, 0, 'StraySafe HQ, Santa Maria, Bulacan', '14.80690600', '121.00392970', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop', 'Active', 1, NULL, '2026-07-31 18:05:02', '2026-07-31 18:05:02');
+
 
 -- =========================================
 -- TABLE: REPORT_CATEGORIES
@@ -409,6 +449,11 @@ CREATE TABLE `reports` (
   `condition` text,
   `latitude` decimal(10,8) NOT NULL,
   `longitude` decimal(11,8) NOT NULL,
+  `initial_latitude` decimal(10,8) DEFAULT NULL,
+  `initial_longitude` decimal(11,8) DEFAULT NULL,
+  `initial_landmark` varchar(255) DEFAULT NULL,
+  `facility_id` int DEFAULT NULL,
+  `custody_status` varchar(50) DEFAULT 'Sighting',
   `animal_count` int DEFAULT '1',
   `landmark` varchar(255) DEFAULT NULL,
   `priority_level` enum('Low','Medium','High') DEFAULT 'Medium',
@@ -436,6 +481,7 @@ CREATE TABLE `reports` (
   KEY `fk_reports_subdivision` (`subdivision_id`),
   KEY `fk_reports_category` (`category_id`),
   KEY `fk_reports_pet` (`pet_id`),
+  KEY `fk_reports_facility` (`facility_id`),
   KEY `fk_reports_assigned_leader` (`assigned_leader_id`),
   KEY `fk_reports_verified_by` (`verified_by_user_id`),
   KEY `idx_reports_location` (`latitude`,`longitude`),
@@ -443,6 +489,7 @@ CREATE TABLE `reports` (
   KEY `idx_reports_status` (`current_status_id`),
   CONSTRAINT `fk_reports_assigned_leader` FOREIGN KEY (`assigned_leader_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_category` FOREIGN KEY (`category_id`) REFERENCES `report_categories` (`category_id`),
+  CONSTRAINT `fk_reports_facility` FOREIGN KEY (`facility_id`) REFERENCES `landmarks` (`landmark_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_status` FOREIGN KEY (`current_status_id`) REFERENCES `report_status` (`status_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_subdivision` FOREIGN KEY (`subdivision_id`) REFERENCES `subdivisions` (`subdivision_id`),
@@ -460,6 +507,10 @@ CREATE TABLE `status_history` (
   `report_status_id` int DEFAULT NULL,
   `rescue_status_id` int DEFAULT NULL,
   `updated_by` int DEFAULT NULL,
+  `latitude` decimal(10,8) DEFAULT NULL,
+  `longitude` decimal(11,8) DEFAULT NULL,
+  `landmark` varchar(255) DEFAULT NULL,
+  `facility_id` int DEFAULT NULL,
   `remarks` text,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `rescue_id` int DEFAULT NULL,
@@ -467,12 +518,56 @@ CREATE TABLE `status_history` (
   KEY `fk_history_report` (`report_id`),
   KEY `fk_history_status` (`report_status_id`),
   KEY `fk_history_rescue_status` (`rescue_status_id`),
+  KEY `fk_history_facility` (`facility_id`),
   KEY `fk_history_user` (`updated_by`),
+  CONSTRAINT `fk_history_facility` FOREIGN KEY (`facility_id`) REFERENCES `landmarks` (`landmark_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_history_report` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_history_rescue_status` FOREIGN KEY (`rescue_status_id`) REFERENCES `rescue_status` (`status_id`),
   CONSTRAINT `fk_history_status` FOREIGN KEY (`report_status_id`) REFERENCES `report_status` (`status_id`),
   CONSTRAINT `fk_history_user` FOREIGN KEY (`updated_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- =========================================
+-- TABLE: FACILITY_STATUS
+-- =========================================
+DROP TABLE IF EXISTS `facility_status`;
+CREATE TABLE `facility_status` (
+  `status_id` int NOT NULL AUTO_INCREMENT,
+  `status_name` varchar(50) NOT NULL,
+  PRIMARY KEY (`status_id`),
+  UNIQUE KEY `uq_facility_status_name` (`status_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- =========================================
+-- TABLE: HOLDING_ANIMALS
+-- =========================================
+DROP TABLE IF EXISTS `holding_animals`;
+CREATE TABLE `holding_animals` (
+  `holding_id` int NOT NULL AUTO_INCREMENT,
+  `report_id` int NOT NULL,
+  `rescue_id` int DEFAULT NULL,
+  `animal_type` enum('Dog','Cat','Unknown') DEFAULT 'Unknown',
+  `animal_name` varchar(100) DEFAULT NULL,
+  `breed` varchar(100) DEFAULT NULL,
+  `color` varchar(100) DEFAULT NULL,
+  `estimated_size` varchar(50) DEFAULT NULL,
+  `facility_status` int NOT NULL DEFAULT '1',
+  `kennel_slot` varchar(50) DEFAULT NULL,
+  `medical_notes` text,
+  `intake_date` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `discharge_date` timestamp NULL DEFAULT NULL,
+  `intake_staff_id` int DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`holding_id`),
+  UNIQUE KEY `uq_holding_report` (`report_id`),
+  KEY `fk_holding_rescue` (`rescue_id`),
+  KEY `fk_holding_status` (`facility_status`),
+  KEY `fk_holding_staff` (`intake_staff_id`),
+  CONSTRAINT `fk_holding_report` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_holding_rescue` FOREIGN KEY (`rescue_id`) REFERENCES `rescues` (`rescue_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_holding_status` FOREIGN KEY (`facility_status`) REFERENCES `facility_status` (`status_id`),
+  CONSTRAINT `fk_holding_staff` FOREIGN KEY (`intake_staff_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- =========================================
 -- TABLE: HOLDING_TIMELINE

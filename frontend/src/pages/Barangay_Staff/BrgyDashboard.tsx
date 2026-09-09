@@ -266,11 +266,36 @@ const BrgyDashboard = () => {
                     onMenuToggle={() => setIsMobileSidebarOpen(true)}
                     leftContent={
                         <div className="flex flex-col">
-                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Barangay Operations</h1>
-                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">Managing rescue requests and field operations for Brgy. San Vicente</p>
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Barangay Operations</h1>
+                                {(() => {
+                                    try {
+                                        const raw = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
+                                        const parsed = raw ? JSON.parse(raw) : null;
+                                        if (parsed?.is_head_officer) {
+                                            return (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
+                                                    ★ Head Officer
+                                                </span>
+                                            );
+                                        }
+                                        return (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-teal-50 text-teal-700 border border-teal-200">
+                                                Field Staff
+                                            </span>
+                                        );
+                                    } catch {
+                                        return null;
+                                    }
+                                })()}
+                            </div>
+                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">
+                                Command Center & Field Operations for Brgy. San Vicente
+                            </p>
                         </div>
                     }
                 />
+
 
                 {/* SCROLLABLE AREA */}
                 <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
@@ -414,9 +439,19 @@ const BrgyDashboard = () => {
                                                                 className="w-7 h-7 rounded-full object-cover border border-gray-100" 
                                                                 onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
                                                             />
-                                                            {p.name}
+                                                            <div className="flex flex-col">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span>{p.name}</span>
+                                                                    {p.is_head_officer && (
+                                                                        <span className="text-[8px] px-1.5 py-0.2 bg-purple-100 text-purple-700 font-black rounded border border-purple-200 uppercase tracking-tighter">
+                                                                            ★ Head
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
                                                         </td>
-                                                        <td className="py-3.5 text-gray-500 font-medium">{getPositionName(p.position_id)}</td>
+                                                        <td className="py-3.5 text-gray-500 font-medium">{p.position_name || getPositionName(p.position_id)}</td>
+
                                                         <td className="py-3.5 text-gray-500 font-mono">{p.phone || '—'}</td>
                                                         <td className="py-3.5">
                                                             {activeRescue ? (

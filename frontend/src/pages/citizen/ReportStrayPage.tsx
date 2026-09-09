@@ -167,6 +167,8 @@ export default function ReportStrayPage() {
         description: '',
         latitude: 14.801313,
         longitude: 121.003109,
+        custodyStatus: 'Sighting' as 'Sighting' | 'Secured',
+        securedLocationMode: 'with_animal' as 'with_animal' | 'secured_elsewhere',
         mediaFiles: [] as File[],
         collarDetected: false,
         qrTagDetected: false,
@@ -420,6 +422,7 @@ export default function ReportStrayPage() {
             }
 
             const extraDetails = [
+                `Custody: ${formData.custodyStatus === 'Secured' ? 'Secured in safe place by resident' : 'Stray sighting (not touched)'}`,
                 formData.coatPattern !== 'Unknown' ? `Pattern: ${formData.coatPattern}` : null,
                 formData.distinctiveMarkings ? `Markings: ${formData.distinctiveMarkings}` : null,
                 formData.observedConditions.length > 0 ? `Observed Conditions: ${formData.observedConditions.join(', ')}` : null,
@@ -440,7 +443,9 @@ export default function ReportStrayPage() {
                 animal_breed: formData.animalBreed || 'Unknown',
                 animal_color: compiledColor,
                 estimated_size: formData.estimatedSize,
+                custody_status: formData.custodyStatus,
                 description: extraDetails || 'No additional details provided.',
+                condition: formData.observedConditions.length > 0 ? formData.observedConditions.join(', ') : 'Healthy',
                 latitude: formData.latitude,
                 longitude: formData.longitude,
                 animal_count: formData.animalCount,
@@ -1021,35 +1026,146 @@ export default function ReportStrayPage() {
                         </div>
                     )}
 
-                    {/* STEP 6: Location */}
+                    {/* STEP 6: Location & Custody */}
                     {currentStep === 6 && (
                         <div className="space-y-6">
                             <div>
                                 <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
-                                    <span>Location</span>
+                                    <span>Location & Custody Status</span>
                                     <span className="text-red-500 text-sm">*</span>
                                 </h2>
-                                <p className="text-xs font-bold text-gray-400 mt-1">Confirm exact sighting position within the subdivision boundary.</p>
+                                <p className="text-xs font-bold text-gray-400 mt-1">Specify whether you only observed the animal or currently have it secured.</p>
                             </div>
 
-                            <div className="flex items-center justify-between p-4 bg-orange-50/50 border border-orange-100 rounded-2xl">
-                                <div className="flex items-center gap-3">
-                                    <MapPin className="w-5 h-5 text-[#F97316]" />
+                            {/* Option Cards: Option A (Sighting) vs Option B (Secured) */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData(prev => ({ ...prev, custodyStatus: 'Sighting' }))}
+                                    className={`p-5 rounded-3xl border-2 text-left transition-all flex flex-col justify-between relative cursor-pointer ${
+                                        formData.custodyStatus === 'Sighting'
+                                            ? 'border-[#F97316] bg-orange-50/40 shadow-sm ring-2 ring-orange-200/50'
+                                            : 'border-gray-200 bg-white hover:border-gray-300'
+                                    }`}
+                                >
+                                    <div className="flex items-start justify-between w-full mb-3">
+                                        <div className="w-10 h-10 rounded-2xl bg-orange-100 flex items-center justify-center text-[#F97316]">
+                                            <Eye className="w-5 h-5" />
+                                        </div>
+                                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                                            formData.custodyStatus === 'Sighting' ? 'border-[#F97316] bg-[#F97316]' : 'border-gray-300'
+                                        }`}>
+                                            {formData.custodyStatus === 'Sighting' && <span className="w-2 h-2 rounded-full bg-white" />}
+                                        </span>
+                                    </div>
                                     <div>
-                                        <span className="text-[10px] font-black text-gray-400 uppercase block">Current GPS Location</span>
-                                        <span className="text-xs font-black text-[#F97316]">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-[#F97316] block">Option A</span>
+                                        <h3 className="text-sm font-black text-[#1a1208] mt-0.5 leading-snug">
+                                            I saw the animal but did not touch or secure it
+                                        </h3>
+                                        <p className="text-[11px] font-semibold text-gray-500 mt-1.5 leading-relaxed">
+                                            Sighting only. Provide where the animal was observed.
+                                        </p>
+                                    </div>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData(prev => ({ ...prev, custodyStatus: 'Secured' }))}
+                                    className={`p-5 rounded-3xl border-2 text-left transition-all flex flex-col justify-between relative cursor-pointer ${
+                                        formData.custodyStatus === 'Secured'
+                                            ? 'border-[#F97316] bg-orange-50/40 shadow-sm ring-2 ring-orange-200/50'
+                                            : 'border-gray-200 bg-white hover:border-gray-300'
+                                    }`}
+                                >
+                                    <div className="flex items-start justify-between w-full mb-3">
+                                        <div className="w-10 h-10 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600">
+                                            <Shield className="w-5 h-5" />
+                                        </div>
+                                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                                            formData.custodyStatus === 'Secured' ? 'border-[#F97316] bg-[#F97316]' : 'border-gray-300'
+                                        }`}>
+                                            {formData.custodyStatus === 'Secured' && <span className="w-2 h-2 rounded-full bg-white" />}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 block">Option B</span>
+                                        <h3 className="text-sm font-black text-[#1a1208] mt-0.5 leading-snug">
+                                            I found the animal and secured it in a safe place
+                                        </h3>
+                                        <p className="text-[11px] font-semibold text-gray-500 mt-1.5 leading-relaxed">
+                                            In custody. You currently have physical custody or shelter for the animal.
+                                        </p>
+                                    </div>
+                                </button>
+                            </div>
+
+                            {/* Dynamic Location Action Bar based on Option */}
+                            {formData.custodyStatus === 'Sighting' ? (
+                                <div className="flex items-center justify-between p-4 bg-orange-50/50 border border-orange-100 rounded-2xl">
+                                    <div className="flex items-center gap-3">
+                                        <MapPin className="w-5 h-5 text-[#F97316] shrink-0" />
+                                        <div>
+                                            <span className="text-[10px] font-black text-gray-400 uppercase block">Sighting Location Pin</span>
+                                            <span className="text-xs font-black text-[#F97316]">
+                                                {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleGetUseCurrentLocation}
+                                        className="px-4 py-2 bg-[#F97316] text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-sm hover:scale-105 transition-all cursor-pointer"
+                                    >
+                                        Use Current Location
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-3 p-4 bg-emerald-50/40 border border-emerald-100 rounded-2xl">
+                                    <span className="text-[10px] font-black text-emerald-800 uppercase tracking-wider block">
+                                        Where is the animal secured?
+                                    </span>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setFormData(prev => ({ ...prev, securedLocationMode: 'with_animal' }));
+                                                handleGetUseCurrentLocation();
+                                            }}
+                                            className={`p-3 rounded-xl border text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
+                                                formData.securedLocationMode === 'with_animal'
+                                                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                                                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            <MapPin className="w-4 h-4 shrink-0" />
+                                            <span>I'm with the animal (Use GPS)</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormData(prev => ({ ...prev, securedLocationMode: 'secured_elsewhere' }))}
+                                            className={`p-3 rounded-xl border text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
+                                                formData.securedLocationMode === 'secured_elsewhere'
+                                                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                                                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            <MapPin className="w-4 h-4 shrink-0" />
+                                            <span>Secured elsewhere (Pin map)</span>
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center justify-between pt-2 border-t border-emerald-100/60 text-xs">
+                                        <span className="text-[11px] font-bold text-gray-500">
+                                            {formData.securedLocationMode === 'with_animal'
+                                                ? '📍 Using current physical location with animal'
+                                                : '📌 Click the map below to pinpoint where the animal is held'}
+                                        </span>
+                                        <span className="font-mono text-[11px] font-black text-emerald-700">
                                             {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
                                         </span>
                                     </div>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={handleGetUseCurrentLocation}
-                                    className="px-4 py-2 bg-[#F97316] text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-sm hover:scale-105 transition-all"
-                                >
-                                    Use Current Location
-                                </button>
-                            </div>
+                            )}
 
                             {/* Interactive Map */}
                             <div className="relative w-full h-64 rounded-3xl overflow-hidden border border-gray-100 shadow-inner">
@@ -1088,11 +1204,17 @@ export default function ReportStrayPage() {
                             </div>
 
                             <div>
-                                <label className="text-xs font-black text-[#1a1208] uppercase tracking-wider mb-2 block">Landmark</label>
+                                <label className="text-xs font-black text-[#1a1208] uppercase tracking-wider mb-2 block">
+                                    {formData.custodyStatus === 'Secured' ? 'Holding Location / Landmark Notes' : 'Landmark'}
+                                </label>
                                 <input
                                     type="text"
                                     className="w-full h-12 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-4 text-xs font-bold text-[#1a1208]"
-                                    placeholder="Near Barangay Hall, beside basketball court, etc."
+                                    placeholder={
+                                        formData.custodyStatus === 'Secured'
+                                            ? "e.g. Inside front gate at Phase 2 Lot 8, or kept on porch"
+                                            : "Near Barangay Hall, beside basketball court, etc."
+                                    }
                                     value={formData.landmark}
                                     onChange={(e) => setFormData(prev => ({ ...prev, landmark: e.target.value }))}
                                 />
@@ -1186,6 +1308,12 @@ export default function ReportStrayPage() {
                                 <div className="flex justify-between py-2 border-b border-gray-200">
                                     <span className="text-gray-400">Observed Conditions:</span>
                                     <span>{formData.observedConditions.join(', ') || 'None specified'}</span>
+                                </div>
+                                <div className="flex justify-between py-2 border-b border-gray-200">
+                                    <span className="text-gray-400">Animal Custody:</span>
+                                    <span className={`font-black ${formData.custodyStatus === 'Secured' ? 'text-emerald-600' : 'text-[#F97316]'}`}>
+                                        {formData.custodyStatus === 'Secured' ? '🏠 Secured in Safe Place' : '👁️ Sighting Only (Not Touched)'}
+                                    </span>
                                 </div>
                                 <div className="flex justify-between py-2 border-b border-gray-200">
                                     <span className="text-gray-400">Location:</span>

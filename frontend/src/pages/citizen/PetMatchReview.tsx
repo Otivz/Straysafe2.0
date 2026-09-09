@@ -69,6 +69,26 @@ const PetMatchReview = () => {
     const [allReportMatches, setAllReportMatches] = useState<any[]>([]);
     const [isChatOpen, setIsChatOpen] = useState(false);
 
+    // Lightbox / Image Viewer States
+    const [viewingImage, setViewingImage] = useState<{
+        url: string;
+        title: string;
+        subtitle?: string;
+        type: 'stray' | 'pet';
+    } | null>(null);
+    const [isSideBySideModalOpen, setIsSideBySideModalOpen] = useState(false);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setViewingImage(null);
+                setIsSideBySideModalOpen(false);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
     const userStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user') || localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
 
@@ -625,15 +645,57 @@ const PetMatchReview = () => {
                     {/* Left: Comparison Cards */}
                     <div className="lg:col-span-8 space-y-8">
                         <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden p-6 sm:p-8">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pb-3 border-b border-gray-100">
+                                <div>
+                                    <h2 className="text-base font-black text-[#1a1208] uppercase tracking-wide">Photo Comparison</h2>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Click any image to expand & inspect details</p>
+                                </div>
+                                {report?.media?.[0]?.file_url && matchedPet?.photo_url && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsSideBySideModalOpen(true)}
+                                        className="px-3.5 py-2 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-[#F97316] text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center gap-1.5 self-start sm:self-auto shadow-xs"
+                                    >
+                                        <span>🔍</span>
+                                        <span>Compare Fullscreen Dual-View</span>
+                                    </button>
+                                )}
+                            </div>
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 {/* Stray Report Photo */}
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
                                         <span className="text-xs font-black text-[#F97316] bg-orange-50 px-3.5 py-1.5 rounded-full uppercase tracking-widest leading-none">Reported Stray</span>
                                     </div>
-                                    <div className="relative h-64 rounded-3xl overflow-hidden bg-gray-50 border border-gray-100">
+                                    <div 
+                                        onClick={() => {
+                                            if (report.media && report.media[0]?.file_url) {
+                                                setViewingImage({
+                                                    url: report.media[0].file_url,
+                                                    title: "Reported Stray Sighting",
+                                                    subtitle: `${report.animal_type || report.ai_animal_type || 'Stray Animal'} • ${sightingAddress}`,
+                                                    type: 'stray'
+                                                });
+                                            }
+                                        }}
+                                        className="relative h-64 rounded-3xl overflow-hidden bg-gray-50 border border-gray-100 group cursor-pointer shadow-xs hover:shadow-md hover:border-orange-200 transition-all"
+                                    >
                                         {report.media && report.media.length > 0 ? (
-                                             <img src={report.media[0].file_url} alt="Stray Sighting" className="w-full h-full object-cover" />
+                                             <>
+                                                 <img src={report.media[0].file_url} alt="Stray Sighting" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                                 <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                                                     <span className="px-4 py-2 bg-white/95 text-[#1a1208] text-xs font-black uppercase tracking-wider rounded-2xl shadow-lg flex items-center gap-2">
+                                                         <svg className="w-4 h-4 text-[#F97316]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                                                         </svg>
+                                                         <span>Click to Expand</span>
+                                                     </span>
+                                                 </div>
+                                                 <span className="absolute bottom-3 left-3 px-3 py-1 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold rounded-xl flex items-center gap-1.5 pointer-events-none">
+                                                     <span>🔍</span> Click to inspect
+                                                 </span>
+                                             </>
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center text-gray-300">No Photo</div>
                                         )}
@@ -655,9 +717,34 @@ const PetMatchReview = () => {
                                     <div className="flex justify-between items-center">
                                         <span className="text-xs font-black text-gray-500 bg-gray-50 px-3.5 py-1.5 rounded-full uppercase tracking-widest leading-none">Your Registered Pet</span>
                                     </div>
-                                    <div className="relative h-64 rounded-3xl overflow-hidden bg-gray-50 border border-gray-100">
+                                    <div 
+                                        onClick={() => {
+                                            if (matchedPet && matchedPet.photo_url) {
+                                                setViewingImage({
+                                                    url: getPetPicture(matchedPet.photo_url),
+                                                    title: matchedPet.pet_name || "Your Registered Pet",
+                                                    subtitle: `${matchedPet.pet_type || 'Pet'} • ${matchedPet.breed || 'Registered Breed'}`,
+                                                    type: 'pet'
+                                                });
+                                            }
+                                        }}
+                                        className={`relative h-64 rounded-3xl overflow-hidden bg-gray-50 border border-gray-100 group shadow-xs ${matchedPet?.photo_url ? 'cursor-pointer hover:shadow-md hover:border-orange-200' : ''} transition-all`}
+                                    >
                                         {matchedPet && matchedPet.photo_url ? (
-                                            <img src={getPetPicture(matchedPet.photo_url)} alt={matchedPet.pet_name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }} />
+                                            <>
+                                                <img src={getPetPicture(matchedPet.photo_url)} alt={matchedPet.pet_name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }} />
+                                                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                                                    <span className="px-4 py-2 bg-white/95 text-[#1a1208] text-xs font-black uppercase tracking-wider rounded-2xl shadow-lg flex items-center gap-2">
+                                                        <svg className="w-4 h-4 text-[#F97316]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                                                        </svg>
+                                                        <span>Click to Expand</span>
+                                                    </span>
+                                                </div>
+                                                <span className="absolute bottom-3 left-3 px-3 py-1 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold rounded-xl flex items-center gap-1.5 pointer-events-none">
+                                                    <span>🔍</span> Click to inspect
+                                                </span>
+                                            </>
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center text-gray-300">Select a pet below</div>
                                         )}
@@ -713,8 +800,11 @@ const PetMatchReview = () => {
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
-                                    <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Sighting Location</p>
+                                    <div className="bg-orange-50/40 border border-orange-100 hover:border-orange-300 rounded-2xl p-4 transition-all group">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest">Sighting Location</p>
+                                            <span className="text-[9px] font-bold text-orange-400 group-hover:text-orange-600 transition-colors">Hover pin on map 📍</span>
+                                        </div>
                                         <p className="text-xs font-bold text-[#1a1208] mt-1">{sightingAddress}</p>
                                     </div>
                                     <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
@@ -873,7 +963,20 @@ const PetMatchReview = () => {
                                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Matched Registered Pet</label>
                                              {matchedPet ? (
                                                  <div className="flex items-center gap-4 p-4 bg-orange-50/30 border border-orange-100 rounded-2xl">
-                                                     <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-100 border border-gray-250 flex-shrink-0">
+                                                     <div 
+                                                         onClick={() => {
+                                                             if (matchedPet && matchedPet.photo_url) {
+                                                                 setViewingImage({
+                                                                     url: getPetPicture(matchedPet.photo_url),
+                                                                     title: matchedPet.pet_name || "Your Registered Pet",
+                                                                     subtitle: `${matchedPet.pet_type || 'Pet'} • ${matchedPet.breed || 'Registered Breed'}`,
+                                                                     type: 'pet'
+                                                                 });
+                                                             }
+                                                         }}
+                                                         className="w-12 h-12 rounded-full overflow-hidden bg-gray-100 border border-gray-250 flex-shrink-0 cursor-pointer hover:scale-105 transition-transform"
+                                                         title="Click to inspect photo"
+                                                     >
                                                          <img src={getPetPicture(matchedPet.photo_url)} alt={matchedPet.pet_name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }} />
                                                      </div>
                                                      <div>
@@ -1044,7 +1147,7 @@ const PetMatchReview = () => {
                             photo_url: matchedPet?.photo_url,
                             species: matchedPet?.pet_type || "Dog",
                             breed: matchedPet?.breed || "Shih Tzu",
-                            color: [matchedPet?.primary_color, matchedPet?.secondary_color].filter(Boolean).join(' ') || matchedPet?.color || "White Black",
+color: [matchedPet?.primary_color, matchedPet?.secondary_color].filter(Boolean).join(' ') || matchedPet?.color || "White Black",
                             size: matchedPet?.size_category || "Small",
                             owner_name: currentUser?.name || 'You',
                             registered_address: matchedPet?.registered_address || 'Registered in Selera Homes',
@@ -1060,6 +1163,67 @@ const PetMatchReview = () => {
                     />
                 );
             })()}
+
+            {/* ── MINIMAL LIGHTBOX MODAL (MATCHING USER SCREENSHOT) ── */}
+            {(viewingImage || isSideBySideModalOpen) && (
+                <div 
+                    className="fixed inset-0 z-[99999] bg-[#191512]/92 backdrop-blur-sm flex flex-col items-center justify-center p-4 sm:p-8 animate-in fade-in duration-200"
+                    onClick={() => { setViewingImage(null); setIsSideBySideModalOpen(false); }}
+                >
+                    {/* Top Right Close Button */}
+                    <button
+                        type="button"
+                        onClick={() => { setViewingImage(null); setIsSideBySideModalOpen(false); }}
+                        className="fixed top-6 right-6 z-10 w-8 h-8 rounded-full bg-white/20 hover:bg-white/35 text-white flex items-center justify-center transition-all cursor-pointer shadow-lg"
+                        title="Close"
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+
+                    {/* Center Image Container */}
+                    <div 
+                        className="relative flex flex-col items-center justify-center max-w-5xl max-h-[85vh] w-full h-full my-auto"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {isSideBySideModalOpen ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-h-[80vh] items-center justify-center">
+                                <div className="flex flex-col items-center space-y-2">
+                                    <span className="text-[11px] font-black text-[#F97316] uppercase tracking-wider bg-black/50 px-3 py-1 rounded-full border border-white/10">Reported Stray</span>
+                                    <img
+                                        src={report?.media?.[0]?.file_url}
+                                        alt="Reported Stray"
+                                        className="rounded-xl max-h-[72vh] max-w-full object-contain shadow-2xl"
+                                    />
+                                </div>
+                                <div className="flex flex-col items-center space-y-2">
+                                    <span className="text-[11px] font-black text-emerald-400 uppercase tracking-wider bg-black/50 px-3 py-1 rounded-full border border-white/10">Your Pet: {matchedPet?.pet_name}</span>
+                                    <img
+                                        src={getPetPicture(matchedPet?.photo_url)}
+                                        alt={matchedPet?.pet_name}
+                                        className="rounded-xl max-h-[72vh] max-w-full object-contain shadow-2xl"
+                                        onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
+                                    />
+                                </div>
+                            </div>
+                        ) : viewingImage ? (
+                            <div className="flex flex-col items-center justify-center max-h-[82vh] max-w-[88vw]">
+                                <img
+                                    src={viewingImage.url}
+                                    alt={viewingImage.title}
+                                    className="rounded-xl shadow-2xl max-h-[80vh] max-w-[85vw] object-contain"
+                                />
+                            </div>
+                        ) : null}
+
+                        {/* Bottom Center Orange Indicator Bar */}
+                        <div className="mt-8 flex items-center justify-center">
+                            <span className="w-6 h-1 bg-[#F97316] rounded-full inline-block"></span>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

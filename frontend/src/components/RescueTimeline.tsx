@@ -190,24 +190,35 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
                     </div>
                 ) : (
                     filteredHistory.map((entry, index) => {
-                        const config = statusConfig[entry.report_status_id] || statusConfig[1];
-                        const displayLabel = statusConfig[entry.report_status_id]
-                            ? statusConfig[entry.report_status_id].label
-                            : (entry.rescue_status_id ? rescueStatusLabels[entry.rescue_status_id] : config.label);
+                        const remarksLower = (entry.remarks || '').toLowerCase();
+                        const isFacilityHolding = (remarksLower.includes('secured') && (remarksLower.includes('facility') || remarksLower.includes('shelter') || remarksLower.includes('holding') || remarksLower.includes('relocated from'))) || (entry as any).facility_id;
+
+                        const baseConfig = statusConfig[entry.report_status_id] || statusConfig[1];
+                        const config = isFacilityHolding ? {
+                            label: 'Secured in Facility',
+                            color: 'amber',
+                            icon: <span className="text-base">🐾</span>
+                        } : baseConfig;
+
+                        const displayLabel = isFacilityHolding 
+                            ? 'Secured in Facility'
+                            : (statusConfig[entry.report_status_id]
+                                ? statusConfig[entry.report_status_id].label
+                                : (entry.rescue_status_id ? rescueStatusLabels[entry.rescue_status_id] : config.label));
                         
                         return (
                             <div key={entry.history_id} className="relative group animate-in slide-in-from-left-4 duration-500" style={{ animationDelay: `${index * 100}ms` }}>
                                 {/* Timeline Node */}
-                                <div className={`absolute -left-[31px] top-0 w-8 h-8 rounded-2xl bg-white border-4 border-${config.color}-50 flex items-center justify-center text-${config.color}-600 shadow-sm z-10 transition-transform group-hover:scale-110`}>
+                                <div className={`absolute -left-[31px] top-0 w-8 h-8 rounded-2xl bg-white border-4 border-amber-100 flex items-center justify-center text-amber-600 shadow-sm z-10 transition-transform group-hover:scale-110`}>
                                     {config.icon}
                                 </div>
 
                                 {/* Content Card */}
-                                <div className="bg-white rounded-3xl border border-gray-50 shadow-sm hover:shadow-md transition-all overflow-hidden">
+                                <div className={`bg-white rounded-3xl border ${isFacilityHolding ? 'border-amber-200 shadow-amber-500/10' : 'border-gray-50'} shadow-sm hover:shadow-md transition-all overflow-hidden`}>
                                     <div className="p-6">
                                         <div className="flex justify-between items-start mb-4">
                                             <div>
-                                                <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-${config.color}-50 text-${config.color}-600 border border-${config.color}-100`}>
+                                                <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${isFacilityHolding ? 'bg-amber-100 text-amber-900 border border-amber-200' : `bg-${config.color}-50 text-${config.color}-600 border border-${config.color}-100`}`}>
                                                     {displayLabel}
                                                 </span>
                                                 {entry.report_status_id === currentStatusId && index === 0 && (

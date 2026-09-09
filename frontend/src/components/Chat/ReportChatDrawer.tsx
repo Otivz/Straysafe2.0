@@ -43,7 +43,7 @@ interface ReportChatDrawerProps {
     onClose: () => void;
     report: {
         report_id: number;
-        user_id: number;
+        user_id?: number;
         reporter_name?: string;
         reporter_photo?: string;
         animal_type?: string;
@@ -51,6 +51,9 @@ interface ReportChatDrawerProps {
         status_id?: number;
         landmark?: string;
         created_at?: string;
+        rescue_id?: number;
+        title?: string;
+        [key: string]: any;
     } | null;
     currentUser: {
         user_id: number;
@@ -116,6 +119,7 @@ export default function ReportChatDrawer({
 
     const [autoMatchId, setAutoMatchId] = useState<number | undefined>(matchId);
     const [localMatchedPet, setLocalMatchedPet] = useState<MatchedPetInfo | null>(matchedPet || null);
+    const [canInteract, setCanInteract] = useState<boolean>(true);
 
     const reportId = report?.report_id || 0;
     const rawStatusId = (report as any)?.current_status_id || report?.status_id;
@@ -294,6 +298,18 @@ export default function ReportChatDrawer({
         };
 
         fetchLiveMessages();
+
+        if (!isMatchMode && reportId) {
+            api.get(`/chat/reports/${reportId}/thread`)
+                .then(res => {
+                    if (res.data && typeof res.data.can_interact === 'boolean') {
+                        setCanInteract(res.data.can_interact);
+                    }
+                })
+                .catch(err => {
+                    console.warn('Could not fetch thread details:', err);
+                });
+        }
     }, [isOpen, reportId, effectiveMatchId, isMatchMode, storageKey, messagesGetUrl, markReadUrl, report, currentUser]);
 
     // Auto-scroll to bottom
@@ -307,7 +323,7 @@ export default function ReportChatDrawer({
         if (e) e.preventDefault();
         const trimmed = inputText.trim();
         if (!trimmed && !selectedImagePreview) return;
-        if (isResolved) return;
+        if (isResolved || !canInteract) return;
 
         const now = new Date();
         const timeFormatted = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -865,7 +881,17 @@ export default function ReportChatDrawer({
                             <div className="p-3 bg-gray-50 rounded-2xl border border-gray-200 text-center space-y-1">
                                 <p className="text-xs font-bold text-gray-700">🔒 Case Resolved & Archived</p>
                                 <p className="text-[10px] text-gray-500 leading-relaxed">
-                                    This report has been resolved and direct messaging is in read-only mode. If you need any further assistance, please contact the subdivision office directly.
+                                    This report has been resolved and direct messaging is in read-only mode. If you need any further assistance, please contact the office directly.
+                                </p>
+                            </div>
+                        ) : !canInteract ? (
+                            <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-center space-y-1">
+                                <div className="flex items-center justify-center gap-1.5 text-amber-900 font-black text-xs">
+                                    <span>🔒</span>
+                                    <span>Read-Only Case Access</span>
+                                </div>
+                                <p className="text-[10.5px] text-amber-800 leading-relaxed">
+                                    Only responders assigned to this incident report can interact and send messages. Higher role officers can view and monitor all messages.
                                 </p>
                             </div>
                         ) : (

@@ -2,14 +2,16 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 logger = logging.getLogger(__name__)
+from decimal import Decimal
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from app.database import get_db
 from app.models.report import Rescue, Report, RescueAssignment, StatusHistory, HoldingAnimal, HoldingTimeline, ReportMedia, EndorsementLetter
-from app.models.user import User
+from app.models.user import User, Barangay, Subdivision
+from app.models.landmark import Landmark
 from app.models.notification import Notification
-from app.schemas.rescue import RescueRequestCreate, RescueRequestResponse, RescueRequestUpdate
+from app.schemas.rescue import RescueRequestCreate, RescueRequestResponse, RescueRequestUpdate, RescueAssignTeamRequest
 from app.utils.audit import log_activity
 
 router = APIRouter(
@@ -67,7 +69,7 @@ def _populate_rescue_fields(rescue: Optional[Rescue], db: Session) -> Optional[R
          rescue.assigned_staff_name = rescue.staff.name
     elif rescue.assignments:
         # Fallback to history
-        latest = sorted(rescue.assignments, key=lambda x: x.assigned_at, reverse=True)[0]  # type: ignore[arg-type]
+        latest = sorted(rescue.assignments, key=lambda x: x.assigned_at or datetime.min, reverse=True)[0]  # type: ignore[arg-type]
         if latest.staff:
             rescue.assigned_staff_name = latest.staff.name
         else:
@@ -76,25 +78,55 @@ def _populate_rescue_fields(rescue: Optional[Rescue], db: Session) -> Optional[R
                 assigned_staff = db.query(User).filter(User.user_id == staff_user_id).first()
                 rescue.assigned_staff_name = assigned_staff.name if assigned_staff else None
         
-    # Populate staff_name for each assignment
+    # Populate detailed staff information for each assignment (email, photo, phone, name)
     if rescue.assignments:
+        seen_user_ids = set()
+        unique_assignments = []
+        # Sort by assignment_id descending to prioritize latest assignments
+        sorted_assignments = sorted(
+            rescue.assignments,
+            key=lambda x: getattr(x, "assignment_id", 0) or 0,
+            reverse=True
+        )
+        # Filter for active "Assigned" status first
+        active_list = [a for a in sorted_assignments if getattr(a, "assignment_status", "Assigned") == "Assigned"]
+        candidates = active_list if active_list else sorted_assignments
+
+        for asgn in candidates:
+            uid = getattr(asgn, "staff_id", None) or getattr(asgn, "user_id", None)
+            if uid and uid not in seen_user_ids:
+                seen_user_ids.add(uid)
+                unique_assignments.append(asgn)
+
+        rescue.assignments = unique_assignments
+
         for asgn in rescue.assignments:
             if not getattr(asgn, "staff_id", None) and getattr(asgn, "user_id", None):
                 asgn.staff_id = asgn.user_id
-            if asgn.staff:
-                asgn.staff_name = asgn.staff.name  # type: ignore[attr-defined]
-            elif getattr(asgn, "user_id", None) or getattr(asgn, "staff_id", None):
+            staff_obj = asgn.staff
+            if not staff_obj and (getattr(asgn, "user_id", None) or getattr(asgn, "staff_id", None)):
                 uid = getattr(asgn, "user_id", None) or getattr(asgn, "staff_id", None)
-                u = db.query(User).filter(User.user_id == uid).first()
-                asgn.staff_name = u.name if u else None
+                staff_obj = db.query(User).filter(User.user_id == uid).first()
+            if staff_obj:
+                asgn.staff_name = staff_obj.name
+                asgn.staff_email = staff_obj.email
+                asgn.staff_phone = getattr(staff_obj, "phone", None) or getattr(staff_obj, "phone_number", None)
+                asgn.staff_photo = staff_obj.profile_picture
 
     # Populate request_id for frontend compatibility
     rescue.request_id = rescue.rescue_id  # type: ignore[assignment]
 
-    # Populate updater names for report history entries
-    if rescue.report and rescue.report.history:
-        for hist in rescue.report.history:
-            hist.updater_name = hist.updater.name if hist.updater else "System"
+    # Populate updater names and facility names for report history entries
+    if rescue.report:
+        rescue.report.initial_landmark = rescue.report.initial_landmark or rescue.report.landmark
+        if rescue.report.facility_id and not rescue.report.facility:
+            rescue.report.facility = db.query(Landmark).filter(Landmark.landmark_id == rescue.report.facility_id).first()
+        if rescue.report.history:
+            for hist in rescue.report.history:
+                hist.updater_name = hist.updater.name if hist.updater else "System"
+                if hist.facility_id and not getattr(hist, "facility_name", None):
+                    h_fac = db.query(Landmark).filter(Landmark.landmark_id == hist.facility_id).first()
+                    hist.facility_name = h_fac.name if h_fac else None
             
     return rescue
 
@@ -181,6 +213,7 @@ def create_rescue_request(request_in: RescueRequestCreate, db: Session = Depends
         db_rescue = db.query(Rescue).options(
             joinedload(Rescue.report).joinedload(Report.media),
             joinedload(Rescue.report).joinedload(Report.reporter),
+            joinedload(Rescue.report).joinedload(Report.facility),
             joinedload(Rescue.report).joinedload(Report.history).joinedload(StatusHistory.updater),
             joinedload(Rescue.report).joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position),
             joinedload(Rescue.staff),
@@ -202,6 +235,7 @@ def get_rescue_requests(subdivision_id: Optional[int] = None, db: Session = Depe
     rescues = query.options(
         joinedload(Rescue.report).joinedload(Report.media),
         joinedload(Rescue.report).joinedload(Report.reporter),
+        joinedload(Rescue.report).joinedload(Report.facility),
         joinedload(Rescue.report).joinedload(Report.history).joinedload(StatusHistory.updater),
         joinedload(Rescue.report).joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position),
         joinedload(Rescue.staff),
@@ -220,6 +254,7 @@ def get_request_by_report(report_id: int, db: Session = Depends(get_db)):
     rescue = db.query(Rescue).options(
         joinedload(Rescue.report).joinedload(Report.media),
         joinedload(Rescue.report).joinedload(Report.reporter),
+        joinedload(Rescue.report).joinedload(Report.facility),
         joinedload(Rescue.report).joinedload(Report.history).joinedload(StatusHistory.updater),
         joinedload(Rescue.report).joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position),
         joinedload(Rescue.staff),
@@ -243,12 +278,44 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
 
         update_data = request_in.model_dump(exclude_unset=True)
         
-        # Handle assignment if personnel ID is provided
+        # Handle assignment if personnel ID or multiple personnel IDs are provided
         assigned_id = update_data.pop("assigned_personnel_id", None)
+        assigned_ids = update_data.pop("assigned_personnel_ids", None)
+
+        if assigned_ids is None and assigned_id is not None:
+            assigned_ids = [assigned_id]
+
         remarks = update_data.pop("remarks", None)
-        animal_condition = update_data.pop("animal_condition", None)  # Pop early; applied to Report, not Rescue
+        animal_condition = update_data.pop("animal_condition", None)
+        facility_id = update_data.pop("facility_id", None)
+        lat = update_data.pop("latitude", None)
+        lng = update_data.pop("longitude", None)
+        lmk = update_data.pop("landmark", None)
+        custody_status = update_data.pop("custody_status", None)
         # Accept both barangay_staff_id and user_id for flexibility
         staff_id_for_history = update_data.pop("user_id", None) or update_data.get("barangay_staff_id")
+
+        # Check permission: Only personnel assigned to this report (or Barangay Head Officer) can update its status
+        updater_user_id = staff_id_for_history or update_data.get("barangay_staff_id") or update_data.get("staff_id")
+        if updater_user_id:
+            updater = db.query(User).filter(User.user_id == updater_user_id).first()
+            if updater and updater.role_id == 3:
+                is_head = getattr(updater, 'is_head_officer', False)
+                if not is_head:
+                    is_assigned = (
+                        db_rescue.staff_id == updater.user_id or
+                        db_rescue.leader_id == updater.user_id or
+                        db.query(RescueAssignment).filter(
+                            RescueAssignment.rescue_id == rescue_id,
+                            (RescueAssignment.user_id == updater.user_id) | (RescueAssignment.staff_id == updater.user_id),
+                            RescueAssignment.assignment_status == "Assigned"
+                        ).first() is not None
+                    )
+                    if not is_assigned:
+                        raise HTTPException(
+                            status_code=403,
+                            detail="Only personnel assigned to this report have the ability to update its status."
+                        )
 
         # Map barangay_staff_id → staff_id (DB column name) if it exists in update_data
         if "barangay_staff_id" in update_data:
@@ -257,19 +324,64 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
         # Capture original staff_id BEFORE overwriting it
         original_staff_id = db_rescue.staff_id
 
-        if assigned_id:
-            # Update the main staff_id for the rescue as the assigned person
-            db_rescue.staff_id = assigned_id
-            
-            # Also create record in assignment history
-            new_assignment = RescueAssignment(
-                rescue_id=rescue_id,
-                user_id=assigned_id,
-                staff_id=assigned_id,
-                assigned_by=staff_id_for_history or original_staff_id or assigned_id,
-                remarks=remarks
-            )
-            db.add(new_assignment)
+        if assigned_ids is not None and len(assigned_ids) > 0:
+            unique_ids = list(dict.fromkeys(assigned_ids))
+            # Update the primary staff_id for the rescue to the lead assigned responder
+            db_rescue.staff_id = unique_ids[0]
+            assigner_id = staff_id_for_history or original_staff_id or unique_ids[0]
+
+            # Mark previous active assignments for this rescue as Cancelled
+            db.query(RescueAssignment).filter(
+                RescueAssignment.rescue_id == rescue_id,
+                RescueAssignment.assignment_status == "Assigned"
+            ).update({"assignment_status": "Cancelled"}, synchronize_session=False)
+
+            # Create RescueAssignment for each assigned responder
+            assigned_users = db.query(User).filter(User.user_id.in_(unique_ids)).all()
+            assigned_names = [u.name for u in assigned_users]
+
+            for idx, pid in enumerate(unique_ids):
+                asgn_remarks = remarks or "Field Responder"
+                new_assignment = RescueAssignment(
+                    rescue_id=rescue_id,
+                    user_id=pid,
+                    staff_id=pid,
+                    assigned_by=assigner_id,
+                    assignment_status="Assigned",
+                    remarks=asgn_remarks
+                )
+                db.add(new_assignment)
+
+            # Trigger notification to assigned field personnel
+            try:
+                assigner_user = db.query(User).filter(User.user_id == assigner_id).first() if assigner_id else None
+                assigner_name = assigner_user.name if assigner_user else "Barangay Head Officer"
+                team_desc = f"{len(assigned_ids)}-person responder team ({', '.join(assigned_names)})" if len(assigned_ids) > 1 else "field responder"
+                for pid in assigned_ids:
+                    personnel_notif = Notification(
+                        user_id=pid,
+                        title="🚨 New Rescue Mission Assignment",
+                        message=f"You have been assigned to Rescue Mission #{rescue_id} (Report #{db_rescue.report_id}) as part of a {team_desc} by {assigner_name}.",
+                        type="rescue_assignment",
+                        related_id=db_rescue.report_id
+                    )
+                    db.add(personnel_notif)
+            except Exception as notif_err:
+                logger.warning(f"Failed to create personnel assignment notification: {notif_err}")
+
+            # Also log to StatusHistory if status is not changing in this call
+            if "status_id" not in update_data:
+                team_str = ", ".join(assigned_names) if assigned_names else f"{len(assigned_ids)} responders"
+                db_history = StatusHistory(
+                    rescue_id=rescue_id,
+                    report_id=db_rescue.report_id,
+                    report_status_id=db_rescue.report.current_status_id if db_rescue.report else 5,
+                    rescue_status_id=db_rescue.status_id,
+                    updated_by=assigner_id,
+                    remarks=remarks or f"Field responder team assigned ({team_str})."
+                )
+                db.add(db_history)
+
 
         # Update rescue fields — skip status_id (handled below), staff_id (handled above)
         SKIP_KEYS = {"status_id", "staff_id"}
@@ -282,7 +394,7 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
             report_status_id = update_data["status_id"]
             
             # Map Report Status ID → Rescue Status ID
-            # Report: 1:Reported, 2:Verified, 3:Rejected, 4:Escalated, 13:Approved, 5:In Action, 7:Picked Up, 11:Resolved
+            # Report: 1:Reported, 2:Verified, 3:Rejected, 4:Escalated, 13:Approved, 5:In Action, 6:Picked Up, 7:Observation, 8:Impounded, 11:Resolved, 17:Cannot Be Found
             # Rescue: 1:Pending, 2:Approved, 3:Rejected, 4:Started, 5:Dispatched, 6:Resolved
             report_to_rescue_map = {
                 1: 1, # Reported -> Pending
@@ -291,13 +403,18 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                 4: 1, # Escalated -> Pending
                 13: 2, # Approved by Barangay -> Approved
                 5: 5, # Dispatched -> Dispatched
-                6: 5, # Picked Up -> Still Dispatched
+                6: 5, # Picked Up -> Still Dispatched / In Action
                 7: 5, # Under Observation -> Still Dispatched
+                8: 5, # Impounded -> Dispatched / Facility
+                9: 6, # Claimed by Owner -> Resolved
+                10: 6, # Released -> Resolved
                 11: 6, # Resolved -> Resolved
-                12: 6  # Deceased -> Resolved (Operational end)
+                12: 6, # Deceased -> Resolved (Operational end)
+                14: 6, # False Alarm -> Resolved
+                17: 6  # Animal Cannot Be Found -> Resolved (Operational end)
             }
             
-            rescue_status_id = report_to_rescue_map.get(report_status_id)
+            rescue_status_id = report_to_rescue_map.get(report_status_id, 6 if report_status_id in (11, 12, 14, 17) else 5)
             
             # Update Rescue status if mapping exists
             if rescue_status_id:
@@ -323,38 +440,97 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                     10: "Safely released.",
                     11: "Incident has been resolved.",
                     12: "Resolved (animal deceased).",
-                    13: "Approved by Barangay. Rescue operation is being planned."
+                    13: "Approved by Barangay. Rescue operation is being planned.",
+                    14: "False Alarm / Dismissed.",
+                    15: "Disputed.",
+                    16: "Under Investigation.",
+                    17: "Animal cannot be found at the reported location."
                 }
-            # Avoid duplicate StatusHistory if already recorded
-            last_history = db.query(StatusHistory).filter(
-                StatusHistory.report_id == db_rescue.report_id
-            ).order_by(StatusHistory.history_id.desc()).first()
+                history_remarks = friendly_defaults.get(report_status_id, "Status updated.")
 
-            is_duplicate = (
-                last_history is not None
-                and last_history.report_status_id == report_status_id
-                and db_rescue.report is not None
-                and db_rescue.report.current_status_id == report_status_id
-            )
-
-            if not is_duplicate:
-                db_history = StatusHistory(
-                    rescue_id=rescue_id,
-                    report_id=db_rescue.report_id,
-                    report_status_id=report_status_id,
-                    rescue_status_id=rescue_status_id,
-                    updated_by=staff_id_for_history,
-                    remarks=history_remarks
-                )
-                db.add(db_history)
-
-            # Update the associated Report's current status and condition
+            # Update the associated Report's current status, condition, and facility location
+            relocation_note = None
             if db_rescue.report_id:
                 report_obj = db.query(Report).filter(Report.report_id == db_rescue.report_id).first()
                 if report_obj:
                     report_obj.current_status_id = report_status_id
-                    if animal_condition:  # Use the pre-popped value
+                    if animal_condition is not None:  # Use the pre-popped value
                         report_obj.condition = animal_condition
+
+                    # Ensure initial origin is preserved
+                    if report_obj.initial_latitude is None:
+                        report_obj.initial_latitude = report_obj.latitude
+                        report_obj.initial_longitude = report_obj.longitude
+                        report_obj.initial_landmark = report_obj.landmark
+
+                    prev_fac_name = report_obj.landmark if report_obj.facility_id else None
+
+                    if facility_id:
+                        fac = db.query(Landmark).filter(Landmark.landmark_id == facility_id).first()
+                        if fac:
+                            report_obj.facility_id = fac.landmark_id
+                            report_obj.latitude = fac.latitude
+                            report_obj.longitude = fac.longitude
+                            report_obj.landmark = fac.name
+                            report_obj.custody_status = custody_status or ("In Barangay Facility" if fac.subdivision_id is None else "In Subdivision Facility")
+                            caretaker_str = f" • Caretaker: {fac.contact_person} ({fac.contact_number})" if fac.contact_person else ""
+                            if prev_fac_name and prev_fac_name != fac.name:
+                                relocation_note = f"Transferred to {fac.name}{caretaker_str} (Previously held at: {prev_fac_name} | Origin: {report_obj.initial_landmark or 'Sighting Spot'})"
+                            else:
+                                relocation_note = f"Secured at {fac.name}{caretaker_str} (Origin: {report_obj.initial_landmark or 'Sighting Spot'})"
+                    elif lat is not None and lng is not None:
+                        report_obj.latitude = Decimal(str(lat))
+                        report_obj.longitude = Decimal(str(lng))
+                        if lmk:
+                            report_obj.landmark = lmk
+                        if custody_status:
+                            report_obj.custody_status = custody_status
+                    elif report_status_id in (6, 7, 8) and not report_obj.facility_id:
+                        # Auto-resolve Barangay HQ location and custody status if picked up / under observation / impounded
+                        brgy = None
+                        if report_obj.subdivision_id:
+                            subd = db.query(Subdivision).filter(Subdivision.subdivision_id == report_obj.subdivision_id).first()
+                            if subd and subd.barangay_id:
+                                brgy = db.query(Barangay).filter(Barangay.barangay_id == subd.barangay_id).first()
+                        if not brgy:
+                            brgy = db.query(Barangay).first()
+
+                        brgy_hq_name = f"Barangay {brgy.barangay_name} HQ" if brgy else "Barangay HQ"
+                        if not report_obj.custody_status:
+                            report_obj.custody_status = "In Barangay Facility"
+                        if not relocation_note:
+                            relocation_note = f"Secured at {brgy_hq_name} (Origin: {report_obj.initial_landmark or 'Sighting Spot'})"
+
+                    if relocation_note and relocation_note not in history_remarks:
+                        history_remarks = f"{history_remarks} | {relocation_note}"
+
+                    # Avoid duplicate StatusHistory if already recorded with same remarks
+                    last_history = db.query(StatusHistory).filter(
+                        StatusHistory.report_id == db_rescue.report_id
+                    ).order_by(StatusHistory.history_id.desc()).first()
+
+                    is_duplicate = (
+                        last_history is not None
+                        and last_history.report_status_id == report_status_id
+                        and db_rescue.report is not None
+                        and db_rescue.report.current_status_id == report_status_id
+                        and (not remarks or remarks == last_history.remarks)
+                    )
+
+                    if not is_duplicate:
+                        db_history = StatusHistory(
+                            rescue_id=rescue_id,
+                            report_id=db_rescue.report_id,
+                            report_status_id=report_status_id,
+                            rescue_status_id=rescue_status_id,
+                            updated_by=staff_id_for_history,
+                            latitude=report_obj.latitude,
+                            longitude=report_obj.longitude,
+                            landmark=report_obj.landmark,
+                            facility_id=report_obj.facility_id,
+                            remarks=history_remarks
+                        )
+                        db.add(db_history)
 
                     # Create Notification for Resident
                     status_names = {
@@ -370,7 +546,11 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                         10: "Released",
                         11: "Resolved",
                         12: "Deceased",
-                        13: "Approved by Barangay"
+                        13: "Approved by Barangay",
+                        14: "False Alarm / Dismissed",
+                        15: "Disputed",
+                        16: "Under Investigation",
+                        17: "Animal Cannot Be Found"
                     }
                     status_name = status_names.get(report_status_id, "Updated")
                     
@@ -403,31 +583,71 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                         except Exception as notif_err:
                             print(f"Notice: Failed to create leader rescue notification: {notif_err}")
 
-                    # ── Auto-intake into Holding Facility when Picked Up ──────
-                    if report_status_id == 6:
+                    # ── Auto-intake into Holding Facility or Log Relocation when Picked Up, Under Observation, Impounded, or Moved to Facility ──────
+                    if report_status_id in (6, 7, 8) or facility_id:
                         already_in = db.query(HoldingAnimal).filter(
                             HoldingAnimal.report_id == report_obj.report_id
                         ).first()
+                        staff_id_for_log = staff_id_for_history or updater_user_id or original_staff_id
                         if not already_in:
+                            raw_t = (report_obj.animal_type or '').strip().lower()
+                            a_type = 'Dog' if ('dog' in raw_t or 'canine' in raw_t or 'puppy' in raw_t) else ('Cat' if ('cat' in raw_t or 'feline' in raw_t or 'kitten' in raw_t) else 'Unknown')
                             new_holding = HoldingAnimal(
                                 report_id       = report_obj.report_id,
                                 rescue_id       = rescue_id,
-                                animal_type     = report_obj.animal_type,
-                                breed           = report_obj.animal_breed,
-                                color           = report_obj.animal_color,
-                                estimated_size  = report_obj.estimated_size,
+                                animal_type     = a_type,
+                                breed           = getattr(report_obj, 'breed', None) or getattr(report_obj, 'ai_possible_breed', None),
+                                color           = getattr(report_obj, 'animal_color', None) or getattr(report_obj, 'ai_dominant_color', None),
+                                estimated_size  = getattr(report_obj, 'ai_estimated_size', None),
                                 facility_status = 1,  # Default: Need Treatment
-                                intake_staff_id = staff_id_for_history,
+                                intake_staff_id = staff_id_for_log,
                             )
                             db.add(new_holding)
                             db.flush()  # get holding_id
+                            # Resolve specific facility or Barangay HQ location
+                            loc_name = None
+                            if report_obj.facility_id:
+                                fac = db.query(Landmark).filter(Landmark.landmark_id == report_obj.facility_id).first()
+                                if fac:
+                                    loc_name = fac.name
+                            if not loc_name:
+                                if report_obj.landmark:
+                                    loc_name = report_obj.landmark
+                                else:
+                                    brgy = None
+                                    if report_obj.subdivision_id:
+                                        subd = db.query(Subdivision).filter(Subdivision.subdivision_id == report_obj.subdivision_id).first()
+                                        if subd and subd.barangay_id:
+                                            brgy = db.query(Barangay).filter(Barangay.barangay_id == subd.barangay_id).first()
+                                    if not brgy:
+                                        brgy = db.query(Barangay).first()
+                                    loc_name = f"Barangay {brgy.barangay_name} HQ" if brgy else "Barangay HQ"
+
                             db.add(HoldingTimeline(
                                 holding_id = new_holding.holding_id,
                                 event_type = 'intake',
-                                title      = 'Animal Admitted to Holding Facility',
-                                notes      = f'Automatically admitted after pickup. Report #{report_obj.report_id}.',
-                                logged_by  = staff_id_for_history,
+                                title      = f'Animal Admitted to Holding Facility ({loc_name})',
+                                notes      = f'Admitted into custody at {loc_name}. Report #{report_obj.report_id}.',
+                                logged_by  = staff_id_for_log,
                             ))
+                        else:
+                            # Animal record already exists — log relocation/transfer or update if facility moved
+                            if relocation_note:
+                                loc_name = None
+                                if report_obj.facility_id:
+                                    fac = db.query(Landmark).filter(Landmark.landmark_id == report_obj.facility_id).first()
+                                    if fac:
+                                        loc_name = fac.name
+                                if not loc_name:
+                                    loc_name = report_obj.landmark or "Barangay HQ"
+
+                                db.add(HoldingTimeline(
+                                    holding_id = already_in.holding_id,
+                                    event_type = 'transfer',
+                                    title      = f'Animal Relocated / Transferred ({loc_name})',
+                                    notes      = relocation_note,
+                                    logged_by  = staff_id_for_log,
+                                ))
 
         # Log to audit log
         log_action = "Update Rescue Request"
@@ -462,6 +682,7 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
         full_rescue = db.query(Rescue).options(
             joinedload(Rescue.report).joinedload(Report.media),
             joinedload(Rescue.report).joinedload(Report.reporter),
+            joinedload(Rescue.report).joinedload(Report.facility),
             joinedload(Rescue.report).joinedload(Report.history).joinedload(StatusHistory.updater),
             joinedload(Rescue.report).joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position),
             joinedload(Rescue.staff),
@@ -476,3 +697,118 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
         db.rollback()
         logger.error(f"Error updating rescue {rescue_id}: {type(e).__name__}: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"{type(e).__name__}: {str(e)}")
+
+
+@router.post("/assign-team", response_model=RescueRequestResponse)
+def assign_rescue_team(payload: RescueAssignTeamRequest, db: Session = Depends(get_db)):
+    """Assign 1 to 5 field responders to a rescue mission."""
+    try:
+        db_rescue = None
+        if payload.rescue_id:
+            db_rescue = db.query(Rescue).filter(Rescue.rescue_id == payload.rescue_id).first()
+        if not db_rescue and payload.report_id:
+            db_rescue = db.query(Rescue).filter(Rescue.report_id == payload.report_id).first()
+            if not db_rescue:
+                # Create a Rescue record for this report if it doesn't exist yet
+                db_rescue = Rescue(
+                    report_id=payload.report_id,
+                    status_id=2,  # Approved
+                    notes=payload.remarks or "Rescue operation initiated by Barangay Staff."
+                )
+                db.add(db_rescue)
+                db.flush()
+
+        if not db_rescue:
+            raise HTTPException(status_code=404, detail="Rescue request or report not found")
+
+        assigned_ids = payload.assigned_personnel_ids
+        if not assigned_ids or len(assigned_ids) == 0:
+            raise HTTPException(status_code=400, detail="Please select at least one field responder.")
+
+        assigner_id = payload.user_id or payload.barangay_staff_id or assigned_ids[0]
+
+        # Set primary staff to the lead responder
+        db_rescue.staff_id = assigned_ids[0]
+
+        # Mark prior active assignments as Cancelled
+        db.query(RescueAssignment).filter(
+            RescueAssignment.rescue_id == db_rescue.rescue_id,
+            RescueAssignment.assignment_status == "Assigned"
+        ).update({"assignment_status": "Cancelled"}, synchronize_session=False)
+
+        # Create new assignments
+        assigned_users = db.query(User).filter(User.user_id.in_(assigned_ids)).all()
+        assigned_names = [u.name for u in assigned_users]
+
+        for idx, pid in enumerate(assigned_ids):
+            is_lead = idx == 0
+            asgn_remarks = payload.remarks or (f"Team Lead" if is_lead and len(assigned_ids) > 1 else f"Field Responder")
+            new_assignment = RescueAssignment(
+                rescue_id=db_rescue.rescue_id,
+                user_id=pid,
+                staff_id=pid,
+                assigned_by=assigner_id,
+                assignment_status="Assigned",
+                remarks=asgn_remarks
+            )
+            db.add(new_assignment)
+
+        # Trigger notifications
+        try:
+            assigner_user = db.query(User).filter(User.user_id == assigner_id).first() if assigner_id else None
+            assigner_name = assigner_user.name if assigner_user else "Barangay Head Officer"
+            team_desc = f"{len(assigned_ids)}-person responder team ({', '.join(assigned_names)})" if len(assigned_ids) > 1 else "field responder"
+            for pid in assigned_ids:
+                personnel_notif = Notification(
+                    user_id=pid,
+                    title="🚨 New Rescue Mission Assignment",
+                    message=f"You have been assigned to Rescue Mission #{db_rescue.rescue_id} (Report #{db_rescue.report_id}) as part of a {team_desc} by {assigner_name}.",
+                    type="rescue_assignment",
+                    related_id=db_rescue.report_id
+                )
+                db.add(personnel_notif)
+        except Exception as notif_err:
+            logger.warning(f"Failed to create personnel assignment notification: {notif_err}")
+
+        # Add StatusHistory record
+        team_str = ", ".join(assigned_names) if assigned_names else f"{len(assigned_ids)} responders"
+        db_history = StatusHistory(
+            rescue_id=db_rescue.rescue_id,
+            report_id=db_rescue.report_id,
+            report_status_id=db_rescue.report.current_status_id if db_rescue.report else 5,
+            rescue_status_id=db_rescue.status_id,
+            updated_by=assigner_id,
+            remarks=payload.remarks or f"Field responder team assigned ({team_str})."
+        )
+        db.add(db_history)
+
+        log_activity(
+            db=db,
+            action="Assign Rescue Team",
+            target_table="rescues",
+            target_id=db_rescue.rescue_id,
+            description=f"Assigned {len(assigned_ids)} responder(s) ({team_str}) to rescue mission #{db_rescue.rescue_id}.",
+            user_id=assigner_id,
+            log_type="operation"
+        )
+
+        db.commit()
+        db.refresh(db_rescue)
+
+        full_rescue = db.query(Rescue).options(
+            joinedload(Rescue.report).joinedload(Report.media),
+            joinedload(Rescue.report).joinedload(Report.reporter),
+            joinedload(Rescue.report).joinedload(Report.history).joinedload(StatusHistory.updater),
+            joinedload(Rescue.report).joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position),
+            joinedload(Rescue.staff),
+            joinedload(Rescue.leader).joinedload(User.position),
+            joinedload(Rescue.assignments).joinedload(RescueAssignment.staff)
+        ).filter(Rescue.rescue_id == db_rescue.rescue_id).first()
+
+        return _populate_rescue_fields(full_rescue, db)
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error assigning team: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e))

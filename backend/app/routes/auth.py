@@ -88,12 +88,21 @@ def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
         request=req
     )
     
+    # Get location and position names
+    b_name = user.barangay.barangay_name if user.barangay else (user.subdivision.barangay.barangay_name if user.subdivision and user.subdivision.barangay else ("San Vicente" if user.role_id in [2, 3] else None))
+    p_name = user.position.position_name if user.position else ("Barangay Head Officer" if user.is_head_officer else None)
+
     return {
         "user_id": user.user_id,
         "email": user.email,
         "name": user.name,
         "role_id": user.role_id,
         "subdivision_id": user.subdivision_id,
+        "barangay_id": user.barangay_id,
+        "is_head_officer": user.is_head_officer,
+        "position_id": user.position_id,
+        "position_name": p_name,
+        "barangay_name": b_name,
         "profile_picture": user.profile_picture,
         "phone": user.phone,
         "address": user.address,
@@ -108,6 +117,9 @@ def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
 
 @router.get("/verify-session")
 def verify_session(current_user: User = Depends(get_current_user)):
+    b_name = current_user.barangay.barangay_name if current_user.barangay else (current_user.subdivision.barangay.barangay_name if current_user.subdivision and current_user.subdivision.barangay else ("San Vicente" if current_user.role_id in [2, 3] else None))
+    p_name = current_user.position.position_name if current_user.position else ("Barangay Head Officer" if current_user.is_head_officer else None)
+
     return {
         "status": "valid",
         "user_id": current_user.user_id,
@@ -115,6 +127,10 @@ def verify_session(current_user: User = Depends(get_current_user)):
         "name": current_user.name,
         "role_id": current_user.role_id,
         "subdivision_id": current_user.subdivision_id,
+        "barangay_id": current_user.barangay_id,
+        "is_head_officer": current_user.is_head_officer,
+        "position_name": p_name,
+        "barangay_name": b_name,
         "profile_picture": current_user.profile_picture,
         "status_account": current_user.status
     }
@@ -134,9 +150,11 @@ def verify_session_by_id(
         "user_id": current_user.user_id,
         "email": current_user.email,
         "name": current_user.name,
-        "role_id": current_user.role_id
+        "role_id": current_user.role_id,
+        "is_head_officer": current_user.is_head_officer
     }
 
 @router.get("/me")
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+

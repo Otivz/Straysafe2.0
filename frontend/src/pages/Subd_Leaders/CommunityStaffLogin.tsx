@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Button from '../../components/Button';
 import { EyeIcon, EyeOffIcon } from '../../components/icon';
 import { useTheme } from '../../context/ThemeContext';
-import { clearAuthStorage } from '../../utils/api';
+import { api, clearAuthStorage } from '../../utils/api';
 
 const CommunityStaffLogin = () => {
     const navigate = useNavigate();
@@ -47,18 +47,8 @@ const CommunityStaffLogin = () => {
         setLoading(true);
 
         try {
-            const res = await fetch('http://127.0.0.1:8000/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
-            });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                setError(data.detail || 'Login failed. Please try again.');
-                return;
-            }
+            const res = await api.post('/auth/login', { email, password });
+            const data = res.data;
 
             // Enforce Role Access Control (2 = Subdivision Leader, 3 = Barangay Staff)
             if (data.role_id !== 2 && data.role_id !== 3) {
@@ -81,8 +71,13 @@ const CommunityStaffLogin = () => {
             } else if (data.role_id === 3) {
                 navigate('/brgy/dashboard');
             }
-        } catch {
-            setError('Cannot connect to server. Make sure the backend is running.');
+        } catch (err: any) {
+            const detail = err?.response?.data?.detail;
+            if (detail) {
+                setError(detail);
+            } else {
+                setError('Cannot connect to server. Make sure the backend is running.');
+            }
         } finally {
             setLoading(false);
         }

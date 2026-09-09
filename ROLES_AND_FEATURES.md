@@ -36,53 +36,55 @@ The validation layer. Leaders ensure that reports are legitimate before they rea
 
 ---
 
-## 3. Barangay Staff / Personnel (Operational Layer)
-The field operations layer. Personnel handle the physical rescue and management of animals.
+## 3. Barangay Head / Officer (Tactical Command & Coordination Layer)
+The tactical command layer. The Head/Officer oversees barangay jurisdiction, personnel deployment, and final mission sign-offs.
 
 ### 📍 Current Features
-*   **Operation Command Center:** A next-gen tactical hub with real-time tactical oversight and mission control.
-*   **AI-Prioritized Incident Feed:** Automated detection and sorting of reports by priority (High/Critical) and condition (Injured/Sick) using AI analytics.
-*   **Resource Availability Tracking:** Real-time monitoring of available teams, field personnel, and operational readiness.
-*   **Active Mission Tracker:** Live 6-stage lifecycle tracking for field rescues with visual progress indicators.
-*   **Immersive Navigation:** Map-based routing from the Barangay Hall or current location to the incident site.
-*   **Intelligence Heatmaps:** View high-density areas to identify where stray animal populations are growing.
-*   **Evidence Documentation:** Upload and manage visual evidence at each stage of the rescue to ensure accountability.
-
-### 🚀 Possible Future Features
-*   **Advanced Shelter Management:** Deep integration for tracking medical records and behavioral health of impounded animals.
-*   **Live GPS Telemetry:** Integration of real-time GPS coordinates from staff mobile devices directly onto the command map.
-*   **Automated Dispatching:** AI-driven assignment of the closest available team based on proximity to the high-priority incident.
+*   **Tactical Command Center:** Overview of all incoming escalated reports from subdivision leaders within their barangay.
+*   **Personnel & Team Management:** Organize field staff into tactical rescue teams and track staff on-duty/off-duty readiness.
+*   **Rescue Mission Dispatch:** Review endorsement letters, approve rescue requests, and assign specific field personnel to missions.
+*   **Live Mission Oversight:** Monitor real-time status of active field dispatches (Assigned → En Route → On Site → Picked Up).
+*   **Holding Facility Authorization:** Supervise shelter intake, owner claims, behavioral observation, and release approvals.
 
 ---
 
-## 4. Admin (System Oversight)
-The governance layer. Admins ensure the system is secure, functional, and data-driven.
+## 4. Barangay Personnel / Field Staff (Operational Execution Layer)
+The field operations layer. Personnel handle the physical rescue and frontline management of animals.
 
 ### 📍 Current Features
-*   **Global Activity Monitor:** High-level Heatmap and Pinpoint views of all reports across all subdivisions.
-*   **User Management:** Audit and manage accounts for Residents, Leaders, and Barangay Staff.
-*   **Security Settings:** Manage administrative credentials and system-wide security configurations.
-*   **Trend Analytics:** Analyze data over time (24h, 7d, 30d) to see if stray populations are decreasing.
+*   **Assigned Missions Inbox:** Direct task feed showing incidents assigned specifically by the Barangay Head Officer.
+*   **Field Action Stepper:** Live status progression with one-tap status updates (Accept → En Route → On Site → Picked Up).
+*   **Immersive Navigation:** Map-based turn-by-turn routing from current position/Barangay Hall to the rescue site.
+*   **Evidence Documentation:** Upload field photos, timestamps, and condition notes upon animal capture.
+*   **Shelter Daily Care:** Log medical notes, feeding, and observation updates for animals in the holding facility.
 
-### 🚀 Possible Future Features
-*   **Geofence Management:** Interface to dynamically draw and update subdivision boundaries on the map.
-*   **Audit Logging:** A detailed ledger of every status change and who performed it for transparency.
-*   **System Configuration:** Manage animal categories, priority definitions, and automated notification triggers.
+---
+
+## 5. Admin (System Oversight & Governance Layer)
+The governance layer. Admins ensure the system is secure, functional, and properly delegated.
+
+### 📍 Current Features
+*   **Barangay Head Officer Designation:** Assign or transfer the designated Head/Officer account for each specific barangay.
+*   **Global Activity Monitor:** High-level Heatmap and Pinpoint views of all reports across all subdivisions and barangays.
+*   **User Management:** Audit, create, and manage accounts for Residents, Subdivision Leaders, Barangay Heads, and Field Staff.
+*   **Security Settings:** Manage administrative credentials and system-wide security configurations.
+*   **Trend Analytics:** Analyze data over time (24h, 7d, 30d) to monitor stray animal population trends and team response times.
 
 ---
 
 ## Summary of Modules
 
-| Module | Citizen | Subd Leader | Brgy Staff | Admin |
-| :--- | :---: | :---: | :---: | :---: |
-| **Operation Hub** | ❌ | ❌ | ✅ Command | ❌ |
-| **AI Priority Feed** | ❌ | ❌ | ✅ Advanced | ❌ |
-| **Incident Reporting** | ✅ Create | ✅ Validate | ❌ | ❌ |
-| **Rescue Dispatch** | ❌ | ❌ | ✅ Full | ❌ |
-| **Heatmap Analytics** | ❌ | ❌ | ✅ Local | ✅ Global |
-| **Navigation** | ❌ | ❌ | ✅ Active | ❌ |
-| **User Management** | ❌ | ❌ | ❌ | ✅ Full |
-| **Report History** | ✅ Personal | ✅ Subd | ✅ Full | ✅ Full |
+| Module | Citizen | Subd Leader | Brgy Head | Brgy Staff | Admin |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Operation Hub & Dispatch** | ❌ | ❌ | ✅ Command / Assign | ✅ Assigned Only | ❌ |
+| **AI Priority Feed** | ❌ | ❌ | ✅ Full Review | ✅ View Assigned | ❌ |
+| **Incident Reporting** | ✅ Create | ✅ Validate | ❌ | ❌ | ❌ |
+| **Rescue Execution & Evidence** | ❌ | ❌ | ✅ Oversee | ✅ Field Capture | ❌ |
+| **Personnel Management** | ❌ | ❌ | ✅ Local Brgy | ❌ | ✅ Global System |
+| **Assign Barangay Head** | ❌ | ❌ | ❌ | ❌ | ✅ Full |
+| **Heatmap Analytics** | ❌ | ❌ | ✅ Local Brgy | ✅ Local Brgy | ✅ Global |
+| **Navigation** | ❌ | ❌ | ❌ | ✅ Active | ❌ |
+| **Report History** | ✅ Personal | ✅ Subd | ✅ Full Brgy | ✅ Assigned | ✅ Full Global |
 
 
 - Residents dashboard ilagay daw ung mga important updates and data

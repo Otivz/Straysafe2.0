@@ -41,6 +41,8 @@ class ChatThreadResponse(BaseModel):
     updated_at: Optional[datetime] = None
     creator_name: Optional[str] = None
     recipient_name: Optional[str] = None
+    can_interact: Optional[bool] = True
+    is_assigned: Optional[bool] = False
     messages: List[ChatMessageResponse] = []
 
     class Config:
