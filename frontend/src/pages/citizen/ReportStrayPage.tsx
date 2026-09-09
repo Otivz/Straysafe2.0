@@ -991,12 +991,12 @@ export default function ReportStrayPage() {
                                     <span>What did you observe?</span>
                                     <span className="text-red-500 text-sm">*</span>
                                 </h2>
-                                <p className="text-xs font-bold text-gray-400 mt-1">Select all conditions that apply to help responders prioritize dispatch.</p>
+                                <p className="text-xs font-bold text-gray-400 mt-1">Select the condition that best describes the animal to help responders prioritize dispatch.</p>
                             </div>
 
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                 {[
-                                    'Injured', 'Bleeding', 'Limping', 'Weak',
+                                    'Healthy', 'Injured', 'Bleeding', 'Limping', 'Weak',
                                     'Sick', 'Aggressive', 'Chasing People', 'Unable to Walk',
                                     'Crying', 'Pregnant', 'With Puppies/Kittens', 'Wearing Collar',
                                     'Wearing QR Tag', 'Dead', 'Trapped', 'Other'
@@ -1008,13 +1008,11 @@ export default function ReportStrayPage() {
                                             className={`p-3.5 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${isChecked ? 'border-[#F97316] bg-orange-50/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}
                                         >
                                             <input
-                                                type="checkbox"
+                                                type="radio"
+                                                name="observedCondition"
                                                 checked={isChecked}
                                                 onChange={() => {
-                                                    const updated = isChecked
-                                                        ? formData.observedConditions.filter(c => c !== cond)
-                                                        : [...formData.observedConditions, cond];
-                                                    setFormData(prev => ({ ...prev, observedConditions: updated }));
+                                                    setFormData(prev => ({ ...prev, observedConditions: [cond] }));
                                                 }}
                                                 className="accent-[#F97316] w-4 h-4"
                                             />

@@ -2075,10 +2075,10 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                 {/* STEP 5: Observed Condition */}
                                 {reportStep === 5 && (
                                     <div className="space-y-4 animate-in fade-in duration-300">
-                                        <p className="text-xs font-bold text-gray-500">Select all that apply ⭐</p>
+                                        <p className="text-xs font-bold text-gray-500">Select the condition that best describes the animal ⭐</p>
                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                             {[
-                                                'Injured', 'Bleeding', 'Limping', 'Weak',
+                                                'Healthy', 'Injured', 'Bleeding', 'Limping', 'Weak',
                                                 'Sick', 'Aggressive', 'Chasing People', 'Unable to Walk',
                                                 'Crying', 'Pregnant', 'With Puppies/Kittens', 'Wearing Collar',
                                                 'Wearing QR Tag', 'Dead', 'Trapped', 'Other'
@@ -2090,13 +2090,11 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                         className={`p-3.5 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${isChecked ? 'border-[#F97316] bg-orange-50/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}
                                                     >
                                                         <input
-                                                            type="checkbox"
+                                                            type="radio"
+                                                            name="homeModalObservedCondition"
                                                             checked={isChecked}
                                                             onChange={() => {
-                                                                const updated = isChecked
-                                                                    ? formData.observedConditions.filter(c => c !== cond)
-                                                                    : [...formData.observedConditions, cond];
-                                                                setFormData(prev => ({ ...prev, observedConditions: updated }));
+                                                                setFormData(prev => ({ ...prev, observedConditions: [cond] }));
                                                             }}
                                                             className="accent-[#F97316] w-4 h-4"
                                                         />

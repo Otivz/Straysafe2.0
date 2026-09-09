@@ -529,10 +529,9 @@ const SubdReports = () => {
             const isInjured = Boolean(
                 targetRep?.verified_injury ||
                 targetRep?.category_id === 1 ||
-                (targetRep?.condition && targetRep.condition.toLowerCase().includes('injured')) ||
-                (targetRep?.description && targetRep.description.toLowerCase().includes('injured'))
+                (targetRep?.condition && targetRep.condition.toLowerCase().includes('injured'))
             );
-            const preservedCondition = isInjured ? 'Injured' : (targetRep?.condition || undefined);
+            const preservedCondition = targetRep?.condition ? targetRep.condition : (isInjured ? 'Injured' : undefined);
 
             // 2. Update status to Forwarded (4)
             await axios.patch(`${API_URL}/${escalatingReportId}/status`, {

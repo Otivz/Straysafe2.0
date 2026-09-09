@@ -342,6 +342,8 @@ const BrgyRescueRequests = () => {
 
             const defaultRemark = friendlyDefaults[statusToUpdate.statusId] || `Status updated to ${statusMap[statusToUpdate.statusId] || reportStatusMap[statusToUpdate.statusId]}`;
             const primaryId = selectedPersonnelIds[0] || selectedPersonnelId || null;
+            const isConditionApplicable = ![5, 13, 4, 3, 14, 17].includes(statusToUpdate.statusId);
+            const conditionToSubmit = (isConditionApplicable && statusUpdateCondition.trim()) ? statusUpdateCondition.trim() : undefined;
 
             // 1. Update Rescue & Report Status in ONE call
             const rescuePayload = {
@@ -350,7 +352,7 @@ const BrgyRescueRequests = () => {
                 assigned_personnel_id: primaryId,
                 assigned_personnel_ids: selectedPersonnelIds.length > 0 ? selectedPersonnelIds : (primaryId ? [primaryId] : undefined),
                 remarks: statusUpdateMessage || defaultRemark,
-                animal_condition: statusUpdateCondition || undefined
+                animal_condition: conditionToSubmit
             };
             const rescueResponse = await axios.patch(`http://localhost:8000/rescue-requests/${statusToUpdate.requestId}`, rescuePayload);
 
@@ -419,27 +421,13 @@ const BrgyRescueRequests = () => {
 
     const getEffectiveAnimalCondition = (rep: any): string => {
         if (!rep) return 'Unknown';
-        if (rep.verified_injury) return 'Injured';
         const rawCond = (rep.condition || '').trim();
-        const rawCondLower = rawCond.toLowerCase();
-        const isInjuredCategory = rep.category_id === 1 || (categoryMap[rep.category_id] || '').toLowerCase().includes('injured');
-        const desc = (rep.description || '').toLowerCase();
-        const hasInjuredInDesc = desc.includes('observed conditions: injured') || desc.includes('injured') || desc.includes('injury');
-
-        if (rawCondLower.includes('injured') || isInjuredCategory || hasInjuredInDesc || Boolean(rep.ai_behavior_injury)) {
-            return 'Injured';
-        }
-
-        if (rawCondLower.includes('limp') || desc.includes('limp')) return 'Limping';
-        if (rawCondLower.includes('sick') || rawCondLower.includes('weak') || desc.includes('sick') || desc.includes('weak')) return 'Sick / Weak';
-        if (rawCondLower.includes('aggress') || desc.includes('aggressive')) return 'Aggressive';
-        if (rawCondLower.includes('thin') || rawCondLower.includes('malnourish') || desc.includes('malnourished') || desc.includes('thin')) return 'Thin / Malnourished';
-        if (rawCondLower.includes('nurs') || rawCondLower.includes('pregnan') || desc.includes('pregnant') || desc.includes('nursing')) return 'Nursing / Pregnant';
-        if (rawCondLower.includes('deceas') || rawCondLower.includes('dead') || desc.includes('deceased') || desc.includes('dead')) return 'Deceased';
-
-        if (rawCond && rawCondLower !== 'unknown' && rawCondLower !== 'healthy') {
+        if (rawCond && rawCond.toLowerCase() !== 'unknown') {
             return rawCond;
         }
+        if (rep.verified_injury) return 'Injured';
+        const isInjuredCategory = rep.category_id === 1 || (categoryMap[rep.category_id] || '').toLowerCase().includes('injured');
+        if (isInjuredCategory) return 'Injured';
         return 'Healthy';
     };
 
@@ -457,8 +445,9 @@ const BrgyRescueRequests = () => {
         setStatusMediaFiles([]);
 
         // Pre-fill animal condition from citizen report or ground-truth verification
+        const isConditionApplicable = ![5, 13, 4, 3, 14, 17].includes(statusId);
         const initialCond = getEffectiveAnimalCondition(reqToUse?.report || null);
-        setStatusUpdateCondition(initialCond !== 'Unknown' ? initialCond : 'Healthy');
+        setStatusUpdateCondition(isConditionApplicable ? (initialCond !== 'Unknown' ? initialCond : 'Healthy') : '');
 
         // Pre-fill active assigned team
         const activeIds: number[] = [];
@@ -1716,7 +1705,7 @@ const BrgyRescueRequests = () => {
                                     />
                                 </div>
 
-                                {statusToUpdate.statusId !== 17 && statusToUpdate.statusId !== 3 && statusToUpdate.statusId !== 14 && (
+                                {statusToUpdate.statusId !== 5 && statusToUpdate.statusId !== 13 && statusToUpdate.statusId !== 4 && statusToUpdate.statusId !== 3 && statusToUpdate.statusId !== 14 && statusToUpdate.statusId !== 17 && (
                                     <div className="space-y-3">
                                         <div className="flex justify-between items-end ml-1">
                                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Current Animal Condition</label>

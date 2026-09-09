@@ -482,10 +482,9 @@ const SubdViewReport = () => {
             const isInjured = Boolean(
                 report.verified_injury ||
                 report.category_id === 1 ||
-                (report.condition && report.condition.toLowerCase().includes('injured')) ||
-                (report.description && report.description.toLowerCase().includes('injured'))
+                (report.condition && report.condition.toLowerCase().includes('injured'))
             );
-            const preservedCondition = isInjured ? 'Injured' : (report.condition || undefined);
+            const preservedCondition = report.condition ? report.condition : (isInjured ? 'Injured' : undefined);
 
             // 2. Update status to Forwarded (4)
             await axios.patch(`http://localhost:8000/reports/${report.report_id}/status`, {
@@ -2387,7 +2386,7 @@ const SubdViewReport = () => {
                                             {/* History / Transfer / Status entries */}
                                             {report.history && report.history.filter((h: any) => h.remarks !== 'Initial report submitted by resident.').map((hist: any) => {
                                                 const remarksLower = (hist.remarks || '').toLowerCase();
-                                                const isFacilityRelocation = (remarksLower.includes('secured') && (remarksLower.includes('facility') || remarksLower.includes('shelter') || remarksLower.includes('holding') || remarksLower.includes('relocated from'))) || hist.facility_id;
+                                                const isFacilityRelocation = (remarksLower.startsWith('transferred to') || remarksLower.startsWith('relocated to') || remarksLower.startsWith('animal relocated') || hist.report_status_id === 8);
                                                 const isTransfer = remarksLower.includes('transfer');
                                                 const isClaim = remarksLower.includes('claim');
                                                 const isWarning = remarksLower.includes('warning') || remarksLower.includes('notice');

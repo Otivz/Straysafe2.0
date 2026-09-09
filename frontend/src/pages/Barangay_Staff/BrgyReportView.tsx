@@ -34,6 +34,7 @@ interface Report {
     created_at: string;
     user_id: number;
     subdivision_id?: number;
+    barangay_id?: number | null;
     reporter_name?: string;
     reporter_photo?: string;
     reporter_email?: string;
@@ -149,12 +150,18 @@ const BRGY_OFFICE_COORDS: [number, number] = [14.8069, 121.0039]; // Barangay Sa
 const PREDEFINED_CONDITIONS = [
     'Healthy',
     'Injured',
-    'Sick / Weak',
+    'Bleeding',
     'Limping',
+    'Weak / Sick',
     'Aggressive',
-    'Thin / Malnourished',
-    'Nursing / Pregnant',
-    'Deceased'
+    'Chasing People',
+    'Unable to Walk',
+    'Crying',
+    'Pregnant / Nursing',
+    'Trapped',
+    'Wearing Collar / Tag',
+    'Deceased',
+    'Other'
 ];
 
 const BrgyReportView = () => {
@@ -331,19 +338,16 @@ const BrgyReportView = () => {
     const fetchFacilities = async () => {
         setIsLoadingFacilities(true);
         try {
-            const params: any = { is_holding_facility: true };
-            if (currentUser?.role_id === 3 && currentUser?.barangay_id) {
-                params.barangay_id = currentUser.barangay_id;
-            } else if (currentUser?.role_id === 2 && currentUser?.subdivision_id) {
-                params.subdivision_id = currentUser.subdivision_id;
-            }
-            const res = await api.get('/landmarks', { params });
-            const list = res.data || [];
+            const bId = currentUser?.barangay_id || report?.barangay_id || 1;
+            const res = await axios.get(`http://localhost:8000/landmarks?barangay_id=${bId}&is_holding_facility=true&barangay_only=true`);
+            const list = (res.data || []).filter((f: any) => f.subdivision_id == null);
             setFacilities(list);
             if (list.length > 0) {
                 const currentFacId = report?.facility_id;
                 const match = list.find((f: any) => f.landmark_id === currentFacId);
                 setSelectedFacilityId(match ? match.landmark_id : list[0].landmark_id);
+            } else {
+                setSelectedFacilityId(null);
             }
         } catch (err) {
             console.warn('Could not fetch holding facilities:', err);
@@ -432,34 +436,18 @@ const BrgyReportView = () => {
     const getEffectiveAnimalCondition = (rep: Report | null): string => {
         if (!rep) return 'Unknown';
         
+        const rawCond = (rep.condition || '').trim();
+        if (rawCond && rawCond.toLowerCase() !== 'unknown') {
+            return rawCond;
+        }
+
         // 1. If verified by official on-site investigation
         if (rep.verified_injury) return 'Injured';
 
-        const rawCond = (rep.condition || '').trim();
-        const rawCondLower = rawCond.toLowerCase();
-
         // 2. Check category for injured animal (category_id 1 is Injured Animal)
         const isInjuredCategory = rep.category_id === 1 || (categoryMap[rep.category_id] || '').toLowerCase().includes('injured');
-        
-        // 3. Description contains observed conditions or notes of injury
-        const desc = (rep.description || '').toLowerCase();
-        const hasInjuredInDesc = desc.includes('observed conditions: injured') || desc.includes('injured') || desc.includes('injury');
-
-        // 4. Prioritize INJURED if verified, reported in category, or in observed conditions/condition text
-        if (rawCondLower.includes('injured') || isInjuredCategory || hasInjuredInDesc || Boolean((rep as any).ai_behavior_injury)) {
+        if (isInjuredCategory) {
             return 'Injured';
-        }
-
-        // 5. Check for other specific standard conditions
-        if (rawCondLower.includes('limp') || desc.includes('limp')) return 'Limping';
-        if (rawCondLower.includes('sick') || rawCondLower.includes('weak') || desc.includes('sick') || desc.includes('weak')) return 'Sick / Weak';
-        if (rawCondLower.includes('aggress') || desc.includes('aggressive')) return 'Aggressive';
-        if (rawCondLower.includes('thin') || rawCondLower.includes('malnourish') || desc.includes('malnourished') || desc.includes('thin')) return 'Thin / Malnourished';
-        if (rawCondLower.includes('nurs') || rawCondLower.includes('pregnan') || desc.includes('pregnant') || desc.includes('nursing')) return 'Nursing / Pregnant';
-        if (rawCondLower.includes('deceas') || rawCondLower.includes('dead') || desc.includes('deceased') || desc.includes('dead')) return 'Deceased';
-
-        if (rawCond && rawCondLower !== 'unknown' && rawCondLower !== 'healthy') {
-            return rawCond;
         }
 
         return 'Healthy';
@@ -470,17 +458,23 @@ const BrgyReportView = () => {
             alert('Access restricted: Only personnel assigned to this report (or the Barangay Head Officer) have the ability to update its status.');
             return;
         }
+        if ((statusId === 7 || statusId === 8) && facilities.length === 0) {
+            alert('Notice: No holding facility registered for this Barangay. Please register a facility under Landmarks & Facilities first.');
+        }
         setTargetStatusId(statusId);
         setStatusRemarks('');
         const currentRep = report || rescueRequest?.report || null;
         const initialCondition = getEffectiveAnimalCondition(currentRep);
-        setStatusCondition(initialCondition !== 'Unknown' ? initialCondition : 'Healthy');
+        const isConditionApplicable = ![5, 13, 4, 3, 14, 17].includes(statusId);
+        setStatusCondition(isConditionApplicable ? (initialCondition !== 'Unknown' ? initialCondition : 'Healthy') : '');
         
-        // Pre-select facility if report already has one, or default to first registered facility
-        if (currentRep?.facility_id) {
+        // Pre-select facility if report already has one and is in the active list, or default to first registered facility
+        if (currentRep?.facility_id && facilities.some(f => f.landmark_id === currentRep.facility_id)) {
             setSelectedFacilityId(currentRep.facility_id);
-        } else if (facilities.length > 0 && !selectedFacilityId) {
+        } else if (facilities.length > 0) {
             setSelectedFacilityId(facilities[0].landmark_id);
+        } else {
+            setSelectedFacilityId(null);
         }
 
         // Pre-populate with currently assigned responders
@@ -531,6 +525,10 @@ const BrgyReportView = () => {
             alert('Please select at least 1 responder to handle this dispatch operation.');
             return;
         }
+        if ((targetStatusId === 7 || targetStatusId === 8) && (!selectedFacilityId || facilities.length === 0)) {
+            alert('No holding facility registered! Please register a holding facility under Landmarks & Facilities before moving this animal to a facility.');
+            return;
+        }
 
         setIsSubmittingStatus(true);
         try {
@@ -559,6 +557,8 @@ const BrgyReportView = () => {
 
             const rescueId = rescueRequest?.rescue_id;
             const primaryStaffId = statusSelectedStaffIds[0] || selectedPersonnelId || null;
+            const isConditionApplicable = ![5, 13, 4, 3, 14, 17].includes(targetStatusId);
+            const conditionToSubmit = (isConditionApplicable && statusCondition.trim()) ? statusCondition.trim() : undefined;
 
             if (rescueId) {
                 const payload: any = {
@@ -567,7 +567,7 @@ const BrgyReportView = () => {
                     assigned_personnel_id: primaryStaffId,
                     assigned_personnel_ids: statusSelectedStaffIds.length > 0 ? statusSelectedStaffIds : (primaryStaffId ? [primaryStaffId] : undefined),
                     remarks: finalRemarks,
-                    animal_condition: statusCondition.trim() || undefined
+                    animal_condition: conditionToSubmit
                 };
                 if (selectedFac) {
                     payload.facility_id = selectedFac.landmark_id;
@@ -583,7 +583,7 @@ const BrgyReportView = () => {
                     user_id: currentUserId,
                     remarks: finalRemarks,
                     assigned_staff_id: primaryStaffId,
-                    animal_condition: statusCondition.trim() || undefined
+                    animal_condition: conditionToSubmit
                 };
                 if (selectedFac) {
                     reportPayload.facility_id = selectedFac.landmark_id;
@@ -1664,7 +1664,7 @@ const BrgyReportView = () => {
                                                 {/* History / Transfer / Status entries */}
                                                 {report.history && report.history.filter((h: any) => h.remarks !== 'Initial report submitted by resident.').map((hist: any, index: number) => {
                                                     const remarksLower = (hist.remarks || '').toLowerCase();
-                                                    const isFacilityRelocation = (remarksLower.includes('secured') && (remarksLower.includes('facility') || remarksLower.includes('shelter') || remarksLower.includes('holding') || remarksLower.includes('relocated from'))) || hist.facility_id;
+                                                    const isFacilityRelocation = (remarksLower.startsWith('transferred to') || remarksLower.startsWith('relocated to') || remarksLower.startsWith('animal relocated') || hist.report_status_id === 8);
                                                     const isTransfer = remarksLower.includes('transfer');
                                                     const isClaim = remarksLower.includes('claim') || hist.report_status_id === 9;
                                                     const isWarning = remarksLower.includes('warning') || remarksLower.includes('notice');
@@ -1827,7 +1827,13 @@ const BrgyReportView = () => {
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Select Next Stage</label>
                                 <select
                                     value={targetStatusId}
-                                    onChange={(e) => setTargetStatusId(parseInt(e.target.value))}
+                                    onChange={(e) => {
+                                        const nextId = parseInt(e.target.value);
+                                        setTargetStatusId(nextId);
+                                        if ((nextId === 7 || nextId === 8) && facilities.length === 0) {
+                                            alert('Notice: No holding facility registered for this Barangay. Please register a facility in Landmarks & Facilities first.');
+                                        }
+                                    }}
                                     className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#F97316] transition-all"
                                 >
                                     <option value={13}>Approved (Prepare Team)</option>
@@ -1855,7 +1861,11 @@ const BrgyReportView = () => {
                                                 Select Facility Location <span className="text-red-500">*</span>
                                             </label>
                                         </div>
-                                        <span className="text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                                        <span className={`text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
+                                            facilities.length > 0
+                                                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                                : 'bg-red-50 text-red-600 border-red-200'
+                                        }`}>
                                             {facilities.length} Registered
                                         </span>
                                     </div>
@@ -1863,7 +1873,7 @@ const BrgyReportView = () => {
                                     <div className="p-2.5 rounded-2xl bg-white/90 border border-amber-200 flex items-center gap-2 text-[10px] text-amber-900 leading-tight">
                                         <span className="text-sm shrink-0">📍</span>
                                         <span>
-                                            Facilities are managed by the Admin. Moving this animal updates its live GPS pin to the selected facility while preserving the original sighting spot.
+                                            Facilities are managed by the Barangay / Admin. Moving this animal updates its live GPS pin to the selected facility while preserving the original sighting spot.
                                         </span>
                                     </div>
 
@@ -1872,10 +1882,13 @@ const BrgyReportView = () => {
                                             Loading registered facilities...
                                         </div>
                                     ) : facilities.length === 0 ? (
-                                        <div className="p-4 rounded-2xl bg-white border border-dashed border-amber-300 text-center space-y-1">
-                                            <p className="text-xs font-black text-amber-900">No Holding Facilities Found</p>
-                                            <p className="text-[10px] text-gray-500">
-                                                Please contact the Admin to register a holding facility in Admin Account Settings.
+                                        <div className="p-5 rounded-2xl bg-white border-2 border-dashed border-red-300 text-center space-y-2 animate-in fade-in">
+                                            <div className="w-10 h-10 mx-auto rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center text-xl shadow-2xs">
+                                                ⚠️
+                                            </div>
+                                            <p className="text-xs font-black text-red-700 uppercase tracking-wider">No Facility Registered</p>
+                                            <p className="text-[11px] text-gray-600 leading-relaxed max-w-sm mx-auto">
+                                                There are currently no holding facilities registered for this Barangay. Please register a facility under <strong>Landmarks & Facilities</strong> before placing an animal in a holding facility.
                                             </p>
                                         </div>
                                     ) : (
@@ -2074,7 +2087,7 @@ const BrgyReportView = () => {
                             )}
 
                             {/* Animal Condition (Predefined Choices & Custom Field) */}
-                            {targetStatusId !== 17 && targetStatusId !== 3 && targetStatusId !== 14 && (
+                            {targetStatusId !== 5 && targetStatusId !== 13 && targetStatusId !== 4 && targetStatusId !== 3 && targetStatusId !== 14 && targetStatusId !== 17 && (
                                 <div className="space-y-3 bg-gray-50/70 p-4 rounded-2xl border border-gray-200/80">
                                     <div className="flex justify-between items-center">
                                         <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest">

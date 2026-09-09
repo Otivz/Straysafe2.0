@@ -35,81 +35,161 @@ interface RescueTimelineProps {
     } | null;
 }
 
-const statusConfig: Record<number, { label: string, color: string, icon: React.ReactNode }> = {
+interface StatusConfigItem {
+    label: string;
+    badgeStyle: string;
+    cardBorder: string;
+    nodeBg: string;
+    nodeBorder: string;
+    nodeText: string;
+    icon: React.ReactNode;
+}
+
+const statusConfig: Record<number, StatusConfigItem> = {
     1: {
         label: 'Reported',
-        color: 'orange',
-        icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+        badgeStyle: 'bg-orange-50 text-orange-700 border-orange-200',
+        cardBorder: 'border-orange-100/60',
+        nodeBg: 'bg-orange-50',
+        nodeBorder: 'border-orange-200',
+        nodeText: 'text-orange-600',
+        icon: <span>📝</span>
     },
     2: {
         label: 'Verified',
-        color: 'blue',
-        icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+        badgeStyle: 'bg-blue-50 text-blue-700 border-blue-200',
+        cardBorder: 'border-blue-100/60',
+        nodeBg: 'bg-blue-50',
+        nodeBorder: 'border-blue-200',
+        nodeText: 'text-blue-600',
+        icon: <span>🔍</span>
     },
     3: {
         label: 'Rejected',
-        color: 'rose',
-        icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        badgeStyle: 'bg-rose-50 text-rose-700 border-rose-200',
+        cardBorder: 'border-rose-100/60',
+        nodeBg: 'bg-rose-50',
+        nodeBorder: 'border-rose-200',
+        nodeText: 'text-rose-600',
+        icon: <span>🚫</span>
     },
     4: {
-        label: 'Escalated',
-        color: 'purple',
-        icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+        label: 'Escalated to Barangay',
+        badgeStyle: 'bg-purple-50 text-purple-700 border-purple-200',
+        cardBorder: 'border-purple-100/60',
+        nodeBg: 'bg-purple-50',
+        nodeBorder: 'border-purple-200',
+        nodeText: 'text-purple-600',
+        icon: <span>📨</span>
     },
     13: {
-        label: 'Approved',
-        color: 'teal',
-        icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>
+        label: 'Rescue Approved',
+        badgeStyle: 'bg-teal-50 text-teal-700 border-teal-200',
+        cardBorder: 'border-teal-100/60',
+        nodeBg: 'bg-teal-50',
+        nodeBorder: 'border-teal-200',
+        nodeText: 'text-teal-600',
+        icon: <span>🛡️</span>
     },
     5: {
-        label: 'Dispatched',
-        color: 'amber',
-        icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+        label: 'Team Dispatched',
+        badgeStyle: 'bg-amber-50 text-amber-700 border-amber-200',
+        cardBorder: 'border-amber-100/60',
+        nodeBg: 'bg-amber-50',
+        nodeBorder: 'border-amber-200',
+        nodeText: 'text-amber-600',
+        icon: <span>🚨</span>
     },
     6: {
-        label: 'Picked Up',
-        color: 'cyan',
-        icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+        label: 'Animal Picked Up',
+        badgeStyle: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+        cardBorder: 'border-cyan-100/60',
+        nodeBg: 'bg-cyan-50',
+        nodeBorder: 'border-cyan-200',
+        nodeText: 'text-cyan-600',
+        icon: <span>🐾</span>
     },
     7: {
         label: 'Under Observation',
-        color: 'indigo',
-        icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+        badgeStyle: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+        cardBorder: 'border-indigo-100/60',
+        nodeBg: 'bg-indigo-50',
+        nodeBorder: 'border-indigo-200',
+        nodeText: 'text-indigo-600',
+        icon: <span>🏥</span>
     },
     8: {
-        label: 'Impounded',
-        color: 'fuchsia',
-        icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+        label: 'Secured in Facility',
+        badgeStyle: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+        cardBorder: 'border-emerald-200 shadow-emerald-500/10',
+        nodeBg: 'bg-emerald-50',
+        nodeBorder: 'border-emerald-200',
+        nodeText: 'text-emerald-700',
+        icon: <span>🏢</span>
     },
     9: {
         label: 'Claimed by Owner',
-        color: 'emerald',
-        icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+        badgeStyle: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        cardBorder: 'border-emerald-100/60',
+        nodeBg: 'bg-emerald-50',
+        nodeBorder: 'border-emerald-200',
+        nodeText: 'text-emerald-600',
+        icon: <span>🏠</span>
     },
     10: {
-        label: 'Released',
-        color: 'sky',
-        icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+        label: 'Safely Released',
+        badgeStyle: 'bg-sky-50 text-sky-700 border-sky-200',
+        cardBorder: 'border-sky-100/60',
+        nodeBg: 'bg-sky-50',
+        nodeBorder: 'border-sky-200',
+        nodeText: 'text-sky-600',
+        icon: <span>🕊️</span>
     },
     11: {
         label: 'Resolved',
-        color: 'green',
-        icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>
+        badgeStyle: 'bg-green-50 text-green-700 border-green-200',
+        cardBorder: 'border-green-100/60',
+        nodeBg: 'bg-green-50',
+        nodeBorder: 'border-green-200',
+        nodeText: 'text-green-600',
+        icon: <span>✅</span>
     },
     12: {
-        label: 'Deceased',
-        color: 'slate',
-        icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+        label: 'Resolved (Deceased)',
+        badgeStyle: 'bg-slate-100 text-slate-700 border-slate-200',
+        cardBorder: 'border-slate-200/60',
+        nodeBg: 'bg-slate-100',
+        nodeBorder: 'border-slate-200',
+        nodeText: 'text-slate-600',
+        icon: <span>🕯️</span>
+    },
+    14: {
+        label: 'False Alarm',
+        badgeStyle: 'bg-rose-50 text-rose-700 border-rose-200',
+        cardBorder: 'border-rose-100/60',
+        nodeBg: 'bg-rose-50',
+        nodeBorder: 'border-rose-200',
+        nodeText: 'text-rose-600',
+        icon: <span>⚠️</span>
+    },
+    15: {
+        label: 'Disputed',
+        badgeStyle: 'bg-yellow-50 text-yellow-800 border-yellow-200',
+        cardBorder: 'border-yellow-100/60',
+        nodeBg: 'bg-yellow-50',
+        nodeBorder: 'border-yellow-200',
+        nodeText: 'text-yellow-600',
+        icon: <span>⚖️</span>
+    },
+    16: {
+        label: 'Under Investigation',
+        badgeStyle: 'bg-violet-50 text-violet-700 border-violet-200',
+        cardBorder: 'border-violet-100/60',
+        nodeBg: 'bg-violet-50',
+        nodeBorder: 'border-violet-200',
+        nodeText: 'text-violet-600',
+        icon: <span>🔎</span>
     }
-};
-
-const rescueStatusLabels: Record<number, string> = {
-    1: 'Pending Approval',
-    2: 'Approved',
-    3: 'Rejected',
-    4: 'Operation Started',
-    5: 'Dispatched',
-    6: 'Resolved'
 };
 
 const RescueTimeline: React.FC<RescueTimelineProps> = ({ 
@@ -138,13 +218,32 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
         return 'Subdivision Leader';
     };
 
-    // Deduplicate consecutive identical status updates so only single stage updates appear
+    const formatCleanRemarks = (rawRemarks: string) => {
+        if (!rawRemarks) return '';
+        const parts = rawRemarks.split('|').map(p => p.trim()).filter(Boolean);
+        const uniqueParts: string[] = [];
+        for (const p of parts) {
+            const isSubset = uniqueParts.some(existing => existing.toLowerCase().includes(p.toLowerCase()) || p.toLowerCase().includes(existing.toLowerCase()));
+            if (!isSubset) {
+                uniqueParts.push(p);
+            } else {
+                const idx = uniqueParts.findIndex(existing => existing.toLowerCase().includes(p.toLowerCase()) || p.toLowerCase().includes(existing.toLowerCase()));
+                if (idx !== -1 && p.length > uniqueParts[idx].length) {
+                    uniqueParts[idx] = p;
+                }
+            }
+        }
+        return uniqueParts.join(' • ');
+    };
+
+    // Deduplicate consecutive identical status updates unless remarks changed (e.g. facility relocation) or has new media
     const cleanHistory = (history || []).filter((entry, idx, arr) => {
         if (idx === 0) return true;
         const prev = arr[idx - 1];
         const sameStatus = entry.report_status_id === prev.report_status_id;
+        const remarksChanged = (entry.remarks || '').trim().toLowerCase() !== (prev.remarks || '').trim().toLowerCase();
         const hasNewMedia = entry.media && entry.media.length > 0 && (!prev.media || prev.media.length === 0);
-        return !sameStatus || hasNewMedia;
+        return !sameStatus || remarksChanged || hasNewMedia;
     });
 
     const filteredHistory = filter === 'all'
@@ -158,11 +257,11 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             {/* Timeline Filter */}
             <div className="flex items-center justify-between bg-white/50 backdrop-blur-md p-4 rounded-3xl border border-white/20 shadow-sm">
                 <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-xl ${filter === 'all' ? 'bg-[#F97316]/10 text-[#F97316]' : `bg-${statusConfig[filter]?.color || 'orange'}-50 text-${statusConfig[filter]?.color || 'orange'}-600`} flex items-center justify-center transition-all`}>
+                    <div className={`w-8 h-8 rounded-xl ${filter === 'all' ? 'bg-[#F97316]/10 text-[#F97316]' : (statusConfig[filter]?.nodeBg || 'bg-orange-50')} flex items-center justify-center transition-all`}>
                         {filter === 'all' ? (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                            <svg className="w-4 h-4 text-[#F97316]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
                         ) : (
-                            statusConfig[filter]?.icon || <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                            statusConfig[filter]?.icon || <span>📌</span>
                         )}
                     </div>
                     <span className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Filter by Stage</span>
@@ -191,34 +290,40 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
                 ) : (
                     filteredHistory.map((entry, index) => {
                         const remarksLower = (entry.remarks || '').toLowerCase();
-                        const isFacilityHolding = (remarksLower.includes('secured') && (remarksLower.includes('facility') || remarksLower.includes('shelter') || remarksLower.includes('holding') || remarksLower.includes('relocated from'))) || (entry as any).facility_id;
+                        const isPureTransfer = remarksLower.includes('transferred to') || 
+                                               remarksLower.includes('relocated to') || 
+                                               remarksLower.includes('relocated from') ||
+                                               remarksLower.includes('animal relocated') ||
+                                               remarksLower.includes('facility relocation') ||
+                                               remarksLower.startsWith('transferred') ||
+                                               remarksLower.startsWith('relocated');
 
-                        const baseConfig = statusConfig[entry.report_status_id] || statusConfig[1];
-                        const config = isFacilityHolding ? {
-                            label: 'Secured in Facility',
-                            color: 'amber',
-                            icon: <span className="text-base">🐾</span>
-                        } : baseConfig;
+                        const config = isPureTransfer ? {
+                            label: 'Facility Relocation',
+                            badgeStyle: 'bg-purple-50 text-purple-700 border-purple-200',
+                            cardBorder: 'border-purple-200 shadow-purple-500/10',
+                            nodeBg: 'bg-purple-50',
+                            nodeBorder: 'border-purple-200',
+                            nodeText: 'text-purple-600',
+                            icon: <span>🚚</span>
+                        } : (statusConfig[entry.report_status_id] || statusConfig[1]);
 
-                        const displayLabel = isFacilityHolding 
-                            ? 'Secured in Facility'
-                            : (statusConfig[entry.report_status_id]
-                                ? statusConfig[entry.report_status_id].label
-                                : (entry.rescue_status_id ? rescueStatusLabels[entry.rescue_status_id] : config.label));
+                        const displayLabel = config.label;
+                        const displayRemarks = formatCleanRemarks(entry.remarks);
                         
                         return (
                             <div key={entry.history_id} className="relative group animate-in slide-in-from-left-4 duration-500" style={{ animationDelay: `${index * 100}ms` }}>
                                 {/* Timeline Node */}
-                                <div className={`absolute -left-[31px] top-0 w-8 h-8 rounded-2xl bg-white border-4 border-amber-100 flex items-center justify-center text-amber-600 shadow-sm z-10 transition-transform group-hover:scale-110`}>
+                                <div className={`absolute -left-[31px] top-0 w-8 h-8 rounded-2xl ${config.nodeBg} border-2 ${config.nodeBorder} flex items-center justify-center ${config.nodeText} shadow-sm z-10 transition-transform group-hover:scale-110`}>
                                     {config.icon}
                                 </div>
 
                                 {/* Content Card */}
-                                <div className={`bg-white rounded-3xl border ${isFacilityHolding ? 'border-amber-200 shadow-amber-500/10' : 'border-gray-50'} shadow-sm hover:shadow-md transition-all overflow-hidden`}>
+                                <div className={`bg-white rounded-3xl border ${config.cardBorder} shadow-sm hover:shadow-md transition-all overflow-hidden`}>
                                     <div className="p-6">
                                         <div className="flex justify-between items-start mb-4">
                                             <div>
-                                                <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${isFacilityHolding ? 'bg-amber-100 text-amber-900 border border-amber-200' : `bg-${config.color}-50 text-${config.color}-600 border border-${config.color}-100`}`}>
+                                                <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${config.badgeStyle}`}>
                                                     {displayLabel}
                                                 </span>
                                                 {entry.report_status_id === currentStatusId && index === 0 && (
@@ -227,7 +332,7 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
                                                     </span>
                                                 )}
                                                 <h4 className="text-sm font-black text-gray-900 mt-2 uppercase tracking-tight">
-                                                    {entry.remarks}
+                                                    {displayRemarks}
                                                 </h4>
                                             </div>
                                             <div className="text-right">
