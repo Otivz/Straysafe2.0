@@ -3,10 +3,13 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.models.report import HoldingAnimal, HoldingTimeline, Report, FacilityStatus
+from app.models.report import HoldingAnimal, HoldingTimeline, Report, FacilityStatus, StatusHistory
+from app.models.landmark import Landmark
+from app.models.user import Subdivision
 from app.utils.audit import log_activity
 from app.schemas.holding import (
     HoldingAnimalCreate,
@@ -35,15 +38,163 @@ CATEGORY_MAP = {
 }
 
 
+def _format_duration(delta_seconds: float) -> str:
+    """Format duration in seconds into human readable format like '2 days, 4 hrs' or '3 days'."""
+    if delta_seconds < 0:
+        delta_seconds = 0
+    days = int(delta_seconds // 86400)
+    hours = int((delta_seconds % 86400) // 3600)
+    mins = int((delta_seconds % 3600) // 60)
+    if days > 0:
+        if hours > 0:
+            return f"{days}d {hours}h"
+        return f"{days} day{'s' if days != 1 else ''}"
+    elif hours > 0:
+        if mins > 0:
+            return f"{hours}h {mins}m"
+        return f"{hours} hr{'s' if hours != 1 else ''}"
+    else:
+        return f"{max(mins, 1)} min{'s' if mins != 1 else ''}"
+
+
 def _populate(animal: HoldingAnimal) -> HoldingAnimal:
-    """Populate transient fields for a HoldingAnimal."""
+    """Populate transient fields and calculate Subdivision & Barangay stay durations for a HoldingAnimal."""
     if animal.intake_staff:
         animal.intake_staff_name = animal.intake_staff.name  # type: ignore[attr-defined]
     if animal.status_obj:
         animal.facility_status_name = animal.status_obj.status_name  # type: ignore[attr-defined]
+
+    current_facility = None
     if animal.report:
         animal.report_landmark = animal.report.landmark  # type: ignore[attr-defined]
         animal.report_category = CATEGORY_MAP.get(animal.report.category_id, "Unknown")  # type: ignore[attr-defined]
+        animal.report_media = animal.report.media  # type: ignore[attr-defined]
+        animal.facility_id = animal.report.facility_id  # type: ignore[attr-defined]
+        animal.subdivision_id = animal.report.subdivision_id  # type: ignore[attr-defined]
+        animal.barangay_id = (
+            animal.report.subdivision.barangay_id
+            if animal.report.subdivision
+            else None
+        )  # type: ignore[attr-defined]
+        if animal.report.facility:
+            current_facility = animal.report.facility
+            animal.facility_name = animal.report.facility.name  # type: ignore[attr-defined]
+            animal.facility_type = animal.report.facility.facility_type  # type: ignore[attr-defined]
+        else:
+            animal.facility_name = animal.report.landmark if animal.report.facility_id else None  # type: ignore[attr-defined]
+            animal.facility_type = None  # type: ignore[attr-defined]
+    else:
+        animal.report_media = []  # type: ignore[attr-defined]
+        animal.facility_id = None  # type: ignore[attr-defined]
+        animal.facility_name = None  # type: ignore[attr-defined]
+        animal.facility_type = None  # type: ignore[attr-defined]
+        animal.subdivision_id = None  # type: ignore[attr-defined]
+        animal.barangay_id = None  # type: ignore[attr-defined]
+
+    # Calculate Subdivision and Barangay Stay Durations
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    intake_time = animal.intake_date or animal.created_at or now
+    resolved = animal.facility_status in RESOLVED_STATUSES
+    discharge_time = animal.discharge_date if resolved else None
+
+    subd_intake: Optional[datetime] = None
+    subd_discharge: Optional[datetime] = None
+    brgy_intake: Optional[datetime] = None
+    brgy_discharge: Optional[datetime] = None
+    transfer_date: Optional[datetime] = None
+    has_subd_history = False
+
+    # Check status history for facility transitions
+    if animal.report and hasattr(animal.report, 'history') and animal.report.history:
+        sorted_history = sorted(animal.report.history, key=lambda h: h.created_at or datetime.min)
+        for h in sorted_history:
+            if h.facility:
+                if h.facility.subdivision_id is not None:
+                    has_subd_history = True
+                    if subd_intake is None:
+                        subd_intake = h.created_at
+                else:
+                    if brgy_intake is None:
+                        brgy_intake = h.created_at
+                        if has_subd_history and transfer_date is None:
+                            transfer_date = h.created_at
+
+    # Also check timeline logs for transfer events
+    if animal.timeline:
+        sorted_logs = sorted(animal.timeline, key=lambda l: l.logged_at or datetime.min)
+        for log in sorted_logs:
+            title_lower = (log.title or '').lower()
+            notes_lower = (log.notes or '').lower()
+            if 'transfer' in title_lower or 'relocat' in title_lower or 'transfer' in notes_lower:
+                if transfer_date is None and ('barangay' in title_lower or 'barangay' in notes_lower or 'shelter' in notes_lower):
+                    transfer_date = log.logged_at
+
+    is_curr_subd = current_facility and current_facility.subdivision_id is not None
+    is_curr_brgy = current_facility and current_facility.subdivision_id is None
+
+    if is_curr_subd:
+        subd_intake = subd_intake or intake_time
+        if discharge_time:
+            subd_discharge = discharge_time
+    elif is_curr_brgy:
+        if transfer_date:
+            subd_intake = subd_intake or intake_time
+            subd_discharge = transfer_date
+            brgy_intake = transfer_date
+            if discharge_time:
+                brgy_discharge = discharge_time
+        elif has_subd_history or (animal.report and animal.report.subdivision_id):
+            subd_intake = subd_intake or intake_time
+            brgy_intake = brgy_intake or intake_time
+            if discharge_time:
+                brgy_discharge = discharge_time
+        else:
+            brgy_intake = intake_time
+            if discharge_time:
+                brgy_discharge = discharge_time
+    else:
+        brgy_intake = intake_time
+        if discharge_time:
+            brgy_discharge = discharge_time
+
+    # Compute Subdivision duration
+    if subd_intake:
+        end_subd = subd_discharge or (now if is_curr_subd and not resolved else (transfer_date or now))
+        subd_duration_sec = max(0.0, (end_subd - subd_intake).total_seconds())
+        animal.subd_intake_date = subd_intake
+        animal.subd_discharge_date = subd_discharge
+        animal.subd_duration_days = round(subd_duration_sec / 86400, 2)
+        animal.subd_duration_display = _format_duration(subd_duration_sec)
+    else:
+        animal.subd_intake_date = None
+        animal.subd_discharge_date = None
+        animal.subd_duration_days = 0.0
+        animal.subd_duration_display = "0 days"
+
+    # Compute Barangay duration
+    if brgy_intake:
+        end_brgy = brgy_discharge or (now if not resolved else brgy_intake)
+        brgy_duration_sec = max(0.0, (end_brgy - brgy_intake).total_seconds())
+        animal.brgy_intake_date = brgy_intake
+        animal.brgy_discharge_date = brgy_discharge
+        animal.brgy_duration_days = round(brgy_duration_sec / 86400, 2)
+        animal.brgy_duration_display = _format_duration(brgy_duration_sec)
+    else:
+        animal.brgy_intake_date = None
+        animal.brgy_discharge_date = None
+        animal.brgy_duration_days = 0.0
+        animal.brgy_duration_display = "0 days"
+
+    # Compute total custody duration
+    start_total = subd_intake or brgy_intake or intake_time
+    end_total = discharge_time or now
+    total_sec = max(0.0, (end_total - start_total).total_seconds())
+    animal.total_duration_days = round(total_sec / 86400, 2)
+    animal.total_duration_display = _format_duration(total_sec)
+    animal.current_facility_duration_display = (
+        animal.subd_duration_display if is_curr_subd else animal.brgy_duration_display
+    )
+
     for log in animal.timeline:
         if log.staff:
             log.staff_name = log.staff.name  # type: ignore[attr-defined]
@@ -54,7 +205,10 @@ def _load(holding_id: int, db: Session) -> Optional[HoldingAnimal]:
     return (
         db.query(HoldingAnimal)
         .options(
-            joinedload(HoldingAnimal.report),
+            joinedload(HoldingAnimal.report).joinedload(Report.media),
+            joinedload(HoldingAnimal.report).joinedload(Report.facility),
+            joinedload(HoldingAnimal.report).joinedload(Report.subdivision),
+            joinedload(HoldingAnimal.report).joinedload(Report.history).joinedload(StatusHistory.facility),
             joinedload(HoldingAnimal.intake_staff),
             joinedload(HoldingAnimal.status_obj),
             joinedload(HoldingAnimal.timeline).joinedload(HoldingTimeline.staff),
@@ -67,12 +221,41 @@ def _load(holding_id: int, db: Session) -> Optional[HoldingAnimal]:
 
 # ── GET /holding/metrics ───────────────────────────────────────────────────────
 @router.get("/metrics", response_model=HoldingMetricsResponse)
-def get_metrics(db: Session = Depends(get_db)):
-    animals = (
+def get_metrics(
+    subdivision_id: Optional[int] = None,
+    barangay_id: Optional[int] = None,
+    facility_id: Optional[int] = None,
+    barangay_only: Optional[bool] = None,
+    db: Session = Depends(get_db)
+):
+    query = (
         db.query(HoldingAnimal)
+        .join(HoldingAnimal.report)
         .options(joinedload(HoldingAnimal.status_obj))
-        .all()
     )
+
+    if facility_id is not None:
+        query = query.filter(Report.facility_id == facility_id)
+    elif subdivision_id is not None:
+        query = query.outerjoin(Report.facility).filter(
+            or_(
+                Report.subdivision_id == subdivision_id,
+                Landmark.subdivision_id == subdivision_id
+            )
+        )
+    elif barangay_only:
+        query = query.outerjoin(Report.facility).filter(Landmark.subdivision_id.is_(None))
+        if barangay_id is not None:
+            query = query.filter(Landmark.barangay_id == barangay_id)
+    elif barangay_id is not None:
+        query = query.outerjoin(Report.subdivision).outerjoin(Report.facility).filter(
+            or_(
+                Subdivision.barangay_id == barangay_id,
+                Landmark.barangay_id == barangay_id
+            )
+        )
+
+    animals = query.all()
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     deadline = timedelta(days=IMPOUND_DAYS)
     warn_threshold = timedelta(days=EXPIRY_WARNING_DAYS)
@@ -111,19 +294,50 @@ def get_metrics(db: Session = Depends(get_db)):
 
 # ── GET /holding/ ─────────────────────────────────────────────────────────────
 @router.get("/", response_model=List[HoldingAnimalResponse])
-def list_animals(db: Session = Depends(get_db)):
-    animals = (
+def list_animals(
+    subdivision_id: Optional[int] = None,
+    barangay_id: Optional[int] = None,
+    facility_id: Optional[int] = None,
+    barangay_only: Optional[bool] = None,
+    db: Session = Depends(get_db)
+):
+    query = (
         db.query(HoldingAnimal)
+        .join(HoldingAnimal.report)
         .options(
-            joinedload(HoldingAnimal.report),
+            joinedload(HoldingAnimal.report).joinedload(Report.media),
+            joinedload(HoldingAnimal.report).joinedload(Report.facility),
+            joinedload(HoldingAnimal.report).joinedload(Report.subdivision),
+            joinedload(HoldingAnimal.report).joinedload(Report.history).joinedload(StatusHistory.facility),
             joinedload(HoldingAnimal.intake_staff),
             joinedload(HoldingAnimal.status_obj),
             joinedload(HoldingAnimal.timeline).joinedload(HoldingTimeline.staff),
             joinedload(HoldingAnimal.timeline).joinedload(HoldingTimeline.media),
         )
-        .order_by(HoldingAnimal.intake_date.desc())
-        .all()
     )
+
+    if facility_id is not None:
+        query = query.filter(Report.facility_id == facility_id)
+    elif subdivision_id is not None:
+        query = query.outerjoin(Report.facility).filter(
+            or_(
+                Report.subdivision_id == subdivision_id,
+                Landmark.subdivision_id == subdivision_id
+            )
+        )
+    elif barangay_only:
+        query = query.outerjoin(Report.facility).filter(Landmark.subdivision_id.is_(None))
+        if barangay_id is not None:
+            query = query.filter(Landmark.barangay_id == barangay_id)
+    elif barangay_id is not None:
+        query = query.outerjoin(Report.subdivision).outerjoin(Report.facility).filter(
+            or_(
+                Subdivision.barangay_id == barangay_id,
+                Landmark.barangay_id == barangay_id
+            )
+        )
+
+    animals = query.order_by(HoldingAnimal.intake_date.desc()).all()
     for a in animals:
         _populate(a)
     return animals

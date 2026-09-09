@@ -173,3 +173,42 @@
     transition-duration: 250ms;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Global Map Marker Hover Protection - Dot MUST NEVER MOVE OR DISAPPEAR */
+/* -------------------------------------------------------------------------- */
+.leaflet-marker-icon {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+}
+
+.leaflet-marker-icon:hover,
+.leaflet-marker-icon:active,
+.leaflet-marker-icon:focus {
+  z-index: 9999 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+}
+
+.leaflet-marker-icon:hover > div {
+  transform: scale(1.15);
+  transition: transform 0.15s ease-out;
+}
+
+.user-location-marker {
+  background: transparent !important;
+  border: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+}
+
+.user-location-marker:hover,
+.user-location-marker:active,
+.user-location-marker:focus {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+}

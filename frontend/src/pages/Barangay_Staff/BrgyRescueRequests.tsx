@@ -35,6 +35,21 @@ interface RescueRequest {
         latitude: number;
         longitude: number;
         landmark: string;
+        initial_landmark?: string | null;
+        facility_id?: number | null;
+        custody_status?: string | null;
+        facility?: {
+            landmark_id?: number;
+            name: string;
+            contact_person?: string | null;
+            contact_number?: string | null;
+            caretaker_name?: string | null;
+            caretaker_phone?: string | null;
+            subdivision_name?: string | null;
+            latitude?: number;
+            longitude?: number;
+            [key: string]: any;
+        } | null;
         animal_count: number;
         description: string;
         reporter_name?: string;
@@ -74,6 +89,15 @@ interface RescueRequest {
     leader_position?: string;
     assigned_staff_name?: string;
     staff_id?: number;
+    assignments?: Array<{
+        assignment_id?: number;
+        staff_id?: number;
+        staff_name?: string;
+        staff_email?: string;
+        staff_phone?: string;
+        staff_photo?: string;
+        status?: string;
+    }>;
 }
 
 const statusMap: Record<number, string> = {
@@ -115,6 +139,7 @@ const BrgyRescueRequests = () => {
     const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
     const [personnel, setPersonnel] = useState<any[]>([]);
     const [selectedPersonnelId, setSelectedPersonnelId] = useState<number | null>(null);
+    const [selectedPersonnelIds, setSelectedPersonnelIds] = useState<number[]>([]);
     const [assignmentRemarks, setAssignmentRemarks] = useState('');
     const [resolvedAddress, setResolvedAddress] = useState('');
     const [isGeocoding, setIsGeocoding] = useState(false);
@@ -134,6 +159,19 @@ const BrgyRescueRequests = () => {
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
     const currentUserId = currentUser ? currentUser.user_id : 1;
+    const isHeadOfficer = Boolean(currentUser?.is_head_officer || currentUser?.role_id === 4 || currentUser?.role_id === 5);
+
+    const isUserAssignedToRescue = (req: RescueRequest | null): boolean => {
+        if (!req) return false;
+        if (Number(req.staff_id) === Number(currentUserId) || Number(req.leader_id) === Number(currentUserId)) return true;
+        if (req.assignments && Array.isArray(req.assignments)) {
+            return req.assignments.some(a => 
+                (a.status === 'Assigned' || (a as any).assignment_status === 'Assigned' || !a.status) &&
+                (Number(a.staff_id) === Number(currentUserId) || Number((a as any).user_id) === Number(currentUserId))
+            );
+        }
+        return false;
+    };
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -261,8 +299,8 @@ const BrgyRescueRequests = () => {
     };
 
     const openRequestModal = (request: RescueRequest) => {
-        console.log("Opening request details:", request);
-        setViewingRequest(request);
+        const targetId = request.report?.report_id || request.report_id || request.rescue_id;
+        navigate(`/brgy/reports/${targetId}`);
     };
 
     useEffect(() => {
@@ -272,10 +310,13 @@ const BrgyRescueRequests = () => {
 
     const handleUpdateStatus = async () => {
         if (!statusToUpdate || !currentUser) return;
+        if (!isHeadOfficer && !isUserAssignedToRescue(viewingRequest)) {
+            alert('Access restricted: Only personnel assigned to this report (or the Barangay Head Officer) have the ability to update its status.');
+            return;
+        }
 
-        // Validation: Must select personnel for status 5 (Dispatched)
-        if (statusToUpdate.statusId === 5 && !selectedPersonnelId) {
-            alert('Please select a personnel to handle this rescue.');
+        if (statusToUpdate.statusId === 5 && selectedPersonnelIds.length === 0 && !selectedPersonnelId) {
+            alert('Please select at least 1 responder to handle this dispatch operation.');
             return;
         }
 
@@ -294,23 +335,27 @@ const BrgyRescueRequests = () => {
                 9: "Claimed by owner.",
                 10: "Safely released.",
                 11: "Incident has been resolved.",
-                12: "Resolved (animal deceased)."
+                12: "Resolved (animal deceased).",
+                14: "Case dismissed (false alarm).",
+                17: "Animal cannot be found at the reported location."
             };
 
             const defaultRemark = friendlyDefaults[statusToUpdate.statusId] || `Status updated to ${statusMap[statusToUpdate.statusId] || reportStatusMap[statusToUpdate.statusId]}`;
+            const primaryId = selectedPersonnelIds[0] || selectedPersonnelId || null;
 
             // 1. Update Rescue & Report Status in ONE call
             const rescuePayload = {
-                status_id: statusToUpdate.statusId, // Use the ACTUAL status (4, 5, 7, etc.)
+                status_id: statusToUpdate.statusId, // Use the ACTUAL status (4, 5, 7, 17, etc.)
                 barangay_staff_id: currentUser.user_id,
-                assigned_personnel_id: selectedPersonnelId,
+                assigned_personnel_id: primaryId,
+                assigned_personnel_ids: selectedPersonnelIds.length > 0 ? selectedPersonnelIds : (primaryId ? [primaryId] : undefined),
                 remarks: statusUpdateMessage || defaultRemark,
-                animal_condition: (statusToUpdate.statusId === 6 || statusToUpdate.statusId === 11) ? statusUpdateCondition : undefined
+                animal_condition: statusUpdateCondition || undefined
             };
             const rescueResponse = await axios.patch(`http://localhost:8000/rescue-requests/${statusToUpdate.requestId}`, rescuePayload);
 
             // 3. Upload Media if any
-            if (statusMediaFiles.length > 0 && (statusToUpdate.statusId === 6 || statusToUpdate.statusId === 11)) {
+            if (statusMediaFiles.length > 0 && (statusToUpdate.statusId === 6 || statusToUpdate.statusId === 11 || statusToUpdate.statusId === 5)) {
                 // Find the history entry we just created in the response
                 const newHistoryEntry = rescueResponse.data.report?.history
                     ?.filter((h: any) => h.report_status_id === statusToUpdate.statusId)
@@ -344,6 +389,7 @@ const BrgyRescueRequests = () => {
             setStatusUpdateMessage('');
             setStatusUpdateCondition('');
             setSelectedPersonnelId(null);
+            setSelectedPersonnelIds([]);
             setAssignmentRemarks('');
             fetchRequests();
             setViewingRequest(null);
@@ -355,20 +401,80 @@ const BrgyRescueRequests = () => {
         }
     };
 
-    const openStatusUpdate = (requestId: number, reportId: number, statusId: number) => {
+    const togglePersonnelSelection = (pid: number) => {
+        if (selectedPersonnelIds.includes(pid)) {
+            const next = selectedPersonnelIds.filter(id => id !== pid);
+            setSelectedPersonnelIds(next);
+            setSelectedPersonnelId(next[0] || null);
+        } else {
+            if (selectedPersonnelIds.length >= 5) {
+                alert('A maximum of 5 field responders can be assigned to a rescue team.');
+                return;
+            }
+            const next = [...selectedPersonnelIds, pid];
+            setSelectedPersonnelIds(next);
+            setSelectedPersonnelId(next[0] || null);
+        }
+    };
+
+    const getEffectiveAnimalCondition = (rep: any): string => {
+        if (!rep) return 'Unknown';
+        if (rep.verified_injury) return 'Injured';
+        const rawCond = (rep.condition || '').trim();
+        const rawCondLower = rawCond.toLowerCase();
+        const isInjuredCategory = rep.category_id === 1 || (categoryMap[rep.category_id] || '').toLowerCase().includes('injured');
+        const desc = (rep.description || '').toLowerCase();
+        const hasInjuredInDesc = desc.includes('observed conditions: injured') || desc.includes('injured') || desc.includes('injury');
+
+        if (rawCondLower.includes('injured') || isInjuredCategory || hasInjuredInDesc || Boolean(rep.ai_behavior_injury)) {
+            return 'Injured';
+        }
+
+        if (rawCondLower.includes('limp') || desc.includes('limp')) return 'Limping';
+        if (rawCondLower.includes('sick') || rawCondLower.includes('weak') || desc.includes('sick') || desc.includes('weak')) return 'Sick / Weak';
+        if (rawCondLower.includes('aggress') || desc.includes('aggressive')) return 'Aggressive';
+        if (rawCondLower.includes('thin') || rawCondLower.includes('malnourish') || desc.includes('malnourished') || desc.includes('thin')) return 'Thin / Malnourished';
+        if (rawCondLower.includes('nurs') || rawCondLower.includes('pregnan') || desc.includes('pregnant') || desc.includes('nursing')) return 'Nursing / Pregnant';
+        if (rawCondLower.includes('deceas') || rawCondLower.includes('dead') || desc.includes('deceased') || desc.includes('dead')) return 'Deceased';
+
+        if (rawCond && rawCondLower !== 'unknown' && rawCondLower !== 'healthy') {
+            return rawCond;
+        }
+        return 'Healthy';
+    };
+
+    const openStatusUpdate = (requestId: number, reportId: number, statusId: number, targetRequest?: RescueRequest) => {
+        const reqToUse = targetRequest || viewingRequest;
+        if (!isHeadOfficer && !isUserAssignedToRescue(reqToUse)) {
+            alert('Access restricted: Only personnel assigned to this report (or the Barangay Head Officer) have the ability to update its status.');
+            return;
+        }
+        if (targetRequest) {
+            setViewingRequest(targetRequest);
+        }
         setStatusToUpdate({ requestId, reportId, statusId });
         setIsStatusModalOpen(true);
         setStatusMediaFiles([]);
 
-        // Pre-fill animal condition from citizen report
-        if (viewingRequest?.report?.condition) {
-            setStatusUpdateCondition(viewingRequest.report.condition);
-        }
+        // Pre-fill animal condition from citizen report or ground-truth verification
+        const initialCond = getEffectiveAnimalCondition(reqToUse?.report || null);
+        setStatusUpdateCondition(initialCond !== 'Unknown' ? initialCond : 'Healthy');
 
-        // Pre-fill if already assigned
-        if (viewingRequest?.staff_id) {
-            setSelectedPersonnelId(viewingRequest.staff_id);
+        // Pre-fill active assigned team
+        const activeIds: number[] = [];
+        if (reqToUse?.assignments && reqToUse.assignments.length > 0) {
+            reqToUse.assignments.forEach(a => {
+                if (a.status === 'Assigned' || (a as any).assignment_status === 'Assigned') {
+                    const sid = a.staff_id;
+                    if (sid && !activeIds.includes(sid)) activeIds.push(sid);
+                }
+            });
         }
+        if (activeIds.length === 0 && reqToUse?.staff_id) {
+            activeIds.push(reqToUse.staff_id);
+        }
+        setSelectedPersonnelIds(activeIds);
+        setSelectedPersonnelId(activeIds[0] || null);
     };
 
     const getPriorityColor = (priority: string) => {
@@ -709,17 +815,38 @@ const BrgyRescueRequests = () => {
                                                                         <button
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation();
-                                                                                setViewingRequest(req);
-                                                                                openStatusUpdate(req.rescue_id, req.report_id || report?.report_id || 0, reportStatusId);
+                                                                                const repId = req.report_id || req.report?.report_id || req.rescue_id;
+                                                                                setSelectedChatReport({
+                                                                                    ...req.report,
+                                                                                    report_id: repId,
+                                                                                    rescue_id: req.rescue_id,
+                                                                                    title: req.title,
+                                                                                    reporter_name: req.report?.reporter_name || req.leader_name
+                                                                                });
+                                                                                setIsChatOpen(true);
                                                                                 setOpenMenuId(null);
                                                                             }}
                                                                             className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50 transition-colors"
                                                                         >
-                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                                                            </svg>
-                                                                            Update Status
+                                                                            <span>💬</span>
+                                                                            Case Chat
                                                                         </button>
+                                                                        {isHeadOfficer && (
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    setViewingRequest(req);
+                                                                                    openStatusUpdate(req.rescue_id, req.report_id || report?.report_id || 0, reportStatusId, req);
+                                                                                    setOpenMenuId(null);
+                                                                                }}
+                                                                                className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50 transition-colors"
+                                                                            >
+                                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                                                </svg>
+                                                                                Update Status
+                                                                            </button>
+                                                                        )}
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -785,13 +912,15 @@ const BrgyRescueRequests = () => {
 
                                                     {/* Location Badge */}
                                                     <div className="flex items-center space-x-1.5 text-gray-600 bg-gray-50/80 p-2.5 rounded-xl border border-gray-100 mb-3 text-xs">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-[#F97316] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                        </svg>
-                                                        <span className="truncate font-semibold text-gray-800" title={report?.landmark || 'Reported Location'}>
-                                                            {report?.landmark || 'Reported Location'}
+                                                        <span className="shrink-0">{report?.facility_id || report?.facility ? '🐾' : '📍'}</span>
+                                                        <span className="truncate font-semibold text-gray-800" title={report?.facility?.name || report?.landmark || 'Reported Location'}>
+                                                            {report?.facility?.name ? `Facility: ${report.facility.name}` : (report?.landmark || 'Reported Location')}
                                                         </span>
+                                                        {report?.facility?.subdivision_name && (
+                                                            <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded ml-auto shrink-0">
+                                                                {report.facility.subdivision_name}
+                                                            </span>
+                                                        )}
                                                     </div>
 
                                                     {/* Description / Leader Notes Preview */}
@@ -802,14 +931,33 @@ const BrgyRescueRequests = () => {
                                                     )}
 
                                                     {/* Assigned Personnel Badge if exists */}
-                                                    {req.assigned_staff_name && (
-                                                        <div className="inline-flex items-center space-x-2 bg-blue-50 border border-blue-100 px-3 py-1 rounded-lg text-xs text-blue-700 font-semibold mb-3">
-                                                            <div className="w-4 h-4 rounded-full bg-blue-200 text-blue-800 flex items-center justify-center text-[9px] font-bold">
-                                                                {req.assigned_staff_name.charAt(0)}
+                                                    {(() => {
+                                                        const activeAssignments = (req.assignments || []).filter(
+                                                            (a: any) => a.assignment_status !== 'Cancelled' && a.status !== 'Cancelled'
+                                                        );
+                                                        const uniqueAssignments = Array.from(
+                                                            new Map(
+                                                                activeAssignments.map((a: any) => [a.user_id || a.staff_id || a.staff_name, a])
+                                                            ).values()
+                                                        );
+                                                        const count = uniqueAssignments.length;
+                                                        const leadName = req.assigned_staff_name || uniqueAssignments[0]?.staff_name;
+
+                                                        if (count === 0 && !leadName) return null;
+
+                                                        return (
+                                                            <div className="inline-flex items-center space-x-2 bg-blue-50 border border-blue-100 px-3 py-1 rounded-lg text-xs text-blue-700 font-semibold mb-3">
+                                                                <div className="w-4 h-4 rounded-full bg-blue-200 text-blue-800 flex items-center justify-center text-[9px] font-bold">
+                                                                    {count > 1 ? '👥' : (leadName || 'A').charAt(0)}
+                                                                </div>
+                                                                <span>
+                                                                    {count > 1
+                                                                        ? `${count} Responders Assigned`
+                                                                        : `Assigned: ${leadName || 'Staff'}`}
+                                                                </span>
                                                             </div>
-                                                            <span>Assigned: {req.assigned_staff_name}</span>
-                                                        </div>
-                                                    )}
+                                                        );
+                                                    })()}
                                                 </div>
 
                                                 {/* Card Footer */}
@@ -826,16 +974,38 @@ const BrgyRescueRequests = () => {
                                                         </div>
                                                     </div>
 
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            openRequestModal(req);
-                                                        }}
-                                                        className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] rounded-xl text-xs font-bold transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
-                                                    >
-                                                        Review →
-                                                    </button>
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                const repId = req.report_id || req.report?.report_id || req.rescue_id;
+                                                                setSelectedChatReport({
+                                                                    ...req.report,
+                                                                    report_id: repId,
+                                                                    rescue_id: req.rescue_id,
+                                                                    title: req.title,
+                                                                    reporter_name: req.report?.reporter_name || req.leader_name
+                                                                });
+                                                                setIsChatOpen(true);
+                                                            }}
+                                                            className="px-2.5 py-1.5 bg-white hover:bg-orange-50 text-[#F97316] border border-orange-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                                                            title="Open Case Coordination Chat"
+                                                        >
+                                                            <span>💬</span>
+                                                            <span className="hidden sm:inline">Chat</span>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                openRequestModal(req);
+                                                            }}
+                                                            className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] rounded-xl text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                                                        >
+                                                            Review →
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         );
@@ -881,20 +1051,44 @@ const BrgyRescueRequests = () => {
                                         )
                                     },
                                     {
-                                        header: "Assigned",
+                                        header: "Assigned Team",
                                         key: "assigned",
-                                        render: (req) => (
-                                            req.assigned_staff_name ? (
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-[8px] font-bold text-blue-600 border border-blue-200">
-                                                        {req.assigned_staff_name.charAt(0)}
+                                        render: (req) => {
+                                            const activeAssignments = (req.assignments || []).filter(
+                                                (a: any) => a.assignment_status !== 'Cancelled' && a.status !== 'Cancelled'
+                                            );
+                                            const team = Array.from(
+                                                new Map(
+                                                    activeAssignments.map((a: any) => [a.user_id || a.staff_id || a.staff_name, a])
+                                                ).values()
+                                            );
+                                            if (team.length > 1) {
+                                                return (
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="flex -space-x-1.5 overflow-hidden">
+                                                            {team.slice(0, 3).map((m, idx) => (
+                                                                <div key={idx} className="w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center text-[8px] font-bold border border-white" title={m.staff_name}>
+                                                                    {(m.staff_name || 'S').charAt(0)}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <span className="text-[10px] font-bold text-blue-700">Team of {team.length}</span>
                                                     </div>
-                                                    <span className="text-[10px] font-bold text-gray-900">{req.assigned_staff_name}</span>
-                                                </div>
-                                            ) : (
-                                                <span className="text-[10px] font-medium text-gray-400 italic">Not Assigned</span>
-                                            )
-                                        )
+                                                );
+                                            }
+                                            if (req.assigned_staff_name || team.length === 1) {
+                                                const name = req.assigned_staff_name || team[0]?.staff_name;
+                                                return (
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-[8px] font-bold text-blue-600 border border-blue-200">
+                                                            {name?.charAt(0)}
+                                                        </div>
+                                                        <span className="text-[10px] font-bold text-gray-900">{name}</span>
+                                                    </div>
+                                                );
+                                            }
+                                            return <span className="text-[10px] font-medium text-gray-400 italic">Not Assigned</span>;
+                                        }
                                     },
                                     {
                                         header: "Prioritization",
@@ -953,17 +1147,20 @@ const BrgyRescueRequests = () => {
                                         header: "Action",
                                         key: "action",
                                         className: "text-right",
-                                        render: (req) => (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    openRequestModal(req);
-                                                }}
-                                                className="text-[10px] font-bold text-[#F97316] hover:underline"
-                                            >
-                                                {req.status_id === 1 ? 'Review Request' : 'Update Status'}
-                                            </button>
-                                        )
+                                        render: (req) => {
+                                            const canUpdate = isHeadOfficer || isUserAssignedToRescue(req);
+                                            return (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openRequestModal(req);
+                                                    }}
+                                                    className={`text-[10px] font-bold hover:underline ${canUpdate ? 'text-[#F97316]' : 'text-gray-500'}`}
+                                                >
+                                                    {canUpdate ? (req.status_id === 1 ? 'Review Request' : 'Update Status') : 'View Details'}
+                                                </button>
+                                            );
+                                        }
                                     }
                                 ]}
                             />
@@ -989,11 +1186,32 @@ const BrgyRescueRequests = () => {
                                 <h3 className="text-xl font-bold text-gray-900">Rescue Request Approval</h3>
                                 <p className="text-xs text-gray-500 mt-1">Review full incident intelligence and documentation</p>
                             </div>
-                            <button onClick={() => setViewingRequest(null)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const repId = viewingRequest.report_id || viewingRequest.report?.report_id || viewingRequest.rescue_id;
+                                        setSelectedChatReport({
+                                            ...viewingRequest.report,
+                                            report_id: repId,
+                                            rescue_id: viewingRequest.rescue_id,
+                                            title: viewingRequest.title,
+                                            reporter_name: viewingRequest.report?.reporter_name || viewingRequest.leader_name
+                                        });
+                                        setIsChatOpen(true);
+                                    }}
+                                    className="px-4 py-2 bg-white hover:bg-orange-50 border border-orange-200 text-[#F97316] text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                    title="Open Case Coordination Chat"
+                                >
+                                    <span>💬</span>
+                                    <span>Case Chat</span>
+                                </button>
+                                <button onClick={() => setViewingRequest(null)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
 
                         <div className="overflow-y-auto custom-scrollbar flex-1 bg-[#FBFBFB]">
@@ -1160,7 +1378,7 @@ const BrgyRescueRequests = () => {
                                     {[
                                         { label: 'Category', value: categoryMap[viewingRequest.report?.category_id || 0] || 'Rescue', color: 'orange' },
                                         { label: 'Animal', value: viewingRequest.report?.animal_type || 'Unknown', color: 'blue' },
-                                        { label: 'Condition', value: viewingRequest.report?.condition || 'Unknown', color: 'red' },
+                                        { label: 'Condition', value: getEffectiveAnimalCondition(viewingRequest.report), color: 'red' },
                                         { label: 'Priority', value: viewingRequest.report?.priority_level || 'Normal', color: 'orange' },
                                         { label: 'Count', value: viewingRequest.report?.animal_count || '1', color: 'gray' }
                                     ].filter(spec => {
@@ -1222,7 +1440,15 @@ const BrgyRescueRequests = () => {
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                             </div>
                                             <div>
-                                                <p className="text-[10px] font-black text-gray-900 uppercase tracking-widest">{viewingRequest.report?.landmark}</p>
+                                                <p className="text-[10px] font-black text-gray-900 uppercase tracking-widest">
+                                                    {viewingRequest.report?.facility?.name ? `🐾 ${viewingRequest.report.facility.name}` : viewingRequest.report?.landmark}
+                                                </p>
+                                                {viewingRequest.report?.facility && (
+                                                    <p className="text-[10px] text-amber-700 font-bold">
+                                                        Caretaker: {viewingRequest.report.facility.contact_person || viewingRequest.report.facility.caretaker_name || 'Designated Staff'}
+                                                        {(viewingRequest.report.facility.contact_number || viewingRequest.report.facility.caretaker_phone) ? ` (${viewingRequest.report.facility.contact_number || viewingRequest.report.facility.caretaker_phone})` : ''}
+                                                    </p>
+                                                )}
                                                 <p className="text-[11px] text-gray-700 font-semibold mt-0.5">
                                                     {isGeocoding ? 'Resolving street/location...' : resolvedAddress || 'Street address not found'}
                                                 </p>
@@ -1230,50 +1456,70 @@ const BrgyRescueRequests = () => {
                                             </div>
                                         </div>
                                         <div className="w-full h-[300px] rounded-[2rem] overflow-hidden border border-gray-100 relative">
-                                            <MapComponent
-                                                center={[viewingRequest.report?.latitude || BRGY_OFFICE[0], viewingRequest.report?.longitude || BRGY_OFFICE[1]]}
-                                                zoom={16}
-                                                markers={[
-                                                    {
-                                                        id: viewingRequest.report_id,
-                                                        lat: viewingRequest.report?.latitude || BRGY_OFFICE[0],
-                                                        lng: viewingRequest.report?.longitude || BRGY_OFFICE[1],
-                                                        title: viewingRequest.report?.landmark || 'Rescue Site',
-                                                        category: categoryMap[viewingRequest.report?.category_id || 0] || 'Rescue',
-                                                        priority: viewingRequest.report?.priority_level,
-                                                        time: 'Now'
-                                                    },
-                                                    {
-                                                        id: -1,
-                                                        lat: BRGY_OFFICE[0],
-                                                        lng: BRGY_OFFICE[1],
-                                                        title: "Barangay Hall",
-                                                        category: "Barangay Office"
-                                                    },
-                                                    ...(userLocation ? [{
-                                                        id: -2,
-                                                        lat: userLocation[0],
-                                                        lng: userLocation[1],
-                                                        title: "Your Location",
-                                                        category: "User Location"
-                                                    }] : [])
-                                                ]}
-                                                routing={isNavigating ? {
-                                                    start: navSource === 'brgy' ? BRGY_OFFICE : (userLocation || BRGY_OFFICE),
-                                                    end: [viewingRequest.report?.latitude || BRGY_OFFICE[0], viewingRequest.report?.longitude || BRGY_OFFICE[1]],
-                                                    waypointNames: [navSource === 'brgy' ? "Barangay Office" : "Your Location", viewingRequest.report?.landmark || "Rescue Site"],
-                                                    onClose: () => setIsNavigating(false)
-                                                } : undefined}
-                                                onMarkerClick={(m) => {
-                                                    if (m.source) {
-                                                        setNavSource(m.source);
-                                                        setIsNavigating(true);
-                                                    } else {
-                                                        setIsNavigating(true);
-                                                        setNavSource('brgy');
-                                                    }
-                                                }}
-                                            />
+                                            {(() => {
+                                                const rep = viewingRequest.report as any;
+                                                const isFac = !!rep?.facility_id || rep?.custody_status === 'Secured in Facility' || rep?.custody_status === 'In Barangay Facility' || !!rep?.facility;
+                                                const facLat = rep?.facility?.latitude != null ? parseFloat(rep.facility.latitude.toString()) : null;
+                                                const facLng = rep?.facility?.longitude != null ? parseFloat(rep.facility.longitude.toString()) : null;
+                                                const currentLat = (isFac && facLat != null) ? facLat : (rep?.latitude || BRGY_OFFICE[0]);
+                                                const currentLng = (isFac && facLng != null) ? facLng : (rep?.longitude || BRGY_OFFICE[1]);
+
+                                                return (
+                                                    <MapComponent
+                                                        center={[currentLat, currentLng]}
+                                                        zoom={16}
+                                                        markers={[
+                                                            {
+                                                                id: viewingRequest.report_id,
+                                                                lat: currentLat,
+                                                                lng: currentLng,
+                                                                title: isFac ? `Secured: ${rep?.facility?.name || rep?.landmark}` : (rep?.landmark || 'Rescue Site'),
+                                                                category: isFac ? 'Holding Facility' : (categoryMap[rep?.category_id || 0] || 'Rescue'),
+                                                                priority: rep?.priority_level,
+                                                                time: 'Now',
+                                                                rawData: rep
+                                                            },
+                                                            ...(isFac && rep?.initial_latitude && rep?.initial_longitude ? [{
+                                                                id: -999,
+                                                                lat: parseFloat(rep.initial_latitude.toString()),
+                                                                lng: parseFloat(rep.initial_longitude.toString()),
+                                                                title: `Found Location: ${rep.initial_landmark || 'Initial Sighting Spot'}`,
+                                                                category: 'Initial Sighting',
+                                                                priority: 'Medium'
+                                                            }] : []),
+                                                            {
+                                                                id: -1,
+                                                                lat: BRGY_OFFICE[0],
+                                                                lng: BRGY_OFFICE[1],
+                                                                title: "Barangay Hall",
+                                                                category: "Barangay Office"
+                                                            },
+                                                            ...(userLocation ? [{
+                                                                id: -2,
+                                                                lat: userLocation[0],
+                                                                lng: userLocation[1],
+                                                                title: "Your Location",
+                                                                category: "User Location"
+                                                            }] : [])
+                                                        ]}
+                                                        routing={isNavigating ? {
+                                                            start: navSource === 'brgy' ? BRGY_OFFICE : (userLocation || BRGY_OFFICE),
+                                                            end: [currentLat, currentLng],
+                                                            waypointNames: [navSource === 'brgy' ? "Barangay Office" : "Your Location", isFac ? (rep?.facility?.name || 'Holding Facility') : (rep?.landmark || "Rescue Site")],
+                                                            onClose: () => setIsNavigating(false)
+                                                        } : undefined}
+                                                        onMarkerClick={(m) => {
+                                                            if (m.source) {
+                                                                setNavSource(m.source);
+                                                                setIsNavigating(true);
+                                                            } else {
+                                                                setIsNavigating(true);
+                                                                setNavSource('brgy');
+                                                            }
+                                                        }}
+                                                    />
+                                                );
+                                            })()}
                                         </div>
                                     </div>
                                 </div>
@@ -1295,7 +1541,22 @@ const BrgyRescueRequests = () => {
                         </div>
 
                         <div className="px-8 py-6 border-t border-gray-100 bg-gray-50/50 flex flex-col gap-4">
-                            {viewingRequest.status_id === 1 ? (
+                            {!isHeadOfficer && !isUserAssignedToRescue(viewingRequest) ? (
+                                <div className="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-4 flex items-center justify-between shadow-2xs">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 font-bold">
+                                            🔒
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-black text-amber-900 uppercase tracking-wider">Status Update Restricted</p>
+                                            <p className="text-[11px] text-amber-700 font-medium mt-0.5">Only field personnel assigned to this report (or the Barangay Head Officer) have the ability to update its status.</p>
+                                        </div>
+                                    </div>
+                                    <span className="px-3 py-1 bg-white text-amber-800 rounded-lg text-[10px] font-bold border border-amber-200 uppercase tracking-widest shrink-0">
+                                        Assigned Only
+                                    </span>
+                                </div>
+                            ) : viewingRequest.status_id === 1 ? (
                                 <>
                                     <div className="flex gap-3">
                                         <Button
@@ -1325,10 +1586,11 @@ const BrgyRescueRequests = () => {
                                         { id: 13, label: 'Approved', sub: 'Barangay Accepted' },
                                         { id: 5, label: 'Dispatched', sub: 'On the way' },
                                         { id: 6, label: 'Picked Up', sub: 'Animal secured' },
-                                        { id: 11, label: 'Resolved', sub: 'Operation complete' }
+                                        { id: 11, label: 'Resolved', sub: 'Operation complete' },
+                                        { id: 17, label: 'Cannot Be Found', sub: 'Search complete' }
                                     ].map((opt) => {
                                         // Define the strict order of stages for the progress bar
-                                        const stages = [1, 2, 4, 13, 5, 6, 11];
+                                        const stages = [1, 2, 4, 13, 5, 6, 11, 17];
 
                                         // Use the status being updated to if the modal is open, otherwise use current status
                                         const displayStatusId = statusToUpdate?.statusId || viewingRequest.report?.status_id || 1;
@@ -1388,35 +1650,61 @@ const BrgyRescueRequests = () => {
                             </p>
 
                             <div className="space-y-6 max-h-[40vh] overflow-y-auto px-1 custom-scrollbar">
-                                {/* Personnel Assignment Section - Only show for "Team Dispatched" (5) */}
-                                {statusToUpdate.statusId === 5 && (
-                                    <div className="space-y-4 bg-orange-50/50 p-6 rounded-[2rem] border border-orange-100">
-                                        <div className="flex items-center gap-3 mb-2">
-                                            <div className="w-8 h-8 rounded-full bg-orange-600 text-white flex items-center justify-center">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                {/* Personnel Assignment Section - Show for "Team Dispatched" (5) or Approved (13) */}
+                                {(statusToUpdate.statusId === 5 || statusToUpdate.statusId === 13) && (
+                                    <div className="space-y-3 bg-orange-50/70 p-5 rounded-[2rem] border border-orange-100 shadow-sm">
+                                        <div className="flex items-center justify-between gap-2 mb-1">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-8 h-8 rounded-full bg-orange-600 text-white flex items-center justify-center shadow-xs text-xs font-bold">
+                                                    👥
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest block">Assign Responders (1 or more)</label>
+                                                    <span className="text-[9px] text-orange-700 font-bold uppercase tracking-wider">Tactical Dispatch & Team Lead</span>
+                                                </div>
                                             </div>
-                                            <label className="text-[11px] font-black text-gray-900 uppercase tracking-widest">Assign Personnel</label>
+                                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-white text-orange-700 border border-orange-200">
+                                                {selectedPersonnelIds.length} / 5 Selected
+                                            </span>
                                         </div>
 
-                                        <select
-                                            value={selectedPersonnelId || ''}
-                                            onChange={(e) => setSelectedPersonnelId(Number(e.target.value))}
-                                            className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3 text-xs font-bold text-gray-700 focus:ring-2 focus:ring-orange-500 outline-none shadow-sm"
-                                        >
-                                            <option value="">Select Personnel...</option>
-                                            {personnel.map(p => (
-                                                <option key={p.user_id} value={p.user_id}>{p.name}</option>
-                                            ))}
-                                        </select>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto custom-scrollbar p-1">
+                                            {personnel.map(p => {
+                                                const isSel = selectedPersonnelIds.includes(p.user_id);
+
+                                                return (
+                                                    <div
+                                                        key={p.user_id}
+                                                        onClick={() => togglePersonnelSelection(p.user_id)}
+                                                        className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between text-xs ${
+                                                            isSel ? 'bg-white border-orange-500 shadow-xs ring-2 ring-orange-100' : 'bg-white/80 border-gray-200 hover:border-orange-200'
+                                                        }`}
+                                                    >
+                                                        <div className="truncate min-w-0 pr-1">
+                                                            <p className="font-bold text-gray-900 truncate text-[11px]">{p.name || `${p.first_name || ''} ${p.last_name || ''}`}</p>
+                                                            <p className="text-[9px] text-gray-400 truncate">{p.email}</p>
+                                                        </div>
+                                                        {isSel ? (
+                                                            <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded bg-orange-500 text-white shadow-2xs flex items-center gap-0.5 shrink-0">
+                                                                <span>✓</span> Selected
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-gray-300 text-xs font-bold shrink-0">+</span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
 
                                         <textarea
-                                            placeholder="Special instructions for the team..."
+                                            placeholder="Mission instructions or location notes for the team..."
                                             value={assignmentRemarks}
                                             onChange={(e) => setAssignmentRemarks(e.target.value)}
-                                            className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3 text-xs font-bold text-gray-700 focus:ring-2 focus:ring-orange-500 outline-none shadow-sm min-h-[80px] resize-none"
+                                            className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-700 focus:ring-2 focus:ring-orange-500 outline-none shadow-sm min-h-[60px] resize-none"
                                         />
                                     </div>
                                 )}
+
 
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Status Message / Title</label>
@@ -1428,7 +1716,7 @@ const BrgyRescueRequests = () => {
                                     />
                                 </div>
 
-                                {(statusToUpdate.statusId === 6 || statusToUpdate.statusId === 11) && (
+                                {statusToUpdate.statusId !== 17 && statusToUpdate.statusId !== 3 && statusToUpdate.statusId !== 14 && (
                                     <div className="space-y-3">
                                         <div className="flex justify-between items-end ml-1">
                                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Current Animal Condition</label>
@@ -1438,20 +1726,30 @@ const BrgyRescueRequests = () => {
                                                 </span>
                                             )}
                                         </div>
-                                        <div className="grid grid-cols-3 gap-2">
-                                            {['Healthy', 'Injured', 'Aggressive', 'Thin', 'Nursing', 'Deceased'].map((cond) => (
-                                                <button
-                                                    key={cond}
-                                                    type="button"
-                                                    onClick={() => setStatusUpdateCondition(cond)}
-                                                    className={`py-2.5 px-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border ${statusUpdateCondition === cond
-                                                        ? 'bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-100'
-                                                        : 'bg-white text-gray-400 border-gray-100 hover:border-orange-200'
-                                                        }`}
-                                                >
-                                                    {cond}
-                                                </button>
-                                            ))}
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                            {['Healthy', 'Injured', 'Sick / Weak', 'Limping', 'Aggressive', 'Thin / Malnourished', 'Nursing / Pregnant', 'Deceased'].map((cond) => {
+                                                const isSelected = statusUpdateCondition.trim().toLowerCase() === cond.toLowerCase();
+                                                return (
+                                                    <button
+                                                        key={cond}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (isSelected) {
+                                                                setStatusUpdateCondition('');
+                                                            } else {
+                                                                setStatusUpdateCondition(cond);
+                                                            }
+                                                        }}
+                                                        className={`py-2 px-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border ${isSelected
+                                                            ? 'bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-100'
+                                                            : 'bg-white text-gray-600 border-gray-100 hover:border-orange-200'
+                                                            }`}
+                                                    >
+                                                        {isSelected && <span className="mr-1">✓</span>}
+                                                        {cond}
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}

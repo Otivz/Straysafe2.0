@@ -40,6 +40,9 @@ interface Report {
     created_at: string;
     user_id: number;
     subdivision_id?: number;
+    subdivision_name?: string | null;
+    subdivision?: { subdivision_name?: string; [key: string]: any } | null;
+    endorsement_letter?: any;
     reporter_name?: string;
     reporter_photo?: string;
     media?: any[];
@@ -84,6 +87,34 @@ interface Report {
     verified_by_user_id?: number | null;
     verified_by_name?: string | null;
     verified_at?: string | null;
+    verified_actual_bite?: boolean | null;
+    verified_chasing?: boolean | null;
+    verified_attempted_bite?: boolean | null;
+    verified_injury?: boolean | null;
+    verified_aggressive?: boolean | null;
+    behavior_finding?: string | null;
+    ai_behavior_actual_bite?: boolean | null;
+    ai_behavior_chasing?: boolean | null;
+    ai_behavior_attempted_bite?: boolean | null;
+    ai_behavior_injury?: boolean | null;
+    ai_behavior_aggressive?: boolean | null;
+    initial_latitude?: number | null;
+    initial_longitude?: number | null;
+    initial_landmark?: string | null;
+    facility_id?: number | null;
+    custody_status?: string | null;
+    facility?: {
+        landmark_id?: number;
+        name: string;
+        caretaker_name?: string | null;
+        caretaker_phone?: string | null;
+        is_holding_facility?: boolean;
+        subdivision_id?: number | null;
+        subdivision_name?: string | null;
+        latitude?: number;
+        longitude?: number;
+        [key: string]: any;
+    } | null;
     disputes?: ReportDispute[];
 }
 
@@ -448,11 +479,20 @@ const SubdViewReport = () => {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
+            const isInjured = Boolean(
+                report.verified_injury ||
+                report.category_id === 1 ||
+                (report.condition && report.condition.toLowerCase().includes('injured')) ||
+                (report.description && report.description.toLowerCase().includes('injured'))
+            );
+            const preservedCondition = isInjured ? 'Injured' : (report.condition || undefined);
+
             // 2. Update status to Forwarded (4)
             await axios.patch(`http://localhost:8000/reports/${report.report_id}/status`, {
                 status_id: 4,
                 user_id: currentUserId,
-                remarks: "Report forwarded to Barangay Operations for official review and approval."
+                remarks: "Report forwarded to Barangay Operations for official review and approval.",
+                ...(preservedCondition ? { animal_condition: preservedCondition } : {})
             });
 
             // 3. Create official Rescue Request record
@@ -721,6 +761,46 @@ const SubdViewReport = () => {
         }
         return rep.priority_level || 'Medium';
     };
+
+    // Compute Location and Custody Progression Steps
+    const custodyProgression = (() => {
+        const originLandmark = report?.initial_landmark || (report?.history && report.history[0]?.landmark) || report?.landmark || 'Reported Sighting Location';
+        
+        // Find distinct facility movements in chronological order
+        const facilitySteps: { name: string; date?: string; remarks?: string; isCurrent: boolean }[] = [];
+        const seenFacs = new Set<string>();
+
+        if (report?.history && report.history.length > 0) {
+            report.history.forEach((h: any) => {
+                const facName = h.facility_name || (h.facility_id ? h.landmark : null);
+                if (facName && facName !== originLandmark && !seenFacs.has(facName)) {
+                    seenFacs.add(facName);
+                    const isLatest = (report?.facility?.name === facName) || (report?.facility_id === h.facility_id);
+                    facilitySteps.push({
+                        name: facName,
+                        date: h.created_at,
+                        remarks: h.remarks,
+                        isCurrent: isLatest
+                    });
+                }
+            });
+        }
+
+        const curFacName = report?.facility?.name || (report?.facility_id ? report.landmark : null);
+        if (curFacName && curFacName !== originLandmark && !seenFacs.has(curFacName)) {
+            facilitySteps.push({
+                name: curFacName,
+                isCurrent: true
+            });
+        }
+
+        return {
+            origin: originLandmark,
+            hasMoved: !!(report?.facility_id || report?.facility || facilitySteps.length > 0),
+            steps: facilitySteps,
+            currentFacility: curFacName || (facilitySteps.length > 0 ? facilitySteps[facilitySteps.length - 1].name : null)
+        };
+    })();
 
 
 
@@ -1123,6 +1203,117 @@ const SubdViewReport = () => {
                                     </div>
                                 </div>
 
+                                {/* Location & Custody Movement History Card */}
+                                {(report.facility_id || report.custody_status === 'Secured in Facility' || report.facility || custodyProgression.hasMoved) && (
+                                    <div className="p-6 rounded-3xl bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-amber-500/10 border-2 border-amber-300/80 shadow-sm space-y-4 animate-in fade-in duration-300">
+                                        <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-amber-200/60">
+                                            <div className="flex items-center gap-2.5">
+                                                <span className="w-10 h-10 rounded-2xl bg-amber-600 text-white flex items-center justify-center text-xl font-black shadow-md shadow-amber-600/20">
+                                                    🏠
+                                                </span>
+                                                <div>
+                                                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black uppercase tracking-wider shadow-xs">
+                                                        {report.custody_status || 'Secured in Facility'}
+                                                    </span>
+                                                    <h4 className="text-base font-black text-amber-950 uppercase mt-0.5">
+                                                        Location & Custody Flow
+                                                    </h4>
+                                                </div>
+                                            </div>
+                                            {report.facility?.subdivision_name ? (
+                                                <span className="px-3 py-1 bg-white border border-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                                                    📍 {report.facility.subdivision_name}
+                                                </span>
+                                            ) : (
+                                                <span className="px-3 py-1 bg-white border border-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                                                    📍 Barangay Holding Facility
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* Step-by-Step Movement Chain */}
+                                        <div className="space-y-3">
+                                            {/* 1. Spotted (Preserved Incident Origin) */}
+                                            <div className="flex items-start gap-3 bg-white/95 p-3.5 rounded-2xl border border-amber-200 shadow-2xs">
+                                                <div className="w-8 h-8 rounded-xl bg-orange-100 text-[#F97316] flex items-center justify-center text-sm shrink-0 font-black">
+                                                    🚩
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="text-[10px] font-black text-[#F97316] uppercase tracking-wider">
+                                                            • Spotted (Preserved Incident Origin)
+                                                        </span>
+                                                        {report.created_at && (
+                                                            <span className="text-[9px] font-bold text-gray-400">
+                                                                {new Date(report.created_at).toLocaleDateString()}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-xs font-black text-gray-900 mt-0.5">
+                                                        {custodyProgression.origin}
+                                                    </p>
+                                                    <p className="text-[10px] text-gray-500 font-medium mt-0.5">
+                                                        Initial Sighting Spot where animal was originally reported
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* 2. Previous Facility Holding Location(s) */}
+                                            {custodyProgression.steps.filter(s => !s.isCurrent).map((prevStep, idx) => (
+                                                <div key={idx} className="flex items-start gap-3 bg-white/80 p-3.5 rounded-2xl border border-amber-200/80 shadow-2xs">
+                                                    <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-sm shrink-0 font-black">
+                                                        🏡
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <span className="text-[10px] font-black text-amber-800 uppercase tracking-wider">
+                                                                • Facility Holding Location
+                                                            </span>
+                                                            {prevStep.date && (
+                                                                <span className="text-[9px] font-bold text-gray-400">
+                                                                    {new Date(prevStep.date).toLocaleDateString()}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-xs font-black text-gray-900 mt-0.5">
+                                                            {prevStep.name}
+                                                        </p>
+                                                        <p className="text-[10px] text-gray-500 font-medium mt-0.5">
+                                                            Temporary Holding Pen / Initial Shelter Custody
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ))}
+
+                                            {/* 3. Current Facility Holding Location / Transferred To */}
+                                            <div className="flex items-start gap-3 bg-gradient-to-r from-orange-50/90 to-amber-50/90 p-4 rounded-2xl border-2 border-[#F97316] shadow-xs">
+                                                <div className="w-8 h-8 rounded-xl bg-[#F97316] text-white flex items-center justify-center text-sm shrink-0 font-black">
+                                                    🏢
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="text-[10px] font-black text-[#F97316] uppercase tracking-wider flex items-center gap-1.5">
+                                                            <span>• {custodyProgression.steps.length > 1 ? 'Transferred To (Current Facility)' : 'Current Facility Holding Location'}</span>
+                                                            <span className="px-1.5 py-0.2 rounded bg-[#F97316] text-white text-[8px] font-bold uppercase">Active</span>
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-sm font-black text-gray-900 mt-0.5">
+                                                        {report.facility?.name || custodyProgression.currentFacility || report.landmark || 'Holding Facility'}
+                                                    </p>
+                                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-[10px] font-bold text-gray-600">
+                                                        {(report.facility?.contact_person || report.facility?.caretaker_name) && (
+                                                            <span>Caretaker: <strong className="text-gray-900">{report.facility?.contact_person || report.facility?.caretaker_name}</strong></span>
+                                                        )}
+                                                        {(report.facility?.contact_number || report.facility?.caretaker_phone) && (
+                                                            <span>Hotline: <a href={`tel:${report.facility?.contact_number || report.facility?.caretaker_phone}`} className="text-[#F97316] underline font-black">{report.facility?.contact_number || report.facility?.caretaker_phone}</a></span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Lost Pet Owner Contact & Digital QR Tag Panel */}
                                 {(report.pet_id || report.owner_name || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
                                     <div className="p-6 rounded-3xl bg-gradient-to-br from-amber-50/90 to-orange-50/70 border-2 border-amber-200 shadow-sm space-y-4">
@@ -1447,19 +1638,27 @@ const SubdViewReport = () => {
                                         </button>
                                     </div>
                                     <div className="w-full h-64 rounded-2xl overflow-hidden border border-gray-100 shadow-sm bg-gray-50">
-                                        <MapComponent
-                                            center={[report.latitude, report.longitude]}
-                                            zoom={17}
-                                            showHeatmap={false}
-                                            markers={[
+                                        {(() => {
+                                            const isRelocated = !!report.facility_id || report.custody_status === 'Secured in Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude));
+                                            const markersList = [
                                                 {
                                                     id: report.report_id,
                                                     lat: report.latitude,
                                                     lng: report.longitude,
-                                                    title: report.landmark || 'Incident Location',
-                                                    category: categoryMap[report.category_id],
-                                                    priority: report.priority_level
+                                                    title: isRelocated ? `Secured: ${report.facility?.name || report.landmark}` : (report.landmark || 'Incident Location'),
+                                                    category: isRelocated ? 'Holding Facility' : categoryMap[report.category_id],
+                                                    priority: report.priority_level,
+                                                    rawData: report
                                                 },
+                                                ...(isRelocated && report.initial_latitude && report.initial_longitude ? [{
+                                                    id: -999,
+                                                    lat: report.initial_latitude,
+                                                    lng: report.initial_longitude,
+                                                    title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
+                                                    category: 'Initial Sighting',
+                                                    priority: 'Medium',
+                                                    rawData: { ...report, landmark: report.initial_landmark || 'Initial Sighting Spot' }
+                                                }] : []),
                                                 {
                                                     id: -1,
                                                     lat: BRGY_OFFICE[0],
@@ -1474,31 +1673,40 @@ const SubdViewReport = () => {
                                                     title: "Your Location",
                                                     category: "User Location"
                                                 }] : [])
-                                            ]}
-                                            routing={isNavigating ? (() => {
-                                                const repLoc: [number, number] = [report.latitude, report.longitude];
-                                                const destName = report.landmark || 'Incident Location';
-                                                if (navSource === 'current' && userLocation) {
-                                                    return {
-                                                        start: userLocation,
-                                                        end: repLoc,
-                                                        waypointNames: ["Your Location", destName] as [string, string],
-                                                        onClose: () => setIsNavigating(false)
-                                                    };
-                                                } else {
-                                                    return {
-                                                        start: BRGY_OFFICE,
-                                                        end: repLoc,
-                                                        waypointNames: ["Barangay Office", destName] as [string, string],
-                                                        onClose: () => setIsNavigating(false)
-                                                    };
-                                                }
-                                            })() : undefined}
-                                            onMarkerClick={(m) => {
-                                                setNavSource(m.source || 'brgy');
-                                                setIsNavigating(true);
-                                            }}
-                                        />
+                                            ];
+
+                                            return (
+                                                <MapComponent
+                                                    center={[report.latitude, report.longitude]}
+                                                    zoom={17}
+                                                    showHeatmap={false}
+                                                    markers={markersList}
+                                                    routing={isNavigating ? (() => {
+                                                        const repLoc: [number, number] = [report.latitude, report.longitude];
+                                                        const destName = report.landmark || 'Incident Location';
+                                                        if (navSource === 'current' && userLocation) {
+                                                            return {
+                                                                start: userLocation,
+                                                                end: repLoc,
+                                                                waypointNames: ["Your Location", destName] as [string, string],
+                                                                onClose: () => setIsNavigating(false)
+                                                            };
+                                                        } else {
+                                                            return {
+                                                                start: BRGY_OFFICE,
+                                                                end: repLoc,
+                                                                waypointNames: ["Barangay Office", destName] as [string, string],
+                                                                onClose: () => setIsNavigating(false)
+                                                            };
+                                                        }
+                                                    })() : undefined}
+                                                    onMarkerClick={(m) => {
+                                                        setNavSource(m.source || 'brgy');
+                                                        setIsNavigating(true);
+                                                    }}
+                                                />
+                                            );
+                                        })()}
                                     </div>
                                 </div>
 
@@ -1949,8 +2157,10 @@ const SubdViewReport = () => {
                                                             } else {
                                                                 if (initBite) {
                                                                     setVerifyBehaviorFinding('Confirmed Physical Bite Incident');
-                                                                } else if (initAggressive || initChasing || initAttempted || initInjury) {
+                                                                } else if (initAggressive || initChasing || initAttempted) {
                                                                     setVerifyBehaviorFinding('Substantiated Aggressive Incident');
+                                                                } else if (initInjury) {
+                                                                    setVerifyBehaviorFinding('Injured Animal (Docile / Needs Care)');
                                                                 } else {
                                                                     setVerifyBehaviorFinding('Unsubstantiated / Friendly Dog');
                                                                 }
@@ -1963,7 +2173,7 @@ const SubdViewReport = () => {
                                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                         </svg>
-                                                        VERIFY INCIDENT REPORT
+                                                        VERIFY ANIMAL ACTION
                                                     </button>
                                                 )}
 
@@ -1983,7 +2193,7 @@ const SubdViewReport = () => {
                                                 )}
 
                                                 {/* STEP 2: ESCALATE */}
-                                                {report.status_id === 2 && (
+                                                {(report.status_id === 2 || report.status_id === 7) && (
                                                     <button
                                                         onClick={() => {
                                                             setEscalationTitle('');
@@ -2143,7 +2353,13 @@ const SubdViewReport = () => {
                                                 </div>
                                             </div>
                                             <span className="text-[10px] font-black text-gray-500 bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
-                                                {(report.history?.length || 0) + 1} Event{((report.history?.length || 0) + 1) > 1 ? 's' : ''}
+                                                {(() => {
+                                                    const validHistoryCount = report.history 
+                                                        ? report.history.filter((h: any) => h.remarks !== 'Initial report submitted by resident.').length 
+                                                        : 0;
+                                                    const totalEvents = validHistoryCount + 1;
+                                                    return `${totalEvents} Event${totalEvents > 1 ? 's' : ''}`;
+                                                })()}
                                             </span>
                                         </div>
 
@@ -2169,8 +2385,9 @@ const SubdViewReport = () => {
                                             </div>
 
                                             {/* History / Transfer / Status entries */}
-                                            {report.history && report.history.map((hist: any) => {
+                                            {report.history && report.history.filter((h: any) => h.remarks !== 'Initial report submitted by resident.').map((hist: any) => {
                                                 const remarksLower = (hist.remarks || '').toLowerCase();
+                                                const isFacilityRelocation = (remarksLower.includes('secured') && (remarksLower.includes('facility') || remarksLower.includes('shelter') || remarksLower.includes('holding') || remarksLower.includes('relocated from'))) || hist.facility_id;
                                                 const isTransfer = remarksLower.includes('transfer');
                                                 const isClaim = remarksLower.includes('claim');
                                                 const isWarning = remarksLower.includes('warning') || remarksLower.includes('notice');
@@ -2184,7 +2401,12 @@ const SubdViewReport = () => {
                                                 let cardBg = 'bg-gray-50/70';
                                                 let borderColor = 'border-gray-100';
 
-                                                if (isTransfer) {
+                                                if (isFacilityRelocation) {
+                                                    icon = '🏠';
+                                                    dotColor = 'bg-amber-600';
+                                                    cardBg = 'bg-gradient-to-br from-amber-50/90 to-orange-50/60';
+                                                    borderColor = 'border-amber-300';
+                                                } else if (isTransfer) {
                                                     icon = '🔄';
                                                     dotColor = 'bg-purple-500';
                                                     cardBg = 'bg-purple-50/40';
@@ -2230,7 +2452,7 @@ const SubdViewReport = () => {
                                                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                                                                 <span className="text-xs font-black text-gray-900 flex items-center gap-1.5">
                                                                     <span>{icon}</span>
-                                                                    <span>{hist.updater_name || 'Subdivision Officer'}</span>
+                                                                    <span>{isFacilityRelocation ? 'Animal Relocated & Secured in Facility' : (hist.updater_name || 'Subdivision Officer')}</span>
                                                                 </span>
                                                                 <span className="text-[10px] font-bold text-gray-400">
                                                                     <RelativeTimestamp date={hist.created_at} />
@@ -2522,20 +2744,27 @@ const SubdViewReport = () => {
 
                         {/* Map Area */}
                         <div className="flex-1 rounded-2xl overflow-hidden relative border border-gray-100 min-h-0">
-                            <MapComponent
-                                height="100%"
-                                center={[report.latitude, report.longitude]}
-                                zoom={18}
-                                showHeatmap={false}
-                                markers={[
+                            {(() => {
+                                const isRelocated = !!report.facility_id || report.custody_status === 'Secured in Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude));
+                                const markersList = [
                                     {
                                         id: report.report_id,
                                         lat: report.latitude,
                                         lng: report.longitude,
-                                        title: report.landmark || 'Incident Location',
-                                        category: categoryMap[report.category_id],
-                                        priority: report.priority_level
+                                        title: isRelocated ? `Secured: ${report.facility?.name || report.landmark}` : (report.landmark || 'Incident Location'),
+                                        category: isRelocated ? 'Holding Facility' : categoryMap[report.category_id],
+                                        priority: report.priority_level,
+                                        rawData: report
                                     },
+                                    ...(isRelocated && report.initial_latitude && report.initial_longitude ? [{
+                                        id: -999,
+                                        lat: report.initial_latitude,
+                                        lng: report.initial_longitude,
+                                        title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
+                                        category: 'Initial Sighting',
+                                        priority: 'Medium',
+                                        rawData: { ...report, landmark: report.initial_landmark || 'Initial Sighting Spot' }
+                                    }] : []),
                                     {
                                         id: -1,
                                         lat: BRGY_OFFICE[0],
@@ -2550,31 +2779,41 @@ const SubdViewReport = () => {
                                         title: "Your Location",
                                         category: "User Location"
                                     }] : [])
-                                ]}
-                                routing={isNavigating ? (() => {
-                                    const repLoc: [number, number] = [report.latitude, report.longitude];
-                                    const destName = report.landmark || 'Incident Location';
-                                    if (navSource === 'current' && userLocation) {
-                                        return {
-                                            start: userLocation,
-                                            end: repLoc,
-                                            waypointNames: ["Your Location", destName] as [string, string],
-                                            onClose: () => setIsNavigating(false)
-                                        };
-                                    } else {
-                                        return {
-                                            start: BRGY_OFFICE,
-                                            end: repLoc,
-                                            waypointNames: ["Barangay Office", destName] as [string, string],
-                                            onClose: () => setIsNavigating(false)
-                                        };
-                                    }
-                                })() : undefined}
-                                onMarkerClick={(m) => {
-                                    setNavSource(m.source || 'brgy');
-                                    setIsNavigating(true);
-                                }}
-                            />
+                                ];
+
+                                return (
+                                    <MapComponent
+                                        height="100%"
+                                        center={[report.latitude, report.longitude]}
+                                        zoom={18}
+                                        showHeatmap={false}
+                                        markers={markersList}
+                                        routing={isNavigating ? (() => {
+                                            const repLoc: [number, number] = [report.latitude, report.longitude];
+                                            const destName = report.landmark || 'Incident Location';
+                                            if (navSource === 'current' && userLocation) {
+                                                return {
+                                                    start: userLocation,
+                                                    end: repLoc,
+                                                    waypointNames: ["Your Location", destName] as [string, string],
+                                                    onClose: () => setIsNavigating(false)
+                                                };
+                                            } else {
+                                                return {
+                                                    start: BRGY_OFFICE,
+                                                    end: repLoc,
+                                                    waypointNames: ["Barangay Office", destName] as [string, string],
+                                                    onClose: () => setIsNavigating(false)
+                                                };
+                                            }
+                                        })() : undefined}
+                                        onMarkerClick={(m) => {
+                                            setNavSource(m.source || 'brgy');
+                                            setIsNavigating(true);
+                                        }}
+                                    />
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>
@@ -2646,6 +2885,8 @@ const SubdViewReport = () => {
                         species: (report as any).pet_type || report.animal_type || 'Animal'
                     }}
                     reportId={report.report_id}
+                    isEscalated={Boolean(report.endorsement_letter || report.status_id === 4 || report.status_id === 5)}
+                    subdivisionName={(report as any).subdivision_name || (report as any).subdivision?.subdivision_name}
                     onClose={() => {
                         setIsResolveLostModalOpen(false);
                         setIsResolveModalOpen(false);
@@ -2852,6 +3093,12 @@ const SubdViewReport = () => {
                                             setVerifyInjury(false);
                                             setVerifyChasing(false);
                                             setVerifyAttemptedBite(false);
+                                        } else if (val.includes('Injured Animal')) {
+                                            setVerifyActualBite(false);
+                                            setVerifyAggressive(false);
+                                            setVerifyInjury(true);
+                                            setVerifyChasing(false);
+                                            setVerifyAttemptedBite(false);
                                         } else if (val.includes('Substantiated Aggressive')) {
                                             setVerifyAggressive(true);
                                         }
@@ -2859,6 +3106,7 @@ const SubdViewReport = () => {
                                     className="w-full px-4 py-3 bg-white border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
                                 >
                                     <option value="Unsubstantiated / Friendly Dog">🛡️ Unsubstantiated / Friendly Dog (Keep Record Clean)</option>
+                                    <option value="Injured Animal (Docile / Needs Care)">🩹 Injured Animal (Docile / Needs Medical Attention)</option>
                                     <option value="Exaggerated Claim (Playful / No Threat)">🛡️ Exaggerated Claim (Playful / Harmless Behavior)</option>
                                     <option value="Normal Stray (Docile / No Bite)">🛡️ Normal Stray (Docile / Non-Aggressive)</option>
                                     <option value="Substantiated Aggressive Incident">⚠️ Substantiated Aggressive Incident (Hostile / Threat Confirmed)</option>
@@ -2886,8 +3134,8 @@ const SubdViewReport = () => {
                                                 setVerifyActualBite(checked);
                                                 if (checked) {
                                                     setVerifyBehaviorFinding('Confirmed Physical Bite Incident');
-                                                } else if (!verifyAggressive && !verifyInjury && !verifyChasing && !verifyAttemptedBite) {
-                                                    setVerifyBehaviorFinding('Unsubstantiated / Friendly Dog');
+                                                } else if (!verifyAggressive && !verifyChasing && !verifyAttemptedBite) {
+                                                    setVerifyBehaviorFinding(verifyInjury ? 'Injured Animal (Docile / Needs Care)' : 'Unsubstantiated / Friendly Dog');
                                                 }
                                             }}
                                             className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500"
@@ -2911,8 +3159,8 @@ const SubdViewReport = () => {
                                                 setVerifyChasing(checked);
                                                 if (checked && !verifyActualBite) {
                                                     setVerifyBehaviorFinding('Substantiated Aggressive Incident');
-                                                } else if (!checked && !verifyActualBite && !verifyAggressive && !verifyInjury && !verifyAttemptedBite) {
-                                                    setVerifyBehaviorFinding('Unsubstantiated / Friendly Dog');
+                                                } else if (!checked && !verifyActualBite && !verifyAggressive && !verifyAttemptedBite) {
+                                                    setVerifyBehaviorFinding(verifyInjury ? 'Injured Animal (Docile / Needs Care)' : 'Unsubstantiated / Friendly Dog');
                                                 }
                                             }}
                                             className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
@@ -2936,8 +3184,8 @@ const SubdViewReport = () => {
                                                 setVerifyAttemptedBite(checked);
                                                 if (checked && !verifyActualBite) {
                                                     setVerifyBehaviorFinding('Substantiated Aggressive Incident');
-                                                } else if (!checked && !verifyActualBite && !verifyAggressive && !verifyInjury && !verifyChasing) {
-                                                    setVerifyBehaviorFinding('Unsubstantiated / Friendly Dog');
+                                                } else if (!checked && !verifyActualBite && !verifyAggressive && !verifyChasing) {
+                                                    setVerifyBehaviorFinding(verifyInjury ? 'Injured Animal (Docile / Needs Care)' : 'Unsubstantiated / Friendly Dog');
                                                 }
                                             }}
                                             className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
@@ -2951,7 +3199,7 @@ const SubdViewReport = () => {
                                     </label>
 
                                     <label className={`flex items-center gap-3 p-3 rounded-2xl border transition-all cursor-pointer ${
-                                        verifyInjury ? 'bg-rose-50 border-rose-300 text-rose-900 font-bold' : 'bg-gray-50/80 border-gray-200 text-gray-700'
+                                        verifyInjury ? 'bg-amber-50/80 border-amber-300 text-amber-950 font-bold' : 'bg-gray-50/80 border-gray-200 text-gray-700'
                                     }`}>
                                         <input
                                             type="checkbox"
@@ -2959,18 +3207,18 @@ const SubdViewReport = () => {
                                             onChange={(e) => {
                                                 const checked = e.target.checked;
                                                 setVerifyInjury(checked);
-                                                if (checked && !verifyActualBite) {
-                                                    setVerifyBehaviorFinding('Substantiated Aggressive Incident');
+                                                if (checked && !verifyActualBite && !verifyAggressive && !verifyChasing && !verifyAttemptedBite) {
+                                                    setVerifyBehaviorFinding('Injured Animal (Docile / Needs Care)');
                                                 } else if (!checked && !verifyActualBite && !verifyAggressive && !verifyChasing && !verifyAttemptedBite) {
                                                     setVerifyBehaviorFinding('Unsubstantiated / Friendly Dog');
                                                 }
                                             }}
-                                            className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500"
+                                            className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
                                         />
                                         <div className="flex-1 flex items-center justify-between">
-                                            <span className="text-xs">Physical Injury / Bleeding</span>
+                                            <span className="text-xs">Animal is Injured / Bleeding</span>
                                             {Boolean((report as any).ai_behavior_injury) && (
-                                                <span className="text-[9px] px-1.5 py-0.5 bg-rose-200/80 text-rose-800 rounded font-bold uppercase">AI Flagged</span>
+                                                <span className="text-[9px] px-1.5 py-0.5 bg-amber-200/80 text-amber-900 rounded font-bold uppercase">AI Flagged</span>
                                             )}
                                         </div>
                                     </label>
@@ -2986,8 +3234,8 @@ const SubdViewReport = () => {
                                                 setVerifyAggressive(checked);
                                                 if (checked && !verifyActualBite) {
                                                     setVerifyBehaviorFinding('Substantiated Aggressive Incident');
-                                                } else if (!checked && !verifyActualBite && !verifyInjury && !verifyChasing && !verifyAttemptedBite) {
-                                                    setVerifyBehaviorFinding('Unsubstantiated / Friendly Dog');
+                                                } else if (!checked && !verifyActualBite && !verifyChasing && !verifyAttemptedBite) {
+                                                    setVerifyBehaviorFinding(verifyInjury ? 'Injured Animal (Docile / Needs Care)' : 'Unsubstantiated / Friendly Dog');
                                                 }
                                             }}
                                             className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500"
@@ -3004,22 +3252,38 @@ const SubdViewReport = () => {
                                 </div>
                             </div>
 
-                            {/* Clean Record Status Banner */}
-                            {!verifyActualBite && !verifyAggressive && !verifyInjury ? (
-                                <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200 text-xs text-emerald-900 flex items-start gap-2">
-                                    <span className="text-base flex-shrink-0">🛡️</span>
-                                    <p className="leading-relaxed">
-                                        <strong>Clean Record Mode:</strong> No biting or aggression observed. This will record the dog as <em>friendly/unsubstantiated</em>, ensuring the pet or animal's registry remains clean and preventing wrongful penalties.
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="p-3.5 bg-rose-50 rounded-2xl border border-rose-200 text-xs text-rose-900 flex items-start gap-2">
-                                    <span className="text-base flex-shrink-0">⚠️</span>
-                                    <p className="leading-relaxed">
-                                        <strong>Substantiated Threat:</strong> Aggression or bite confirmed. This will be recorded on the animal's permanent profile and may escalate dispatch or rabies observation protocols.
-                                    </p>
-                                </div>
-                            )}
+                            {/* Clean Record vs Medical vs Threat Status Banner */}
+                            {(() => {
+                                const isAggressiveThreat = verifyActualBite || verifyAggressive || verifyChasing || verifyAttemptedBite;
+                                if (isAggressiveThreat) {
+                                    return (
+                                        <div className="p-3.5 bg-rose-50 rounded-2xl border border-rose-200 text-xs text-rose-900 flex items-start gap-2">
+                                            <span className="text-base flex-shrink-0">⚠️</span>
+                                            <p className="leading-relaxed">
+                                                <strong>Substantiated Threat:</strong> Aggression or bite confirmed. This will be recorded on the animal's permanent profile and may escalate dispatch or rabies observation protocols.
+                                            </p>
+                                        </div>
+                                    );
+                                }
+                                if (verifyInjury) {
+                                    return (
+                                        <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+                                            <span className="text-base flex-shrink-0">🩹</span>
+                                            <p className="leading-relaxed">
+                                                <strong>Medical Care Priority:</strong> Physical inspection confirmed the animal is injured / bleeding, but <em>non-aggressive</em>. The animal's behavioral record remains clean, and medical aid will be prioritized.
+                                            </p>
+                                        </div>
+                                    );
+                                }
+                                return (
+                                    <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200 text-xs text-emerald-900 flex items-start gap-2">
+                                        <span className="text-base flex-shrink-0">🛡️</span>
+                                        <p className="leading-relaxed">
+                                            <strong>Clean Record Mode:</strong> No biting or aggression observed. This will record the dog as <em>friendly/unsubstantiated</em>, ensuring the pet or animal's registry remains clean and preventing wrongful penalties.
+                                        </p>
+                                    </div>
+                                );
+                            })()}
 
                             {/* Field Notes */}
                             <div className="space-y-1.5">

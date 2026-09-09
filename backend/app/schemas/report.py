@@ -1,6 +1,7 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any, Union
 from datetime import datetime
+from app.schemas.landmark import LandmarkResponse
 
 
 class ReportBase(BaseModel):
@@ -14,8 +15,13 @@ class ReportBase(BaseModel):
     estimated_size: Optional[str] = None
     description: Optional[str] = None
     condition: Optional[str] = None
+    custody_status: Optional[str] = 'Sighting'
     latitude: float
     longitude: float
+    initial_latitude: Optional[float] = None
+    initial_longitude: Optional[float] = None
+    initial_landmark: Optional[str] = None
+    facility_id: Optional[int] = None
     animal_count: Optional[int] = 1
     landmark: Optional[str] = None
     priority_level: Optional[str] = 'Medium'
@@ -100,6 +106,11 @@ class StatusHistoryResponse(BaseModel):
     history_id: int
     report_status_id: Optional[int] = None
     rescue_status_id: Optional[int] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    landmark: Optional[str] = None
+    facility_id: Optional[int] = None
+    facility_name: Optional[str] = None
     remarks: Optional[str] = None
     created_at: datetime
     updater_name: Optional[str] = None
@@ -131,6 +142,7 @@ class ReportResponse(ReportBase):
     created_at: datetime
     reporter_name: Optional[str] = None
     reporter_photo: Optional[str] = None
+    facility: Optional[Union[LandmarkResponse, dict, Any]] = None
     media: Optional[list[ReportMediaResponse]] = []
     comments: Optional[list[CommentResponse]] = []
     history: Optional[list[StatusHistoryResponse]] = []
@@ -281,6 +293,12 @@ class ReportStatusUpdate(BaseModel):
     remarks: Optional[str] = None
     status_remarks: Optional[str] = None
     animal_condition: Optional[str] = None
+    facility_id: Optional[int] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    landmark: Optional[str] = None
+    custody_status: Optional[str] = None
+    location_notes: Optional[str] = None
 
 
 class ReportUpdate(BaseModel):
@@ -297,5 +315,6 @@ class ReportUpdate(BaseModel):
     visibility: Optional[str] = None
     priority_level: Optional[str] = None
     is_possible_owned: Optional[bool] = None
+    custody_status: Optional[str] = None
     status_id: Optional[int] = None
 

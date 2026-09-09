@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
@@ -140,7 +140,220 @@ const ResiViewReport = () => {
     const currentUser = userStr ? JSON.parse(userStr) : null;
     const currentUserId = currentUser ? currentUser.user_id : null;
 
-    const chatCount = useReportChatCount(report?.report_id || 0, currentUserId);
+    // Only the reporter who reported the animal communicates with the subdivision
+    const isReporter = Boolean(
+        currentUser &&
+        report &&
+        (
+            (report.user_id != null && currentUserId != null && Number(report.user_id) === Number(currentUserId)) ||
+            (report.reporter_id != null && currentUserId != null && Number(report.reporter_id) === Number(currentUserId)) ||
+            (report.user?.user_id != null && currentUserId != null && Number(report.user.user_id) === Number(currentUserId)) ||
+            (currentUser.role_id && currentUser.role_id !== 1)
+        )
+    );
+
+    const chatCount = useReportChatCount(report?.report_id || 0, isReporter ? currentUserId : null);
+
+    // In-App Turn-by-Turn Routing State with Real-Time GPS Tracking
+    const [routingState, setRoutingState] = useState<{
+        start: [number, number];
+        end: [number, number];
+        waypointNames?: [string, string];
+        distance?: string;
+        time?: string;
+        isRealtime?: boolean;
+    } | null>(null);
+    const [isLocatingRoute, setIsLocatingRoute] = useState(false);
+    const [locationNotice, setLocationNotice] = useState<string | null>(null);
+    const [locationAmbiguous, setLocationAmbiguous] = useState(false);
+    const [isSettingStartingPoint, setIsSettingStartingPoint] = useState(false);
+    const [isMapExpanded, setIsMapExpanded] = useState(false);
+    const watchIdRef = useRef<number | null>(null);
+
+    const stopLocationTracking = () => {
+        if (watchIdRef.current !== null) {
+            navigator.geolocation.clearWatch(watchIdRef.current);
+            watchIdRef.current = null;
+        }
+    };
+
+    const handlePinReposition = (lat: number, lng: number) => {
+        stopLocationTracking();
+        if (!report?.latitude || !report?.longitude) return;
+        const destLat = parseFloat(report.latitude);
+        const destLng = parseFloat(report.longitude);
+        const destName = report.facility?.name || report.landmark || 'Animal Location';
+
+        setIsSettingStartingPoint(false);
+        setLocationAmbiguous(false);
+        setRoutingState({
+            start: [lat, lng],
+            end: [destLat, destLng],
+            waypointNames: ['Custom Starting Point', destName],
+            isRealtime: false
+        });
+        setLocationNotice('Starting point updated. Route recalculated!');
+        setTimeout(() => setLocationNotice(null), 4000);
+    };
+
+    const handleSetStartingPointMode = () => {
+        setLocationAmbiguous(false);
+        setIsSettingStartingPoint(true);
+        setLocationNotice('🎯 Click anywhere on the map or drag the blue pin to set your starting point.');
+        setTimeout(() => {
+            const mapEl = document.getElementById('report-map-container');
+            if (mapEl) {
+                mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 100);
+    };
+
+    useEffect(() => {
+        return () => {
+            stopLocationTracking();
+        };
+    }, []);
+
+    const handleGetDirections = (mode: 'gps' | 'hq' | 'home' = 'gps') => {
+        if (routingState && mode === 'gps' && routingState.isRealtime) {
+            // Toggle off if already active
+            stopLocationTracking();
+            setRoutingState(null);
+            setLocationNotice(null);
+            setLocationAmbiguous(false);
+            setIsSettingStartingPoint(false);
+            return;
+        }
+
+        if (!report?.latitude || !report?.longitude) return;
+
+        const destLat = parseFloat(report.latitude);
+        const destLng = parseFloat(report.longitude);
+        const destName = report.facility?.name || report.landmark || 'Animal Location';
+
+        const applyRouting = (startLat: number, startLng: number, startLabel: string = 'My Location', isRealtime: boolean = false) => {
+            setIsLocatingRoute(false);
+            setLocationAmbiguous(false);
+            setIsSettingStartingPoint(false);
+            setRoutingState({
+                start: [startLat, startLng],
+                end: [destLat, destLng],
+                waypointNames: [startLabel, destName],
+                isRealtime
+            });
+            setTimeout(() => {
+                const mapEl = document.getElementById('report-map-container');
+                if (mapEl) {
+                    mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100);
+        };
+
+        if (mode === 'hq') {
+            stopLocationTracking();
+            setLocationNotice(null);
+            applyRouting(14.8069, 121.0039, 'Barangay San Vicente HQ', false);
+            return;
+        }
+
+        if (mode === 'home') {
+            stopLocationTracking();
+            setLocationNotice(null);
+            if (currentUser?.latitude && currentUser?.longitude) {
+                const homeLat = parseFloat(currentUser.latitude);
+                const homeLng = parseFloat(currentUser.longitude);
+                applyRouting(
+                    homeLat, 
+                    homeLng, 
+                    currentUser?.subdivision_name ? `${currentUser.subdivision_name} (Home)` : 'My Registered Home', 
+                    false
+                );
+            } else {
+                setIsLocatingRoute(false);
+                alert('No registered home location found in your profile. Please use "From Brgy HQ" or click "Set Starting Point" on the map.');
+            }
+            return;
+        }
+
+        if (mode === 'gps') {
+            setLocationAmbiguous(false);
+            setIsSettingStartingPoint(false);
+            setLocationNotice(null);
+
+            if (navigator.geolocation) {
+                stopLocationTracking();
+                setIsLocatingRoute(true);
+
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        setIsLocatingRoute(false);
+                        const accuracy = pos.coords.accuracy;
+                        const userLat = pos.coords.latitude;
+                        const userLng = pos.coords.longitude;
+
+                        // Check returned coordinates and accuracy value (reliable if accuracy <= 1500 meters)
+                        if (typeof accuracy === 'number' && accuracy <= 1500) {
+                            applyRouting(userLat, userLng, 'My Current Location', true);
+
+                            // Continue real-time tracking on mobile / active GPS devices
+                            try {
+                                watchIdRef.current = navigator.geolocation.watchPosition(
+                                    (watchPos) => {
+                                        if (typeof watchPos.coords.accuracy === 'number' && watchPos.coords.accuracy <= 2000) {
+                                            const nextLat = watchPos.coords.latitude;
+                                            const nextLng = watchPos.coords.longitude;
+                                            setRoutingState((prev) => {
+                                                if (!prev) return null;
+                                                const distMoved = Math.hypot(prev.start[0] - nextLat, prev.start[1] - nextLng);
+                                                if (distMoved > 0.00003) {
+                                                    return {
+                                                        ...prev,
+                                                        start: [nextLat, nextLng]
+                                                    };
+                                                }
+                                                return prev;
+                                            });
+                                        }
+                                    },
+                                    (watchErr) => {
+                                        console.warn('Real-time location watch warning:', watchErr);
+                                    },
+                                    {
+                                        enableHighAccuracy: true,
+                                        maximumAge: 0,
+                                        timeout: 15000
+                                    }
+                                );
+                            } catch (e) {
+                                console.warn('Could not initialize watchPosition:', e);
+                            }
+                        } else {
+                            // Location cannot be reliably determined (poor accuracy / IP geolocation)
+                            console.warn(`Geolocation accuracy too poor (${accuracy}m). Prompting user for options.`);
+                            stopLocationTracking();
+                            setRoutingState(null);
+                            setLocationAmbiguous(true);
+                        }
+                    },
+                    (err) => {
+                        console.warn('Geolocation failed or permission denied:', err);
+                        setIsLocatingRoute(false);
+                        stopLocationTracking();
+                        setRoutingState(null);
+                        setLocationAmbiguous(true);
+                    },
+                    { 
+                        enableHighAccuracy: true, 
+                        timeout: 10000, 
+                        maximumAge: 0 
+                    }
+                );
+            } else {
+                setIsLocatingRoute(false);
+                setLocationAmbiguous(true);
+            }
+        }
+    };
 
     const fetchReportDetails = async () => {
         if (!id) return;
@@ -197,10 +410,10 @@ const ResiViewReport = () => {
     }, [id]);
 
     useEffect(() => {
-        if (searchParams.get('openChat') === 'true' || (location.state as any)?.openChat) {
+        if ((searchParams.get('openChat') === 'true' || (location.state as any)?.openChat) && isReporter) {
             setIsChatOpen(true);
         }
-    }, [searchParams, location]);
+    }, [searchParams, location, isReporter]);
 
     useEffect(() => {
         if (!report) return;
@@ -442,12 +655,12 @@ const ResiViewReport = () => {
                         </div>
                     </div>
                     <div className="flex items-center gap-3 flex-wrap">
-                        {currentUser && (
+                        {isReporter && (
                             <button
                                 type="button"
                                 onClick={() => setIsChatOpen(true)}
                                 className="px-5 py-3.5 bg-gradient-to-r from-[#F97316] to-[#EA580C] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-orange-600/20 hover:scale-105 active:scale-95 flex items-center gap-2"
-                                title="Open Case Chat with Responders & Pet Owner"
+                                title="Open Case Chat with Subdivision Responders"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -904,43 +1117,492 @@ const ResiViewReport = () => {
                 <div className="bg-gray-900 text-white p-8 rounded-[2.5rem] shadow-xl relative overflow-hidden group mt-10">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-150 transition-transform duration-700" />
                     <div className="relative z-10">
-                        <h4 className="text-[10px] font-black text-orange-400 uppercase tracking-[0.2em] mb-4">Location Intelligence</h4>
-                        <div className="flex items-start gap-4 mb-6">
-                            <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center text-orange-400 shrink-0">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                            </div>
-                            <div>
-                                <p className="text-sm font-black tracking-tight">{report.landmark || 'No landmark specified'}</p>
-                                <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-1">
-                                    {isGeocoding ? 'Resolving street...' : resolvedAddress || 'Santa Maria, Bulacan • Selera Homes'}
-                                </p>
+                        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                            <h4 className="text-[10px] font-black text-orange-400 uppercase tracking-[0.2em]">Location Intelligence</h4>
+                            <div className="flex items-center gap-2">
+                                {(report.facility_id || report.custody_status === 'Secured in Facility' || report.facility) && (
+                                    <span className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-400/30 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                                        <span>🐾</span>
+                                        <span>Animal Secured at Holding Facility</span>
+                                    </span>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setIsMapExpanded(true)}
+                                    className="px-3.5 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-wider border border-white/15 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer hover:scale-105 active:scale-95"
+                                    title="Open Fullscreen Expanded Map"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-amber-300" viewBox="0 0 20 20" fill="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h3a1 1 0 010 2H5v2a1 1 0 01-2 0V4zm14 0a1 1 0 00-1-1h-3a1 1 0 110 2h2v2a1 1 0 112 0V4zM3 16a1 1 0 001 1h3a1 1 0 100-2H5v-2a1 1 0 10-2 0v3zm14 0a1 1 0 01-1 1h-3a1 1 0 100-2h2v-2a1 1 0 102 0v3z" />
+                                    </svg>
+                                    <span>Expand Map</span>
+                                </button>
                             </div>
                         </div>
-                        <div className="w-full h-[500px] rounded-2xl overflow-hidden border border-white/10 relative">
-                            <MapComponent
-                                height="100%"
-                                center={[parseFloat(report.latitude), parseFloat(report.longitude)]}
-                                zoom={17}
-                                showHeatmap={false}
-                                showGeofence={true}
-                                showLandmarks={false}
-                                markers={[
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
+                                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-400 text-lg shrink-0">
+                                    {(report.facility_id || report.custody_status === 'Secured in Facility' || report.facility) ? '🐾' : '📍'}
+                                </div>
+                                <div className="overflow-hidden">
+                                    <p className="text-[9px] font-black text-white/50 uppercase tracking-widest">
+                                        {(report.facility_id || report.custody_status === 'Secured in Facility' || report.facility) ? 'Current Facility Holding Location' : 'Current Active Location'}
+                                    </p>
+                                    <p className="text-sm font-black tracking-tight text-white truncate">
+                                        {report.facility?.name || report.landmark || 'No landmark specified'}
+                                    </p>
+                                    <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-0.5">
+                                        {isGeocoding ? 'Resolving street...' : resolvedAddress || 'Santa Maria, Bulacan • Selera Homes'}
+                                    </p>
+                                    {report.facility?.caretaker_name && (
+                                        <p className="text-[10px] text-amber-300 font-semibold mt-1">
+                                            Caretaker: <span className="font-extrabold">{report.facility.caretaker_name}</span>
+                                            {report.facility.caretaker_phone ? ` (${report.facility.caretaker_phone})` : ''}
+                                        </p>
+                                    )}
+                                    <div className="mt-2.5 pt-2 border-t border-white/10 flex flex-wrap items-center gap-2">
+                                        <button
+                                            onClick={() => handleGetDirections('gps')}
+                                            disabled={isLocatingRoute}
+                                            className={`px-3 py-1.5 text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ${
+                                                routingState?.isRealtime
+                                                    ? 'bg-emerald-600 hover:bg-emerald-700 ring-2 ring-emerald-400/40' 
+                                                    : 'bg-[#F97316] hover:bg-[#EA580C]'
+                                            }`}
+                                            title="Use device GPS sensor"
+                                        >
+                                            <span>{isLocatingRoute ? '⏳' : routingState?.isRealtime ? '🟢' : '🧭'}</span>
+                                            <span>
+                                                {isLocatingRoute 
+                                                    ? 'Checking Location...' 
+                                                    : routingState?.isRealtime 
+                                                        ? 'Live GPS Active (Click to Hide)' 
+                                                        : 'Directions (Live GPS)'}
+                                            </span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleGetDirections('home')}
+                                            className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold rounded-xl transition-all border border-white/10 flex items-center gap-1.5 cursor-pointer"
+                                            title="Route from your registered home coordinates"
+                                        >
+                                            <span>🏠</span>
+                                            <span>From My Home</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleGetDirections('hq')}
+                                            className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold rounded-xl transition-all border border-white/10 flex items-center gap-1.5 cursor-pointer"
+                                            title="Route from Barangay San Vicente HQ"
+                                        >
+                                            <span>🏛️</span>
+                                            <span>From Brgy HQ</span>
+                                        </button>
+                                        <button
+                                            onClick={handleSetStartingPointMode}
+                                            className={`px-2.5 py-1.5 text-white text-[11px] font-bold rounded-xl transition-all border flex items-center gap-1.5 cursor-pointer ${
+                                                isSettingStartingPoint
+                                                    ? 'bg-blue-600 border-blue-400 ring-2 ring-blue-400/40'
+                                                    : 'bg-white/10 hover:bg-white/20 border-white/10'
+                                            }`}
+                                            title="Click anywhere on the map or drag the pin to set your starting location"
+                                        >
+                                            <span>🎯</span>
+                                            <span>Set Starting Point</span>
+                                        </button>
+                                        {routingState?.distance && (
+                                            <span className="px-2.5 py-1 bg-white/10 border border-white/15 rounded-xl text-[11px] font-black text-amber-300">
+                                                📏 {routingState.distance} {routingState.time ? `• ⏱️ ${routingState.time}` : ''}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {(report.facility_id || report.custody_status === 'Secured in Facility' || (report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude))) && (
+                                <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
+                                    <div className="w-10 h-10 rounded-2xl bg-slate-700 flex items-center justify-center text-slate-300 text-lg shrink-0">
+                                        🚩
+                                    </div>
+                                    <div className="overflow-hidden">
+                                        <p className="text-[9px] font-black text-white/50 uppercase tracking-widest">Initial Found / Sighting Spot</p>
+                                        <p className="text-sm font-black tracking-tight text-slate-200 truncate">
+                                            {report.initial_landmark || 'Original Reported Location'}
+                                        </p>
+                                        <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-0.5">
+                                            Preserved Incident Origin
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Location Unreliable Message & Resolution Options */}
+                        {locationAmbiguous && (
+                            <div className="mb-3.5 p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-slate-900/95 border-2 border-amber-500/40 text-white shadow-xl animate-in fade-in space-y-3.5">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg shrink-0 border border-amber-500/30">
+                                            📍
+                                        </div>
+                                        <div>
+                                            <h4 className="text-xs font-black uppercase tracking-tight text-white">Location Unreliable</h4>
+                                            <p className="text-xs text-amber-200 font-semibold mt-0.5">
+                                                Your device could not determine your exact location.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setLocationAmbiguous(false)}
+                                        className="text-slate-400 hover:text-white text-xs font-bold px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                                
+                                <p className="text-[11px] text-slate-300 font-medium">
+                                    Please choose an option below to set your route starting point:
+                                </p>
+
+                                <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleGetDirections('home')}
+                                        className="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-[11px] uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                                    >
+                                        <span>🏠</span>
+                                        <span>From My Home</span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => handleGetDirections('hq')}
+                                        className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white font-black text-[11px] uppercase tracking-wider rounded-xl transition-all border border-white/15 flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                        <span>🏛️</span>
+                                        <span>From Brgy HQ</span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={handleSetStartingPointMode}
+                                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-black text-[11px] uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                                    >
+                                        <span>🎯</span>
+                                        <span>Set Starting Point</span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Setting Starting Point Instruction Banner */}
+                        {isSettingStartingPoint && (
+                            <div className="mb-3 p-3.5 rounded-2xl bg-blue-500/20 border border-blue-400/40 text-blue-200 text-xs flex items-center justify-between gap-3 animate-in fade-in">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-base animate-pulse">🎯</span>
+                                    <span className="font-semibold">Click anywhere on the map or drag the blue pin to set your starting location.</span>
+                                </div>
+                                <button 
+                                    type="button"
+                                    onClick={() => setIsSettingStartingPoint(false)}
+                                    className="px-2.5 py-1 bg-white/10 hover:bg-white/20 rounded-xl text-[10px] font-bold text-white transition-colors cursor-pointer shrink-0"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        )}
+
+                        {/* General Notification / Route Status */}
+                        {locationNotice && !locationAmbiguous && !isSettingStartingPoint && (
+                            <div className="mb-3 p-3 rounded-2xl bg-white/10 border border-white/15 text-slate-200 text-xs flex items-center justify-between gap-3 animate-in fade-in">
+                                <div className="flex items-center gap-2">
+                                    <span>ℹ️</span>
+                                    <span>{locationNotice}</span>
+                                </div>
+                                <button 
+                                    type="button"
+                                    onClick={() => setLocationNotice(null)}
+                                    className="text-slate-400 hover:text-white text-xs px-2 py-0.5 rounded-lg bg-white/5 transition-colors cursor-pointer"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Active Route Tip Pill */}
+                        {routingState && !locationAmbiguous && !isSettingStartingPoint && (
+                            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 p-2 px-3.5 bg-white/10 rounded-2xl border border-white/15">
+                                <div className="flex items-center gap-2 text-[11px] font-bold text-amber-300">
+                                    <span>💡</span>
+                                    <span>You can <strong>drag the blue pin</strong> or <strong>click anywhere on the map</strong> to change your starting point.</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[10px] font-extrabold text-slate-300">
+                                    <span>Start:</span>
+                                    <span className="text-white bg-black/30 px-2 py-0.5 rounded-lg font-mono">
+                                        {routingState.start[0].toFixed(4)}, {routingState.start[1].toFixed(4)}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+
+                        <div id="report-map-container" className="w-full h-[500px] rounded-2xl overflow-hidden border border-white/10 relative">
+                            {/* Floating Expand Map Button */}
+                            <button
+                                type="button"
+                                onClick={() => setIsMapExpanded(true)}
+                                className="absolute top-4 right-4 z-[400] px-3 py-1.5 bg-slate-900/85 hover:bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-wider border border-white/20 transition-all flex items-center gap-1.5 shadow-lg backdrop-blur-md cursor-pointer hover:scale-105 active:scale-95"
+                                title="Expand Map to Fullscreen"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-amber-300" viewBox="0 0 20 20" fill="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h3a1 1 0 010 2H5v2a1 1 0 01-2 0V4zm14 0a1 1 0 00-1-1h-3a1 1 0 110 2h2v2a1 1 0 112 0V4zM3 16a1 1 0 001 1h3a1 1 0 100-2H5v-2a1 1 0 10-2 0v3zm14 0a1 1 0 01-1 1h-3a1 1 0 100-2h2v-2a1 1 0 102 0v3z" />
+                                </svg>
+                                <span>Expand</span>
+                            </button>
+
+                            {(() => {
+                                const isRelocated = !!report.facility_id || report.custody_status === 'Secured in Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude));
+                                const currentLat = parseFloat(report.latitude);
+                                const currentLng = parseFloat(report.longitude);
+                                const initLat = report.initial_latitude ? parseFloat(report.initial_latitude) : null;
+                                const initLng = report.initial_longitude ? parseFloat(report.initial_longitude) : null;
+
+                                const resiMarkers = [
+                                    ...(routingState ? [{
+                                        id: -888,
+                                        lat: routingState.start[0],
+                                        lng: routingState.start[1],
+                                        title: routingState.isRealtime ? 'Your Live Location (GPS)' : (routingState.waypointNames?.[0] || 'Your Starting Point'),
+                                        category: 'User Location',
+                                        priority: 'Low',
+                                        draggable: true,
+                                        onDragEnd: (newLat: number, newLng: number) => {
+                                            handlePinReposition(newLat, newLng);
+                                        }
+                                    }] : []),
                                     {
                                         id: report.report_id,
-                                        lat: parseFloat(report.latitude),
-                                        lng: parseFloat(report.longitude),
-                                        title: report.landmark || 'Incident Location',
-                                        category: report.animal_type || 'Stray Animal',
+                                        lat: currentLat,
+                                        lng: currentLng,
+                                        title: isRelocated ? `Secured: ${report.facility?.name || report.landmark}` : (report.landmark || 'Incident Location'),
+                                        category: isRelocated ? 'Holding Facility' : (report.animal_type || 'Stray Animal'),
                                         color: (report.status_id === 6 || report.status_id === 11) ? 'green' : (report.status_id === 4 || report.status_id === 13) ? 'orange' : (report.status_id === 5) ? 'yellow' : 'red',
                                         priority: report.priority_level || 'Medium',
                                         time: report.created_at ? new Date(report.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Live',
                                         rawData: report
-                                    }
-                                ]}
-                            />
+                                    },
+                                    ...(isRelocated && initLat && initLng ? [{
+                                        id: -999,
+                                        lat: initLat,
+                                        lng: initLng,
+                                        title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
+                                        category: 'Initial Sighting',
+                                        priority: 'Medium',
+                                        rawData: { ...report, landmark: report.initial_landmark || 'Initial Sighting Spot' }
+                                    }] : [])
+                                ];
+
+                                return (
+                                    <MapComponent
+                                        height="100%"
+                                        center={routingState ? [(routingState.start[0] + currentLat) / 2, (routingState.start[1] + currentLng) / 2] : [currentLat, currentLng]}
+                                        zoom={routingState ? 16 : 17}
+                                        showHeatmap={false}
+                                        showGeofence={true}
+                                        showLandmarks={false}
+                                        markers={resiMarkers}
+                                        onMapClick={(routingState || isSettingStartingPoint) ? (clickedLat, clickedLng) => handlePinReposition(clickedLat, clickedLng) : undefined}
+                                        routing={routingState ? {
+                                            start: routingState.start,
+                                            end: routingState.end,
+                                            waypointNames: routingState.waypointNames,
+                                            onRoutingUpdate: (data) => setRoutingState(prev => prev ? { ...prev, ...data } : null),
+                                            onClose: () => {
+                                                stopLocationTracking();
+                                                setRoutingState(null);
+                                                setLocationNotice(null);
+                                                setLocationAmbiguous(false);
+                                                setIsSettingStartingPoint(false);
+                                            }
+                                        } : undefined}
+                                    />
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>
+
+                {/* FULLSCREEN EXPANDED MAP MODAL */}
+                {isMapExpanded && report && (
+                    <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+                        <div className="bg-slate-900 border border-white/20 rounded-3xl shadow-2xl w-[96%] h-[94%] flex flex-col p-4 sm:p-6 text-white overflow-hidden animate-in zoom-in-95 duration-200">
+                            {/* Header */}
+                            <div className="flex justify-between items-center mb-3 shrink-0 pb-3 border-b border-white/10 gap-3">
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-8 h-8 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center text-sm font-bold border border-orange-500/30">
+                                            🗺️
+                                        </span>
+                                        <div>
+                                            <h3 className="text-sm sm:text-base font-black text-white uppercase tracking-tight truncate">
+                                                Expanded Map View • {report.landmark || 'Incident Location'}
+                                            </h3>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">
+                                                Report #{report.report_id} • {resolvedAddress || 'Santa Maria, Bulacan'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                    {routingState?.distance && (
+                                        <span className="hidden sm:inline-flex px-3 py-1.5 bg-white/10 border border-white/15 rounded-xl text-xs font-black text-amber-300">
+                                            📏 {routingState.distance} {routingState.time ? `• ⏱️ ${routingState.time}` : ''}
+                                        </span>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsMapExpanded(false)}
+                                        className="p-2 hover:bg-white/10 rounded-2xl transition-colors text-slate-300 hover:text-white cursor-pointer border border-white/10"
+                                        title="Close Expanded Map"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* In-Modal Quick Controls */}
+                            <div className="flex flex-wrap items-center gap-2 mb-3 shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={() => handleGetDirections('gps')}
+                                    disabled={isLocatingRoute}
+                                    className={`px-3 py-1.5 text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ${
+                                        routingState?.isRealtime
+                                            ? 'bg-emerald-600 hover:bg-emerald-700 ring-2 ring-emerald-400/40' 
+                                            : 'bg-[#F97316] hover:bg-[#EA580C]'
+                                    }`}
+                                >
+                                    <span>{isLocatingRoute ? '⏳' : routingState?.isRealtime ? '🟢' : '🧭'}</span>
+                                    <span>
+                                        {isLocatingRoute 
+                                            ? 'Checking Location...' 
+                                            : routingState?.isRealtime 
+                                                ? 'Live GPS Active' 
+                                                : 'Directions (Live GPS)'}
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleGetDirections('home')}
+                                    className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold rounded-xl transition-all border border-white/10 flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    <span>🏠</span>
+                                    <span>From My Home</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleGetDirections('hq')}
+                                    className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold rounded-xl transition-all border border-white/10 flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    <span>🏛️</span>
+                                    <span>From Brgy HQ</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleSetStartingPointMode}
+                                    className={`px-2.5 py-1.5 text-white text-[11px] font-bold rounded-xl transition-all border flex items-center gap-1.5 cursor-pointer ${
+                                        isSettingStartingPoint
+                                            ? 'bg-blue-600 border-blue-400 ring-2 ring-blue-400/40'
+                                            : 'bg-white/10 hover:bg-white/20 border-white/10'
+                                    }`}
+                                >
+                                    <span>🎯</span>
+                                    <span>Set Starting Point</span>
+                                </button>
+
+                                {routingState && (
+                                    <span className="text-[10px] font-bold text-amber-300 ml-auto hidden md:inline-block">
+                                        💡 Click anywhere on the map or drag the blue pin to adjust your route
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Expanded Map Canvas */}
+                            <div className="flex-1 rounded-2xl overflow-hidden relative border border-white/10 min-h-0">
+                                {(() => {
+                                    const isRelocated = !!report.facility_id || report.custody_status === 'Secured in Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude));
+                                    const currentLat = parseFloat(report.latitude);
+                                    const currentLng = parseFloat(report.longitude);
+                                    const initLat = report.initial_latitude ? parseFloat(report.initial_latitude) : null;
+                                    const initLng = report.initial_longitude ? parseFloat(report.initial_longitude) : null;
+
+                                    const resiMarkers = [
+                                        ...(routingState ? [{
+                                            id: -888,
+                                            lat: routingState.start[0],
+                                            lng: routingState.start[1],
+                                            title: routingState.isRealtime ? 'Your Live Location (GPS)' : (routingState.waypointNames?.[0] || 'Your Starting Point'),
+                                            category: 'User Location',
+                                            priority: 'Low',
+                                            draggable: true,
+                                            onDragEnd: (newLat: number, newLng: number) => {
+                                                handlePinReposition(newLat, newLng);
+                                            }
+                                        }] : []),
+                                        {
+                                            id: report.report_id,
+                                            lat: currentLat,
+                                            lng: currentLng,
+                                            title: isRelocated ? `Secured: ${report.facility?.name || report.landmark}` : (report.landmark || 'Incident Location'),
+                                            category: isRelocated ? 'Holding Facility' : (report.animal_type || 'Stray Animal'),
+                                            color: (report.status_id === 6 || report.status_id === 11) ? 'green' : (report.status_id === 4 || report.status_id === 13) ? 'orange' : (report.status_id === 5) ? 'yellow' : 'red',
+                                            priority: report.priority_level || 'Medium',
+                                            time: report.created_at ? new Date(report.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Live',
+                                            rawData: report
+                                        },
+                                        ...(isRelocated && initLat && initLng ? [{
+                                            id: -999,
+                                            lat: initLat,
+                                            lng: initLng,
+                                            title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
+                                            category: 'Initial Sighting',
+                                            priority: 'Medium',
+                                            rawData: { ...report, landmark: report.initial_landmark || 'Initial Sighting Spot' }
+                                        }] : [])
+                                    ];
+
+                                    return (
+                                        <MapComponent
+                                            height="100%"
+                                            center={routingState ? [(routingState.start[0] + currentLat) / 2, (routingState.start[1] + currentLng) / 2] : [currentLat, currentLng]}
+                                            zoom={routingState ? 16 : 17}
+                                            showHeatmap={false}
+                                            showGeofence={true}
+                                            showLandmarks={true}
+                                            markers={resiMarkers}
+                                            onMapClick={(routingState || isSettingStartingPoint) ? (clickedLat, clickedLng) => handlePinReposition(clickedLat, clickedLng) : undefined}
+                                            routing={routingState ? {
+                                                start: routingState.start,
+                                                end: routingState.end,
+                                                waypointNames: routingState.waypointNames,
+                                                onRoutingUpdate: (data) => setRoutingState(prev => prev ? { ...prev, ...data } : null),
+                                                onClose: () => {
+                                                    stopLocationTracking();
+                                                    setRoutingState(null);
+                                                    setLocationNotice(null);
+                                                    setLocationAmbiguous(false);
+                                                    setIsSettingStartingPoint(false);
+                                                }
+                                            } : undefined}
+                                        />
+                                    );
+                                })()}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
 
 
@@ -1091,6 +1753,8 @@ const ResiViewReport = () => {
                         species: (report as any).pet_type || report.animal_type
                     }}
                     reportId={report.report_id}
+                    isEscalated={Boolean(report.endorsement_letter || report.status_id === 4 || report.status_id === 5)}
+                    subdivisionName={(report as any).subdivision_name || (report.subdivision as any)?.subdivision_name}
                     onClose={() => setIsResolveLostModalOpen(false)}
                     onSuccess={() => {
                         fetchReportDetails();
@@ -1099,16 +1763,18 @@ const ResiViewReport = () => {
                 />
             )}
 
-            {/* Case Chat Drawer */}
-            <ReportChatDrawer
-                isOpen={isChatOpen}
-                onClose={() => setIsChatOpen(false)}
-                report={report}
-                currentUser={currentUser}
-            />
+            {/* Case Chat Drawer - restricted to reporter */}
+            {isReporter && (
+                <ReportChatDrawer
+                    isOpen={isChatOpen}
+                    onClose={() => setIsChatOpen(false)}
+                    report={report}
+                    currentUser={currentUser}
+                />
+            )}
 
-            {/* Floating Chat Trigger */}
-            {currentUser && !isChatOpen && (
+            {/* Floating Chat Trigger - restricted to reporter */}
+            {isReporter && !isChatOpen && (
                 <div className="fixed bottom-6 right-6 z-40">
                     <button
                         onClick={() => setIsChatOpen(true)}

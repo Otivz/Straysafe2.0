@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 import os
 import uuid
+from decimal import Decimal
 from sqlalchemy.orm import Session, joinedload, selectinload
 from typing import List, Optional
 from sqlalchemy import or_
 from app.database import get_db
-from app.models.report import Report, ReportMedia, Comment, StatusHistory, ReportCategory, EndorsementLetter, ReportStatus, Rescue, HoldingAnimal
+from app.models.report import Report, ReportMedia, Comment, StatusHistory, ReportCategory, EndorsementLetter, ReportStatus, Rescue, HoldingAnimal, HoldingTimeline, RescueAssignment
 from app.models.user import User, Subdivision
+from app.models.landmark import Landmark
 from app.models.notification import Notification
 from app.models.pet import Pet
 from app.models.pet_qr import PetQRCode
@@ -222,7 +224,48 @@ def populate_verification_and_disputes(rep_data: ReportResponse, rep: Report, db
             disputes_list.append(d_resp)
         rep_data.disputes = disputes_list
     except Exception as err:
-        print(f"Failed to populate verification/dispute info for report {rep.report_id}: {err}")
+        print(f"Failed to populate verification/disputes for report {rep.report_id}: {err}")
+
+
+def populate_location_and_facility_info(rep_data: ReportResponse, rep: Report, db: Session):
+    """Populates location history and holding facility details on ReportResponse."""
+    try:
+        rep_data.initial_latitude = float(rep.initial_latitude) if rep.initial_latitude is not None else float(rep.latitude)
+        rep_data.initial_longitude = float(rep.initial_longitude) if rep.initial_longitude is not None else float(rep.longitude)
+        rep_data.initial_landmark = rep.initial_landmark or rep.landmark
+        rep_data.facility_id = rep.facility_id
+        rep_data.custody_status = rep.custody_status or "Sighting"
+
+        if rep.facility_id:
+            fac = db.query(Landmark).filter(Landmark.landmark_id == rep.facility_id).first()
+            if fac:
+                rep_data.facility = {
+                    "landmark_id": fac.landmark_id,
+                    "name": fac.name,
+                    "category": fac.category,
+                    "description": fac.description,
+                    "latitude": float(fac.latitude),
+                    "longitude": float(fac.longitude),
+                    "is_holding_facility": fac.is_holding_facility,
+                    "facility_type": fac.facility_type,
+                    "capacity": fac.capacity,
+                    "contact_person": fac.contact_person,
+                    "contact_number": fac.contact_number,
+                    "status": fac.status
+                }
+
+        if rep.history:
+            for i, hist in enumerate(rep.history):
+                if rep_data.history and i < len(rep_data.history):
+                    rep_data.history[i].latitude = float(hist.latitude) if hist.latitude is not None else None
+                    rep_data.history[i].longitude = float(hist.longitude) if hist.longitude is not None else None
+                    rep_data.history[i].landmark = hist.landmark
+                    rep_data.history[i].facility_id = hist.facility_id
+                    if hist.facility_id:
+                        h_fac = db.query(Landmark).filter(Landmark.landmark_id == hist.facility_id).first()
+                        rep_data.history[i].facility_name = h_fac.name if h_fac else None
+    except Exception as err:
+        print(f"Failed to populate location/facility info for report {rep.report_id}: {err}")
 
 
 @router.get("/", response_model=List[ReportResponse])
@@ -339,6 +382,9 @@ def get_reports(
 
             # Populate verification & dispute data
             populate_verification_and_disputes(rep_data, rep, db)
+
+            # Populate location history & facility info
+            populate_location_and_facility_info(rep_data, rep, db)
 
             results.append(rep_data)
         except Exception as e:
@@ -856,8 +902,8 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
         if not subd_obj:
             report_data["subdivision_id"] = user_obj.subdivision_id if (user_obj and user_obj.subdivision_id) else 1
 
-        # Drop any frontend-only fields not in the DB (condition, behavior_tags, is_archived are not in reports table)
-        for field in ["condition", "behavior_tags", "is_archived", "status_remarks"]:
+        # Drop any frontend-only fields not in the DB
+        for field in ["behavior_tags", "is_archived", "status_remarks"]:
             report_data.pop(field, None)
 
         # Auto-classify category if not provided or invalid
@@ -867,6 +913,11 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
             report_data["category_id"] = classify_category_from_description(report_data.get("description", "")) or 1
         else:
             report_data["category_id"] = cat_obj.category_id
+
+        # Preserve initial found location
+        report_data["initial_latitude"] = report_data.get("latitude")
+        report_data["initial_longitude"] = report_data.get("longitude")
+        report_data["initial_landmark"] = report_data.get("landmark")
 
         db_report = Report(**report_data)
         db.add(db_report)
@@ -904,6 +955,10 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
             report_id=db_report.report_id,
             report_status_id=db_report.current_status_id,
             updated_by=db_report.user_id,
+            latitude=db_report.latitude,
+            longitude=db_report.longitude,
+            landmark=db_report.landmark,
+            facility_id=db_report.facility_id,
             remarks="Initial report submitted by resident."
         )
         db.add(initial_history)
@@ -1006,6 +1061,7 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
         joinedload(Report.category),
         joinedload(Report.status),
         joinedload(Report.subdivision),
+        joinedload(Report.facility),
         selectinload(Report.media),
         selectinload(Report.comments).joinedload(Comment.user),
         selectinload(Report.history).joinedload(StatusHistory.updater),
@@ -1088,6 +1144,7 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
         populate_pet_and_owner_info(rep_data, report, db)
         populate_handler_info(rep_data, report)
         populate_verification_and_disputes(rep_data, report, db)
+        populate_location_and_facility_info(rep_data, report, db)
 
         return rep_data
     except Exception as e:
@@ -1379,6 +1436,7 @@ async def upload_report_media(
 def update_report_status(report_id: int, status_update: ReportStatusUpdate, req: Request, db: Session = Depends(get_db)):
     report = db.query(Report).options(
         joinedload(Report.assigned_leader),
+        joinedload(Report.facility),
         selectinload(Report.history),
         joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
     ).filter(Report.report_id == report_id).first()
@@ -1386,7 +1444,61 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
+    # Check permission for Barangay Staff: only assigned personnel or Head Officer can update status
+    if status_update.user_id:
+        updater = db.query(User).filter(User.user_id == status_update.user_id).first()
+        if updater and updater.role_id == 3:
+            is_head = getattr(updater, 'is_head_officer', False)
+            if not is_head:
+                rescues = db.query(Rescue).filter(Rescue.report_id == report_id).all()
+                is_assigned = False
+                for r in rescues:
+                    if r.staff_id == updater.user_id or r.leader_id == updater.user_id:
+                        is_assigned = True
+                        break
+                    asgn = db.query(RescueAssignment).filter(
+                        RescueAssignment.rescue_id == r.rescue_id,
+                        (RescueAssignment.user_id == updater.user_id) | (RescueAssignment.staff_id == updater.user_id),
+                        RescueAssignment.assignment_status == "Assigned"
+                    ).first()
+                    if asgn:
+                        is_assigned = True
+                        break
+                if not is_assigned:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Only personnel assigned to this report have the ability to update its status."
+                    )
+
     prev_status_id = report.current_status_id
+
+    # Preserve initial location if not already recorded
+    if report.initial_latitude is None:
+        report.initial_latitude = report.latitude
+        report.initial_longitude = report.longitude
+        report.initial_landmark = report.landmark
+
+    # Handle facility relocation or location update
+    relocation_note = None
+    if status_update.facility_id:
+        fac = db.query(Landmark).filter(Landmark.landmark_id == status_update.facility_id).first()
+        if fac:
+            report.facility_id = fac.landmark_id
+            report.latitude = fac.latitude
+            report.longitude = fac.longitude
+            report.landmark = fac.name
+            report.custody_status = status_update.custody_status or "In Subdivision Facility"
+            caretaker_str = f" • Caretaker: {fac.contact_person} ({fac.contact_number})" if fac.contact_person else ""
+            prev_str = report.initial_landmark or "Original found location"
+            relocation_note = f"Animal secured at {fac.name}{caretaker_str} (Relocated from: {prev_str})"
+    elif status_update.latitude is not None and status_update.longitude is not None:
+        report.latitude = Decimal(str(status_update.latitude))
+        report.longitude = Decimal(str(status_update.longitude))
+        if status_update.landmark:
+            report.landmark = status_update.landmark
+
+    if status_update.custody_status:
+        report.custody_status = status_update.custody_status
 
     # Update current_status_id (DB column name)
     report.current_status_id = status_update.status_id
@@ -1411,11 +1523,18 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
             10: "Safely released.",
             11: "Incident has been resolved.",
             12: "Resolved (animal deceased).",
-            13: "Approved by Barangay. Rescue operation is being planned."
+            13: "Approved by Barangay. Rescue operation is being planned.",
+            14: "False Alarm / Dismissed.",
+            15: "Disputed.",
+            16: "Under Investigation.",
+            17: "Animal cannot be found at the reported location."
         }
         final_remarks = friendly_defaults.get(status_update.status_id, "Status updated.")
 
-    # Avoid adding duplicate StatusHistory entries if status hasn't changed
+    if relocation_note and relocation_note not in final_remarks:
+        final_remarks = f"{final_remarks} | {relocation_note}"
+
+    # Avoid adding duplicate StatusHistory entries if status and remarks haven't changed
     last_history = db.query(StatusHistory).filter(
         StatusHistory.report_id == report_id
     ).order_by(StatusHistory.history_id.desc()).first()
@@ -1424,6 +1543,7 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
         last_history is not None
         and last_history.report_status_id == status_update.status_id
         and prev_status_id == status_update.status_id
+        and (not final_remarks or final_remarks == last_history.remarks)
     )
 
     if not is_duplicate:
@@ -1432,6 +1552,10 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
             report_id=report_id,
             report_status_id=status_update.status_id,
             updated_by=status_update.user_id,  # Link the update to the user
+            latitude=report.latitude,
+            longitude=report.longitude,
+            landmark=report.landmark,
+            facility_id=report.facility_id,
             remarks=final_remarks
         )
         db.add(db_history)
@@ -1451,7 +1575,11 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
             10: "Released",
             11: "Resolved",
             12: "Deceased",
-            13: "Approved"
+            13: "Approved",
+            14: "False Alarm / Dismissed",
+            15: "Disputed",
+            16: "Under Investigation",
+            17: "Animal Cannot Be Found"
         }
         status_name = status_names.get(status_update.status_id, "Updated")
         notif_msg = f"Your report #{report_id} status has been updated to '{status_name}'."
@@ -1482,6 +1610,45 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
                 db.add(b_notif)
         except Exception as notif_err:
             print(f"Notice: Failed to notify barangay of escalation: {notif_err}")
+
+    # Auto-intake into Holding Facility or Log Relocation when Picked Up (6), Observation (7), Impounded (8), or moved to facility
+    if status_update.status_id in (6, 7, 8) or status_update.facility_id:
+        already_in = db.query(HoldingAnimal).filter(
+            HoldingAnimal.report_id == report.report_id
+        ).first()
+        if not already_in:
+            raw_t = str(report.animal_type or '').strip().lower()
+            a_type = 'Dog' if ('dog' in raw_t or 'canine' in raw_t or 'puppy' in raw_t) else ('Cat' if ('cat' in raw_t or 'feline' in raw_t or 'kitten' in raw_t) else 'Unknown')
+            new_holding = HoldingAnimal(
+                report_id       = report.report_id,
+                rescue_id       = report.rescues[0].rescue_id if report.rescues else None,
+                animal_type     = a_type,
+                breed           = getattr(report, 'breed', None) or getattr(report, 'ai_possible_breed', None),
+                color           = getattr(report, 'animal_color', None) or getattr(report, 'ai_dominant_color', None),
+                estimated_size  = getattr(report, 'ai_estimated_size', None),
+                facility_status = 1,  # Default: Need Treatment
+                intake_staff_id = status_update.user_id,
+            )
+            db.add(new_holding)
+            db.flush()
+            loc_name = report.landmark or "Holding Facility"
+            db.add(HoldingTimeline(
+                holding_id = new_holding.holding_id,
+                event_type = 'intake',
+                title      = f'Animal Admitted to Holding Facility ({loc_name})',
+                notes      = f'Admitted into custody at {loc_name}. Report #{report.report_id}.',
+                logged_by  = status_update.user_id,
+            ))
+        else:
+            if relocation_note:
+                loc_name = report.landmark or "New Facility"
+                db.add(HoldingTimeline(
+                    holding_id = already_in.holding_id,
+                    event_type = 'transfer',
+                    title      = f'Animal Relocated / Transferred ({loc_name})',
+                    notes      = relocation_note,
+                    logged_by  = status_update.user_id,
+                ))
         
     db.commit()
     db.refresh(report)
@@ -2431,6 +2598,8 @@ def verify_incident_report(report_id: int, verify_in: ReportVerifyRequest, req: 
     report.verified_chasing = bool(verify_in.verified_chasing)
     report.verified_attempted_bite = bool(verify_in.verified_attempted_bite)
     report.verified_injury = bool(verify_in.verified_injury)
+    if verify_in.verified_injury:
+        report.condition = "Injured"
     report.verified_aggressive = bool(verify_in.verified_aggressive)
     report.behavior_finding = verify_in.behavior_finding or (
         "Substantiated" if (verify_in.verified_actual_bite or verify_in.verified_aggressive) else "Unsubstantiated / Friendly"

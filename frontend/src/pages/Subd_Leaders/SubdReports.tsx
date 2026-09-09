@@ -23,6 +23,8 @@ import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 interface Report {
     report_id: number;
     subdivision_id?: number;
+    subdivision_name?: string | null;
+    subdivision?: { subdivision_name?: string; [key: string]: any } | null;
     category_id: number;
     status_id: number;
     priority_level: string;
@@ -523,11 +525,21 @@ const SubdReports = () => {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
+            const targetRep = reports.find(r => r.report_id === escalatingReportId);
+            const isInjured = Boolean(
+                targetRep?.verified_injury ||
+                targetRep?.category_id === 1 ||
+                (targetRep?.condition && targetRep.condition.toLowerCase().includes('injured')) ||
+                (targetRep?.description && targetRep.description.toLowerCase().includes('injured'))
+            );
+            const preservedCondition = isInjured ? 'Injured' : (targetRep?.condition || undefined);
+
             // 2. Update status to Forwarded (4)
             await axios.patch(`${API_URL}/${escalatingReportId}/status`, {
                 status_id: 4,
                 user_id: currentUserId,
-                remarks: "Report forwarded to Barangay Operations for official review and approval."
+                remarks: "Report forwarded to Barangay Operations for official review and approval.",
+                ...(preservedCondition ? { animal_condition: preservedCondition } : {})
             });
 
             // 3. Create official Rescue Request record
@@ -1606,7 +1618,7 @@ const SubdReports = () => {
                                                     estimatedSize={viewReport.ai_estimated_size || (viewReport as any).estimated_size}
                                                     suggestedRiskLevel={viewReport.ai_suggested_risk_level}
                                                     suggestedPriority={viewReport.ai_suggested_priority}
-                                                    possibleBreed={viewReport.ai_possible_breed || (viewReport as any).animal_breed || viewReport.breed}
+                                                    possibleBreed={(viewReport as any).animal_breed || (viewReport as any).breed || viewReport.ai_possible_breed}
                                                     description={viewReport.description}
                                                     categoryName={categoryMap[viewReport.category_id]}
                                                     suggestedPriorityReason={viewReport.ai_suggested_priority_reason}
@@ -2061,12 +2073,12 @@ const SubdReports = () => {
                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                                 </svg>
-                                                                VERIFY INCIDENT REPORT
+                                                                VERIFY ANIMAL ACTION
                                                             </button>
                                                         )}
 
                                                         {/* STEP 2: ESCALATE (Only after verification) */}
-                                                        {viewReport.status_id === 2 && (
+                                                        {(viewReport.status_id === 2 || viewReport.status_id === 7) && (
                                                             <button
                                                                 onClick={() => {
                                                                     setEscalatingReportId(viewReport.report_id);
@@ -2657,6 +2669,8 @@ const SubdReports = () => {
                                 species: (resolvingReport as any).pet_type || resolvingReport.animal_type || 'Animal'
                             }}
                             reportId={resolvingReport.report_id}
+                            isEscalated={Boolean((resolvingReport as any).endorsement_letter || resolvingReport.status_id === 4 || resolvingReport.status_id === 5)}
+                            subdivisionName={(resolvingReport as any).subdivision_name || (resolvingReport as any).subdivision?.subdivision_name}
                             onClose={() => {
                                 setIsResolveModalOpen(false);
                                 setResolvingReportId(null);

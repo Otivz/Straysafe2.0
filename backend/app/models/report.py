@@ -1,10 +1,11 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional, List, TYPE_CHECKING
+from typing import Optional, List, Any, TYPE_CHECKING
 from sqlalchemy import Column, Integer, String, Text, DateTime, func, ForeignKey, Numeric, Boolean, Enum
 from sqlalchemy.orm import relationship, backref, Mapped, mapped_column
 from app.database import Base
 from app.models.user import User
+from app.models.landmark import Landmark
 
 if TYPE_CHECKING:
     from app.models.report_dispute import ReportDispute
@@ -40,9 +41,14 @@ class Report(Base):
 
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     condition: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    custody_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, default='Sighting')
 
     latitude: Mapped[Decimal] = mapped_column(Numeric(10, 8), nullable=False)
     longitude: Mapped[Decimal] = mapped_column(Numeric(11, 8), nullable=False)
+    initial_latitude: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 8), nullable=True)
+    initial_longitude: Mapped[Optional[Decimal]] = mapped_column(Numeric(11, 8), nullable=True)
+    initial_landmark: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    facility_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("landmarks.landmark_id", ondelete="SET NULL"), nullable=True)
 
     animal_count: Mapped[int] = mapped_column(Integer, default=1)
     landmark: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -116,6 +122,7 @@ class Report(Base):
     history: Mapped[List["StatusHistory"]] = relationship("StatusHistory", back_populates="report", cascade="all, delete-orphan", order_by="StatusHistory.created_at")
     endorsement_letter: Mapped[Optional["EndorsementLetter"]] = relationship("EndorsementLetter", back_populates="report", uselist=False, cascade="all, delete-orphan")
     disputes: Mapped[List["ReportDispute"]] = relationship("ReportDispute", back_populates="report", cascade="all, delete-orphan", order_by="ReportDispute.created_at.desc()")
+    facility: Mapped[Optional["Landmark"]] = relationship("Landmark", foreign_keys=[facility_id])
 
     # Transient fields populated at runtime (not DB columns)
     reporter_name: Optional[str] = None
@@ -255,15 +262,21 @@ class StatusHistory(Base):
     report_status_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("report_status.status_id"), nullable=True)
     rescue_status_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("rescue_status.status_id"), nullable=True)
     updated_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    latitude: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 8), nullable=True)
+    longitude: Mapped[Optional[Decimal]] = mapped_column(Numeric(11, 8), nullable=True)
+    landmark: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    facility_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("landmarks.landmark_id", ondelete="SET NULL"), nullable=True)
     remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
 
     report: Mapped[Optional["Report"]] = relationship("Report", back_populates="history")
     updater: Mapped[Optional["User"]] = relationship("User")
     media: Mapped[List["ReportMedia"]] = relationship("ReportMedia", back_populates="history")
+    facility: Mapped[Optional["Landmark"]] = relationship("Landmark", foreign_keys=[facility_id])
 
     # Transient fields
     updater_name: Optional[str] = None
+    facility_name: Optional[str] = None
 
 
 class RescueAssignment(Base):
@@ -287,6 +300,9 @@ class RescueAssignment(Base):
 
     # Transient fields
     staff_name: Optional[str] = None
+    staff_email: Optional[str] = None
+    staff_phone: Optional[str] = None
+    staff_photo: Optional[str] = None
 
 
 # ─── Holding Facility Models ───────────────────────────────────────────────────
@@ -328,7 +344,26 @@ class HoldingAnimal(Base):
 
     # Transient fields populated at runtime
     intake_staff_name: Optional[str] = None
+    facility_status_name: Optional[str] = None
     report_category: Optional[str] = None
+    report_landmark: Optional[str] = None
+    report_media: Optional[List[Any]] = None
+    facility_id: Optional[int] = None
+    facility_name: Optional[str] = None
+    facility_type: Optional[str] = None
+    subdivision_id: Optional[int] = None
+    barangay_id: Optional[int] = None
+    subd_intake_date: Optional[datetime] = None
+    subd_discharge_date: Optional[datetime] = None
+    subd_duration_days: Optional[float] = None
+    subd_duration_display: Optional[str] = None
+    brgy_intake_date: Optional[datetime] = None
+    brgy_discharge_date: Optional[datetime] = None
+    brgy_duration_days: Optional[float] = None
+    brgy_duration_display: Optional[str] = None
+    total_duration_days: Optional[float] = None
+    total_duration_display: Optional[str] = None
+    current_facility_duration_display: Optional[str] = None
 
     # Relationships
     report       = relationship("Report")

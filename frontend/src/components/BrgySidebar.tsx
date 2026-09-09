@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import Button from './Button';
+import { api } from '../utils/api';
 
 interface BrgySidebarProps {
     isMobileOpen?: boolean;
@@ -11,6 +12,7 @@ interface BrgySidebarProps {
 const BrgySidebar = ({ isMobileOpen, onCloseMobile }: BrgySidebarProps) => {
     const [isOpen, setIsOpen] = useState(true);
     const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
+    const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
     const location = useLocation();
 
     useEffect(() => {
@@ -28,6 +30,15 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile }: BrgySidebarProps) => {
                 }
             } catch (e) {
                 console.warn("Could not fetch brgy reports count", e);
+            }
+
+            try {
+                const chatRes = await api.get('/chat/unread-count');
+                if (chatRes.data && typeof chatRes.data.unread_count === 'number') {
+                    setUnreadMessagesCount(chatRes.data.unread_count);
+                }
+            } catch (e) {
+                // ignore
             }
         };
 
@@ -51,6 +62,16 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile }: BrgySidebarProps) => {
             icon: (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+                </svg>
+            )
+        },
+        {
+            path: '/brgy/messages',
+            label: 'Messages',
+            badgeCount: unreadMessagesCount,
+            icon: (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
             )
         },
@@ -92,6 +113,30 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile }: BrgySidebarProps) => {
             )
         }
     ];
+
+    const rawUser = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
+    const isHeadOfficer = rawUser ? JSON.parse(rawUser).is_head_officer : false;
+
+    menuItems.push({
+        path: '/brgy/personnel',
+        label: isHeadOfficer ? 'Personnel Management' : 'Personnel Directory',
+        icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
+            </svg>
+        )
+    });
+
+    menuItems.push({
+        path: '/brgy/settings',
+        label: 'Station Settings',
+        icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+        )
+    });
 
     const renderSidebarContent = (showFullText: boolean, isMobileView: boolean) => (
         <div className="overflow-hidden flex flex-col h-full">

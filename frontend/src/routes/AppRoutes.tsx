@@ -24,6 +24,8 @@ import SubdRemovedPetRecords from '../pages/Subd_Leaders/SubdRemovedPetRecords';
 import SubdProfile from '../pages/Subd_Leaders/SubdProfile';
 import SubdHazardAlert from '../pages/Subd_Leaders/SubdHazardAlert';
 import SubdMessages from '../pages/Subd_Leaders/SubdMessages';
+import SubdSettings from '../pages/Subd_Leaders/SubdSettings';
+import SubdHoldingFacility from '../pages/Subd_Leaders/SubdHoldingFacility';
 
 import LandingPage from '../pages/citizen/LandingPage';
 import ResidentsLogin from '../pages/citizen/ResidentsLogin';
@@ -37,11 +39,15 @@ import PetQrCardPage from '../pages/citizen/PetQrCardPage';
 import PetScanHistoryPage from '../pages/citizen/PetScanHistoryPage';
 import BrgyDashboard from '../pages/Barangay_Staff/BrgyDashboard';
 import BrgyRescueRequests from '../pages/Barangay_Staff/BrgyRescueRequests';
+import BrgyReportView from '../pages/Barangay_Staff/BrgyReportView';
 import BrgyCommunityAlerts from '../pages/Barangay_Staff/BrgyCommunityAlerts';
 import BrgyProfile from '../pages/Barangay_Staff/BrgyProfile';
 import BrgyHoldingFacility from '../pages/Barangay_Staff/BrgyHoldingFacility';
 import BrgyHistoryReports from '../pages/Barangay_Staff/BrgyHistoryReports';
 import BrgyViewHistory from '../pages/Barangay_Staff/BrgyViewHistory';
+import BrgyPersonnelManagement from '../pages/Barangay_Staff/BrgyPersonnelManagement';
+import BrgyMessages from '../pages/Barangay_Staff/BrgyMessages';
+import BrgySettings from '../pages/Barangay_Staff/BrgySettings';
 import PetMatchReview from '../pages/citizen/PetMatchReview';
 import PetClaimsDashboard from '../pages/citizen/PetClaimsDashboard';
 import ReportStrayPage from '../pages/citizen/ReportStrayPage';
@@ -96,16 +102,23 @@ const AppRoutes = () => {
                 <Route path="/subd/pet-records" element={<SubdPetRecords />} />
                 <Route path="/subd/removed-pets" element={<SubdRemovedPetRecords />} />
                 <Route path="/subd/hazard-alert" element={<SubdHazardAlert />} />
+                <Route path="/subd/holding-facility" element={<SubdHoldingFacility />} />
                 <Route path="/subd/profile" element={<SubdProfile />} />
+                <Route path="/subd/settings" element={<SubdSettings />} />
             </Route>
 
             {/* Protected Barangay Staff Routes (Role ID = 3) */}
             <Route element={<ProtectedRoute allowedRoles={[3]} />}>
                 <Route path="/brgy/dashboard" element={<BrgyDashboard />} />
+                <Route path="/brgy/messages" element={<BrgyMessages />} />
                 <Route path="/brgy/rescue-requests" element={<BrgyRescueRequests />} />
+                <Route path="/brgy/reports/:id" element={<BrgyReportView />} />
+                <Route path="/brgy/rescue-requests/:id" element={<BrgyReportView />} />
                 <Route path="/brgy/history-reports" element={<BrgyHistoryReports />} />
                 <Route path="/brgy/community-alerts" element={<BrgyCommunityAlerts />} />
                 <Route path="/brgy/profile" element={<BrgyProfile />} />
+                <Route path="/brgy/settings" element={<BrgySettings />} />
+                <Route path="/brgy/personnel" element={<BrgyPersonnelManagement />} />
                 <Route path="/brgy/holding-facility" element={<BrgyHoldingFacility />} />
                 <Route path="/brgy/history" element={<BrgyHistoryReports />} />
                 <Route path="/brgy/history/:id" element={<BrgyViewHistory />} />
@@ -117,10 +130,12 @@ const AppRoutes = () => {
                 <Route path="/admin/pet-records" element={<PetRecords />} />
                 <Route path="/admin/users" element={<AdminUserManagement />} />
                 <Route path="/admin/account-settings" element={<AdminAccountSettings />} />
+                <Route path="/admin/settings" element={<AdminAccountSettings />} />
                 <Route path="/admin/incidents" element={<AdminReport />} />
                 <Route path="/admin/heatmap" element={<AdminHeatMap />} />
                 <Route path="/admin/logs" element={<AdminLogs />} />
                 <Route path="/admin/pets" element={<AdminPetManagement />} />
+                <Route path="/admin/holding-facility" element={<BrgyHoldingFacility />} />
             </Route>
 
             {/* Catch-all Redirect to Login */}

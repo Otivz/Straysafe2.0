@@ -20,6 +20,9 @@ class Barangay(Base):
     barangay_name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     city: Mapped[str] = mapped_column(String(100), nullable=False)
     contact_no: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    hq_plus_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    hq_lat: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 8), nullable=True)
+    hq_lng: Mapped[Optional[Decimal]] = mapped_column(Numeric(11, 8), nullable=True)
 
 class Subdivision(Base):
     __tablename__ = "subdivisions"
@@ -40,6 +43,8 @@ class User(Base):
     role_id: Mapped[int] = mapped_column(Integer, ForeignKey("roles.role_id"), nullable=False)
     position_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("positions.position_id"), nullable=True)
     subdivision_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("subdivisions.subdivision_id"), nullable=True)
+    barangay_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("barangays.barangay_id"), nullable=True)
+    is_head_officer: Mapped[bool] = mapped_column(Boolean, default=False)
     
     address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     latitude: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 8), nullable=True)
@@ -57,3 +62,5 @@ class User(Base):
     role: Mapped[Optional[Role]] = relationship("Role")
     position: Mapped[Optional[Position]] = relationship("Position")
     subdivision: Mapped[Optional[Subdivision]] = relationship("Subdivision")
+    barangay: Mapped[Optional[Barangay]] = relationship("Barangay")
+

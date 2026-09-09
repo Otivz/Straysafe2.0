@@ -99,70 +99,71 @@ Pages & Routes
 • /subd/profile          — Leader profile and settings
 
 
-C.  Barangay Staff (Action Layer)
-Barangay staff handle rescue operations and the full case lifecycle after escalation.
+C.  Barangay Head / Officer (Tactical Command Layer)
+The Barangay Head / Officer-in-Charge manages operational authority, team coordination, and mission dispatch within their barangay.
 
-Barangay Staff — Action Layer
-Manages rescue operations and the full animal case lifecycle
-Login: /staff/login
+Barangay Head / Officer — Command & Coordination Layer
+Assigns personnel, approves rescue requests, and monitors operations
+Login: /staff/login  |  Role ID: 5 (or Role ID: 3 with is_head_officer = 1)
 
 Features
-• Operation Command Center: Real-time tactical oversight for all field operations
-• AI-Prioritized Incident Feed: Automatic sorting of cases by medical urgency and aggression
-• Receive and review validated rescue requests from Subdivision Leaders
-• Approve or reject incoming rescue requests
-• Dispatch response teams with real-time mission tracking
-• Perform field rescue and animal pickup
-• Manage post-rescue states: Under Observation, Impoundment, Released, Deceased
-• Manage the Holding Facility (animals currently in care)
-• Publish community alerts for the barangay area
-
-Rescue Request Status Flow (Barangay-side)
-→ 1. Pending Approval    (Waiting for Barangay review)
-→ 2. Approved            (Report auto-updates to Status 13 — Approved)
-→ 3. Rejected            (Request declined by Barangay)
-→ 4. Operation Started   (Report updates to Status 5 — Rescue In Progress)
-→ 5. Dispatched          (Field team en route)
-→ 6. Resolved            (Rescue operation complete)
-
-Report Status Updates Managed by Barangay
-→ 13. Approved           (After rescue request approval)
-→ 5.  Rescue In Progress (After operation starts)
-→ 6.  Picked Up          (Animal secured in field)
-→ 7.  Under Observation  (Animal receiving care)
-→ 8.  Impounded          (Moved to holding facility)
-→ 9.  Claimed by Owner   (Returned to rightful owner)
-→ 10. Released           (Rehomed or set free)
-→ 12. Deceased           (Animal did not survive) — CLOSED, moves to History
+• Operation Command Center: Real-time tactical oversight for all field operations in jurisdiction
+• AI-Prioritized Incident Feed: Review cases sorted by medical urgency, aggression, and rabies risk
+• Review & Approve Escalated Reports: Evaluate Endorsement Letters from Subdivision Leaders
+• Team Organization & Dispatch: Assign specific Barangay Field Personnel to rescue missions
+• Live Rescue Telemetry & Monitoring: Track field units across En Route, On Site, and Picked Up stages
+• Holding Facility Supervision: Authorize animal intake, medical isolation, owner claims, and releases
+• Publish Community Alerts: Broadcast official barangay-wide advisories and hazard alerts
 
 Pages & Routes
-• /brgy/dashboard          — Operational overview and statistics
-• /brgy/rescue-requests    — Incoming rescue requests from Subdivision Leaders
-• /brgy/operations         — Active field operations management
-• /brgy/holding-facility   — Animals currently in the holding facility
-• /brgy/community-alerts   — Publish public hazard alerts
-• /brgy/profile            — Staff profile settings
+• /brgy/head/dashboard      — Command overview, active units, and response metrics
+• /brgy/head/requests       — Incoming escalated rescue requests pending approval & dispatch
+• /brgy/head/dispatch       — Tactical dispatch board & personnel team assignment
+• /brgy/head/personnel      — Barangay personnel availability roster and active task tracker
+• /brgy/holding-facility    — Holding facility intake, observation, and disposition authorization
+• /brgy/community-alerts    — Publish barangay hazard advisories
 
 
-D.  Admin (System Controller)
-Admin oversees the entire system, ensuring operational integrity and data accuracy.
+D.  Barangay Field Personnel (Operational Execution Layer)
+Barangay field personnel execute physical rescue operations and handle daily care.
 
-Admin — System Controller
-Full system oversight, configuration, and management
-Login: /admin/login
+Barangay Field Staff — Action Layer
+Receives direct assignments, performs field captures, and uploads evidence
+Login: /staff/login  |  Role ID: 3
 
 Features
+• Assigned Missions Inbox: View tasks assigned specifically by the Barangay Head Officer
+• Field Action Workflow: Step-by-step mission progression (Accept → En Route → On Site → Picked Up)
+• Immersive Navigation: Route navigation from current location/Barangay Hall to incident site
+• Evidence Documentation: Upload photos and timestamps upon animal pickup
+• Holding Facility Daily Logs: Record daily feeding, observation, and medical notes
+
+Pages & Routes
+• /brgy/staff/my-missions   — Assigned tasks and real-time field action stepper
+• /brgy/operations          — Active field operation route and incident details
+• /brgy/holding/daily-logs  — Daily animal care and observation log entries
+• /brgy/profile             — Staff profile settings
+
+
+E.  Admin (System Governance Layer)
+Admin oversees the entire system, ensuring operational integrity, user accountability, and jurisdictional configuration.
+
+Admin — System Controller
+Full system governance, barangay head delegation, and global oversight
+Login: /admin/login  |  Role ID: 4
+
+Features
+• Barangay Head Designation: Assign, transfer, or replace the designated Head/Officer for each Barangay
 • Pet Management Registry: Oversee all registered pets, vaccination status, and ownership history
-• Manage users with Role-Based Access Control (RBAC)
-• Add, edit, and deactivate user accounts (Citizens, Leaders, Barangay Staff)
-• Monitor all reports and rescue cases system-wide
-• View geographic heatmaps and analytics dashboards
-• Access full audit logs and system activity records
+• User Management: RBAC control over Citizens, Subdivision Leaders, Barangay Heads, and Field Staff
+• Global Incident Monitor: Geographic heatmaps and analytics dashboards across all jurisdictions
+• Audit Logging: Comprehensive ledger of all status transitions, team dispatches, and user actions
 • Configure system settings and parameters
 
 Pages & Routes
 • /admin/dashboard         — System-wide statistics and overview
-• /admin/users             — User management (all roles)
+• /admin/barangays         — Barangay registry and Head Officer assignment
+• /admin/users             — User management (all roles & statuses)
 • /admin/incidents         — Read-only view of all reports across the system
 • /admin/heatmap           — Geographic density map of stray incidents
 • /admin/logs              — System activity audit logs

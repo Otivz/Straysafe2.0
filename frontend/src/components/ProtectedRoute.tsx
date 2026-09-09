@@ -10,6 +10,7 @@ const ProtectedRoute = ({ allowedRoles = [4] }: ProtectedRouteProps) => {
     const location = useLocation();
     const [status, setStatus] = useState<'loading' | 'authorized' | 'unauthorized' | 'forbidden'>('loading');
     const [userRole, setUserRole] = useState<number | null>(null);
+    const allowedRolesKey = allowedRoles.slice().sort().join(',');
 
     useEffect(() => {
         let isMounted = true;
@@ -21,9 +22,11 @@ const ProtectedRoute = ({ allowedRoles = [4] }: ProtectedRouteProps) => {
             let rawUser: string | null = null;
             if (allowedRoles.includes(4)) {
                 rawUser = sessionStorage.getItem('admin_user') || localStorage.getItem('admin_user');
-            } else if (allowedRoles.includes(2) || allowedRoles.includes(3)) {
+            }
+            if (!rawUser && (allowedRoles.includes(2) || allowedRoles.includes(3))) {
                 rawUser = sessionStorage.getItem('staff_user') || localStorage.getItem('staff_user');
-            } else if (allowedRoles.includes(1)) {
+            }
+            if (!rawUser && allowedRoles.includes(1)) {
                 rawUser = sessionStorage.getItem('resident_user') || localStorage.getItem('resident_user');
             }
 
@@ -60,10 +63,29 @@ const ProtectedRoute = ({ allowedRoles = [4] }: ProtectedRouteProps) => {
                     clearAuthStorage();
                     if (isMounted) setStatus('unauthorized');
                 }
-            } catch (err) {
-                console.error('ProtectedRoute session verification failed:', err);
-                clearAuthStorage();
-                if (isMounted) setStatus('unauthorized');
+            } catch (err: any) {
+                if (err?.response?.status === 401 || err?.response?.status === 403) {
+                    console.error('ProtectedRoute session verification failed (unauthorized):', err);
+                    clearAuthStorage();
+                    if (isMounted) setStatus('unauthorized');
+                } else {
+                    // Network glitch or server error fallback
+                    try {
+                        const parsedUser = JSON.parse(rawUser);
+                        const roleId = parsedUser.role_id;
+                        if (isMounted) {
+                            setUserRole(roleId);
+                            if (allowedRoles.includes(roleId)) {
+                                setStatus('authorized');
+                            } else {
+                                setStatus('forbidden');
+                            }
+                        }
+                    } catch {
+                        clearAuthStorage();
+                        if (isMounted) setStatus('unauthorized');
+                    }
+                }
             }
         };
 
@@ -72,7 +94,7 @@ const ProtectedRoute = ({ allowedRoles = [4] }: ProtectedRouteProps) => {
         return () => {
             isMounted = false;
         };
-    }, [location.pathname, allowedRoles]);
+    }, [location.pathname, allowedRolesKey]);
 
     if (status === 'loading') {
         return (

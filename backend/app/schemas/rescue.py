@@ -21,6 +21,9 @@ class RescueAssignmentResponse(BaseModel):
     staff_id: Optional[int] = None
     user_id: Optional[int] = None
     staff_name: Optional[str] = None
+    staff_email: Optional[str] = None
+    staff_phone: Optional[str] = None
+    staff_photo: Optional[str] = None
     assigned_by: Optional[int] = None
     assigned_at: Optional[datetime] = None
     assignment_status: Optional[str] = "Assigned"
@@ -65,13 +68,28 @@ class RescueRequestCreate(RescueBase):
     description: Optional[str] = None
 
 
+class RescueAssignTeamRequest(BaseModel):
+    report_id: Optional[int] = None
+    rescue_id: Optional[int] = None
+    assigned_personnel_ids: List[int]
+    barangay_staff_id: Optional[int] = None
+    user_id: Optional[int] = None
+    remarks: Optional[str] = None
+
+
 class RescueRequestUpdate(BaseModel):
     status_id: Optional[int] = None
     barangay_staff_id: Optional[int] = None
     user_id: Optional[int] = None
     assigned_personnel_id: Optional[int] = None
+    assigned_personnel_ids: Optional[List[int]] = None
     remarks: Optional[str] = None
     animal_condition: Optional[str] = None
+    facility_id: Optional[int] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    landmark: Optional[str] = None
+    custody_status: Optional[str] = None
 
 
 class RescueRequestResponse(RescueBase):

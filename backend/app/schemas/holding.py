@@ -56,6 +56,11 @@ class HoldingAnimalResponse(BaseModel):
     holding_id:        int
     report_id:         int
     rescue_id:         Optional[int] = None
+    facility_id:       Optional[int] = None
+    facility_name:     Optional[str] = None
+    facility_type:     Optional[str] = None
+    subdivision_id:    Optional[int] = None
+    barangay_id:       Optional[int] = None
     animal_type:       Optional[str] = None
     animal_name:       Optional[str] = None
     breed:             Optional[str] = None
@@ -71,7 +76,19 @@ class HoldingAnimalResponse(BaseModel):
     intake_staff_name: Optional[str] = None
     report_landmark:   Optional[str] = None
     report_category:   Optional[str] = None
+    report_media:      Optional[List[ReportMediaResponse]] = []
     created_at:        Optional[datetime] = None
+    subd_intake_date:  Optional[datetime] = None
+    subd_discharge_date: Optional[datetime] = None
+    subd_duration_days: Optional[float] = None
+    subd_duration_display: Optional[str] = None
+    brgy_intake_date:  Optional[datetime] = None
+    brgy_discharge_date: Optional[datetime] = None
+    brgy_duration_days: Optional[float] = None
+    brgy_duration_display: Optional[str] = None
+    total_duration_days: Optional[float] = None
+    total_duration_display: Optional[str] = None
+    current_facility_duration_display: Optional[str] = None
     timeline:          List[HoldingTimelineResponse] = []
 
     class Config:

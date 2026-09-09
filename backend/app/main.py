@@ -13,7 +13,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Local imports (now safe to import after path fix)
 from app.database import engine, Base
-from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches
+from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches, landmarks
 from app.routes import audit_logs as audit_logs_router
 from app.models.pet_qr import PetQRCode, PetQRScan
 from app.models.audit_log import AuditLog  # noqa: F401 — ensures table is in Base.metadata
@@ -22,6 +22,7 @@ from app.models.report_dispute import ReportDispute  # noqa: F401
 from app.models.chat import ChatThread, ChatMessage  # noqa: F401
 from app.models.warning import OwnerWarning  # noqa: F401
 from app.models.report_match import ReportMatch  # noqa: F401
+from app.models.landmark import Landmark  # noqa: F401
 from app.tasks.unassigned_checker import start_unassigned_reports_watcher
 
 
@@ -132,6 +133,7 @@ def ensure_report_status_rows():
         14: 'False Alarm / Dismissed',
         15: 'Disputed',
         16: 'Under Investigation',
+        17: 'Animal Cannot Be Found',
     }
     with engine.begin() as conn:
         for status_id, status_name in required_statuses.items():
@@ -725,6 +727,141 @@ def ensure_report_transfer_columns():
                 except Exception as e:
                     print(f"Error adding {col_name} to reports: {e}")
 
+def ensure_landmarks_table():
+    """Ensure landmarks table exists and insert initial seed landmarks if empty."""
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS landmarks (
+                landmark_id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(150) NOT NULL,
+                category VARCHAR(50) NOT NULL DEFAULT 'general',
+                description TEXT NULL,
+                subdivision_id INT NULL,
+                barangay_id INT NOT NULL DEFAULT 1,
+                latitude DECIMAL(10,8) NOT NULL,
+                longitude DECIMAL(11,8) NOT NULL,
+                is_holding_facility TINYINT(1) NOT NULL DEFAULT 0,
+                facility_type VARCHAR(50) NULL,
+                capacity INT NULL,
+                contact_person VARCHAR(100) NULL,
+                contact_number VARCHAR(20) NULL,
+                status ENUM('Active','Inactive') NOT NULL DEFAULT 'Active',
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                KEY fk_landmarks_subdivision (subdivision_id),
+                KEY fk_landmarks_barangay (barangay_id),
+                CONSTRAINT fk_landmarks_subdivision FOREIGN KEY (subdivision_id) REFERENCES subdivisions (subdivision_id) ON DELETE CASCADE,
+                CONSTRAINT fk_landmarks_barangay FOREIGN KEY (barangay_id) REFERENCES barangays (barangay_id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+        """))
+
+        # Add category column if table existed without it
+        try:
+            col_res = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'landmarks' AND COLUMN_NAME = 'category'"
+            ))
+            if col_res.scalar() == 0:
+                conn.execute(text("ALTER TABLE landmarks ADD COLUMN category VARCHAR(50) NOT NULL DEFAULT 'general' AFTER name"))
+                # Update existing rows based on keywords or holding facility
+                conn.execute(text("UPDATE landmarks SET category = 'gate' WHERE name LIKE '%Gate%' OR name LIKE '%Guardhouse%'"))
+                conn.execute(text("UPDATE landmarks SET category = 'facility' WHERE is_holding_facility = 1 OR name LIKE '%Holding%' OR name LIKE '%Impound%'"))
+                conn.execute(text("UPDATE landmarks SET category = 'park' WHERE name LIKE '%Park%' OR name LIKE '%Clubhouse%'"))
+                conn.execute(text("UPDATE landmarks SET category = 'court' WHERE name LIKE '%Court%' OR name LIKE '%Gym%'"))
+                conn.execute(text("UPDATE landmarks SET category = 'office' WHERE name LIKE '%Office%' OR name LIKE '%Hall%'"))
+        except Exception as e:
+            print(f"Error checking category column on landmarks: {e}")
+
+        # Seed initial landmarks if empty
+        try:
+            res = conn.execute(text("SELECT COUNT(*) FROM landmarks"))
+            if res.scalar() == 0:
+                conn.execute(text("""
+                    INSERT INTO landmarks (landmark_id, name, category, description, subdivision_id, barangay_id, latitude, longitude, is_holding_facility, facility_type, capacity, contact_person, contact_number, status) VALUES
+                    (1, 'Selera Homes Main Entrance Gate', 'gate', 'Main guardhouse and security station at the entrance of Selera Homes', 1, 1, 14.80149600, 121.00517400, 0, NULL, NULL, 'Chief Guard Reyes', '09171112233', 'Active'),
+                    (2, 'Selera Homes Temporary Holding Pen', 'facility', 'Community temporary animal shelter and kennel cages near HOA office', 1, 1, 14.80180000, 121.00280000, 1, 'Temporary Holding Pen', 6, 'Kyla Joy Arriola', '09192223344', 'Active'),
+                    (3, 'Selera Community Park & Clubhouse', 'park', 'Recreation grounds and event center', 1, 1, 14.80063400, 121.00222800, 0, NULL, NULL, 'HOA Secretariat', '09172223344', 'Active'),
+                    (4, 'Barangay San Vicente Animal Impound Facility', 'facility', 'Official municipal holding shelter and veterinary holding cages', NULL, 1, 14.80690600, 121.00392970, 1, 'Barangay Main Shelter', 20, 'Barangay Animal Welfare Desk', '09123456789', 'Active');
+                """))
+        except Exception as e:
+            print(f"Error seeding landmarks: {e}")
+
+def ensure_report_location_columns():
+    """Ensure location history and facility tracking columns exist on reports and status_history tables."""
+    with engine.begin() as conn:
+        # 1. Reports columns
+        for col_name, col_def in [
+            ("initial_latitude", "DECIMAL(10,8) NULL"),
+            ("initial_longitude", "DECIMAL(11,8) NULL"),
+            ("initial_landmark", "VARCHAR(255) NULL"),
+            ("facility_id", "INT NULL"),
+            ("custody_status", "VARCHAR(50) DEFAULT 'Sighting'"),
+        ]:
+            res = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'reports' "
+                f"AND COLUMN_NAME = '{col_name}'"
+            ))
+            if res.scalar() == 0:
+                try:
+                    conn.execute(text(f"ALTER TABLE reports ADD COLUMN {col_name} {col_def}"))
+                except Exception as e:
+                    print(f"Error adding {col_name} to reports: {e}")
+
+        # Initialize initial_latitude/longitude/landmark for existing reports
+        try:
+            conn.execute(text("""
+                UPDATE reports 
+                SET initial_latitude = latitude, 
+                    initial_longitude = longitude, 
+                    initial_landmark = landmark 
+                WHERE initial_latitude IS NULL
+            """))
+        except Exception as e:
+            print(f"Error backfilling initial location in reports: {e}")
+
+        # Add foreign key for facility_id on reports
+        try:
+            res_fk = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS "
+                "WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'reports' "
+                "AND CONSTRAINT_NAME = 'fk_reports_facility'"
+            ))
+            if res_fk.scalar() == 0:
+                conn.execute(text("ALTER TABLE reports ADD CONSTRAINT fk_reports_facility FOREIGN KEY (facility_id) REFERENCES landmarks(landmark_id) ON DELETE SET NULL"))
+        except Exception:
+            pass
+
+        # 2. StatusHistory columns
+        for col_name, col_def in [
+            ("latitude", "DECIMAL(10,8) NULL"),
+            ("longitude", "DECIMAL(11,8) NULL"),
+            ("landmark", "VARCHAR(255) NULL"),
+            ("facility_id", "INT NULL"),
+        ]:
+            res = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'status_history' "
+                f"AND COLUMN_NAME = '{col_name}'"
+            ))
+            if res.scalar() == 0:
+                try:
+                    conn.execute(text(f"ALTER TABLE status_history ADD COLUMN {col_name} {col_def}"))
+                except Exception as e:
+                    print(f"Error adding {col_name} to status_history: {e}")
+
+        # Add foreign key for facility_id on status_history
+        try:
+            res_hist_fk = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS "
+                "WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'status_history' "
+                "AND CONSTRAINT_NAME = 'fk_history_facility'"
+            ))
+            if res_hist_fk.scalar() == 0:
+                conn.execute(text("ALTER TABLE status_history ADD CONSTRAINT fk_history_facility FOREIGN KEY (facility_id) REFERENCES landmarks(landmark_id) ON DELETE SET NULL"))
+        except Exception:
+            pass
+
 ensure_announcement_tables_columns()
 ensure_rescue_tables_columns()
 ensure_report_verifications_columns()
@@ -736,6 +873,8 @@ ensure_report_handler_columns()
 ensure_report_verification_columns()
 ensure_report_transfer_columns()
 ensure_report_disputes_table()
+ensure_landmarks_table()
+ensure_report_location_columns()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -783,6 +922,7 @@ app.include_router(claims.router)
 app.include_router(chat.router)
 app.include_router(warnings.router)
 app.include_router(matches.router)
+app.include_router(landmarks.router)
 
 @app.get("/")
 def read_root():

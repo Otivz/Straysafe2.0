@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
+import AdminSidebar from '../../components/AdminSidebar';
+import AdminNavbar from '../../components/Navbars/AdminNavbar';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,6 +24,11 @@ interface HoldingAnimal {
     holding_id: number;
     report_id: number;
     rescue_id: number | null;
+    facility_id: number | null;
+    facility_name: string | null;
+    facility_type: string | null;
+    subdivision_id: number | null;
+    barangay_id: number | null;
     animal_type: string | null;
     animal_name: string | null;
     breed: string | null;
@@ -36,6 +43,17 @@ interface HoldingAnimal {
     intake_staff_name: string | null;
     report_landmark: string | null;
     report_category: string | null;
+    subd_intake_date?: string | null;
+    subd_discharge_date?: string | null;
+    subd_duration_days?: number | null;
+    subd_duration_display?: string | null;
+    brgy_intake_date?: string | null;
+    brgy_discharge_date?: string | null;
+    brgy_duration_days?: number | null;
+    brgy_duration_display?: string | null;
+    total_duration_days?: number | null;
+    total_duration_display?: string | null;
+    current_facility_duration_display?: string | null;
     timeline: TimelineEntry[];
     report_media?: {
         media_id: number;
@@ -44,6 +62,26 @@ interface HoldingAnimal {
         is_evidence?: boolean;
         uploaded_at?: string;
     }[];
+}
+
+interface FacilityOption {
+    landmark_id: number;
+    name: string;
+    facility_type?: string;
+    capacity?: number;
+    contact_person?: string;
+    contact_number?: string;
+    latitude: number;
+    longitude: number;
+    subdivision_id?: number | null;
+    subdivision_name?: string | null;
+    barangay_id?: number | null;
+    barangay_name?: string | null;
+}
+
+interface JurisdictionData {
+    barangays: { barangay_id: number; barangay_name: string; city: string }[];
+    subdivisions: { subdivision_id: number; subdivision_name: string; barangay_id: number; barangay_name: string | null }[];
 }
 
 interface Metrics {
@@ -69,7 +107,9 @@ const FACILITY_STATUSES = [
 const RESOLVED_IDS = new Set([3, 4, 5]);
 
 const EVENT_TYPE_META: Record<string, { icon: ReactNode; color: string }> = {
-    intake: { icon: <span>🏠</span>, color: 'bg-blue-100 text-blue-600' },
+    intake: { icon: <span>🐾</span>, color: 'bg-emerald-100 text-emerald-700' },
+    transfer: { icon: <span>🚚</span>, color: 'bg-indigo-100 text-indigo-700' },
+    relocation: { icon: <span>📍</span>, color: 'bg-indigo-100 text-indigo-700' },
     status_change: { icon: <span>🔄</span>, color: 'bg-amber-100 text-amber-700' },
     medical: { icon: <span>💊</span>, color: 'bg-purple-100 text-purple-600' },
     treatment: { icon: <span>🩺</span>, color: 'bg-pink-100 text-pink-600' },
@@ -82,7 +122,7 @@ const EVENT_TYPE_META: Record<string, { icon: ReactNode; color: string }> = {
 function daysSince(dateStr: string | null): number {
     if (!dateStr) return 0;
     const ms = Date.now() - new Date(dateStr).getTime();
-    return Math.floor(ms / (1000 * 60 * 60 * 24)) + 3;
+    return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
 }
 
 function daysRemaining(dateStr: string | null): number {
@@ -122,6 +162,10 @@ function animalIcon(type: string | null): string {
 const BrgyHoldingFacility = () => {
     const navigate = useNavigate();
     const [animals, setAnimals] = useState<HoldingAnimal[]>([]);
+    const [facilities, setFacilities] = useState<FacilityOption[]>([]);
+    const [jurisdictions, setJurisdictions] = useState<JurisdictionData>({ barangays: [], subdivisions: [] });
+    const [selectedScope, setSelectedScope] = useState<string>('all'); // 'all' | 'brgy_<id>' | 'subd_<id>'
+    const [selectedFacilityId, setSelectedFacilityId] = useState<number | 'all'>('all');
     const [metrics, setMetrics] = useState<Metrics>({ total: 0, need_treatment: 0, healthy: 0, nearing_expiry: 0, resolved_today: 0 });
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -151,21 +195,103 @@ const BrgyHoldingFacility = () => {
     const [lightboxMedia, setLightboxMedia] = useState<{ mediaList: any[]; index: number } | null>(null);
     const [uploadFiles, setUploadFiles] = useState<File[]>([]);
 
-    const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
+    const userStr = localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user') || localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
+    const isAdmin = currentUser?.role_id === 4;
+    const isSubdLeader = currentUser?.role_id === 2;
+    const isHeadOfficer = Boolean(currentUser?.is_head_officer || isAdmin);
+    const defaultSubdId = currentUser?.subdivision_id;
+    const defaultBrgyId = currentUser?.barangay_id;
 
     useEffect(() => {
-        if (!userStr) navigate('/staff/login');
+        if (!userStr) {
+            navigate('/staff/login');
+        }
     }, [navigate, userStr]);
+
+    // ── Fetch Facilities & Jurisdictions ────────────────────────────────────────
+    useEffect(() => {
+        const fetchFacilityMetadata = async () => {
+            try {
+                if (isAdmin) {
+                    const [facRes, jurisRes] = await Promise.all([
+                        axios.get('http://localhost:8000/landmarks?is_holding_facility=true'),
+                        axios.get('http://localhost:8000/landmarks/jurisdictions'),
+                    ]);
+                    if (Array.isArray(facRes.data)) setFacilities(facRes.data);
+                    if (jurisRes.data) setJurisdictions(jurisRes.data);
+                } else if (isSubdLeader && defaultSubdId) {
+                    const res = await axios.get(`http://localhost:8000/landmarks?subdivision_id=${defaultSubdId}&is_holding_facility=true`);
+                    if (Array.isArray(res.data)) {
+                        setFacilities(res.data.filter((f: any) => f.subdivision_id === defaultSubdId));
+                    }
+                } else if (defaultBrgyId) {
+                    const res = await axios.get(`http://localhost:8000/landmarks?barangay_id=${defaultBrgyId}&is_holding_facility=true&barangay_only=true`);
+                    if (Array.isArray(res.data)) {
+                        setFacilities(res.data.filter((f: any) => f.subdivision_id == null));
+                    }
+                } else {
+                    const res = await axios.get('http://localhost:8000/landmarks?is_holding_facility=true&barangay_only=true');
+                    if (Array.isArray(res.data)) {
+                        setFacilities(res.data.filter((f: any) => f.subdivision_id == null));
+                    }
+                }
+            } catch (e) {
+                console.error('Error fetching holding facilities and jurisdictions:', e);
+            }
+        };
+        fetchFacilityMetadata();
+    }, [isAdmin, isSubdLeader, defaultSubdId, defaultBrgyId]);
+
+    // ── Filtered Facilities based on Admin Jurisdiction Selection ──────────────
+    const filteredFacilities = useMemo(() => {
+        if (!isAdmin) {
+            if (isSubdLeader && defaultSubdId) {
+                return facilities.filter(f => f.subdivision_id === defaultSubdId);
+            }
+            return facilities.filter(f => f.subdivision_id == null);
+        }
+        if (selectedScope === 'all') return facilities;
+        if (selectedScope.startsWith('brgy_')) {
+            const bId = Number(selectedScope.replace('brgy_', ''));
+            return facilities.filter(f => f.barangay_id === bId && f.subdivision_id == null);
+        }
+        if (selectedScope.startsWith('subd_')) {
+            const sId = Number(selectedScope.replace('subd_', ''));
+            return facilities.filter(f => f.subdivision_id === sId);
+        }
+        return facilities;
+    }, [isAdmin, isSubdLeader, defaultSubdId, selectedScope, facilities]);
 
     // ── Data Fetching ──────────────────────────────────────────────────────────
 
     const fetchAll = useCallback(async () => {
         try {
             setLoading(true);
+            const params: any = {};
+            if (isAdmin) {
+                if (selectedFacilityId !== 'all') {
+                    params.facility_id = selectedFacilityId;
+                } else if (selectedScope.startsWith('subd_')) {
+                    params.subdivision_id = Number(selectedScope.replace('subd_', ''));
+                } else if (selectedScope.startsWith('brgy_')) {
+                    params.barangay_id = Number(selectedScope.replace('brgy_', ''));
+                    params.barangay_only = true;
+                }
+            } else if (isSubdLeader) {
+                if (defaultSubdId) params.subdivision_id = defaultSubdId;
+                if (selectedFacilityId !== 'all') params.facility_id = selectedFacilityId;
+            } else {
+                if (defaultBrgyId) {
+                    params.barangay_id = defaultBrgyId;
+                    params.barangay_only = true;
+                }
+                if (selectedFacilityId !== 'all') params.facility_id = selectedFacilityId;
+            }
+
             const [animalsRes, metricsRes] = await Promise.all([
-                axios.get('http://localhost:8000/holding/'),
-                axios.get('http://localhost:8000/holding/metrics'),
+                axios.get('http://localhost:8000/holding/', { params }),
+                axios.get('http://localhost:8000/holding/metrics', { params }),
             ]);
             setAnimals(animalsRes.data || []);
             setMetrics(metricsRes.data || { total: 0, need_treatment: 0, healthy: 0, nearing_expiry: 0, resolved_today: 0 });
@@ -174,9 +300,17 @@ const BrgyHoldingFacility = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [isAdmin, isSubdLeader, defaultSubdId, defaultBrgyId, selectedScope, selectedFacilityId]);
 
     useEffect(() => { fetchAll(); }, [fetchAll]);
+
+    // ── Active facility object ─────────────────────────────────────────────────
+    const activeFacility = selectedFacilityId !== 'all'
+        ? facilities.find(f => f.landmark_id === selectedFacilityId)
+        : null;
+
+    // Active occupancy count
+    const activeOccupancy = animals.filter(a => !RESOLVED_IDS.has(a.facility_status)).length;
 
     // ── Filter ─────────────────────────────────────────────────────────────────
 
@@ -188,6 +322,7 @@ const BrgyHoldingFacility = () => {
             (a.animal_type?.toLowerCase() || '').includes(q) ||
             (a.breed?.toLowerCase() || '').includes(q) ||
             (a.report_landmark?.toLowerCase() || '').includes(q) ||
+            (a.facility_name?.toLowerCase() || '').includes(q) ||
             (a.kennel_slot?.toLowerCase() || '').includes(q) ||
             String(a.report_id).includes(q)
         );
@@ -227,7 +362,7 @@ const BrgyHoldingFacility = () => {
         setIsUpdating(true);
         try {
             const d = new Date();
-            d.setDate(d.getDate() - (updateForm.stay_duration - 3));
+            d.setDate(d.getDate() - updateForm.stay_duration);
             const calculatedIntakeDate = d.toISOString();
 
             // 1. Upload files first if any
@@ -344,22 +479,179 @@ const BrgyHoldingFacility = () => {
 
     return (
         <div className="flex h-screen bg-[#F8FAFC]">
-            <BrgySidebar />
+            {isAdmin ? <AdminSidebar /> : <BrgySidebar />}
 
             <div className="flex-1 flex flex-col overflow-hidden">
-                <BrgyNavbar
-                    leftContent={
-                        <div className="flex flex-col">
-                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Holding Facility</h1>
-                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">
-                                Animal intake, monitoring & case resolution
-                            </p>
-                        </div>
-                    }
-                />
+                {isAdmin ? (
+                    <AdminNavbar
+                        leftContent={
+                            <div className="flex flex-col">
+                                <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Holding Facility</h1>
+                                <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">
+                                    Cross-jurisdiction animal holding facilities, intake & duration tracking
+                                </p>
+                            </div>
+                        }
+                    />
+                ) : (
+                    <BrgyNavbar
+                        leftContent={
+                            <div className="flex flex-col">
+                                <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Holding Facility</h1>
+                                <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">
+                                    Animal intake, monitoring & case resolution
+                                </p>
+                            </div>
+                        }
+                    />
+                )}
 
                 <main className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto space-y-6">
+
+                        {/* ── Facility Selector & Management Header ─────────── */}
+                        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-2xl shadow-md shadow-indigo-600/20">
+                                    🏢
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                                            Holding Facility Selector
+                                        </span>
+                                        {activeFacility && (
+                                            <span className="text-[10px] font-bold text-gray-400">
+                                                {activeFacility.facility_type || 'Holding Facility'}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <h2 className="text-lg font-black text-gray-900 leading-snug">
+                                        {activeFacility ? activeFacility.name : (
+                                            isAdmin
+                                                ? (selectedScope === 'all' ? 'All Holding Facilities Across Jurisdictions' : 'Filtered Jurisdiction Facilities')
+                                                : 'Assigned Barangay Holding Facilities'
+                                        )}
+                                    </h2>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-3">
+                                {/* Admin Step 1: Select Subdivision / Barangay */}
+                                {isAdmin && (
+                                    <div className="relative min-w-[220px]">
+                                        <label className="block text-[9px] font-black uppercase text-indigo-700 tracking-wider mb-1">
+                                            1. Subdivision / Barangay
+                                        </label>
+                                        <div className="relative">
+                                            <select
+                                                value={selectedScope}
+                                                onChange={(e) => {
+                                                    setSelectedScope(e.target.value);
+                                                    setSelectedFacilityId('all');
+                                                }}
+                                                className="w-full appearance-none bg-indigo-50/70 hover:bg-indigo-50 border-2 border-indigo-200 focus:border-indigo-500 text-indigo-950 text-xs font-black rounded-xl px-4 py-2.5 pr-8 transition-all cursor-pointer outline-none shadow-xs"
+                                            >
+                                                <option value="all">🌐 All Subdivisions & Barangays</option>
+                                                {jurisdictions.barangays.length > 0 && (
+                                                    <optgroup label="🏛️ Barangay Central Jurisdictions">
+                                                        {jurisdictions.barangays.map(b => (
+                                                            <option key={`brgy_${b.barangay_id}`} value={`brgy_${b.barangay_id}`}>
+                                                                🏛️ Barangay {b.barangay_name} ({b.city})
+                                                            </option>
+                                                        ))}
+                                                    </optgroup>
+                                                )}
+                                                {jurisdictions.subdivisions.length > 0 && (
+                                                    <optgroup label="🏡 Subdivisions">
+                                                        {jurisdictions.subdivisions.map(s => (
+                                                            <option key={`subd_${s.subdivision_id}`} value={`subd_${s.subdivision_id}`}>
+                                                                🏡 {s.subdivision_name} {s.barangay_name ? `(${s.barangay_name})` : ''}
+                                                            </option>
+                                                        ))}
+                                                    </optgroup>
+                                                )}
+                                            </select>
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-400 text-xs">
+                                                ▼
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Step 2 (or Direct for Staff): Select Holding Facility */}
+                                <div className="relative min-w-[240px]">
+                                    {isAdmin && (
+                                        <label className="block text-[9px] font-black uppercase text-gray-500 tracking-wider mb-1">
+                                            2. Holding Facility
+                                        </label>
+                                    )}
+                                    <div className="relative">
+                                        <select
+                                            value={selectedFacilityId}
+                                            onChange={(e) => setSelectedFacilityId(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                                            className="w-full appearance-none bg-gray-50 hover:bg-gray-100 border-2 border-indigo-200 focus:border-indigo-500 text-gray-900 text-xs font-black rounded-xl px-4 py-2.5 pr-8 transition-all cursor-pointer outline-none shadow-xs"
+                                        >
+                                            <option value="all">
+                                                🏢 All Facilities in Scope ({filteredFacilities.length})
+                                            </option>
+                                            {filteredFacilities.map((fac) => (
+                                                <option key={fac.landmark_id} value={fac.landmark_id}>
+                                                    📍 {fac.name} {fac.capacity ? `(Cap: ${fac.capacity})` : ''} {isAdmin && (fac.subdivision_name ? `• ${fac.subdivision_name}` : (fac.barangay_name ? `• Brgy ${fac.barangay_name}` : ''))}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 text-xs">
+                                            ▼
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {isHeadOfficer && (
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate('/brgy/settings')}
+                                        className="px-4 py-2.5 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-700 text-xs font-black rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer self-end md:self-auto"
+                                        title="Add, edit, or remove Barangay landmarks and holding facilities"
+                                    >
+                                        <span>⚙️</span>
+                                        <span>Manage Facilities</span>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* ── Active Facility Status Card (if specific facility selected) ── */}
+                        {activeFacility && (
+                            <div className="bg-gradient-to-r from-indigo-500/10 via-blue-500/5 to-transparent rounded-2xl border border-indigo-200 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="space-y-1">
+                                    <p className="text-xs font-black text-indigo-900 uppercase tracking-wide">
+                                        {activeFacility.name} — Status & Occupancy
+                                    </p>
+                                    <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600 font-semibold">
+                                        <span>📊 Type: <strong className="text-gray-900">{activeFacility.facility_type || 'Holding Facility'}</strong></span>
+                                        {activeFacility.contact_person && (
+                                            <span>👤 Caretaker: <strong className="text-gray-900">{activeFacility.contact_person}</strong></span>
+                                        )}
+                                        {activeFacility.contact_number && (
+                                            <span>📞 Phone: <strong className="text-gray-900">{activeFacility.contact_number}</strong></span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 bg-white px-4 py-2.5 rounded-xl border border-indigo-200 shadow-xs">
+                                    <div className="text-center">
+                                        <p className="text-[9px] font-black uppercase text-gray-400 tracking-wider">Occupied</p>
+                                        <p className="text-base font-black text-indigo-600">{activeOccupancy}</p>
+                                    </div>
+                                    <span className="text-gray-300 font-light text-lg">/</span>
+                                    <div className="text-center">
+                                        <p className="text-[9px] font-black uppercase text-gray-400 tracking-wider">Capacity</p>
+                                        <p className="text-base font-black text-gray-800">{activeFacility.capacity || '—'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* ── Metrics Row ───────────────────────────────────── */}
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -428,148 +720,189 @@ const BrgyHoldingFacility = () => {
                             </button>
                         </div>
 
-                        {/* ── Animal Table ──────────────────────────────────── */}
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                            {loading ? (
-                                <div className="flex flex-col items-center justify-center py-20 gap-3">
-                                    <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-                                    <p className="text-sm text-gray-400 font-semibold">Loading facility records...</p>
-                                </div>
-                            ) : filtered.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-20 gap-3">
-                                    <span className="text-5xl">🏠</span>
-                                    <p className="text-gray-400 font-semibold text-sm">No animals in holding facility.</p>
-                                    <p className="text-gray-300 text-xs">Animals are automatically admitted when a rescue is marked as "Picked Up".</p>
-                                </div>
-                            ) : (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                        <thead>
-                                            <tr className="bg-gray-50 border-b border-gray-100">
-                                                {['Animal', 'Report', 'Location / Kennel', 'Facility Status', 'Intake Date', 'Stay Duration', 'Impound Deadline', 'Action'].map(h => (
-                                                    <th key={h} className="px-5 py-3.5 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50">
-                                            {filtered.map(animal => {
-                                                const statusMeta = getStatusMeta(animal.facility_status);
-                                                const days = daysSince(animal.intake_date);
-                                                const remaining = daysRemaining(animal.intake_date);
-                                                const isResolved = RESOLVED_IDS.has(animal.facility_status);
-                                                const isNearExpiry = !isResolved && remaining <= 2;
+                        {/* ── Animal Cards Grid ─────────────────────────────── */}
+                        {loading ? (
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center py-20 gap-3">
+                                <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                                <p className="text-sm text-gray-400 font-semibold">Loading facility records...</p>
+                            </div>
+                        ) : filtered.length === 0 ? (
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center py-20 gap-3">
+                                <span className="text-5xl">🐾</span>
+                                <p className="text-gray-400 font-semibold text-sm">No animals in holding facility.</p>
+                                <p className="text-gray-300 text-xs">Animals are automatically admitted when a rescue is marked as "Picked Up".</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {filtered.map(animal => {
+                                    const statusMeta = getStatusMeta(animal.facility_status);
+                                    const days = daysSince(animal.intake_date);
+                                    const remaining = daysRemaining(animal.intake_date);
+                                    const isResolved = RESOLVED_IDS.has(animal.facility_status);
+                                    const isNearExpiry = !isResolved && remaining <= 2;
+                                    const firstImage = animal.report_media?.find(
+                                        m => m.media_type === 'Image' || m.file_url.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i)
+                                    ) || (animal.timeline ? animal.timeline.flatMap(t => (t as any).media || []).find((m: any) => m.file_url) : undefined);
 
-                                                return (
-                                                    <tr
-                                                        key={animal.holding_id}
-                                                        onClick={() => openDetail(animal)}
-                                                        className={`cursor-pointer hover:bg-gray-50/80 transition-colors ${isResolved ? 'opacity-60' : ''}`}
-                                                    >
-                                                        {/* Animal */}
-                                                        <td className="px-5 py-4">
-                                                            <div className="flex items-center gap-3">
-                                                                {(() => {
-                                                                    const firstImage = animal.report_media?.find(
-                                                                        m => m.media_type === 'Image' || m.file_url.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i)
-                                                                    );
-                                                                    return (
-                                                                        <div className="w-10 h-10 rounded-xl bg-indigo-50 overflow-hidden border border-indigo-100 flex items-center justify-center shrink-0">
-                                                                            {firstImage ? (
-                                                                                <img 
-                                                                                    src={firstImage.file_url} 
-                                                                                    alt={animal.animal_name || 'Animal'} 
-                                                                                    className="w-full h-full object-cover" 
-                                                                                />
-                                                                            ) : (
-                                                                                <span className="text-xl">{animalIcon(animal.animal_type)}</span>
-                                                                            )}
-                                                                        </div>
-                                                                    );
-                                                                })()}
-                                                                <div>
-                                                                    <p className="font-bold text-gray-900 text-sm">
-                                                                        {animal.animal_name || `${animal.animal_type || 'Unknown'} #${animal.holding_id}`}
-                                                                    </p>
-                                                                    <p className="text-[11px] text-gray-400">{animal.breed || '—'} · {animal.color || '—'}</p>
-                                                                </div>
+                                    return (
+                                        <div
+                                            key={animal.holding_id}
+                                            onClick={() => openDetail(animal)}
+                                            className={`bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:border-indigo-200 transition-all duration-300 flex flex-col overflow-hidden cursor-pointer group ${
+                                                isResolved ? 'opacity-75 bg-gray-50/50' : ''
+                                            }`}
+                                        >
+                                            {/* Card Top / Prominent Image Hero */}
+                                            <div className="relative w-full h-52 bg-slate-100 overflow-hidden">
+                                                {firstImage ? (
+                                                    <>
+                                                        <img
+                                                            src={firstImage.file_url}
+                                                            alt={animal.animal_name || 'Animal in Facility'}
+                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                        />
+                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/30 pointer-events-none" />
+                                                    </>
+                                                ) : (
+                                                    <div className="w-full h-full bg-gradient-to-br from-indigo-50 via-slate-50 to-purple-50 flex flex-col items-center justify-center relative p-4 text-center">
+                                                        <span className="text-6xl drop-shadow-sm transform group-hover:scale-110 transition-transform duration-300">
+                                                            {animalIcon(animal.animal_type)}
+                                                        </span>
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2">
+                                                            No Photo Uploaded
+                                                        </span>
+                                                        <div className="absolute inset-0 bg-gradient-to-t from-gray-900/60 via-transparent to-transparent pointer-events-none" />
+                                                    </div>
+                                                )}
+
+                                                {/* Top Badges Overlay */}
+                                                <div className="absolute top-3 inset-x-3 flex items-center justify-between gap-2 pointer-events-none">
+                                                    {/* Kennel Slot Pill */}
+                                                    {animal.kennel_slot ? (
+                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/90 backdrop-blur-md text-indigo-700 text-[11px] font-black rounded-full shadow-sm border border-white/50">
+                                                            📍 {animal.kennel_slot}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-black/40 backdrop-blur-md text-white/90 text-[10px] font-semibold rounded-full border border-white/20">
+                                                            📍 Not Assigned
+                                                        </span>
+                                                    )}
+
+                                                    {/* Facility Status Badge */}
+                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-wider uppercase backdrop-blur-md shadow-sm border ${
+                                                        firstImage 
+                                                            ? 'bg-white/95 text-gray-900 border-white/60' 
+                                                            : statusMeta.color
+                                                    }`}>
+                                                        {statusMeta.name}
+                                                    </span>
+                                                </div>
+
+                                                {/* Bottom Animal Name & Category on Image */}
+                                                <div className="absolute bottom-3 inset-x-4 pointer-events-none">
+                                                    <div className="flex items-end justify-between gap-2">
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-2 mb-0.5">
+                                                                <span className="text-[10px] font-mono font-black text-white bg-black/40 backdrop-blur-md px-2 py-0.5 rounded-md border border-white/20">
+                                                                    #{animal.report_id.toString().padStart(4, '0')}
+                                                                </span>
+                                                                <span className="text-[11px] font-bold text-white/90 truncate drop-shadow-sm">
+                                                                    {animal.report_category || 'Rescue'}
+                                                                </span>
                                                             </div>
-                                                        </td>
+                                                            <h3 className="font-black text-white text-lg leading-tight truncate drop-shadow-md group-hover:text-indigo-200 transition-colors">
+                                                                {animal.animal_name || `${animal.animal_type || 'Animal'} #${animal.holding_id}`}
+                                                            </h3>
+                                                            <p className="text-xs text-white/80 font-medium truncate drop-shadow-sm">
+                                                                {animal.breed || 'Unknown Breed'} · {animal.color || 'Unknown Color'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
 
-                                                        {/* Report */}
-                                                        <td className="px-5 py-4">
-                                                            <span className="text-xs font-mono text-gray-400">#{animal.report_id.toString().padStart(4, '0')}</span>
-                                                            <p className="text-[11px] text-gray-500 mt-0.5">{animal.report_category || '—'}</p>
-                                                        </td>
+                                            {/* Card Body - Details */}
+                                            <div className="p-5 space-y-3 flex-1 text-xs">
+                                                {/* Grid for Dates & Stay Durations */}
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div className="bg-gray-50/70 p-2.5 rounded-xl border border-gray-100">
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Intake Date</p>
+                                                        <p className="font-bold text-gray-800 text-xs mt-0.5">{formatDate(animal.intake_date)}</p>
+                                                    </div>
+                                                    <div className="bg-gray-50/70 p-2.5 rounded-xl border border-gray-100">
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Total Custody</p>
+                                                        {isResolved ? (
+                                                            <p className="font-bold text-gray-400 text-xs mt-0.5">Discharged ({animal.total_duration_display || '—'})</p>
+                                                        ) : (
+                                                            <p className={`font-black text-xs mt-0.5 ${days >= IMPOUND_DAYS ? 'text-red-600' : 'text-gray-800'}`}>
+                                                                {animal.total_duration_display || `${days} day(s)`}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
 
-                                                        {/* Location */}
-                                                        <td className="px-5 py-4">
-                                                            {animal.kennel_slot ? (
-                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded-lg border border-indigo-100">
-                                                                    📍 {animal.kennel_slot}
-                                                                </span>
-                                                            ) : (
-                                                                <span className="text-xs text-gray-400">Not assigned</span>
-                                                            )}
-                                                            <p className="text-[10px] text-gray-400 mt-1 truncate max-w-[120px]">{animal.report_landmark || '—'}</p>
-                                                        </td>
+                                                {/* Facility Stay Breakdown Pills */}
+                                                <div className="flex items-center justify-between gap-1.5 p-2 bg-indigo-50/40 rounded-xl border border-indigo-100/60 text-[10px]">
+                                                    <span className="font-bold text-indigo-900 truncate">
+                                                        🏡 Subd: <strong className="text-indigo-700">{animal.subd_duration_display || '0 days'}</strong>
+                                                    </span>
+                                                    <span className="text-gray-300">|</span>
+                                                    <span className="font-bold text-indigo-900 truncate">
+                                                        🏢 Brgy: <strong className="text-indigo-700">{animal.brgy_duration_display || '0 days'}</strong>
+                                                    </span>
+                                                </div>
 
-                                                        {/* Status */}
-                                                        <td className="px-5 py-4">
-                                                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${statusMeta.color}`}>
-                                                                {statusMeta.name}
+                                                {/* Impound Deadline */}
+                                                <div className="flex items-center justify-between p-2.5 bg-gray-50/50 rounded-xl border border-gray-100/80">
+                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Impound Deadline</span>
+                                                    <div>
+                                                        {isResolved ? (
+                                                            <span className="text-xs text-gray-400 font-bold">Completed</span>
+                                                        ) : isNearExpiry ? (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-600 text-[11px] font-black rounded-lg border border-red-200 animate-pulse shadow-xs">
+                                                                ⚠️ {remaining}d left
                                                             </span>
-                                                        </td>
+                                                        ) : (
+                                                            <span className="text-xs font-bold text-gray-700">
+                                                                {remaining} days remaining
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
 
-                                                        {/* Intake date */}
-                                                        <td className="px-5 py-4 text-xs text-gray-500 whitespace-nowrap">
-                                                            {formatDate(animal.intake_date)}
-                                                        </td>
+                                                {/* Location Landmark */}
+                                                {(animal.facility_name || animal.report_landmark) && (
+                                                    <div className="text-[11px] text-gray-500 font-medium truncate flex items-center gap-1.5 px-1">
+                                                        <span className="text-gray-400">📍</span>
+                                                        <span className="truncate">{animal.facility_name || animal.report_landmark}</span>
+                                                    </div>
+                                                )}
+                                            </div>
 
-                                                        {/* Stay duration */}
-                                                        <td className="px-5 py-4">
-                                                            {isResolved ? (
-                                                                <span className="text-xs text-gray-400">Discharged</span>
-                                                            ) : (
-                                                                <span className={`text-sm font-bold ${days >= IMPOUND_DAYS ? 'text-red-600' : 'text-gray-700'}`}>
-                                                                    {days} day{days !== 1 ? 's' : ''}
-                                                                </span>
-                                                            )}
-                                                        </td>
-
-                                                        {/* Impound deadline */}
-                                                        <td className="px-5 py-4">
-                                                            {isResolved ? (
-                                                                <span className="text-xs text-gray-400">—</span>
-                                                            ) : isNearExpiry ? (
-                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-600 text-[10px] font-bold rounded-lg border border-red-100 animate-pulse">
-                                                                    ⚠️ {remaining}d left
-                                                                </span>
-                                                            ) : (
-                                                                <span className="text-xs text-gray-500">{remaining}d remaining</span>
-                                                            )}
-                                                        </td>
-
-                                                        {/* Action */}
-                                                        <td className="px-5 py-4">
-                                                            <button
-                                                                onClick={e => { e.stopPropagation(); openDetail(animal); }}
-                                                                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg hover:bg-indigo-100 transition-all uppercase tracking-widest"
-                                                            >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                                </svg>
-                                                                Manage
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
+                                            {/* Card Action Footer */}
+                                            <div className="p-4 pt-3 bg-gray-50/60 border-t border-gray-100 flex items-center justify-between mt-auto">
+                                                <span className="text-[11px] text-gray-400 font-semibold group-hover:text-indigo-600 transition-colors">
+                                                    Click to view notes & logs
+                                                </span>
+                                                <button
+                                                    onClick={e => {
+                                                        e.stopPropagation();
+                                                        openDetail(animal);
+                                                    }}
+                                                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 shadow-md hover:shadow-lg transition-all uppercase tracking-wider"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                    </svg>
+                                                    Manage
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
 
                         {/* ── Info Banner ───────────────────────────────────── */}
                         <div className="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-4 flex items-start gap-4">
@@ -657,15 +990,36 @@ const BrgyHoldingFacility = () => {
                                         );
                                     })()}
 
+                                    {/* Stay Duration Breakdown Highlight Card */}
+                                    <div className="bg-gradient-to-br from-indigo-50/80 via-white to-purple-50/80 p-4 rounded-2xl border border-indigo-100 shadow-sm">
+                                        <p className="text-[10px] font-black text-indigo-900 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
+                                            <span>⏱️</span> Facility Stay & Custody Duration
+                                        </p>
+                                        <div className="grid grid-cols-3 gap-3">
+                                            <div className="bg-white/80 backdrop-blur-xs p-3 rounded-xl border border-indigo-100/60 shadow-2xs">
+                                                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">🏡 Subdivision Stay</p>
+                                                <p className="text-sm font-black text-indigo-700 mt-1">{selected.subd_duration_display || '0 days'}</p>
+                                            </div>
+                                            <div className="bg-white/80 backdrop-blur-xs p-3 rounded-xl border border-indigo-100/60 shadow-2xs">
+                                                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">🏢 Barangay Stay</p>
+                                                <p className="text-sm font-black text-indigo-700 mt-1">{selected.brgy_duration_display || '0 days'}</p>
+                                            </div>
+                                            <div className="bg-indigo-600 text-white p-3 rounded-xl shadow-xs">
+                                                <p className="text-[9px] font-bold text-indigo-200 uppercase tracking-wider">Total Custody</p>
+                                                <p className="text-sm font-black text-white mt-1">{selected.total_duration_display || '0 days'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     {/* Current Info Grid */}
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-2 gap-3.5">
                                         {[
                                             { label: 'Animal Type', value: selected.animal_type || '—' },
                                             { label: 'Breed', value: selected.breed || '—' },
                                             { label: 'Color', value: selected.color || '—' },
                                             { label: 'Estimated Size', value: selected.estimated_size || '—' },
                                             { label: 'Kennel Slot', value: selected.kennel_slot || '—' },
-                                            { label: 'Stay Duration', value: RESOLVED_IDS.has(selected.facility_status) ? 'Discharged' : `${daysSince(selected.intake_date)} day(s)` },
+                                            { label: 'Current Facility', value: selected.facility_name || selected.report_landmark || '—' },
                                             { label: 'Intake Staff', value: selected.intake_staff_name || '—' },
                                         ].map(row => (
                                             <div key={row.label} className={`bg-gray-50 rounded-xl p-3 ${row.label === 'Intake Staff' ? 'col-span-2' : ''}`}>
@@ -763,7 +1117,7 @@ const BrgyHoldingFacility = () => {
                                                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Stay Duration (days)</label>
                                                 <input
                                                     type="number"
-                                                    min={3}
+                                                    min={0}
                                                     max={365}
                                                     className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-200 outline-none"
                                                     value={updateForm.stay_duration}

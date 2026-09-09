@@ -7,8 +7,8 @@ from datetime import datetime
 
 from app.database import get_db
 from app.models.chat import ChatThread, ChatMessage
-from app.models.report import Report
-from app.models.user import User
+from app.models.report import Report, Rescue, RescueAssignment
+from app.models.user import User, Subdivision
 from app.models.notification import Notification
 from app.models.report_match import ReportMatch
 from app.models.pet import Pet
@@ -33,7 +33,12 @@ def format_message_dict(msg: ChatMessage, db: Session) -> dict:
         if sender.role_id == 2:
             sender_role = "Subdivision Leader"
         elif sender.role_id == 3:
-            sender_role = "Barangay Staff"
+            if sender.position and getattr(sender.position, 'position_name', None):
+                sender_role = sender.position.position_name
+            elif getattr(sender, 'is_head_officer', False):
+                sender_role = "Barangay Head Officer"
+            else:
+                sender_role = "Barangay Staff"
         elif sender.role_id == 4:
             sender_role = "Admin"
 
@@ -227,6 +232,33 @@ def check_user_report_chat_access(report_id: int, current_user: User, thread: Ch
     return False
 
 
+def is_user_assigned_to_report(report_id: int, user_id: int, db: Session) -> bool:
+    rescues = db.query(Rescue).filter(Rescue.report_id == report_id).all()
+    for r in rescues:
+        if r.staff_id == user_id or r.leader_id == user_id:
+            return True
+        assignment = db.query(RescueAssignment).filter(
+            RescueAssignment.rescue_id == r.rescue_id,
+            (RescueAssignment.user_id == user_id) | (RescueAssignment.staff_id == user_id)
+        ).first()
+        if assignment:
+            return True
+    return False
+
+
+def can_user_interact_with_report_chat(report_id: int, current_user: User, db: Session) -> bool:
+    if current_user.role_id == 1:
+        report = db.query(Report).filter(Report.report_id == report_id).first()
+        return report is not None and report.user_id == current_user.user_id
+    if current_user.role_id in [2, 4]:
+        return True
+    if current_user.role_id == 3:
+        if getattr(current_user, 'is_head_officer', False):
+            return True
+        return is_user_assigned_to_report(report_id, current_user.user_id, db)
+    return False
+
+
 def get_or_create_match_thread(match_id: int, current_user: User, db: Session) -> ChatThread:
     match = db.query(ReportMatch).filter(ReportMatch.match_id == match_id).first()
     if not match:
@@ -335,6 +367,8 @@ def get_report_thread_endpoint(
         "updated_at": thread.updated_at,
         "creator_name": creator.name if creator else None,
         "recipient_name": recipient.name if recipient else None,
+        "can_interact": can_user_interact_with_report_chat(report_id, current_user, db),
+        "is_assigned": is_user_assigned_to_report(report_id, current_user.user_id, db),
         "messages": formatted_messages
     }
 
@@ -370,6 +404,12 @@ async def send_report_message(
 
     if not check_user_report_chat_access(report_id, current_user, thread, db):
         raise HTTPException(status_code=403, detail="Access denied to this case chat")
+
+    if not can_user_interact_with_report_chat(report_id, current_user, db):
+        raise HTTPException(
+            status_code=403,
+            detail="Only Barangay responders assigned to this report can send messages. Higher role officers have view-all oversight."
+        )
 
     media_url = None
     if file:
@@ -432,6 +472,20 @@ async def send_report_message(
             for leader in leaders:
                 if leader.user_id != current_user.user_id:
                     recipient_user_ids.add(leader.user_id)
+
+        # 5. Assigned Barangay Responders and Staff for this report
+        rescues = db.query(Rescue).filter(Rescue.report_id == report_id).all()
+        for r in rescues:
+            if r.staff_id and r.staff_id != current_user.user_id:
+                recipient_user_ids.add(r.staff_id)
+            if r.leader_id and r.leader_id != current_user.user_id:
+                recipient_user_ids.add(r.leader_id)
+            assignments = db.query(RescueAssignment).filter(RescueAssignment.rescue_id == r.rescue_id).all()
+            for a in assignments:
+                if a.user_id and a.user_id != current_user.user_id:
+                    recipient_user_ids.add(a.user_id)
+                if a.staff_id and a.staff_id != current_user.user_id:
+                    recipient_user_ids.add(a.staff_id)
 
         for uid in recipient_user_ids:
             notif = Notification(
@@ -726,6 +780,37 @@ def list_user_threads(
     elif current_user.role_id == 1:
         # Resident only sees Case Threads for reports they created
         report_query = report_query.filter(Report.user_id == current_user.user_id)
+    elif current_user.role_id == 3:
+        # Barangay Staff & Responders:
+        is_head = getattr(current_user, 'is_head_officer', False)
+        assigned_rescue_report_ids = [
+            r[0] for r in db.query(Rescue.report_id).join(
+                RescueAssignment, Rescue.rescue_id == RescueAssignment.rescue_id
+            ).filter(
+                (RescueAssignment.user_id == current_user.user_id) |
+                (RescueAssignment.staff_id == current_user.user_id)
+            ).all()
+        ] + [
+            r[0] for r in db.query(Rescue.report_id).filter(
+                (Rescue.staff_id == current_user.user_id) | (Rescue.leader_id == current_user.user_id)
+            ).all()
+        ]
+
+        if is_head:
+            # Head Officer (In Charge): can view and interact with all reports in their barangay
+            if current_user.barangay_id:
+                subd_ids = [s.subdivision_id for s in db.query(Subdivision).filter(Subdivision.barangay_id == current_user.barangay_id).all()]
+                report_query = report_query.filter(
+                    (Report.report_id.in_(assigned_rescue_report_ids)) | (Report.subdivision_id.in_(subd_ids))
+                )
+            elif assigned_rescue_report_ids:
+                report_query = report_query.filter(Report.report_id.in_(assigned_rescue_report_ids))
+        else:
+            # User NOT in charge: ONLY reports assigned to them can appear in the messages!
+            if assigned_rescue_report_ids:
+                report_query = report_query.filter(Report.report_id.in_(assigned_rescue_report_ids))
+            else:
+                report_query = report_query.filter(Report.report_id == -1)
 
     report_threads = report_query.order_by(ChatThread.updated_at.desc()).all()
 
@@ -748,6 +833,9 @@ def list_user_threads(
 
         memorable_title = generate_memorable_report_title(report, reporter)
 
+        can_interact = can_user_interact_with_report_chat(t.related_id, current_user, db) if report else True
+        is_assigned = is_user_assigned_to_report(t.related_id, current_user.user_id, db) if report else False
+
         results.append({
             "thread_id": t.thread_id,
             "thread_type": "Report",
@@ -756,6 +844,8 @@ def list_user_threads(
             "match_id": None,
             "title": memorable_title or t.title or f"Report #{t.related_id} Case Coordination",
             "is_closed": t.is_closed,
+            "can_interact": can_interact,
+            "is_assigned": is_assigned,
             "created_at": t.created_at,
             "updated_at": t.updated_at,
             "report": {
@@ -802,6 +892,17 @@ def list_user_threads(
             match_query = match_query.filter(Report.subdivision_id == current_user.subdivision_id)
     elif current_user.role_id == 1:
         match_query = match_query.filter(Pet.owner_id == current_user.user_id)
+    elif current_user.role_id == 3:
+        is_head = getattr(current_user, 'is_head_officer', False)
+        if is_head:
+            if current_user.barangay_id:
+                subd_ids = [s.subdivision_id for s in db.query(Subdivision).filter(Subdivision.barangay_id == current_user.barangay_id).all()]
+                match_query = match_query.filter(Report.subdivision_id.in_(subd_ids))
+        else:
+            if assigned_rescue_report_ids:
+                match_query = match_query.filter(Report.report_id.in_(assigned_rescue_report_ids))
+            else:
+                match_query = match_query.filter(Report.report_id == -1)
 
     match_threads = match_query.order_by(ChatThread.updated_at.desc()).all()
 
@@ -857,6 +958,8 @@ def list_user_threads(
             "match_id": match.match_id,
             "title": memorable_match_title or t.title or f"Match Inquiry: {pet.pet_name if pet else 'Pet'} (Report #{match.source_report_id})",
             "is_closed": t.is_closed,
+            "can_interact": True,
+            "is_assigned": False,
             "created_at": t.created_at,
             "updated_at": t.updated_at,
             "report": {
@@ -939,6 +1042,35 @@ def get_unread_chat_count(
         for d in dir_threads:
             thread_ids.add(d[0])
 
+    elif current_user.role_id == 3:
+        # Barangay Staff & Responders:
+        is_head = getattr(current_user, 'is_head_officer', False)
+        if is_head and current_user.barangay_id:
+            subd_ids = [s.subdivision_id for s in db.query(Subdivision).filter(Subdivision.barangay_id == current_user.barangay_id).all()]
+            rep_threads = db.query(ChatThread.thread_id).filter(ChatThread.thread_type == "Report").join(Report, ChatThread.related_id == Report.report_id).filter(Report.subdivision_id.in_(subd_ids)).all()
+            for r in rep_threads:
+                thread_ids.add(r[0])
+        else:
+            assigned_report_ids = [
+                r[0] for r in db.query(Rescue.report_id).join(
+                    RescueAssignment, Rescue.rescue_id == RescueAssignment.rescue_id
+                ).filter(
+                    (RescueAssignment.user_id == current_user.user_id) |
+                    (RescueAssignment.staff_id == current_user.user_id)
+                ).all()
+            ] + [
+                r[0] for r in db.query(Rescue.report_id).filter(
+                    (Rescue.staff_id == current_user.user_id) | (Rescue.leader_id == current_user.user_id)
+                ).all()
+            ]
+            if assigned_report_ids:
+                rep_threads = db.query(ChatThread.thread_id).filter(
+                    ChatThread.thread_type == "Report",
+                    ChatThread.related_id.in_(assigned_report_ids)
+                ).all()
+                for r in rep_threads:
+                    thread_ids.add(r[0])
+
     if not thread_ids:
         return {"unread_count": 0}
 
@@ -949,5 +1081,6 @@ def get_unread_chat_count(
     ).count()
 
     return {"unread_count": count}
+
 
 
