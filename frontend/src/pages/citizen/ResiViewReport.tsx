@@ -1120,7 +1120,7 @@ const ResiViewReport = () => {
                         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                             <h4 className="text-[10px] font-black text-orange-400 uppercase tracking-[0.2em]">Location Intelligence</h4>
                             <div className="flex items-center gap-2">
-                                {(report.facility_id || report.custody_status === 'Secured in Facility' || report.facility) && (
+                                {([6, 7, 8, 9, 10, 11].includes(report.status_id) && (report.facility_id || report.custody_status === 'Secured in Facility' || report.facility)) && (
                                     <span className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-400/30 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5">
                                         <span>🐾</span>
                                         <span>Animal Secured at Holding Facility</span>
@@ -1143,11 +1143,11 @@ const ResiViewReport = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                             <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
                                 <div className="w-10 h-10 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-400 text-lg shrink-0">
-                                    {(report.facility_id || report.custody_status === 'Secured in Facility' || report.facility) ? '🐾' : '📍'}
+                                    {([6, 7, 8, 9, 10, 11].includes(report.status_id) && (report.facility_id || report.custody_status === 'Secured in Facility' || report.facility)) ? '🐾' : '📍'}
                                 </div>
                                 <div className="overflow-hidden">
                                     <p className="text-[9px] font-black text-white/50 uppercase tracking-widest">
-                                        {(report.facility_id || report.custody_status === 'Secured in Facility' || report.facility) ? 'Current Facility Holding Location' : 'Current Active Location'}
+                                        {([6, 7, 8, 9, 10, 11].includes(report.status_id) && (report.facility_id || report.custody_status === 'Secured in Facility' || report.facility)) ? 'Current Facility Holding Location' : 'Current Active Location'}
                                     </p>
                                     <p className="text-sm font-black tracking-tight text-white truncate">
                                         {report.facility?.name || report.landmark || 'No landmark specified'}
@@ -1218,7 +1218,7 @@ const ResiViewReport = () => {
                                 </div>
                             </div>
 
-                            {(report.facility_id || report.custody_status === 'Secured in Facility' || (report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude))) && (
+                            {([6, 7, 8, 9, 10, 11].includes(report.status_id) && (report.facility_id || report.custody_status === 'Secured in Facility' || (report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude)))) && (
                                 <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
                                     <div className="w-10 h-10 rounded-2xl bg-slate-700 flex items-center justify-center text-slate-300 text-lg shrink-0">
                                         🚩
@@ -1360,7 +1360,7 @@ const ResiViewReport = () => {
                             </button>
 
                             {(() => {
-                                const isRelocated = !!report.facility_id || report.custody_status === 'Secured in Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude));
+                                const isRelocated = [6, 7, 8, 9, 10, 11].includes(report.status_id) && (!!report.facility_id || report.custody_status === 'Secured in Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude)));
                                 const currentLat = parseFloat(report.latitude);
                                 const currentLng = parseFloat(report.longitude);
                                 const initLat = report.initial_latitude ? parseFloat(report.initial_latitude) : null;
@@ -1532,7 +1532,7 @@ const ResiViewReport = () => {
                             {/* Expanded Map Canvas */}
                             <div className="flex-1 rounded-2xl overflow-hidden relative border border-white/10 min-h-0">
                                 {(() => {
-                                    const isRelocated = !!report.facility_id || report.custody_status === 'Secured in Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude));
+                                    const isRelocated = [6, 7, 8, 9, 10, 11].includes(report.status_id) && (!!report.facility_id || report.custody_status === 'Secured in Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude)));
                                     const currentLat = parseFloat(report.latitude);
                                     const currentLng = parseFloat(report.longitude);
                                     const initLat = report.initial_latitude ? parseFloat(report.initial_latitude) : null;

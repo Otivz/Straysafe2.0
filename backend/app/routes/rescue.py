@@ -475,9 +475,9 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                             report_obj.custody_status = custody_status or ("In Barangay Facility" if fac.subdivision_id is None else "In Subdivision Facility")
                             caretaker_str = f" • Caretaker: {fac.contact_person} ({fac.contact_number})" if fac.contact_person else ""
                             if prev_fac_name and prev_fac_name != fac.name:
-                                relocation_note = f"Transferred to {fac.name}{caretaker_str} (Previously held at: {prev_fac_name} | Origin: {report_obj.initial_landmark or 'Sighting Spot'})"
-                            else:
-                                relocation_note = f"Secured at {fac.name}{caretaker_str} (Origin: {report_obj.initial_landmark or 'Sighting Spot'})"
+                                relocation_note = f"Transferred to {fac.name}{caretaker_str} (Previously held at: {prev_fac_name})"
+                            elif report_status_id in (6, 7, 8):
+                                relocation_note = f"Secured at {fac.name}{caretaker_str}"
                     elif lat is not None and lng is not None:
                         report_obj.latitude = Decimal(str(lat))
                         report_obj.longitude = Decimal(str(lng))
@@ -499,12 +499,15 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                         if not report_obj.custody_status:
                             report_obj.custody_status = "In Barangay Facility"
                         if not relocation_note:
-                            relocation_note = f"Secured at {brgy_hq_name} (Origin: {report_obj.initial_landmark or 'Sighting Spot'})"
+                            relocation_note = f"Secured at {brgy_hq_name}"
 
-                    if relocation_note and relocation_note not in history_remarks:
-                        history_remarks = f"{history_remarks} | {relocation_note}"
+                    if relocation_note:
+                        if "Secured at" not in history_remarks and "Transferred to" not in history_remarks:
+                            history_remarks = f"{history_remarks} {relocation_note}"
+                        elif prev_fac_name and prev_fac_name != (fac.name if facility_id and fac else None):
+                            history_remarks = f"Facility Relocation: {relocation_note}"
 
-                    # Avoid duplicate StatusHistory if already recorded with same remarks
+                    # Avoid duplicate StatusHistory if already recorded with same remarks and facility
                     last_history = db.query(StatusHistory).filter(
                         StatusHistory.report_id == db_rescue.report_id
                     ).order_by(StatusHistory.history_id.desc()).first()
@@ -514,7 +517,8 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                         and last_history.report_status_id == report_status_id
                         and db_rescue.report is not None
                         and db_rescue.report.current_status_id == report_status_id
-                        and (not remarks or remarks == last_history.remarks)
+                        and last_history.remarks == history_remarks
+                        and (facility_id is None or last_history.facility_id == facility_id)
                     )
 
                     if not is_duplicate:
