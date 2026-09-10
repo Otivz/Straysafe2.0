@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models.report import HoldingAnimal, HoldingTimeline, Report, FacilityStatus, StatusHistory
 from app.models.landmark import Landmark
-from app.models.user import Subdivision
+from app.models.user import Subdivision, User
 from app.utils.audit import log_activity
 from app.schemas.holding import (
     HoldingAnimalCreate,
@@ -66,6 +66,24 @@ def _populate(animal: HoldingAnimal) -> HoldingAnimal:
 
     current_facility = None
     if animal.report:
+        # Reconcile breed if animal.breed is missing or generic (Aspin/Puspin/Unknown) while report has specific breed
+        if animal.report.animal_breed:
+            if not animal.breed or animal.breed in ('Unknown', 'Aspin', 'Puspin') or animal.breed != animal.report.animal_breed:
+                animal.breed = animal.report.animal_breed
+        if not animal.color and (animal.report.animal_color or animal.report.ai_dominant_color):
+            animal.color = animal.report.animal_color or animal.report.ai_dominant_color
+        if not animal.estimated_size and (animal.report.estimated_size or animal.report.ai_estimated_size):
+            animal.estimated_size = animal.report.estimated_size or animal.report.ai_estimated_size
+
+        # If facility_status is default 1 (Need Treatment) and the report condition indicates Healthy without injuries
+        if animal.facility_status == 1 and animal.report.condition:
+            cond_text = str(animal.report.condition).lower()
+            is_injured = any(k in cond_text for k in ['injured', 'bleeding', 'limping', 'weak', 'sick', 'treatment', 'wound', 'trapped'])
+            is_healthy = 'healthy' in cond_text or 'no condition' in cond_text
+            if is_healthy and not is_injured:
+                animal.facility_status = 2
+                animal.facility_status_name = "Healthy"
+
         animal.report_landmark = animal.report.landmark  # type: ignore[attr-defined]
         animal.report_category = CATEGORY_MAP.get(animal.report.category_id, "Unknown")  # type: ignore[attr-defined]
         animal.report_media = animal.report.media  # type: ignore[attr-defined]
@@ -267,9 +285,17 @@ def get_metrics(
     resolved_today = 0
 
     for a in animals:
-        if a.facility_status == 1:
+        eff_status = a.facility_status
+        if eff_status == 1 and a.report and a.report.condition:
+            cond_text = str(a.report.condition).lower()
+            is_injured = any(k in cond_text for k in ['injured', 'bleeding', 'limping', 'weak', 'sick', 'treatment', 'wound', 'trapped'])
+            is_healthy = 'healthy' in cond_text or 'no condition' in cond_text
+            if is_healthy and not is_injured:
+                eff_status = 2
+
+        if eff_status == 1:
             need_treatment += 1
-        elif a.facility_status == 2:
+        elif eff_status == 2:
             healthy += 1
 
         # Only count active animals for expiry
@@ -414,6 +440,25 @@ def update_animal(holding_id: int, body: HoldingAnimalUpdate, db: Session = Depe
         update_notes = update_data.pop("update_notes", None)
         media_ids    = update_data.pop("media_ids", None)
 
+        if updated_by:
+            updater = db.query(User).filter(User.user_id == updated_by).first()
+            if updater and updater.role_id == 2:
+                # Check if animal is transferred to barangay or in barangay custody
+                is_in_barangay = False
+                if animal.report and animal.report.facility:
+                    is_in_barangay = (
+                        animal.report.facility.facility_type == 'barangay_facility' or
+                        'barangay' in (animal.report.facility.name or '').lower()
+                    )
+                elif animal.facility_status == 5:
+                    is_in_barangay = True
+                
+                if is_in_barangay:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="This animal is currently in a Barangay facility and cannot be modified by Subdivision Leaders. You can only track its progress."
+                    )
+
         for key, value in update_data.items():
             if hasattr(animal, key):
                 setattr(animal, key, value)
@@ -523,6 +568,24 @@ def add_timeline_entry(holding_id: int, body: HoldingTimelineCreate, db: Session
         animal = db.query(HoldingAnimal).filter(HoldingAnimal.holding_id == holding_id).first()
         if not animal:
             raise HTTPException(status_code=404, detail="Holding record not found")
+
+        if body.logged_by:
+            updater = db.query(User).filter(User.user_id == body.logged_by).first()
+            if updater and updater.role_id == 2:
+                is_in_barangay = False
+                if animal.report and animal.report.facility:
+                    is_in_barangay = (
+                        animal.report.facility.facility_type == 'barangay_facility' or
+                        'barangay' in (animal.report.facility.name or '').lower()
+                    )
+                elif animal.facility_status == 5:
+                    is_in_barangay = True
+                
+                if is_in_barangay:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="This animal is currently in a Barangay facility and cannot be modified by Subdivision Leaders. You can only track its progress."
+                    )
 
         log = HoldingTimeline(
             holding_id=holding_id,

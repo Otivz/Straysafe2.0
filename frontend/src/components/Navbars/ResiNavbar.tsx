@@ -7,6 +7,7 @@ import { useUnreadMessageCount } from '../../utils/useUnreadMessageCount';
 import type { ChatThreadSummary } from '../../utils/useUnreadMessageCount';
 import MessagesDropdown from '../Chat/MessagesDropdown';
 import ReportChatDrawer from '../Chat/ReportChatDrawer';
+import QRScannerModal from '../Modals/QRScannerModal';
 
 interface ResiNavbarProps {
     onMenuToggle?: (isOpen: boolean) => void;
@@ -49,6 +50,7 @@ const ResiNavbar = ({
     const [isMobileNotificationsOpen, setIsMobileNotificationsOpen] = useState(false);
     const [isMessagesOpen, setIsMessagesOpen] = useState(false);
     const [activeChatThread, setActiveChatThread] = useState<ChatThreadSummary | null>(null);
+    const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
     const [drawerNotifLimit, setDrawerNotifLimit] = useState(5);
     const [hasClickedViewAllDrawer, setHasClickedViewAllDrawer] = useState(false);
 
@@ -390,6 +392,19 @@ const ResiNavbar = ({
                                 )}
                             </div>
 
+                            {/* QR COLLAR SCANNER BUTTON (DESKTOP) */}
+                            <button
+                                type="button"
+                                onClick={() => setIsQRScannerOpen(true)}
+                                className="p-2.5 rounded-full bg-[#FAFAF9] dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-[#4a3b28] dark:text-gray-200 hover:text-[#F97316] hover:bg-orange-50 dark:hover:bg-gray-700 transition-all active:scale-95 group cursor-pointer shadow-xs"
+                                title="Scan Pet QR Collar Tag"
+                                aria-label="Open QR Scanner"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                                </svg>
+                            </button>
+
                             {/* MESSAGES BUTTON (DESKTOP) */}
                             <div className="relative" ref={messagesRef}>
                                 <button
@@ -481,6 +496,13 @@ const ResiNavbar = ({
                                             <Link to="/resident/pets" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
                                                 My Pets
                                             </Link>
+                                            <button
+                                                type="button"
+                                                onClick={() => { setIsDropdownOpen(false); setIsQRScannerOpen(true); }}
+                                                className="w-full flex items-center gap-2 px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all text-left cursor-pointer"
+                                            >
+                                                <span className="text-sm">📷</span> Scan QR Collar
+                                            </button>
                                             <Link to="/resident/settings" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
                                                 Settings
                                             </Link>
@@ -499,6 +521,19 @@ const ResiNavbar = ({
 
                         {/* MOBILE ACTIONS */}
                         <div className="md:hidden flex items-center gap-1">
+
+                            {/* QR Scanner (Mobile) */}
+                            <button
+                                type="button"
+                                onClick={() => setIsQRScannerOpen(true)}
+                                className="p-2 text-[#4a3b28] hover:text-[#F97316] transition-all flex items-center justify-center active:scale-95 cursor-pointer"
+                                title="Scan Pet QR Collar Tag"
+                                aria-label="Open QR Scanner"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                                </svg>
+                            </button>
 
                             {/* Message Button (Mobile) */}
                             <button
@@ -589,6 +624,19 @@ const ResiNavbar = ({
 
                     {/* Menu Items */}
                     <div className="flex-1 px-4 py-6 space-y-2.5">
+                        <button
+                            type="button"
+                            onClick={() => { setIsMobileHamburgerOpen(false); setIsQRScannerOpen(true); }}
+                            className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl hover:bg-orange-50/50 hover:pl-6 text-[#4a3b28] hover:text-[#F97316] transition-all duration-300 ease-out group active:scale-[0.98] cursor-pointer"
+                        >
+                            <div className="w-10 h-10 bg-orange-50 group-hover:bg-orange-100 rounded-xl flex items-center justify-center text-[#F97316] shadow-sm shadow-orange-100/50 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shrink-0">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                                </svg>
+                            </div>
+                            <span className="font-black text-xs uppercase tracking-[0.15em] transition-colors">Scan QR Collar</span>
+                        </button>
+
                         <Link
                             to="/resident/settings"
                             onClick={() => setIsMobileHamburgerOpen(false)}
@@ -1000,6 +1048,11 @@ const ResiNavbar = ({
                     threadMode={activeChatThread.thread_mode}
                 />
             )}
+            {/* QR SCANNER MODAL */}
+            <QRScannerModal 
+                isOpen={isQRScannerOpen} 
+                onClose={() => setIsQRScannerOpen(false)} 
+            />
         </>
     );
 };

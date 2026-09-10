@@ -32,3 +32,11 @@ class LoginResponse(BaseModel):
         "from_attributes": True
     }
 
+
+class GoogleAuthRequest(BaseModel):
+    email: EmailStr
+    name: Optional[str] = None
+    google_id: Optional[str] = None
+    profile_picture: Optional[str] = None
+    credential: Optional[str] = None
+

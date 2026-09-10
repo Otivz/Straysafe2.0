@@ -7,7 +7,6 @@ import MapComponent from '../../components/MapComponent';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import RescueTimeline from '../../components/RescueTimeline';
-import ResolveLostPetModal from '../../components/Modals/ResolveLostPetModal';
 
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import { useReportChatCount } from '../../utils/chatUtils';
@@ -19,7 +18,7 @@ const categoryMap: Record<number, string> = {
     1: 'Injured Animal',
     2: 'Aggressive Stray',
     3: 'Possible Rabies Risk',
-    4: 'Roaming Pack',
+    4: 'Roaming',
     5: 'Animal Rescue Needed',
     6: 'Lost Pet'
 };
@@ -122,7 +121,6 @@ const ResiViewReport = () => {
     // Geocoding address
     const [resolvedAddress, setResolvedAddress] = useState('');
     const [isGeocoding, setIsGeocoding] = useState(false);
-    const [isResolveLostModalOpen, setIsResolveLostModalOpen] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [userMatch, setUserMatch] = useState<any | null>(null);
 
@@ -681,14 +679,6 @@ const ResiViewReport = () => {
                             </button>
                         )}
 
-                        {((report.category_id === 6 || report.pet_id || (report.description && report.description.includes('[LOST PET REPORT]'))) && ![9, 10, 11, 12].includes(report.status_id)) && (
-                            <button
-                                onClick={() => setIsResolveLostModalOpen(true)}
-                                className="px-5 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-emerald-600/20 hover:scale-105 active:scale-95 flex items-center gap-2"
-                            >
-                                <span>🏠</span> Resolve Lost Case
-                            </button>
-                        )}
                         <div className="flex items-center gap-3 bg-[#FAFAF9] border border-gray-100 rounded-2xl p-4 w-fit">
                             <div className="flex items-center gap-2">
                                 {report.visibility === 'Private' ? (
@@ -1120,8 +1110,8 @@ const ResiViewReport = () => {
                         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                             <h4 className="text-[10px] font-black text-orange-400 uppercase tracking-[0.2em]">Location Intelligence</h4>
                             <div className="flex items-center gap-2">
-                                {([6, 7, 8, 9, 10, 11].includes(report.status_id) && (report.facility_id || report.custody_status === 'Secured in Facility' || report.facility)) && (
-                                    <span className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-400/30 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                                {([6, 7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status?.toLowerCase().includes('facility') || report.custody_status?.toLowerCase().includes('secured')) && (
+                                    <span className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-400/30 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
                                         <span>🐾</span>
                                         <span>Animal Secured at Holding Facility</span>
                                     </span>
@@ -1143,14 +1133,14 @@ const ResiViewReport = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                             <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
                                 <div className="w-10 h-10 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-400 text-lg shrink-0">
-                                    {([6, 7, 8, 9, 10, 11].includes(report.status_id) && (report.facility_id || report.custody_status === 'Secured in Facility' || report.facility)) ? '🐾' : '📍'}
+                                    {([6, 7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status?.toLowerCase().includes('facility') || report.custody_status?.toLowerCase().includes('secured')) ? '🐾' : '📍'}
                                 </div>
                                 <div className="overflow-hidden">
                                     <p className="text-[9px] font-black text-white/50 uppercase tracking-widest">
-                                        {([6, 7, 8, 9, 10, 11].includes(report.status_id) && (report.facility_id || report.custody_status === 'Secured in Facility' || report.facility)) ? 'Current Facility Holding Location' : 'Current Active Location'}
+                                        {([6, 7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status?.toLowerCase().includes('facility') || report.custody_status?.toLowerCase().includes('secured')) ? 'Current Facility Holding Location' : 'Current Active Location'}
                                     </p>
                                     <p className="text-sm font-black tracking-tight text-white truncate">
-                                        {report.facility?.name || report.landmark || 'No landmark specified'}
+                                        {report.facility?.name || report.landmark || 'Barangay Holding Facility'}
                                     </p>
                                     <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-0.5">
                                         {isGeocoding ? 'Resolving street...' : resolvedAddress || 'Santa Maria, Bulacan • Selera Homes'}
@@ -1218,7 +1208,7 @@ const ResiViewReport = () => {
                                 </div>
                             </div>
 
-                            {([6, 7, 8, 9, 10, 11].includes(report.status_id) && (report.facility_id || report.custody_status === 'Secured in Facility' || (report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude)))) && (
+                            {([6, 7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status?.toLowerCase().includes('facility') || report.custody_status?.toLowerCase().includes('secured') || (report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude))) && (
                                 <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
                                     <div className="w-10 h-10 rounded-2xl bg-slate-700 flex items-center justify-center text-slate-300 text-lg shrink-0">
                                         🚩
@@ -1360,11 +1350,16 @@ const ResiViewReport = () => {
                             </button>
 
                             {(() => {
-                                const isRelocated = [6, 7, 8, 9, 10, 11].includes(report.status_id) && (!!report.facility_id || report.custody_status === 'Secured in Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude)));
-                                const currentLat = parseFloat(report.latitude);
-                                const currentLng = parseFloat(report.longitude);
-                                const initLat = report.initial_latitude ? parseFloat(report.initial_latitude) : null;
-                                const initLng = report.initial_longitude ? parseFloat(report.initial_longitude) : null;
+                                const isRelocated = [6, 7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || report.custody_status === 'In Subdivision Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude));
+                                const activeFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : null;
+                                const activeFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : null;
+
+                                const currentLat = (isRelocated && activeFacLat != null) ? activeFacLat : parseFloat(report.latitude);
+                                const currentLng = (isRelocated && activeFacLng != null) ? activeFacLng : parseFloat(report.longitude);
+                                const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : (isRelocated ? parseFloat(report.latitude.toString()) : null);
+                                const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : (isRelocated ? parseFloat(report.longitude.toString()) : null);
+                                const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
+                                const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && (Math.abs(initLat - currentLat) > 0.0001 || Math.abs(initLng - currentLng) > 0.0001);
 
                                 const resiMarkers = [
                                     ...(routingState ? [{
@@ -1383,17 +1378,21 @@ const ResiViewReport = () => {
                                         id: report.report_id,
                                         lat: currentLat,
                                         lng: currentLng,
-                                        title: isRelocated ? `Secured: ${report.facility?.name || report.landmark}` : (report.landmark || 'Incident Location'),
+                                        title: isRelocated ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}` : (report.landmark || 'Incident Location'),
                                         category: isRelocated ? 'Holding Facility' : (report.animal_type || 'Stray Animal'),
                                         color: (report.status_id === 6 || report.status_id === 11) ? 'green' : (report.status_id === 4 || report.status_id === 13) ? 'orange' : (report.status_id === 5) ? 'yellow' : 'red',
                                         priority: report.priority_level || 'Medium',
                                         time: report.created_at ? new Date(report.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Live',
-                                        rawData: report
+                                        rawData: {
+                                            ...report,
+                                            facility: report.facility || (isRelocated ? { name: report.landmark || 'Holding Facility' } : undefined),
+                                            facility_name: report.facility?.name || report.landmark || 'Holding Facility'
+                                        }
                                     },
-                                    ...(isRelocated && initLat && initLng ? [{
+                                    ...(hasDifferentInitialSpot ? [{
                                         id: -999,
-                                        lat: initLat,
-                                        lng: initLng,
+                                        lat: initLat!,
+                                        lng: initLng!,
                                         title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
                                         category: 'Initial Sighting',
                                         priority: 'Medium',
@@ -1409,6 +1408,7 @@ const ResiViewReport = () => {
                                         showHeatmap={false}
                                         showGeofence={true}
                                         showLandmarks={false}
+                                        showHoldingFacilities={true}
                                         markers={resiMarkers}
                                         onMapClick={(routingState || isSettingStartingPoint) ? (clickedLat, clickedLng) => handlePinReposition(clickedLat, clickedLng) : undefined}
                                         routing={routingState ? {
@@ -1532,11 +1532,16 @@ const ResiViewReport = () => {
                             {/* Expanded Map Canvas */}
                             <div className="flex-1 rounded-2xl overflow-hidden relative border border-white/10 min-h-0">
                                 {(() => {
-                                    const isRelocated = [6, 7, 8, 9, 10, 11].includes(report.status_id) && (!!report.facility_id || report.custody_status === 'Secured in Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude)));
-                                    const currentLat = parseFloat(report.latitude);
-                                    const currentLng = parseFloat(report.longitude);
-                                    const initLat = report.initial_latitude ? parseFloat(report.initial_latitude) : null;
-                                    const initLng = report.initial_longitude ? parseFloat(report.initial_longitude) : null;
+                                    const isRelocated = [6, 7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || report.custody_status === 'In Subdivision Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude));
+                                    const activeFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : null;
+                                    const activeFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : null;
+
+                                    const currentLat = (isRelocated && activeFacLat != null) ? activeFacLat : parseFloat(report.latitude);
+                                    const currentLng = (isRelocated && activeFacLng != null) ? activeFacLng : parseFloat(report.longitude);
+                                    const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : (isRelocated ? parseFloat(report.latitude.toString()) : null);
+                                    const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : (isRelocated ? parseFloat(report.longitude.toString()) : null);
+                                    const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
+                                    const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && (Math.abs(initLat - currentLat) > 0.0001 || Math.abs(initLng - currentLng) > 0.0001);
 
                                     const resiMarkers = [
                                         ...(routingState ? [{
@@ -1555,17 +1560,21 @@ const ResiViewReport = () => {
                                             id: report.report_id,
                                             lat: currentLat,
                                             lng: currentLng,
-                                            title: isRelocated ? `Secured: ${report.facility?.name || report.landmark}` : (report.landmark || 'Incident Location'),
+                                            title: isRelocated ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}` : (report.landmark || 'Incident Location'),
                                             category: isRelocated ? 'Holding Facility' : (report.animal_type || 'Stray Animal'),
                                             color: (report.status_id === 6 || report.status_id === 11) ? 'green' : (report.status_id === 4 || report.status_id === 13) ? 'orange' : (report.status_id === 5) ? 'yellow' : 'red',
                                             priority: report.priority_level || 'Medium',
                                             time: report.created_at ? new Date(report.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Live',
-                                            rawData: report
+                                            rawData: {
+                                                ...report,
+                                                facility: report.facility || (isRelocated ? { name: report.landmark || 'Holding Facility' } : undefined),
+                                                facility_name: report.facility?.name || report.landmark || 'Holding Facility'
+                                            }
                                         },
-                                        ...(isRelocated && initLat && initLng ? [{
+                                        ...(hasDifferentInitialSpot ? [{
                                             id: -999,
-                                            lat: initLat,
-                                            lng: initLng,
+                                            lat: initLat!,
+                                            lng: initLng!,
                                             title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
                                             category: 'Initial Sighting',
                                             priority: 'Medium',
@@ -1581,6 +1590,7 @@ const ResiViewReport = () => {
                                             showHeatmap={false}
                                             showGeofence={true}
                                             showLandmarks={true}
+                                            showHoldingFacilities={true}
                                             markers={resiMarkers}
                                             onMapClick={(routingState || isSettingStartingPoint) ? (clickedLat, clickedLng) => handlePinReposition(clickedLat, clickedLng) : undefined}
                                             routing={routingState ? {
@@ -1739,28 +1749,6 @@ const ResiViewReport = () => {
                         </p>
                     </div>
                 </div>
-            )}
-
-            {/* Resolve Lost Pet Report Modal */}
-            {isResolveLostModalOpen && report && (
-                <ResolveLostPetModal
-                    isOpen={isResolveLostModalOpen}
-                    pet={{
-                        pet_id: report.pet_id || 0,
-                        pet_name: report.pet_name || 'Pet',
-                        photo_url: (report as any).pet_photo_url || (report.media && report.media[0]?.file_url),
-                        breed: (report as any).pet_breed || (report as any).animal_breed,
-                        species: (report as any).pet_type || report.animal_type
-                    }}
-                    reportId={report.report_id}
-                    isEscalated={Boolean(report.endorsement_letter || report.status_id === 4 || report.status_id === 5)}
-                    subdivisionName={(report as any).subdivision_name || (report.subdivision as any)?.subdivision_name}
-                    onClose={() => setIsResolveLostModalOpen(false)}
-                    onSuccess={() => {
-                        fetchReportDetails();
-                        setIsResolveLostModalOpen(false);
-                    }}
-                />
             )}
 
             {/* Case Chat Drawer - restricted to reporter */}

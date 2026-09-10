@@ -1638,21 +1638,32 @@ const SubdViewReport = () => {
                                     </div>
                                     <div className="w-full h-64 rounded-2xl overflow-hidden border border-gray-100 shadow-sm bg-gray-50">
                                         {(() => {
-                                            const isRelocated = !!report.facility_id || report.custody_status === 'Secured in Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude));
+                                            const isRelocated = [6, 7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || report.custody_status === 'In Subdivision Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude));
+                                            const currentLat = report.latitude != null ? parseFloat(report.latitude.toString()) : null;
+                                            const currentLng = report.longitude != null ? parseFloat(report.longitude.toString()) : null;
+                                            const initLat = report.initial_latitude != null ? parseFloat(report.initial_latitude.toString()) : null;
+                                            const initLng = report.initial_longitude != null ? parseFloat(report.initial_longitude.toString()) : null;
+                                            const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
+                                            const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && currentLat != null && currentLng != null && (Math.abs(initLat - currentLat) > 0.0001 || Math.abs(initLng - currentLng) > 0.0001);
+
                                             const markersList = [
                                                 {
                                                     id: report.report_id,
                                                     lat: report.latitude,
                                                     lng: report.longitude,
-                                                    title: isRelocated ? `Secured: ${report.facility?.name || report.landmark}` : (report.landmark || 'Incident Location'),
+                                                    title: isRelocated ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}` : (report.landmark || 'Incident Location'),
                                                     category: isRelocated ? 'Holding Facility' : categoryMap[report.category_id],
                                                     priority: report.priority_level,
-                                                    rawData: report
+                                                    rawData: {
+                                                        ...report,
+                                                        facility: report.facility || (isRelocated ? { name: report.landmark || 'Holding Facility' } : undefined),
+                                                        facility_name: report.facility?.name || report.landmark || 'Holding Facility'
+                                                    }
                                                 },
-                                                ...(isRelocated && report.initial_latitude && report.initial_longitude ? [{
+                                                ...(hasDifferentInitialSpot ? [{
                                                     id: -999,
-                                                    lat: report.initial_latitude,
-                                                    lng: report.initial_longitude,
+                                                    lat: initLat!,
+                                                    lng: initLng!,
                                                     title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
                                                     category: 'Initial Sighting',
                                                     priority: 'Medium',
@@ -2121,145 +2132,180 @@ const SubdViewReport = () => {
                                         {report.assigned_leader_id === currentUserId && ![11, 12, 14, 3].includes(report.status_id) && (
                                             <>
                                                 {/* OPTION: ADD PET RECORD IF UNREGISTERED */}
-                                                {!report.pet_id && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setIsAddPetModalOpen(true)}
-                                                        className="w-full py-3.5 border-2 border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 text-[#F97316] rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer hover:scale-[1.01] active:scale-95"
-                                                    >
-                                                        <span className="text-base">🐾</span>
-                                                        <span>Add Record for this Animal in System</span>
-                                                    </button>
-                                                )}
+                                                {/* STEP 0: ESCALATED TO BARANGAY (Strictly Read-Only / Tracking Mode) */}
+                                                {Boolean(
+                                                    report.status_id === 4 ||
+                                                    report.status_id === 5 ||
+                                                    report.status_id === 6 ||
+                                                    (report.status_id >= 4 && report.status_id <= 10) ||
+                                                    report.endorsement_letter ||
+                                                    ((report as any).rescue && (report as any).rescue.status_id >= 1)
+                                                ) ? (
+                                                    <div className="w-full p-6 bg-gradient-to-br from-indigo-50/90 via-purple-50/50 to-white border-2 border-indigo-200/80 rounded-3xl shadow-sm flex flex-col gap-4 animate-in fade-in duration-300">
+                                                        <div className="flex items-start gap-3.5">
+                                                            <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-xl shrink-0 shadow-md shadow-indigo-600/20">
+                                                                🏢
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-xs font-black uppercase tracking-wider text-indigo-900">Escalated to Barangay</span>
+                                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                                                        {report.status_id === 4 ? 'Pending Barangay Action' : 'In Barangay Care'}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-xs text-indigo-950 font-bold mt-1 leading-relaxed">
+                                                                    This animal case has been endorsed and escalated to the Barangay.
+                                                                </p>
+                                                                <p className="text-[11px] text-indigo-700 mt-1 leading-normal font-medium">
+                                                                    Subdivision leaders can no longer modify this animal record. You can track all live progress, rescue missions, and veterinary updates below or in the Escalated Missions tracker.
+                                                                </p>
+                                                            </div>
+                                                        </div>
 
-                                                {/* STEP 1: VERIFY */}
-                                                {(report.status_id === 1 || report.status_id === 2 || report.status_id === 16) && (
-                                                    <button
-                                                        onClick={() => {
-                                                            const isAlreadyVerified = report.verification_status === 'verified_true';
-                                                            
-                                                            const initBite = isAlreadyVerified ? Boolean((report as any).verified_actual_bite) : Boolean((report as any).ai_behavior_actual_bite);
-                                                            const initChasing = isAlreadyVerified ? Boolean((report as any).verified_chasing) : Boolean((report as any).ai_behavior_chasing);
-                                                            const initAttempted = isAlreadyVerified ? Boolean((report as any).verified_attempted_bite) : Boolean((report as any).ai_behavior_attempted_bite);
-                                                            const initInjury = isAlreadyVerified ? Boolean((report as any).verified_injury) : Boolean((report as any).ai_behavior_injury);
-                                                            const initAggressive = isAlreadyVerified ? Boolean((report as any).verified_aggressive) : Boolean((report as any).ai_behavior_aggressive);
-
-                                                            setVerifyNotes(isAlreadyVerified ? (report.verification_notes || '') : '');
-                                                            setVerifyActualBite(initBite);
-                                                            setVerifyChasing(initChasing);
-                                                            setVerifyAttemptedBite(initAttempted);
-                                                            setVerifyInjury(initInjury);
-                                                            setVerifyAggressive(initAggressive);
-
-                                                            if (isAlreadyVerified && (report as any).behavior_finding) {
-                                                                setVerifyBehaviorFinding((report as any).behavior_finding);
-                                                            } else {
-                                                                if (initBite) {
-                                                                    setVerifyBehaviorFinding('Confirmed Physical Bite Incident');
-                                                                } else if (initAggressive || initChasing || initAttempted) {
-                                                                    setVerifyBehaviorFinding('Substantiated Aggressive Incident');
-                                                                } else if (initInjury) {
-                                                                    setVerifyBehaviorFinding('Injured Animal (Docile / Needs Care)');
-                                                                } else {
-                                                                    setVerifyBehaviorFinding('Unsubstantiated / Friendly Dog');
-                                                                }
-                                                            }
-
-                                                            setIsVerifyModalOpen(true);
-                                                        }}
-                                                        className="w-full py-4 bg-blue-600 text-white rounded-2xl text-xs font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                        </svg>
-                                                        VERIFY ANIMAL ACTION
-                                                    </button>
-                                                )}
-
-                                                {/* FALSE ALARM DISMISSAL BUTTON */}
-                                                {(report.status_id === 1 || report.status_id === 2 || report.status_id === 15 || report.status_id === 16) && (
-                                                    <button
-                                                        onClick={() => {
-                                                            setFalseAlarmReason('No Animal Found');
-                                                            setFalseAlarmNotes('');
-                                                            setIsFalseAlarmModalOpen(true);
-                                                        }}
-                                                        className="w-full py-3.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
-                                                    >
-                                                        <span>🚫</span>
-                                                        <span>Mark as False Alarm / Dismiss</span>
-                                                    </button>
-                                                )}
-
-                                                {/* STEP 2: ESCALATE */}
-                                                {(report.status_id === 2 || report.status_id === 7) && (
-                                                    <button
-                                                        onClick={() => {
-                                                            setEscalationTitle('');
-                                                            setEscalationDescription('');
-                                                            setIsEscalateModalOpen(true);
-                                                        }}
-                                                        className="w-full py-4 bg-orange-600 text-white rounded-2xl text-xs font-bold shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                                                        </svg>
-                                                        ESCALATE TO BARANGAY
-                                                    </button>
-                                                )}
-
-                                                {/* STEP 2.5: ISSUE WARNING */}
-                                                {Boolean(report.owner_id || (report.is_owner_report && report.user_id) || report.owner_name || report.pet_id) && (
-                                                    <button
-                                                        onClick={openIssueWarningModal}
-                                                        className="w-full py-4 bg-yellow-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-yellow-100 hover:bg-yellow-600 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
-                                                    >
-                                                        <span className="text-base">⚠️</span>
-                                                        ISSUE OWNER WARNING
-                                                    </button>
-                                                )}
-
-                                                {/* STEP 3: PENDING BARANGAY */}
-                                                {report.status_id === 4 && (
-                                                    <div className="w-full py-4 bg-gray-100 text-gray-500 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border border-gray-200">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                        </svg>
-                                                        Pending Barangay Review
+                                                        <div className="pt-2 border-t border-indigo-100/80 flex flex-col sm:flex-row gap-2">
+                                                            <Link
+                                                                to="/subd/escalated"
+                                                                className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-indigo-600/25 cursor-pointer"
+                                                            >
+                                                                <span>🚀</span>
+                                                                <span>Track in Escalated Missions →</span>
+                                                            </Link>
+                                                        </div>
                                                     </div>
-                                                )}
+                                                ) : (
+                                                    <>
+                                                        {!report.pet_id && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setIsAddPetModalOpen(true)}
+                                                                className="w-full py-3.5 border-2 border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 text-[#F97316] rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer hover:scale-[1.01] active:scale-95"
+                                                            >
+                                                                <span className="text-base">🐾</span>
+                                                                <span>Add Record for this Animal in System</span>
+                                                            </button>
+                                                        )}
 
-                                                {(report.status_id === 1 || report.status_id === 2 || report.status_id === 4 || report.status_id === 7) && (
-                                                    <button
-                                                        onClick={() => {
-                                                            setIsResolveLostModalOpen(true);
-                                                        }}
-                                                        className="w-full py-3.5 border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100 text-emerald-700 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
-                                                    >
-                                                        <span>{(report.category_id === 6 || !!report.pet_id || (!!report.description && report.description.includes('[LOST PET REPORT]'))) ? '🏠' : '🐾'}</span>
-                                                        Update Animal Status
-                                                    </button>
-                                                )}
+                                                        {/* STEP 1: VERIFY */}
+                                                        {(report.status_id === 1 || report.status_id === 2 || report.status_id === 16) && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    const isAlreadyVerified = report.verification_status === 'verified_true';
+                                                                    
+                                                                    const initBite = isAlreadyVerified ? Boolean((report as any).verified_actual_bite) : Boolean((report as any).ai_behavior_actual_bite);
+                                                                    const initChasing = isAlreadyVerified ? Boolean((report as any).verified_chasing) : Boolean((report as any).ai_behavior_chasing);
+                                                                    const initAttempted = isAlreadyVerified ? Boolean((report as any).verified_attempted_bite) : Boolean((report as any).ai_behavior_attempted_bite);
+                                                                    const initInjury = isAlreadyVerified ? Boolean((report as any).verified_injury) : Boolean((report as any).ai_behavior_injury);
+                                                                    const initAggressive = isAlreadyVerified ? Boolean((report as any).verified_aggressive) : Boolean((report as any).ai_behavior_aggressive);
 
-                                                {/* STEP 4: TRANSFER CASE TO ANOTHER LEADER */}
-                                                {![11, 12, 14, 3].includes(report.status_id) && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setIsTransferModalOpen(true)}
-                                                        className="w-full py-3.5 border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 text-purple-800 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs hover:scale-[1.01] active:scale-95"
-                                                    >
-                                                        <span className="text-base">🔄</span>
-                                                        <span>Transfer Report to Another Leader</span>
-                                                    </button>
-                                                )}
+                                                                    setVerifyNotes(isAlreadyVerified ? (report.verification_notes || '') : '');
+                                                                    setVerifyActualBite(initBite);
+                                                                    setVerifyChasing(initChasing);
+                                                                    setVerifyAttemptedBite(initAttempted);
+                                                                    setVerifyInjury(initInjury);
+                                                                    setVerifyAggressive(initAggressive);
 
-                                                {(report.status_id === 1 || report.status_id === 2) && (
-                                                    <button
-                                                        onClick={handleReject}
-                                                        className="w-full py-3 border border-gray-100 rounded-2xl text-[10px] font-bold text-gray-400 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all uppercase tracking-widest cursor-pointer"
-                                                    >
-                                                        Reject Report
-                                                    </button>
+                                                                    if (isAlreadyVerified && (report as any).behavior_finding) {
+                                                                        setVerifyBehaviorFinding((report as any).behavior_finding);
+                                                                    } else {
+                                                                        if (initBite) {
+                                                                            setVerifyBehaviorFinding('Confirmed Physical Bite Incident');
+                                                                        } else if (initAggressive || initChasing || initAttempted) {
+                                                                            setVerifyBehaviorFinding('Substantiated Aggressive Incident');
+                                                                        } else if (initInjury) {
+                                                                            setVerifyBehaviorFinding('Injured Animal (Docile / Needs Care)');
+                                                                        } else {
+                                                                            setVerifyBehaviorFinding('Unsubstantiated / Friendly Dog');
+                                                                        }
+                                                                    }
+
+                                                                    setIsVerifyModalOpen(true);
+                                                                }}
+                                                                className="w-full py-4 bg-blue-600 text-white rounded-2xl text-xs font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                </svg>
+                                                                VERIFY ANIMAL ACTION
+                                                            </button>
+                                                        )}
+
+                                                        {/* FALSE ALARM DISMISSAL BUTTON */}
+                                                        {(report.status_id === 1 || report.status_id === 2 || report.status_id === 15 || report.status_id === 16) && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setFalseAlarmReason('No Animal Found');
+                                                                    setFalseAlarmNotes('');
+                                                                    setIsFalseAlarmModalOpen(true);
+                                                                }}
+                                                                className="w-full py-3.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                                                            >
+                                                                <span>🚫</span>
+                                                                <span>Mark as False Alarm / Dismiss</span>
+                                                            </button>
+                                                        )}
+
+                                                        {/* STEP 2: ESCALATE (Only when Verified and not yet Escalated) */}
+                                                        {report.status_id === 2 && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEscalationTitle('');
+                                                                    setEscalationDescription('');
+                                                                    setIsEscalateModalOpen(true);
+                                                                }}
+                                                                className="w-full py-4 bg-orange-600 text-white rounded-2xl text-xs font-bold shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                                                </svg>
+                                                                ESCALATE TO BARANGAY
+                                                            </button>
+                                                        )}
+
+                                                        {/* STEP 2.5: ISSUE WARNING */}
+                                                        {Boolean(report.owner_id || (report.is_owner_report && report.user_id) || report.owner_name || report.pet_id) && (
+                                                            <button
+                                                                onClick={openIssueWarningModal}
+                                                                className="w-full py-4 bg-yellow-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-yellow-100 hover:bg-yellow-600 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
+                                                            >
+                                                                <span className="text-base">⚠️</span>
+                                                                ISSUE OWNER WARNING
+                                                            </button>
+                                                        )}
+
+                                                        {/* STEP 3: RESOLVE / UPDATE ANIMAL STATUS */}
+                                                        {(report.status_id === 1 || report.status_id === 2) && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setIsResolveLostModalOpen(true);
+                                                                }}
+                                                                className="w-full py-3.5 border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100 text-emerald-700 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                                                            >
+                                                                <span>{(report.category_id === 6 || !!report.pet_id || (!!report.description && report.description.includes('[LOST PET REPORT]'))) ? '🏠' : '🐾'}</span>
+                                                                Update Animal Status
+                                                            </button>
+                                                        )}
+
+                                                        {/* STEP 4: TRANSFER CASE TO ANOTHER LEADER */}
+                                                        {![11, 12, 14, 3].includes(report.status_id) && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setIsTransferModalOpen(true)}
+                                                                className="w-full py-3.5 border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 text-purple-800 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs hover:scale-[1.01] active:scale-95"
+                                                            >
+                                                                <span className="text-base">🔄</span>
+                                                                <span>Transfer Report to Another Leader</span>
+                                                            </button>
+                                                        )}
+
+                                                        {(report.status_id === 1 || report.status_id === 2) && (
+                                                            <button
+                                                                onClick={handleReject}
+                                                                className="w-full py-3 border border-gray-100 rounded-2xl text-[10px] font-bold text-gray-400 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all uppercase tracking-widest cursor-pointer"
+                                                            >
+                                                                Reject Report
+                                                            </button>
+                                                        )}
+                                                    </>
                                                 )}
                                             </>
                                         )}
@@ -2744,21 +2790,32 @@ const SubdViewReport = () => {
                         {/* Map Area */}
                         <div className="flex-1 rounded-2xl overflow-hidden relative border border-gray-100 min-h-0">
                             {(() => {
-                                const isRelocated = !!report.facility_id || report.custody_status === 'Secured in Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude));
+                                const isRelocated = [6, 7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || report.custody_status === 'In Subdivision Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude));
+                                const currentLat = report.latitude != null ? parseFloat(report.latitude.toString()) : null;
+                                const currentLng = report.longitude != null ? parseFloat(report.longitude.toString()) : null;
+                                const initLat = report.initial_latitude != null ? parseFloat(report.initial_latitude.toString()) : null;
+                                const initLng = report.initial_longitude != null ? parseFloat(report.initial_longitude.toString()) : null;
+                                const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
+                                const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && currentLat != null && currentLng != null && (Math.abs(initLat - currentLat) > 0.0001 || Math.abs(initLng - currentLng) > 0.0001);
+
                                 const markersList = [
                                     {
                                         id: report.report_id,
                                         lat: report.latitude,
                                         lng: report.longitude,
-                                        title: isRelocated ? `Secured: ${report.facility?.name || report.landmark}` : (report.landmark || 'Incident Location'),
+                                        title: isRelocated ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}` : (report.landmark || 'Incident Location'),
                                         category: isRelocated ? 'Holding Facility' : categoryMap[report.category_id],
                                         priority: report.priority_level,
-                                        rawData: report
+                                        rawData: {
+                                            ...report,
+                                            facility: report.facility || (isRelocated ? { name: report.landmark || 'Holding Facility' } : undefined),
+                                            facility_name: report.facility?.name || report.landmark || 'Holding Facility'
+                                        }
                                     },
-                                    ...(isRelocated && report.initial_latitude && report.initial_longitude ? [{
+                                    ...(hasDifferentInitialSpot ? [{
                                         id: -999,
-                                        lat: report.initial_latitude,
-                                        lng: report.initial_longitude,
+                                        lat: initLat!,
+                                        lng: initLng!,
                                         title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
                                         category: 'Initial Sighting',
                                         priority: 'Medium',

@@ -1531,6 +1531,8 @@ const BrgyReportView = () => {
                                                     const isRelocated = !!report.facility_id || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || !!report.facility || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude));
                                                     const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : null;
                                                     const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : null;
+                                                    const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
+                                                    const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && (Math.abs(initLat - sightingLat) > 0.0001 || Math.abs(initLng - sightingLng) > 0.0001);
 
                                                     const brgyMarkers = [
                                                         {
@@ -1542,10 +1544,10 @@ const BrgyReportView = () => {
                                                             color: 'orange',
                                                             rawData: report
                                                         },
-                                                        ...(isRelocated && initLat && initLng ? [{
+                                                        ...(hasDifferentInitialSpot ? [{
                                                             id: -999,
-                                                            lat: initLat,
-                                                            lng: initLng,
+                                                            lat: initLat!,
+                                                            lng: initLng!,
                                                             title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
                                                             category: 'Initial Sighting',
                                                             priority: 'Medium',

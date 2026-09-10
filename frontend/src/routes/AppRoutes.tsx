@@ -48,6 +48,8 @@ import BrgyViewHistory from '../pages/Barangay_Staff/BrgyViewHistory';
 import BrgyPersonnelManagement from '../pages/Barangay_Staff/BrgyPersonnelManagement';
 import BrgyMessages from '../pages/Barangay_Staff/BrgyMessages';
 import BrgySettings from '../pages/Barangay_Staff/BrgySettings';
+import BrgyPetRecords from '../pages/Barangay_Staff/BrgyPetRecords';
+import BrgyPetClaims from '../pages/Barangay_Staff/BrgyPetClaims';
 import PetMatchReview from '../pages/citizen/PetMatchReview';
 import PetClaimsDashboard from '../pages/citizen/PetClaimsDashboard';
 import ReportStrayPage from '../pages/citizen/ReportStrayPage';
@@ -120,6 +122,8 @@ const AppRoutes = () => {
                 <Route path="/brgy/settings" element={<BrgySettings />} />
                 <Route path="/brgy/personnel" element={<BrgyPersonnelManagement />} />
                 <Route path="/brgy/holding-facility" element={<BrgyHoldingFacility />} />
+                <Route path="/brgy/pet-records" element={<BrgyPetRecords />} />
+                <Route path="/brgy/pet-claims" element={<BrgyPetClaims />} />
                 <Route path="/brgy/history" element={<BrgyHistoryReports />} />
                 <Route path="/brgy/history/:id" element={<BrgyViewHistory />} />
             </Route>

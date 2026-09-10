@@ -60,6 +60,22 @@ def issue_warning(
     if not owner:
         raise HTTPException(status_code=404, detail="Target pet owner not found")
 
+    # If issued by a subdivision leader on a report, ensure report is not escalated to Barangay
+    if warning_in.report_id and current_user.role_id == 2:
+        from app.models.report import Report, Rescue
+        rep = db.query(Report).filter(Report.report_id == warning_in.report_id).first()
+        if rep:
+            is_escalated = (
+                rep.current_status_id in [4, 5, 6, 7, 8] or
+                rep.endorsement_letter is not None or
+                db.query(Rescue).filter(Rescue.report_id == warning_in.report_id).first() is not None
+            )
+            if is_escalated:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Cannot issue subdivision warning for an animal case that has already been escalated to Barangay."
+                )
+
     new_warning = OwnerWarning(
         user_id=warning_in.user_id,
         pet_id=warning_in.pet_id,

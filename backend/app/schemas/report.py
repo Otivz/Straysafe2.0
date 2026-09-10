@@ -293,6 +293,7 @@ class ReportStatusUpdate(BaseModel):
     remarks: Optional[str] = None
     status_remarks: Optional[str] = None
     animal_condition: Optional[str] = None
+    condition_notes: Optional[str] = None
     facility_id: Optional[int] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
