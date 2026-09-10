@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
@@ -73,14 +73,6 @@ interface FacilityOption {
     longitude: number;
 }
 
-interface Metrics {
-    total: number;
-    need_treatment: number;
-    healthy: number;
-    nearing_expiry: number;
-    resolved_today: number;
-}
-
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const IMPOUND_DAYS = 7;
@@ -142,6 +134,40 @@ function animalIcon(type: string | null): string {
     return '🐾';
 }
 
+function getAnimalPhoto(animal: HoldingAnimal): string | undefined {
+    // 1. Look for genuine image files in report_media (ignore documents/PDFs/Word docs)
+    const imageMedia = animal.report_media?.find(m => {
+        if (m.media_type && m.media_type.toLowerCase() === 'document') return false;
+        if (m.file_url) {
+            const lower = m.file_url.toLowerCase();
+            return !lower.endsWith('.pdf') && !lower.endsWith('.doc') && !lower.endsWith('.docx') && !lower.endsWith('.txt');
+        }
+        return false;
+    });
+
+    if (imageMedia?.file_url) return imageMedia.file_url;
+
+    // 2. Look in timeline entries
+    if (animal.timeline) {
+        for (const t of animal.timeline) {
+            const tMedia = (t as any).media;
+            if (Array.isArray(tMedia)) {
+                const img = tMedia.find((m: any) => {
+                    if (m.media_type && m.media_type.toLowerCase() === 'document') return false;
+                    if (m.file_url) {
+                        const lower = m.file_url.toLowerCase();
+                        return !lower.endsWith('.pdf') && !lower.endsWith('.doc') && !lower.endsWith('.docx') && !lower.endsWith('.txt');
+                    }
+                    return false;
+                });
+                if (img?.file_url) return img.file_url;
+            }
+        }
+    }
+
+    return undefined;
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const SubdHoldingFacility = () => {
@@ -149,7 +175,7 @@ const SubdHoldingFacility = () => {
     const [animals, setAnimals] = useState<HoldingAnimal[]>([]);
     const [facilities, setFacilities] = useState<FacilityOption[]>([]);
     const [selectedFacilityId, setSelectedFacilityId] = useState<number | 'all'>('all');
-    const [metrics, setMetrics] = useState<Metrics>({ total: 0, need_treatment: 0, healthy: 0, nearing_expiry: 0, resolved_today: 0 });
+    const [tabMode, setTabMode] = useState<'active' | 'history'>('active');
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState(0); // 0 = All
@@ -206,13 +232,8 @@ const SubdHoldingFacility = () => {
             if (subdivisionId) params.subdivision_id = subdivisionId;
             if (selectedFacilityId !== 'all') params.facility_id = selectedFacilityId;
 
-            const [animalsRes, metricsRes] = await Promise.all([
-                axios.get('http://localhost:8000/holding/', { params }),
-                axios.get('http://localhost:8000/holding/metrics', { params }),
-            ]);
-
-            setAnimals(animalsRes.data || []);
-            setMetrics(metricsRes.data || { total: 0, need_treatment: 0, healthy: 0, nearing_expiry: 0, resolved_today: 0 });
+            const res = await axios.get('http://localhost:8000/holding/', { params });
+            setAnimals(res.data || []);
         } catch (err) {
             console.error('Error fetching subdivision holding facility data:', err);
         } finally {
@@ -222,9 +243,26 @@ const SubdHoldingFacility = () => {
 
     useEffect(() => { fetchAll(); }, [fetchAll]);
 
+    // ── Separate Active vs History Animals ─────────────────────────────────────
+    const isCurrentlyInSubd = useCallback((a: HoldingAnimal) => {
+        if (RESOLVED_IDS.has(a.facility_status)) return false;
+        if (a.facility_type === 'barangay_facility' || (a.facility_name && a.facility_name.toLowerCase().includes('barangay'))) {
+            return false;
+        }
+        if (facilities.length > 0 && a.facility_id) {
+            return facilities.some(f => f.landmark_id === a.facility_id);
+        }
+        return true;
+    }, [facilities]);
+
+    const activeAnimals = useMemo(() => animals.filter(isCurrentlyInSubd), [animals, isCurrentlyInSubd]);
+    const historyAnimals = useMemo(() => animals.filter(a => !isCurrentlyInSubd(a)), [animals, isCurrentlyInSubd]);
+
     // ── Filter Animals ─────────────────────────────────────────────────────────
-    const filtered = animals.filter(a => {
-        if (!showResolved && RESOLVED_IDS.has(a.facility_status)) return false;
+    const currentList = tabMode === 'active' ? activeAnimals : historyAnimals;
+
+    const filtered = currentList.filter(a => {
+        if (tabMode === 'active' && !showResolved && RESOLVED_IDS.has(a.facility_status)) return false;
         if (statusFilter !== 0 && a.facility_status !== statusFilter) return false;
         const q = searchTerm.toLowerCase();
         return (
@@ -244,7 +282,24 @@ const SubdHoldingFacility = () => {
         : null;
 
     // Active occupancy count
-    const activeOccupancy = animals.filter(a => !RESOLVED_IDS.has(a.facility_status)).length;
+    const activeOccupancy = activeAnimals.length;
+
+    // Computed Metrics
+    const computedMetrics = useMemo(() => {
+        const needTreatment = activeAnimals.filter(a => a.facility_status === 1).length;
+        const healthy = activeAnimals.filter(a => a.facility_status === 2).length;
+        const nearingExpiry = activeAnimals.filter(a => daysRemaining(a.intake_date) <= 2).length;
+        const transferredCount = historyAnimals.filter(a => a.facility_type === 'barangay_facility' || a.facility_name?.toLowerCase().includes('barangay')).length;
+
+        return {
+            activeTotal: activeAnimals.length,
+            needTreatment,
+            healthy,
+            nearingExpiry,
+            pastTotal: historyAnimals.length,
+            transferredToBrgy: transferredCount,
+        };
+    }, [activeAnimals, historyAnimals]);
 
     // ── Update Handler ─────────────────────────────────────────────────────────
     const handleUpdate = async () => {
@@ -291,41 +346,77 @@ const SubdHoldingFacility = () => {
         }
     };
 
-    const metricCards = [
+    const metricCards = tabMode === 'active' ? [
         {
             label: 'Total Animals Held',
-            value: metrics.total,
+            value: computedMetrics.activeTotal,
             icon: '🐾',
             color: 'bg-orange-50 text-orange-600',
             border: 'border-orange-100',
         },
         {
             label: 'Need Treatment',
-            value: metrics.need_treatment,
+            value: computedMetrics.needTreatment,
             icon: '💊',
             color: 'bg-red-50 text-red-600',
             border: 'border-red-100',
         },
         {
             label: 'Healthy / Monitored',
-            value: metrics.healthy,
+            value: computedMetrics.healthy,
             icon: '✅',
             color: 'bg-emerald-50 text-emerald-600',
             border: 'border-emerald-100',
         },
         {
             label: 'Nearing Expiry (≤2d)',
-            value: metrics.nearing_expiry,
+            value: computedMetrics.nearingExpiry,
             icon: '⚠️',
             color: 'bg-amber-50 text-amber-600',
             border: 'border-amber-100',
         },
         {
-            label: 'Resolved Today',
-            value: metrics.resolved_today,
-            icon: '🎉',
+            label: 'Past / Transferred History',
+            value: computedMetrics.pastTotal,
+            icon: '📜',
+            color: 'bg-indigo-50 text-indigo-600',
+            border: 'border-indigo-100',
+        },
+    ] : [
+        {
+            label: 'Total Past Records',
+            value: computedMetrics.pastTotal,
+            icon: '📜',
+            color: 'bg-indigo-50 text-indigo-600',
+            border: 'border-indigo-100',
+        },
+        {
+            label: 'Transferred to Barangay',
+            value: computedMetrics.transferredToBrgy,
+            icon: '🚚',
             color: 'bg-purple-50 text-purple-600',
             border: 'border-purple-100',
+        },
+        {
+            label: 'Claimed by Owner',
+            value: historyAnimals.filter(a => a.facility_status === 3).length,
+            icon: '🎉',
+            color: 'bg-blue-50 text-blue-600',
+            border: 'border-blue-100',
+        },
+        {
+            label: 'Other Discharges / Shelter',
+            value: historyAnimals.filter(a => a.facility_status === 4 || a.facility_status === 5).length,
+            icon: '🏷️',
+            color: 'bg-gray-100 text-gray-600',
+            border: 'border-gray-200',
+        },
+        {
+            label: 'Active in Shelter Now',
+            value: computedMetrics.activeTotal,
+            icon: '🐾',
+            color: 'bg-orange-50 text-orange-600',
+            border: 'border-orange-100',
         },
     ];
 
@@ -474,6 +565,48 @@ const SubdHoldingFacility = () => {
                             ))}
                         </div>
 
+                        {/* ── Tabs & View Switcher ────────────────────────────── */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-gray-200 shadow-xs">
+                            <div className="flex items-center gap-2 bg-gray-100 p-1.5 rounded-2xl">
+                                <button
+                                    type="button"
+                                    onClick={() => setTabMode('active')}
+                                    className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${
+                                        tabMode === 'active'
+                                            ? 'bg-white text-orange-600 shadow-sm border border-orange-100'
+                                            : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200/50'
+                                    }`}
+                                >
+                                    <span>🐾</span>
+                                    <span>Currently In Shelter ({activeAnimals.length})</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setTabMode('history')}
+                                    className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${
+                                        tabMode === 'history'
+                                            ? 'bg-white text-indigo-600 shadow-sm border border-indigo-100'
+                                            : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200/50'
+                                    }`}
+                                >
+                                    <span>📜</span>
+                                    <span>Past Facility History ({historyAnimals.length})</span>
+                                </button>
+                            </div>
+
+                            <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
+                                {tabMode === 'active' ? (
+                                    <span className="flex items-center gap-1.5 text-orange-700 bg-orange-50 px-3 py-1.5 rounded-xl border border-orange-100">
+                                        <span>🟢</span> Showing active pets currently residing in subdivision shelter
+                                    </span>
+                                ) : (
+                                    <span className="flex items-center gap-1.5 text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">
+                                        <span>📜</span> Showing pets previously held here (Transferred to Barangay / Claimed)
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
                         {/* ── Toolbar ───────────────────────────────────────── */}
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-col md:flex-row md:items-center gap-3">
                             <div className="relative flex-1 max-w-sm">
@@ -502,15 +635,17 @@ const SubdHoldingFacility = () => {
                                 ))}
                             </select>
 
-                            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
-                                <input
-                                    type="checkbox"
-                                    checked={showResolved}
-                                    onChange={e => setShowResolved(e.target.checked)}
-                                    className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
-                                />
-                                Show Discharged / Claimed
-                            </label>
+                            {tabMode === 'active' && (
+                                <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={showResolved}
+                                        onChange={e => setShowResolved(e.target.checked)}
+                                        className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                                    />
+                                    Show Discharged / Claimed
+                                </label>
+                            )}
 
                             <button
                                 onClick={fetchAll}
@@ -530,9 +665,17 @@ const SubdHoldingFacility = () => {
                             </div>
                         ) : filtered.length === 0 ? (
                             <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center space-y-3">
-                                <div className="text-4xl">🐾</div>
-                                <p className="text-base font-black text-gray-700">No animals in temporary holding matching criteria</p>
-                                <p className="text-xs text-gray-400">Animals admitted to the subdivision shelter or marked "Secured in Facility" will appear here.</p>
+                                <div className="text-4xl">{tabMode === 'active' ? '🐾' : '📜'}</div>
+                                <p className="text-base font-black text-gray-700">
+                                    {tabMode === 'active'
+                                        ? 'No animals currently held in the subdivision shelter'
+                                        : 'No past or transferred animals found in history'}
+                                </p>
+                                <p className="text-xs text-gray-400">
+                                    {tabMode === 'active'
+                                        ? 'Animals admitted to the subdivision shelter or secured here will appear here.'
+                                        : 'Animals transferred to Barangay facilities or resolved will be archived in this history view.'}
+                                </p>
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -540,24 +683,31 @@ const SubdHoldingFacility = () => {
                                     const statusMeta = getStatusMeta(animal.facility_status);
                                     const daysLeft = daysRemaining(animal.intake_date);
                                     const isResolved = RESOLVED_IDS.has(animal.facility_status);
-                                    const photo = animal.report_media?.[0]?.file_url;
+                                    const isTransferredToBrgy = animal.facility_type === 'barangay_facility' || (animal.facility_name && animal.facility_name.toLowerCase().includes('barangay'));
+                                    const isHistoryItem = !isCurrentlyInSubd(animal);
+                                    const photo = getAnimalPhoto(animal);
 
                                     return (
                                         <div
                                             key={animal.holding_id}
-                                            className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden"
+                                            className={`bg-white rounded-2xl border shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden ${
+                                                isHistoryItem ? 'border-indigo-100/80' : 'border-gray-100'
+                                            }`}
                                         >
                                             {/* Photo Header */}
                                             <div className="h-44 bg-gray-100 relative overflow-hidden flex items-center justify-center">
                                                 {photo ? (
                                                     <img
                                                         src={photo.startsWith('http') ? photo : `http://localhost:8000${photo}`}
-                                                        alt="Held animal"
+                                                        alt={animal.animal_name || animal.breed || 'Held animal'}
                                                         className="w-full h-full object-cover"
+                                                        onError={(e) => {
+                                                            (e.target as HTMLElement).style.display = 'none';
+                                                        }}
                                                     />
                                                 ) : (
                                                     <div className="text-5xl opacity-40">
-                                                        {animalIcon(animal.animal_type)}
+                                                        🐾
                                                     </div>
                                                 )}
 
@@ -566,10 +716,16 @@ const SubdHoldingFacility = () => {
                                                     <span>#{animal.report_id}</span>
                                                 </div>
 
-                                                <div className="absolute top-3 right-3">
-                                                    <span className={`px-2.5 py-1 rounded-lg text-xs font-black border ${statusMeta.color} bg-white shadow-xs`}>
-                                                        {statusMeta.name}
-                                                    </span>
+                                                <div className="absolute top-3 right-3 flex items-center gap-1">
+                                                    {isTransferredToBrgy ? (
+                                                        <span className="px-2.5 py-1 rounded-lg text-xs font-black border border-indigo-200 bg-indigo-50 text-indigo-700 shadow-xs">
+                                                            🚚 In Brgy Holding
+                                                        </span>
+                                                    ) : (
+                                                        <span className={`px-2.5 py-1 rounded-lg text-xs font-black border ${statusMeta.color} bg-white shadow-xs`}>
+                                                            {statusMeta.name}
+                                                        </span>
+                                                    )}
                                                 </div>
 
                                                 {animal.kennel_slot && (
@@ -592,8 +748,10 @@ const SubdHoldingFacility = () => {
                                                     </div>
 
                                                     <p className="text-xs text-gray-500 font-medium mt-1 flex items-center gap-1.5">
-                                                        <span>📍</span>
-                                                        <span className="truncate">{animal.facility_name || animal.report_landmark || 'Subdivision Shelter'}</span>
+                                                        <span>{isTransferredToBrgy ? '🏢' : '📍'}</span>
+                                                        <span className={`truncate ${isTransferredToBrgy ? 'text-indigo-700 font-bold' : ''}`}>
+                                                            {animal.facility_name || animal.report_landmark || 'Subdivision Shelter'}
+                                                        </span>
                                                     </p>
 
                                                     {animal.medical_notes && (
@@ -618,9 +776,14 @@ const SubdHoldingFacility = () => {
 
                                                     <div className="flex items-center justify-between text-[11px] font-bold text-gray-400">
                                                         <span>Admitted: {formatDate(animal.intake_date)}</span>
-                                                        {!isResolved && (
+                                                        {!isResolved && !isTransferredToBrgy && (
                                                             <span className={daysLeft <= 2 ? 'text-amber-600 font-extrabold' : 'text-gray-500'}>
                                                                 ⏳ {daysLeft}d left
+                                                            </span>
+                                                        )}
+                                                        {isTransferredToBrgy && (
+                                                            <span className="text-indigo-600 font-extrabold">
+                                                                Transferred
                                                             </span>
                                                         )}
                                                     </div>
@@ -630,10 +793,14 @@ const SubdHoldingFacility = () => {
                                                             setSelected(animal);
                                                             setDetailTab('info');
                                                         }}
-                                                        className="w-full py-2.5 bg-orange-50 hover:bg-orange-100 text-orange-700 font-black rounded-xl text-xs transition-all flex items-center justify-center gap-1.5"
+                                                        className={`w-full py-2.5 font-black rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 ${
+                                                            isHistoryItem
+                                                                ? 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700'
+                                                                : 'bg-orange-50 hover:bg-orange-100 text-orange-700'
+                                                        }`}
                                                     >
-                                                        <span>📋</span>
-                                                        <span>View Details & Log Care</span>
+                                                        <span>{isHistoryItem ? '📜' : '📋'}</span>
+                                                        <span>{isHistoryItem ? 'View Past History & Custody Logs' : 'View Details & Log Care'}</span>
                                                     </button>
                                                 </div>
                                             </div>
@@ -648,169 +815,196 @@ const SubdHoldingFacility = () => {
             </div>
 
             {/* ── DETAIL & CARE MODAL ──────────────────────────────────────── */}
-            {selected && (
-                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-                    <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
-                        {/* Header */}
-                        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent">
-                            <div className="flex items-center gap-3">
-                                <span className="text-3xl">{animalIcon(selected.animal_type)}</span>
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <h2 className="text-lg font-black text-gray-900">
-                                            {selected.breed || selected.animal_type} (Report #{selected.report_id})
-                                        </h2>
-                                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black border ${getStatusMeta(selected.facility_status).color}`}>
-                                            {getStatusMeta(selected.facility_status).name}
-                                        </span>
+            {selected && (() => {
+                const isSelectedInHistory = !isCurrentlyInSubd(selected);
+                const isSelectedTransferred = selected.facility_type === 'barangay_facility' || (selected.facility_name && selected.facility_name.toLowerCase().includes('barangay'));
+
+                return (
+                    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+                        <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
+                            {/* Header */}
+                            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent">
+                                <div className="flex items-center gap-3">
+                                    <span className="text-3xl">{animalIcon(selected.animal_type)}</span>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <h2 className="text-lg font-black text-gray-900">
+                                                {selected.breed || selected.animal_type} (Report #{selected.report_id})
+                                            </h2>
+                                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-black border ${
+                                                isSelectedTransferred ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : getStatusMeta(selected.facility_status).color
+                                            }`}>
+                                                {isSelectedTransferred ? 'Transferred to Brgy' : getStatusMeta(selected.facility_status).name}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 font-medium">
+                                            Current Facility: <strong className="text-gray-800">{selected.facility_name || 'Subdivision Holding Pen'}</strong>
+                                        </p>
                                     </div>
-                                    <p className="text-xs text-gray-500 font-medium">
-                                        Located at: {selected.facility_name || 'Subdivision Holding Pen'}
-                                    </p>
                                 </div>
+
+                                <button
+                                    onClick={() => setSelected(null)}
+                                    className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 font-bold transition-all"
+                                >
+                                    ✕
+                                </button>
                             </div>
 
-                            <button
-                                onClick={() => setSelected(null)}
-                                className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 font-bold transition-all"
-                            >
-                                ✕
-                            </button>
-                        </div>
-
-                        {/* Tab Switcher */}
-                        <div className="flex border-b border-gray-100 px-6 gap-6 text-xs font-black">
-                            <button
-                                onClick={() => setDetailTab('info')}
-                                className={`py-3 border-b-2 transition-all ${detailTab === 'info' ? 'border-orange-600 text-orange-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-                            >
-                                Animal Profile & Medical
-                            </button>
-                            <button
-                                onClick={() => setDetailTab('timeline')}
-                                className={`py-3 border-b-2 transition-all ${detailTab === 'timeline' ? 'border-orange-600 text-orange-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-                            >
-                                Custody & Timeline ({selected.timeline?.length || 0})
-                            </button>
-                        </div>
-
-                        {/* Content Body */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
-                            {detailTab === 'info' ? (
-                                <div className="space-y-5">
-                                    {/* Stay Duration Highlight Banner */}
-                                    <div className="bg-gradient-to-br from-orange-50/80 via-amber-50/40 to-white p-4 rounded-2xl border border-orange-100 shadow-sm">
-                                        <p className="text-[10px] font-black text-orange-950 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
-                                            <span>⏱️</span> Stay Duration Breakdown
+                            {/* History Banner Notice if Transferred */}
+                            {isSelectedInHistory && (
+                                <div className="bg-indigo-50 border-b border-indigo-100 px-6 py-3 flex items-center gap-3">
+                                    <span className="text-xl">ℹ️</span>
+                                    <div className="text-xs text-indigo-900">
+                                        <p className="font-black uppercase tracking-wider">Past Facility Record (Read-Only)</p>
+                                        <p className="text-indigo-700 font-medium">
+                                            This animal is currently housed at <strong>{selected.facility_name || 'Barangay Facility'}</strong>. Active daily updates are logged by the receiving facility.
                                         </p>
-                                        <div className="grid grid-cols-3 gap-2.5">
-                                            <div className="bg-white/90 p-3 rounded-xl border border-orange-100 shadow-2xs">
-                                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">🏡 Subd Stay</p>
-                                                <p className="text-sm font-black text-orange-700 mt-0.5">{selected.subd_duration_display || `${daysSince(selected.intake_date)}d`}</p>
-                                            </div>
-                                            <div className="bg-white/90 p-3 rounded-xl border border-orange-100 shadow-2xs">
-                                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">🏢 Brgy Stay</p>
-                                                <p className="text-sm font-black text-orange-700 mt-0.5">{selected.brgy_duration_display || '0 days'}</p>
-                                            </div>
-                                            <div className="bg-orange-600 text-white p-3 rounded-xl shadow-xs">
-                                                <p className="text-[9px] font-bold text-orange-200 uppercase tracking-wider">Total Custody</p>
-                                                <p className="text-sm font-black text-white mt-0.5">{selected.total_duration_display || `${daysSince(selected.intake_date)}d`}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Stats grid */}
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                        <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-100">
-                                            <p className="text-[10px] font-black uppercase text-gray-400">Cage / Slot</p>
-                                            <p className="text-sm font-bold text-gray-900 mt-0.5">{selected.kennel_slot || 'Unassigned'}</p>
-                                        </div>
-                                        <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-100">
-                                            <p className="text-[10px] font-black uppercase text-gray-400">Color & Size</p>
-                                            <p className="text-sm font-bold text-gray-900 mt-0.5">{selected.color || '—'}, {selected.estimated_size || '—'}</p>
-                                        </div>
-                                        <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-100">
-                                            <p className="text-[10px] font-black uppercase text-gray-400">Intake Date</p>
-                                            <p className="text-sm font-bold text-gray-900 mt-0.5">{formatDate(selected.intake_date)}</p>
-                                        </div>
-                                        <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-100">
-                                            <p className="text-[10px] font-black uppercase text-gray-400">Admitted By</p>
-                                            <p className="text-sm font-bold text-gray-900 mt-0.5">{selected.intake_staff_name || 'Leader'}</p>
-                                        </div>
-                                    </div>
-
-                                    {/* Medical Notes */}
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-black text-gray-900 uppercase tracking-wider">Medical & Temperament Notes</label>
-                                        <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-xs text-gray-700 leading-relaxed">
-                                            {selected.medical_notes || 'No active medical flags recorded.'}
-                                        </div>
-                                    </div>
-
-                                    {/* Quick Actions */}
-                                    <div className="flex gap-3">
-                                        <button
-                                            onClick={() => {
-                                                setUpdateForm({
-                                                    facility_status: selected.facility_status,
-                                                    kennel_slot: selected.kennel_slot || '',
-                                                    medical_notes: selected.medical_notes || '',
-                                                    update_notes: '',
-                                                });
-                                                setIsUpdating(true);
-                                            }}
-                                            className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white font-black rounded-xl text-xs transition-all shadow-md shadow-orange-600/20"
-                                        >
-                                            Update Health / Status
-                                        </button>
-                                        <Link
-                                            to={`/subd/reports/${selected.report_id}`}
-                                            className="px-5 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-black rounded-xl text-xs transition-all text-center flex items-center justify-center"
-                                        >
-                                            Open Original Report
-                                        </Link>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-center">
-                                        <p className="text-xs font-black text-gray-900 uppercase tracking-wider">Activity Log</p>
-                                        <button
-                                            onClick={() => setIsAddingTimeline(true)}
-                                            className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-lg text-xs font-black transition-all"
-                                        >
-                                            + Log Observation
-                                        </button>
-                                    </div>
-
-                                    <div className="space-y-3">
-                                        {selected.timeline?.map((log) => {
-                                            const meta = EVENT_TYPE_META[log.event_type] || EVENT_TYPE_META.observation;
-                                            return (
-                                                <div key={log.log_id} className="p-3.5 bg-gray-50 rounded-2xl border border-gray-100 flex items-start gap-3">
-                                                    <div className={`w-8 h-8 rounded-xl ${meta.color} flex items-center justify-center text-sm shrink-0`}>
-                                                        {meta.icon}
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <div className="flex items-center justify-between">
-                                                            <p className="text-xs font-black text-gray-900">{log.title}</p>
-                                                            <span className="text-[10px] text-gray-400 font-semibold">{formatDateTime(log.logged_at)}</span>
-                                                        </div>
-                                                        {log.notes && <p className="text-xs text-gray-600 mt-1">{log.notes}</p>}
-                                                        {log.staff_name && (
-                                                            <p className="text-[10px] text-gray-400 font-bold mt-1">Logged by {log.staff_name}</p>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
                                     </div>
                                 </div>
                             )}
+
+                            {/* Tab Switcher */}
+                            <div className="flex border-b border-gray-100 px-6 gap-6 text-xs font-black">
+                                <button
+                                    onClick={() => setDetailTab('info')}
+                                    className={`py-3 border-b-2 transition-all ${detailTab === 'info' ? 'border-orange-600 text-orange-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                                >
+                                    Animal Profile & Medical
+                                </button>
+                                <button
+                                    onClick={() => setDetailTab('timeline')}
+                                    className={`py-3 border-b-2 transition-all ${detailTab === 'timeline' ? 'border-orange-600 text-orange-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                                >
+                                    Custody & Timeline ({selected.timeline?.length || 0})
+                                </button>
+                            </div>
+
+                            {/* Content Body */}
+                            <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
+                                {detailTab === 'info' ? (
+                                    <div className="space-y-5">
+                                        {/* Stay Duration Highlight Banner */}
+                                        <div className="bg-gradient-to-br from-orange-50/80 via-amber-50/40 to-white p-4 rounded-2xl border border-orange-100 shadow-sm">
+                                            <p className="text-[10px] font-black text-orange-950 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
+                                                <span>⏱️</span> Stay Duration Breakdown
+                                            </p>
+                                            <div className="grid grid-cols-3 gap-2.5">
+                                                <div className="bg-white/90 p-3 rounded-xl border border-orange-100 shadow-2xs">
+                                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">🏡 Subd Stay</p>
+                                                    <p className="text-sm font-black text-orange-700 mt-0.5">{selected.subd_duration_display || `${daysSince(selected.intake_date)}d`}</p>
+                                                </div>
+                                                <div className="bg-white/90 p-3 rounded-xl border border-orange-100 shadow-2xs">
+                                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">🏢 Brgy Stay</p>
+                                                    <p className="text-sm font-black text-orange-700 mt-0.5">{selected.brgy_duration_display || '0 days'}</p>
+                                                </div>
+                                                <div className="bg-orange-600 text-white p-3 rounded-xl shadow-xs">
+                                                    <p className="text-[9px] font-bold text-orange-200 uppercase tracking-wider">Total Custody</p>
+                                                    <p className="text-sm font-black text-white mt-0.5">{selected.total_duration_display || `${daysSince(selected.intake_date)}d`}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Stats grid */}
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                            <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-100">
+                                                <p className="text-[10px] font-black uppercase text-gray-400">Cage / Slot</p>
+                                                <p className="text-sm font-bold text-gray-900 mt-0.5">{selected.kennel_slot || 'Unassigned'}</p>
+                                            </div>
+                                            <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-100">
+                                                <p className="text-[10px] font-black uppercase text-gray-400">Color & Size</p>
+                                                <p className="text-sm font-bold text-gray-900 mt-0.5">{selected.color || '—'}, {selected.estimated_size || '—'}</p>
+                                            </div>
+                                            <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-100">
+                                                <p className="text-[10px] font-black uppercase text-gray-400">Intake Date</p>
+                                                <p className="text-sm font-bold text-gray-900 mt-0.5">{formatDate(selected.intake_date)}</p>
+                                            </div>
+                                            <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-100">
+                                                <p className="text-[10px] font-black uppercase text-gray-400">Admitted By</p>
+                                                <p className="text-sm font-bold text-gray-900 mt-0.5">{selected.intake_staff_name || 'Leader'}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Medical Notes */}
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-black text-gray-900 uppercase tracking-wider">Medical & Temperament Notes</label>
+                                            <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-xs text-gray-700 leading-relaxed">
+                                                {selected.medical_notes || 'No active medical flags recorded.'}
+                                            </div>
+                                        </div>
+
+                                        {/* Quick Actions */}
+                                        <div className="flex gap-3">
+                                            {!isSelectedInHistory && (
+                                                <button
+                                                    onClick={() => {
+                                                        setUpdateForm({
+                                                            facility_status: selected.facility_status,
+                                                            kennel_slot: selected.kennel_slot || '',
+                                                            medical_notes: selected.medical_notes || '',
+                                                            update_notes: '',
+                                                        });
+                                                        setIsUpdating(true);
+                                                    }}
+                                                    className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white font-black rounded-xl text-xs transition-all shadow-md shadow-orange-600/20"
+                                                >
+                                                    Update Health / Status
+                                                </button>
+                                            )}
+                                            <Link
+                                                to={`/subd/reports/${selected.report_id}`}
+                                                className={`${
+                                                    isSelectedInHistory ? 'w-full' : 'px-5'
+                                                } py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-black rounded-xl text-xs transition-all text-center flex items-center justify-center gap-1.5`}
+                                            >
+                                                <span>📋</span>
+                                                <span>Open Original Report</span>
+                                            </Link>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between items-center">
+                                            <p className="text-xs font-black text-gray-900 uppercase tracking-wider">Activity Log</p>
+                                            {!isSelectedInHistory && (
+                                                <button
+                                                    onClick={() => setIsAddingTimeline(true)}
+                                                    className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-lg text-xs font-black transition-all"
+                                                >
+                                                    + Log Observation
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            {selected.timeline?.map((log) => {
+                                                const meta = EVENT_TYPE_META[log.event_type] || EVENT_TYPE_META.observation;
+                                                return (
+                                                    <div key={log.log_id} className="p-3.5 bg-gray-50 rounded-2xl border border-gray-100 flex items-start gap-3">
+                                                        <div className={`w-8 h-8 rounded-xl ${meta.color} flex items-center justify-center text-sm shrink-0`}>
+                                                            {meta.icon}
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center justify-between">
+                                                                <p className="text-xs font-black text-gray-900">{log.title}</p>
+                                                                <span className="text-[10px] text-gray-400 font-semibold">{formatDateTime(log.logged_at)}</span>
+                                                            </div>
+                                                            {log.notes && <p className="text-xs text-gray-600 mt-1">{log.notes}</p>}
+                                                            {log.staff_name && (
+                                                                <p className="text-[10px] text-gray-400 font-bold mt-1">Logged by {log.staff_name}</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* ── UPDATE STATUS MODAL ───────────────────────────────────────── */}
             {isUpdating && selected && (

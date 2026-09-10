@@ -960,17 +960,19 @@ const MapComponent = ({
                 deconflictedLandmarks.map((lm: any) => {
                     const lmLat = lm.lat;
                     const lmLng = lm.lng;
+                    const isHolding = Boolean(lm.is_holding_facility);
 
                     // If an active report/incident marker is already placed at this exact facility location,
                     // suppress the static background landmark pin so they do not overlap!
                     const hasOverlappingReportMarker = markers.some(m =>
-                        Math.abs(m.lat - lmLat) < 0.00015 && Math.abs(m.lng - lmLng) < 0.00015
+                        (Math.abs(m.lat - lmLat) < 0.0006 && Math.abs(m.lng - lmLng) < 0.0006) ||
+                        (m.rawData?.facility_id && m.rawData.facility_id === lm.landmark_id) ||
+                        (m.category === 'Holding Facility' && isHolding)
                     );
                     if (hasOverlappingReportMarker) {
                         return null;
                     }
 
-                    const isHolding = Boolean(lm.is_holding_facility);
                     if (isHolding && !showHoldingFacilities) return null;
                     if (!isHolding && !showLandmarks) return null;
 
@@ -994,41 +996,6 @@ const MapComponent = ({
                             <Tooltip direction="top" offset={[0, -Math.round(getLandmarkZoomMetrics(currentZoom).size / 2) - 4]} className="custom-hover-tooltip">
                                 <span>{isHolding ? '🐾' : '📍'} {lm.name}</span>
                             </Tooltip>
-                            <Popup className="custom-popup">
-                                <div className="p-3 w-[220px] text-gray-800 flex flex-col gap-1.5">
-                                    <div className="flex items-center gap-2 pb-1.5 border-b border-gray-100">
-                                        <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-base shadow-xs ${
-                                            isHolding ? 'bg-emerald-600 text-white' : 'bg-orange-500 text-white'
-                                        }`}>
-                                            {isHolding ? '🐾' : '📍'}
-                                        </span>
-                                        <div className="min-w-0">
-                                            <p className="text-[11px] font-black text-gray-900 uppercase truncate">{lm.name}</p>
-                                            <p className={`text-[8px] font-bold uppercase tracking-wider ${
-                                                isHolding ? 'text-emerald-700' : 'text-orange-600'
-                                            }`}>
-                                                {isHolding ? 'Official Holding Facility' : `${lm.category || 'General'} Landmark`}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="text-[10px] space-y-1 text-gray-600">
-                                        {lm.description && <p className="text-gray-700 font-medium italic">"{lm.description}"</p>}
-                                        {lm.subdivision_name && <p><span className="font-bold text-gray-800">Subdivision:</span> {lm.subdivision_name}</p>}
-                                        {isHolding && lm.capacity && <p><span className="font-bold text-gray-800">Capacity:</span> {lm.capacity} animals</p>}
-                                        {isHolding && lm.contact_person && <p><span className="font-bold text-gray-800">Caretaker:</span> {lm.contact_person}</p>}
-                                        {isHolding && lm.contact_number && <p><span className="font-bold text-gray-800">Phone:</span> {lm.contact_number}</p>}
-                                    </div>
-                                    {onLocationChange && (
-                                        <button
-                                            type="button"
-                                            onClick={() => onLocationChange(lmLat, lmLng)}
-                                            className="mt-1 w-full py-1 bg-gray-100 hover:bg-orange-500 hover:text-white rounded-lg text-[9px] font-black uppercase tracking-wider transition-colors cursor-pointer"
-                                        >
-                                            Select Location
-                                        </button>
-                                    )}
-                                </div>
-                            </Popup>
                         </Marker>
                     );
                 })
@@ -1049,12 +1016,6 @@ const MapComponent = ({
                         <Tooltip direction="top" offset={[0, -Math.round(getLandmarkZoomMetrics(currentZoom).size / 2) - 4]} className="custom-hover-tooltip">
                             <span>{lm.icon} {lm.name}</span>
                         </Tooltip>
-                        <Popup>
-                            <div className="p-1.5 text-center">
-                                <p className="text-[10px] font-black uppercase text-[#F97316]">{lm.icon} {lm.name}</p>
-                                <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">{lm.type} Landmark</p>
-                            </div>
-                        </Popup>
                     </Marker>
                 ))
             )}
@@ -1089,6 +1050,19 @@ const MapComponent = ({
                 const isUserLoc = marker.category === 'User Location' || marker.category === 'Operator';
                 const isHoldingFacility = marker.category === 'Holding Facility' || marker.category === 'Facility Holding' || marker.category === 'Secured Facility';
                 const isInitialSighting = marker.category === 'Initial Sighting' || marker.category === 'Found Location' || marker.category === 'Original Sighting';
+
+                // Prevent overlapping "FOUND SPOT" pin if it is at the exact same location as a Holding Facility or main marker
+                if (isInitialSighting) {
+                    const overlapsOtherMarker = markers.some(m =>
+                        m !== marker &&
+                        m.category !== 'Initial Sighting' &&
+                        m.category !== 'Found Location' &&
+                        Math.abs(m.lat - marker.lat) < 0.0001 &&
+                        Math.abs(m.lng - marker.lng) < 0.0001
+                    );
+                    if (overlapsOtherMarker) return null;
+                }
+
                 const animalTypeStr = marker.rawData?.animal_type || marker.rawData?.animalType || marker.rawData?.pet_type || marker.rawData?.report?.animal_type || marker.category || '';
                 const facilityNameStr = marker.rawData?.facility?.name || marker.rawData?.facility_name || (marker.title ? marker.title.replace(/^Secured:\s*/i, '') : 'HOLDING FACILITY');
                 const petImage = marker.rawData?.media?.[0]?.file_url || marker.rawData?.image_url || marker.rawData?.media?.[0]?.url;

@@ -464,6 +464,7 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                         report_obj.initial_landmark = report_obj.landmark
 
                     prev_fac_name = report_obj.landmark if report_obj.facility_id else None
+                    fac = None
 
                     if facility_id:
                         fac = db.query(Landmark).filter(Landmark.landmark_id == facility_id).first()
@@ -504,7 +505,7 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                     if relocation_note:
                         if "Secured at" not in history_remarks and "Transferred to" not in history_remarks:
                             history_remarks = f"{history_remarks} {relocation_note}"
-                        elif prev_fac_name and prev_fac_name != (fac.name if facility_id and fac else None):
+                        elif prev_fac_name and prev_fac_name != (fac.name if fac else None):
                             history_remarks = f"Facility Relocation: {relocation_note}"
 
                     # Avoid duplicate StatusHistory if already recorded with same remarks and facility
@@ -596,14 +597,30 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                         if not already_in:
                             raw_t = (report_obj.animal_type or '').strip().lower()
                             a_type = 'Dog' if ('dog' in raw_t or 'canine' in raw_t or 'puppy' in raw_t) else ('Cat' if ('cat' in raw_t or 'feline' in raw_t or 'kitten' in raw_t) else 'Unknown')
+                            
+                            # Derive initial facility_status based on animal condition
+                            cond_text = str(report_obj.condition or animal_condition or '').lower()
+                            is_deceased = 'deceased' in cond_text or 'dead' in cond_text
+                            is_injured = any(k in cond_text for k in ['injured', 'bleeding', 'limping', 'weak', 'sick', 'treatment', 'wound', 'trapped'])
+                            is_healthy = 'healthy' in cond_text or 'no condition' in cond_text
+
+                            if is_deceased:
+                                init_fac_status = 4  # Deceased
+                            elif is_healthy and not is_injured:
+                                init_fac_status = 2  # Healthy
+                            elif is_injured:
+                                init_fac_status = 1  # Need Treatment
+                            else:
+                                init_fac_status = 2 if 'healthy' in cond_text else 1
+
                             new_holding = HoldingAnimal(
                                 report_id       = report_obj.report_id,
                                 rescue_id       = rescue_id,
                                 animal_type     = a_type,
-                                breed           = getattr(report_obj, 'breed', None) or getattr(report_obj, 'ai_possible_breed', None),
+                                breed           = getattr(report_obj, 'animal_breed', None) or getattr(report_obj, 'ai_possible_breed', None) or getattr(report_obj, 'breed', None),
                                 color           = getattr(report_obj, 'animal_color', None) or getattr(report_obj, 'ai_dominant_color', None),
-                                estimated_size  = getattr(report_obj, 'ai_estimated_size', None),
-                                facility_status = 1,  # Default: Need Treatment
+                                estimated_size  = getattr(report_obj, 'estimated_size', None) or getattr(report_obj, 'ai_estimated_size', None),
+                                facility_status = init_fac_status,
                                 intake_staff_id = staff_id_for_log,
                             )
                             db.add(new_holding)
@@ -617,15 +634,15 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                             if not loc_name:
                                 if report_obj.landmark:
                                     loc_name = report_obj.landmark
-                                else:
-                                    brgy = None
-                                    if report_obj.subdivision_id:
-                                        subd = db.query(Subdivision).filter(Subdivision.subdivision_id == report_obj.subdivision_id).first()
-                                        if subd and subd.barangay_id:
-                                            brgy = db.query(Barangay).filter(Barangay.barangay_id == subd.barangay_id).first()
-                                    if not brgy:
-                                        brgy = db.query(Barangay).first()
-                                    loc_name = f"Barangay {brgy.barangay_name} HQ" if brgy else "Barangay HQ"
+                            else:
+                                brgy = None
+                                if report_obj.subdivision_id:
+                                    subd = db.query(Subdivision).filter(Subdivision.subdivision_id == report_obj.subdivision_id).first()
+                                    if subd and subd.barangay_id:
+                                        brgy = db.query(Barangay).filter(Barangay.barangay_id == subd.barangay_id).first()
+                                if not brgy:
+                                    brgy = db.query(Barangay).first()
+                                loc_name = f"Barangay {brgy.barangay_name} HQ" if brgy else "Barangay HQ"
 
                             db.add(HoldingTimeline(
                                 holding_id = new_holding.holding_id,
@@ -635,6 +652,14 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                                 logged_by  = staff_id_for_log,
                             ))
                         else:
+                            # Sync breed/color/size and condition if out of sync
+                            if getattr(report_obj, 'animal_breed', None) and (not already_in.breed or already_in.breed in ('Aspin', 'Puspin', 'Unknown')):
+                                already_in.breed = report_obj.animal_breed
+                            if not already_in.color and (getattr(report_obj, 'animal_color', None) or getattr(report_obj, 'ai_dominant_color', None)):
+                                already_in.color = getattr(report_obj, 'animal_color', None) or getattr(report_obj, 'ai_dominant_color', None)
+                            if not already_in.estimated_size and (getattr(report_obj, 'estimated_size', None) or getattr(report_obj, 'ai_estimated_size', None)):
+                                already_in.estimated_size = getattr(report_obj, 'estimated_size', None) or getattr(report_obj, 'ai_estimated_size', None)
+
                             # Animal record already exists — log relocation/transfer or update if facility moved
                             if relocation_note:
                                 loc_name = None

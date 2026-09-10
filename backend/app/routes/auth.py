@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
-from app.schemas.auth import LoginRequest, LoginResponse
+from app.schemas.auth import LoginRequest, LoginResponse, GoogleAuthRequest
 from app.utils.auth import verify_password, create_access_token, get_current_user
 from app.utils.audit import log_activity
 
@@ -157,4 +157,113 @@ def verify_session_by_id(
 @router.get("/me")
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.post("/google", response_model=LoginResponse)
+def google_auth(request: GoogleAuthRequest, req: Request, db: Session = Depends(get_db)):
+    import secrets
+    from app.utils.auth import get_password_hash
+
+    email_clean = str(request.email).strip().lower()
+    user = db.query(User).filter(User.email == email_clean).first()
+
+    if not user:
+        # Create new resident user via Google
+        default_name = request.name or email_clean.split('@')[0].capitalize()
+        random_pass = secrets.token_urlsafe(24)
+        hashed_pass = get_password_hash(random_pass)
+
+        user = User(
+            name=default_name,
+            email=email_clean,
+            password=hashed_pass,
+            role_id=1,  # Resident
+            subdivision_id=1,  # Selera Homes
+            barangay_id=1,
+            status="Active",
+            is_verified=True,
+            profile_picture=request.profile_picture or None
+        )
+        db.add(user)
+        db.flush()
+
+        log_activity(
+            db=db,
+            action="GOOGLE_REGISTER",
+            target_table="users",
+            target_id=user.user_id,
+            description=f"New resident registered via Google: {user.name} ({user.email})",
+            user_id=user.user_id,
+            log_type="security",
+            request=req
+        )
+    else:
+        # Check active status
+        if user.status == "Inactive":
+            log_activity(
+                db=db,
+                action="FAILED_LOGIN",
+                target_table="auth",
+                target_id=user.user_id,
+                description=f"Google login blocked for inactive account: {user.name} ({user.email})",
+                user_id=user.user_id,
+                log_type="security",
+                request=req
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account inactive. Please contact administrator.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        if not user.profile_picture and request.profile_picture:
+            user.profile_picture = request.profile_picture
+
+        log_activity(
+            db=db,
+            action="GOOGLE_LOGIN",
+            target_table="users",
+            target_id=user.user_id,
+            description=f"Successful Google login: {user.name} ({user.email})",
+            user_id=user.user_id,
+            log_type="security",
+            request=req
+        )
+
+    db.commit()
+    db.refresh(user)
+
+    # Generate JWT token
+    token = create_access_token({
+        "sub": str(user.user_id),
+        "user_id": user.user_id,
+        "email": user.email,
+        "role_id": user.role_id
+    })
+
+    b_name = user.barangay.barangay_name if user.barangay else (user.subdivision.barangay.barangay_name if user.subdivision and user.subdivision.barangay else ("San Vicente" if user.role_id in [2, 3] else None))
+    p_name = user.position.position_name if user.position else ("Barangay Head Officer" if user.is_head_officer else None)
+
+    return {
+        "user_id": user.user_id,
+        "email": user.email,
+        "name": user.name,
+        "role_id": user.role_id,
+        "subdivision_id": user.subdivision_id,
+        "barangay_id": user.barangay_id,
+        "is_head_officer": user.is_head_officer,
+        "position_id": user.position_id,
+        "position_name": p_name,
+        "barangay_name": b_name,
+        "profile_picture": user.profile_picture,
+        "phone": user.phone,
+        "address": user.address,
+        "latitude": user.latitude,
+        "longitude": user.longitude,
+        "status": user.status,
+        "is_verified": user.is_verified,
+        "created_at": user.created_at,
+        "access_token": token,
+        "token_type": "bearer"
+    }
 

@@ -236,23 +236,46 @@ def populate_location_and_facility_info(rep_data: ReportResponse, rep: Report, d
         rep_data.facility_id = rep.facility_id
         rep_data.custody_status = rep.custody_status or "Sighting"
 
+        holding_rec = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == rep.report_id).first()
+        is_in_custody = (rep.current_status_id in (6, 7, 8)) or (holding_rec is not None)
+
+        if is_in_custody and (not rep_data.custody_status or rep_data.custody_status == "Sighting"):
+            rep_data.custody_status = "Secured in Facility"
+
+        fac = None
         if rep.facility_id:
             fac = db.query(Landmark).filter(Landmark.landmark_id == rep.facility_id).first()
-            if fac:
-                rep_data.facility = {
-                    "landmark_id": fac.landmark_id,
-                    "name": fac.name,
-                    "category": fac.category,
-                    "description": fac.description,
-                    "latitude": float(fac.latitude),
-                    "longitude": float(fac.longitude),
-                    "is_holding_facility": fac.is_holding_facility,
-                    "facility_type": fac.facility_type,
-                    "capacity": fac.capacity,
-                    "contact_person": fac.contact_person,
-                    "contact_number": fac.contact_number,
-                    "status": fac.status
-                }
+        elif is_in_custody:
+            # Fallback to subdivision/barangay holding facility landmark
+            if rep.subdivision_id:
+                fac = db.query(Landmark).filter(
+                    Landmark.subdivision_id == rep.subdivision_id,
+                    Landmark.is_holding_facility == True
+                ).first()
+            if not fac:
+                fac = db.query(Landmark).filter(Landmark.is_holding_facility == True).first()
+
+        if fac:
+            rep_data.facility_id = fac.landmark_id
+            rep_data.facility = {
+                "landmark_id": fac.landmark_id,
+                "name": fac.name,
+                "category": fac.category,
+                "description": fac.description,
+                "latitude": float(fac.latitude),
+                "longitude": float(fac.longitude),
+                "is_holding_facility": fac.is_holding_facility,
+                "facility_type": fac.facility_type,
+                "capacity": fac.capacity,
+                "contact_person": fac.contact_person,
+                "contact_number": fac.contact_number,
+                "status": fac.status
+            }
+            if is_in_custody and (rep.latitude == rep.initial_latitude or rep.latitude == rep_data.initial_latitude):
+                rep_data.latitude = float(fac.latitude)
+                rep_data.longitude = float(fac.longitude)
+                if not rep.landmark or rep.landmark == rep.initial_landmark:
+                    rep_data.landmark = fac.name
 
         if rep.history:
             for i, hist in enumerate(rep.history):
@@ -1469,6 +1492,17 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
                         status_code=403,
                         detail="Only personnel assigned to this report have the ability to update its status."
                     )
+        elif updater and updater.role_id == 2:
+            is_already_escalated = (
+                report.current_status_id in [4, 5, 6, 7, 8] or
+                report.endorsement_letter is not None or
+                db.query(Rescue).filter(Rescue.report_id == report_id).first() is not None
+            )
+            if is_already_escalated and status_update.status_id != 4:
+                raise HTTPException(
+                    status_code=403,
+                    detail="This animal case has been escalated to the Barangay and can no longer be updated by Subdivision Leaders. You can only track its progress."
+                )
 
     prev_status_id = report.current_status_id
 
@@ -1480,14 +1514,28 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
 
     # Handle facility relocation or location update
     relocation_note = None
-    if status_update.facility_id:
-        fac = db.query(Landmark).filter(Landmark.landmark_id == status_update.facility_id).first()
+    target_facility_id = status_update.facility_id
+    if not target_facility_id and status_update.status_id in (6, 7, 8):
+        # Auto-detect subdivision or barangay holding facility
+        default_fac = None
+        if report.subdivision_id:
+            default_fac = db.query(Landmark).filter(
+                Landmark.subdivision_id == report.subdivision_id,
+                Landmark.is_holding_facility == True
+            ).first()
+        if not default_fac:
+            default_fac = db.query(Landmark).filter(Landmark.is_holding_facility == True).first()
+        if default_fac:
+            target_facility_id = default_fac.landmark_id
+
+    if target_facility_id:
+        fac = db.query(Landmark).filter(Landmark.landmark_id == target_facility_id).first()
         if fac:
             report.facility_id = fac.landmark_id
             report.latitude = fac.latitude
             report.longitude = fac.longitude
             report.landmark = fac.name
-            report.custody_status = status_update.custody_status or "In Subdivision Facility"
+            report.custody_status = status_update.custody_status or "Secured in Facility"
             caretaker_str = f" • Caretaker: {fac.contact_person} ({fac.contact_number})" if fac.contact_person else ""
             prev_str = report.initial_landmark or "Original found location"
             relocation_note = f"Animal secured at {fac.name}{caretaker_str} (Relocated from: {prev_str})"
@@ -1504,8 +1552,9 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
     report.current_status_id = status_update.status_id
 
     # Update animal condition if provided
-    if status_update.animal_condition:
-        report.condition = status_update.animal_condition
+    new_animal_condition = status_update.animal_condition or status_update.condition_notes
+    if new_animal_condition:
+        report.condition = new_animal_condition
 
     # Use either remarks or status_remarks
     final_remarks = status_update.remarks or status_update.status_remarks
@@ -1617,16 +1666,31 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
             HoldingAnimal.report_id == report.report_id
         ).first()
         if not already_in:
-            raw_t = str(report.animal_type or '').strip().lower()
+            raw_t = (report.animal_type or '').strip().lower()
             a_type = 'Dog' if ('dog' in raw_t or 'canine' in raw_t or 'puppy' in raw_t) else ('Cat' if ('cat' in raw_t or 'feline' in raw_t or 'kitten' in raw_t) else 'Unknown')
+            
+            cond_text = (report.condition or status_update.animal_condition or status_update.condition_notes or '').lower()
+            is_deceased = 'deceased' in cond_text or 'dead' in cond_text
+            is_injured = any(k in cond_text for k in ['injured', 'bleeding', 'limping', 'weak', 'sick', 'treatment', 'wound', 'trapped'])
+            is_healthy = 'healthy' in cond_text or 'no condition' in cond_text
+
+            if is_deceased:
+                init_fac_status = 4  # Deceased
+            elif is_healthy and not is_injured:
+                init_fac_status = 2  # Healthy
+            elif is_injured:
+                init_fac_status = 1  # Need Treatment
+            else:
+                init_fac_status = 2 if 'healthy' in cond_text else 1
+
             new_holding = HoldingAnimal(
                 report_id       = report.report_id,
                 rescue_id       = report.rescues[0].rescue_id if report.rescues else None,
                 animal_type     = a_type,
-                breed           = getattr(report, 'breed', None) or getattr(report, 'ai_possible_breed', None),
+                breed           = getattr(report, 'animal_breed', None) or getattr(report, 'ai_possible_breed', None) or getattr(report, 'breed', None),
                 color           = getattr(report, 'animal_color', None) or getattr(report, 'ai_dominant_color', None),
-                estimated_size  = getattr(report, 'ai_estimated_size', None),
-                facility_status = 1,  # Default: Need Treatment
+                estimated_size  = getattr(report, 'estimated_size', None) or getattr(report, 'ai_estimated_size', None),
+                facility_status = init_fac_status,
                 intake_staff_id = status_update.user_id,
             )
             db.add(new_holding)
@@ -1640,6 +1704,13 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
                 logged_by  = status_update.user_id,
             ))
         else:
+            if getattr(report, 'animal_breed', None) and (not already_in.breed or already_in.breed in ('Aspin', 'Puspin', 'Unknown')):
+                already_in.breed = report.animal_breed
+            if not already_in.color and (getattr(report, 'animal_color', None) or getattr(report, 'ai_dominant_color', None)):
+                already_in.color = getattr(report, 'animal_color', None) or getattr(report, 'ai_dominant_color', None)
+            if not already_in.estimated_size and (getattr(report, 'estimated_size', None) or getattr(report, 'ai_estimated_size', None)):
+                already_in.estimated_size = getattr(report, 'estimated_size', None) or getattr(report, 'ai_estimated_size', None)
+
             if relocation_note:
                 loc_name = report.landmark or "New Facility"
                 db.add(HoldingTimeline(
@@ -2219,6 +2290,17 @@ def request_transfer_report(report_id: int, transfer_in: ReportTransferRequest, 
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
+    is_already_escalated = (
+        report.current_status_id in [4, 5, 6, 7, 8] or
+        report.endorsement_letter is not None or
+        db.query(Rescue).filter(Rescue.report_id == report_id).first() is not None
+    )
+    if is_already_escalated and sender.role_id == 2:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot transfer an escalated report. It is already under Barangay management."
+        )
+
     if report.assigned_leader_id != sender.user_id and sender.role_id != 4:
         raise HTTPException(status_code=403, detail="Only the currently assigned handler can transfer this report.")
 
@@ -2586,6 +2668,18 @@ def verify_incident_report(report_id: int, verify_in: ReportVerifyRequest, req: 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    if user.role_id == 2:
+        is_escalated = (
+            report.current_status_id in [4, 5, 6, 7, 8] or
+            report.endorsement_letter is not None or
+            db.query(Rescue).filter(Rescue.report_id == report_id).first() is not None
+        )
+        if is_escalated:
+            raise HTTPException(
+                status_code=403,
+                detail="This report has been escalated to the Barangay and cannot be modified by Subdivision Leaders."
+            )
+
     from datetime import datetime
     now = datetime.now()
 
@@ -2714,6 +2808,18 @@ def mark_report_false_alarm(report_id: int, false_in: ReportFalseAlarmRequest, r
     user = db.query(User).filter(User.user_id == false_in.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    if user.role_id == 2:
+        is_escalated = (
+            report.current_status_id in [4, 5, 6, 7, 8] or
+            report.endorsement_letter is not None or
+            db.query(Rescue).filter(Rescue.report_id == report_id).first() is not None
+        )
+        if is_escalated:
+            raise HTTPException(
+                status_code=403,
+                detail="This report has been escalated to the Barangay and cannot be dismissed by Subdivision Leaders."
+            )
 
     from datetime import datetime
     now = datetime.now()

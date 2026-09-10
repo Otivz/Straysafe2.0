@@ -2076,8 +2076,8 @@ const SubdReports = () => {
                                                             </button>
                                                         )}
 
-                                                        {/* STEP 2: ESCALATE (Only after verification) */}
-                                                        {(viewReport.status_id === 2 || viewReport.status_id === 7) && (
+                                                        {/* STEP 2: ESCALATE (Only after verification and not yet escalated) */}
+                                                        {viewReport.status_id === 2 && (
                                                             <button
                                                                 onClick={() => {
                                                                     setEscalatingReportId(viewReport.report_id);

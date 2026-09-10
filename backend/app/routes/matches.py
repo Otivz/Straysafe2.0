@@ -8,7 +8,7 @@ from sqlalchemy import or_, and_, desc
 
 from app.database import get_db
 from app.models.report_match import ReportMatch
-from app.models.report import Report, ReportMedia, StatusHistory
+from app.models.report import Report, ReportMedia, StatusHistory, HoldingAnimal, HoldingTimeline
 from app.models.pet import Pet
 from app.models.user import User
 from app.models.notification import Notification
@@ -619,6 +619,23 @@ def verify_match(
             match.source_report.pet_id = match.matched_pet.pet_id
             match.source_report.is_possible_owned = True
         
+        # Deduplicate/reconcile holding records if both reports were admitted
+        if match.source_report_id and match.matched_report_id:
+            src_holding = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == match.source_report_id).first()
+            tgt_holding = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == match.matched_report_id).first()
+
+            if src_holding and tgt_holding and src_holding.holding_id != tgt_holding.holding_id:
+                # If target is already transferred to Barangay or further along, resolve source holding
+                tgt_is_brgy = bool(tgt_holding.report and tgt_holding.report.facility and tgt_holding.report.facility.facility_type == 'barangay_facility')
+                src_is_brgy = bool(src_holding.report and src_holding.report.facility and src_holding.report.facility.facility_type == 'barangay_facility')
+
+                if tgt_is_brgy and not src_is_brgy:
+                    src_holding.facility_status = 5  # Transferred to Shelter / Barangay
+                    src_holding.discharge_date = datetime.now(timezone.utc).replace(tzinfo=None)
+                else:
+                    tgt_holding.facility_status = 5
+                    tgt_holding.discharge_date = datetime.now(timezone.utc).replace(tzinfo=None)
+
         # Add to StatusHistory for source report
         hist = StatusHistory(
             report_id=match.source_report_id,

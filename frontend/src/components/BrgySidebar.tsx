@@ -2,18 +2,27 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import Button from './Button';
+import QRScannerModal from './Modals/QRScannerModal';
 import { api } from '../utils/api';
 
 interface BrgySidebarProps {
     isMobileOpen?: boolean;
     onCloseMobile?: () => void;
+    mobileOpen?: boolean;
+    onMobileClose?: () => void;
 }
 
-const BrgySidebar = ({ isMobileOpen, onCloseMobile }: BrgySidebarProps) => {
+const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }: BrgySidebarProps) => {
     const [isOpen, setIsOpen] = useState(true);
+    const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
     const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
+    const [pendingClaimsCount, setPendingClaimsCount] = useState<number>(0);
     const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
     const location = useLocation();
+
+    // Support both prop naming styles for versatility
+    const isDrawerOpen = mobileOpen !== undefined ? mobileOpen : (isMobileOpen || false);
+    const handleDrawerClose = onMobileClose || onCloseMobile;
 
     useEffect(() => {
         const fetchCounts = async () => {
@@ -33,6 +42,20 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile }: BrgySidebarProps) => {
             }
 
             try {
+                const viewedClaimIds = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_brgy_claims') || '[]'));
+                const claimsRes = await axios.get('http://localhost:8000/claims/');
+                if (Array.isArray(claimsRes.data)) {
+                    const unviewedClaims = claimsRes.data.filter((c: any) => {
+                        const isPending = c.status === 'Pending Review' || c.status === 'Evidence Requested' || c.status === 'Potential Owner Match';
+                        return isPending && !viewedClaimIds.has(c.claim_id);
+                    }).length;
+                    setPendingClaimsCount(unviewedClaims);
+                }
+            } catch (e) {
+                console.warn("Could not fetch brgy claims count", e);
+            }
+
+            try {
                 const chatRes = await api.get('/chat/unread-count');
                 if (chatRes.data && typeof chatRes.data.unread_count === 'number') {
                     setUnreadMessagesCount(chatRes.data.unread_count);
@@ -46,110 +69,159 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile }: BrgySidebarProps) => {
         const interval = setInterval(fetchCounts, 4000);
 
         window.addEventListener('straysafe_brgy_viewed', fetchCounts);
+        window.addEventListener('straysafe_claims_viewed', fetchCounts);
         window.addEventListener('storage', fetchCounts);
 
         return () => {
             clearInterval(interval);
             window.removeEventListener('straysafe_brgy_viewed', fetchCounts);
+            window.removeEventListener('straysafe_claims_viewed', fetchCounts);
             window.removeEventListener('storage', fetchCounts);
         };
     }, []);
 
-    const menuItems = [
-        {
-            path: '/brgy/dashboard',
-            label: 'Dashboard',
-            icon: (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
-                </svg>
-            )
-        },
-        {
-            path: '/brgy/messages',
-            label: 'Messages',
-            badgeCount: unreadMessagesCount,
-            icon: (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-            )
-        },
-        {
-            path: '/brgy/rescue-requests',
-            label: 'Incident Reports',
-            badgeCount: pendingRequestsCount,
-            icon: (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-            )
-        },
-        {
-            path: '/brgy/holding-facility',
-            label: 'Holding Facility',
-            icon: (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-                </svg>
-            )
-        },
-        {
-            path: '/brgy/history',
-            label: 'Report History',
-            icon: (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.8 2.8a1 1 0 101.414-1.414L11 9.586V6z" clipRule="evenodd" />
-                </svg>
-            )
-        },
-        {
-            path: '/brgy/community-alerts',
-            label: 'Community Alerts',
-            icon: (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 3a1 1 0 00-1.447-.894L8.763 6H5a3 3 0 000 6h.28l1.771 5.316A1 1 0 008 18h1a1 1 0 001-1v-4.382l6.553 3.276A1 1 0 0018 15V3z" clipRule="evenodd" />
-                </svg>
-            )
-        }
-    ];
-
     const rawUser = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const isHeadOfficer = rawUser ? JSON.parse(rawUser).is_head_officer : false;
 
-    menuItems.push({
-        path: '/brgy/personnel',
-        label: isHeadOfficer ? 'Personnel Management' : 'Personnel Directory',
-        icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
-            </svg>
-        )
-    });
-
-    menuItems.push({
-        path: '/brgy/settings',
-        label: 'Station Settings',
-        icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-        )
-    });
+    const menuSections = [
+        {
+            title: 'OPERATIONS',
+            items: [
+                {
+                    path: '/brgy/dashboard',
+                    label: 'Dashboard',
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+                        </svg>
+                    )
+                },
+                {
+                    path: '/brgy/messages',
+                    label: 'Messages',
+                    badgeCount: unreadMessagesCount,
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                    )
+                },
+                {
+                    path: '/brgy/rescue-requests',
+                    label: 'Incident Reports',
+                    badgeCount: pendingRequestsCount,
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                    )
+                },
+                {
+                    path: '/brgy/holding-facility',
+                    label: 'Holding Facility',
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                        </svg>
+                    )
+                },
+                {
+                    path: '/brgy/community-alerts',
+                    label: 'Community Alerts',
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M18 3a1 1 0 00-1.447-.894L8.763 6H5a3 3 0 000 6h.28l1.771 5.316A1 1 0 008 18h1a1 1 0 001-1v-4.382l6.553 3.276A1 1 0 0018 15V3z" clipRule="evenodd" />
+                        </svg>
+                    )
+                }
+            ]
+        },
+        {
+            title: 'ANIMAL MANAGEMENT',
+            items: [
+                {
+                    path: '/brgy/pet-records',
+                    label: 'Pet Records',
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 21.5c-3.038 0-5.5-2.462-5.5-5.5s2.462-5.5 5.5-5.5s5.5 2.462 5.5 5.5s-2.462 5.5-5.5 5.5zm-5.5-12c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zm11 0c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zM12 8c-1.381 0-2.5-1.119-2.5-2.5S10.619 3 12 3s2.5 1.119 2.5 2.5S13.381 8 12 8z" />
+                        </svg>
+                    )
+                },
+                {
+                    path: '/brgy/pet-claims',
+                    label: 'Pet Claims',
+                    badgeCount: pendingClaimsCount,
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    )
+                },
+                {
+                    isAction: true,
+                    onClick: () => setIsQRScannerOpen(true),
+                    label: 'Scan QR Collar',
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    )
+                }
+            ]
+        },
+        {
+            title: 'RECORDS',
+            items: [
+                {
+                    path: '/brgy/history',
+                    label: 'Report History',
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.8 2.8a1 1 0 101.414-1.414L11 9.586V6z" clipRule="evenodd" />
+                        </svg>
+                    )
+                }
+            ]
+        },
+        {
+            title: 'SYSTEM',
+            items: [
+                {
+                    path: '/brgy/personnel',
+                    label: isHeadOfficer ? 'Personnel Management' : 'Personnel Directory',
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
+                        </svg>
+                    )
+                },
+                {
+                    path: '/brgy/settings',
+                    label: 'Station Settings',
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                    )
+                }
+            ]
+        }
+    ];
 
     const renderSidebarContent = (showFullText: boolean, isMobileView: boolean) => (
         <div className="overflow-hidden flex flex-col h-full">
-            {/* Menu Title */}
-            <div className="pt-10 pb-6 px-6 flex items-center h-[88px] justify-between shrink-0">
+            {/* Menu Title / Logo */}
+            <div className="pt-8 pb-4 px-6 flex items-center justify-between h-[80px] shrink-0">
                 {showFullText && (
-                    <h2 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest animate-in fade-in duration-300">
-                        BRGY STAFF
+                    <h2 className="text-xs font-extrabold text-[#F97316] uppercase tracking-widest animate-in fade-in duration-300">
+                        BARANGAY OPS
                     </h2>
                 )}
-                {isMobileView && onCloseMobile && (
+                {isMobileView && handleDrawerClose && (
                     <button 
-                        onClick={onCloseMobile}
+                        onClick={handleDrawerClose}
                         className="text-gray-400 hover:text-gray-600 p-1.5 hover:bg-gray-50 rounded-xl transition-all"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -160,47 +232,75 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile }: BrgySidebarProps) => {
             </div>
 
             {/* Navigation */}
-            <nav className="space-y-1 flex-1 overflow-y-auto">
-                {menuItems.map((item) => {
-                    const isActive = location.pathname === item.path;
-                    const hasBadge = !!(item.badgeCount && item.badgeCount > 0);
-                    return (
-                        <div key={item.path} className="relative group overflow-hidden">
-                            {isActive && (
-                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#F97316] rounded-r-full"></div>
-                            )}
-                            <Link
-                                to={item.path}
-                                onClick={isMobileView ? onCloseMobile : undefined}
-                                className={`flex items-center py-3 font-bold text-xs uppercase tracking-widest transition-colors ${isActive
-                                    ? 'bg-orange-50 text-[#F97316]'
-                                    : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
-                                    } ${showFullText ? 'px-8' : 'justify-center px-0'}`}
-                            >
-                                <div className="relative shrink-0">
-                                    {item.icon}
-                                    {!showFullText && hasBadge && (
-                                        <span className="absolute -top-1.5 -right-2 bg-[#F97316] text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
-                                            {item.badgeCount! > 9 ? '9+' : item.badgeCount}
-                                        </span>
-                                    )}
-                                </div>
-                                {showFullText && (
-                                    <div className="ml-4 flex-1 flex items-center justify-between overflow-hidden">
-                                        <span className={`truncate ${item.label.length > 18 ? 'text-[9.5px]' : ''}`}>
-                                            {item.label}
-                                        </span>
-                                        {hasBadge && (
-                                            <span className="ml-2 shrink-0 bg-[#F97316] text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-sm animate-pulse">
-                                                {item.badgeCount}
-                                            </span>
+            <nav className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 pb-6">
+                {menuSections.map((section, idx) => (
+                    <div key={section.title} className={idx > 0 ? 'mt-6' : 'mt-2'}>
+                        {showFullText && (
+                            <h3 className="px-8 mb-2 text-[10px] font-black text-gray-400 uppercase tracking-widest animate-in fade-in duration-300">
+                                {section.title}
+                            </h3>
+                        )}
+                        <div className="space-y-1">
+                            {section.items.map((item: any) => {
+                                if (item.isAction) {
+                                    return (
+                                        <div key={item.label} className="relative group overflow-hidden">
+                                            <button
+                                                onClick={() => {
+                                                    if (isMobileView && handleDrawerClose) handleDrawerClose();
+                                                    item.onClick?.();
+                                                }}
+                                                className={`w-full flex items-center py-3 font-bold text-xs uppercase tracking-widest transition-colors text-gray-400 hover:text-[#F97316] hover:bg-orange-50/50 cursor-pointer ${showFullText ? 'px-8' : 'justify-center px-0'}`}
+                                            >
+                                                <span className="shrink-0">{item.icon}</span>
+                                                {showFullText && <span className="ml-4 whitespace-nowrap animate-in fade-in duration-300">{item.label}</span>}
+                                            </button>
+                                        </div>
+                                    );
+                                }
+
+                                const isActive = item.path ? location.pathname === item.path || location.pathname.startsWith(item.path + '/') : false;
+                                const hasBadge = !!(item.badgeCount && item.badgeCount > 0);
+                                return (
+                                    <div key={item.path} className="relative group overflow-hidden">
+                                        {isActive && (
+                                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#F97316] rounded-r-full"></div>
                                         )}
+                                        <Link
+                                            to={item.path}
+                                            onClick={isMobileView && handleDrawerClose ? handleDrawerClose : undefined}
+                                            className={`flex items-center py-3 font-bold text-xs uppercase tracking-widest transition-colors ${isActive
+                                                ? 'bg-orange-50 text-[#F97316]'
+                                                : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
+                                                } ${showFullText ? 'px-8' : 'justify-center px-0'}`}
+                                        >
+                                            <div className="relative shrink-0">
+                                                {item.icon}
+                                                {!showFullText && hasBadge && (
+                                                    <span className="absolute -top-1.5 -right-2 bg-[#F97316] text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
+                                                        {item.badgeCount! > 9 ? '9+' : item.badgeCount}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {showFullText && (
+                                                <div className="ml-4 flex-1 flex items-center justify-between overflow-hidden">
+                                                    <span className={`truncate ${item.label.length > 18 ? 'text-[9.5px]' : ''}`}>
+                                                        {item.label}
+                                                    </span>
+                                                    {hasBadge && (
+                                                        <span className="ml-2 shrink-0 bg-[#F97316] text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-sm animate-pulse">
+                                                            {item.badgeCount}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </Link>
                                     </div>
-                                )}
-                            </Link>
+                                );
+                            })}
                         </div>
-                    );
-                })}
+                    </div>
+                ))}
             </nav>
         </div>
     );
@@ -225,12 +325,12 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile }: BrgySidebarProps) => {
             </aside>
 
             {/* MOBILE DRAWER OVERLAY */}
-            {isMobileOpen && (
+            {isDrawerOpen && (
                 <div className="lg:hidden fixed inset-0 z-[1000] flex">
                     {/* Backdrop */}
                     <div 
                         className="fixed inset-0 bg-[#1a1208]/60 backdrop-blur-sm animate-in fade-in duration-300"
-                        onClick={onCloseMobile}
+                        onClick={handleDrawerClose}
                     />
                     
                     {/* Drawer Content */}
@@ -239,6 +339,8 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile }: BrgySidebarProps) => {
                     </aside>
                 </div>
             )}
+
+            <QRScannerModal isOpen={isQRScannerOpen} onClose={() => setIsQRScannerOpen(false)} />
         </>
     );
 };

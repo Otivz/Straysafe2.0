@@ -1453,6 +1453,11 @@ const BrgyRescueRequests = () => {
                                                 const currentLat = (isFac && facLat != null) ? facLat : (rep?.latitude || BRGY_OFFICE[0]);
                                                 const currentLng = (isFac && facLng != null) ? facLng : (rep?.longitude || BRGY_OFFICE[1]);
 
+                                                const isOptionBSecured = rep?.custody_status === 'Secured' || rep?.custody_status === 'In Custody';
+                                                const repInitLat = rep?.initial_latitude != null ? parseFloat(rep.initial_latitude.toString()) : null;
+                                                const repInitLng = rep?.initial_longitude != null ? parseFloat(rep.initial_longitude.toString()) : null;
+                                                const hasDifferentInitialSpot = !isOptionBSecured && isFac && repInitLat != null && repInitLng != null && (Math.abs(repInitLat - currentLat) > 0.0001 || Math.abs(repInitLng - currentLng) > 0.0001);
+
                                                 return (
                                                     <MapComponent
                                                         center={[currentLat, currentLng]}
@@ -1468,11 +1473,11 @@ const BrgyRescueRequests = () => {
                                                                 time: 'Now',
                                                                 rawData: rep
                                                             },
-                                                            ...(isFac && rep?.initial_latitude && rep?.initial_longitude ? [{
+                                                            ...(hasDifferentInitialSpot ? [{
                                                                 id: -999,
-                                                                lat: parseFloat(rep.initial_latitude.toString()),
-                                                                lng: parseFloat(rep.initial_longitude.toString()),
-                                                                title: `Found Location: ${rep.initial_landmark || 'Initial Sighting Spot'}`,
+                                                                lat: repInitLat!,
+                                                                lng: repInitLng!,
+                                                                title: `Found Location: ${rep?.initial_landmark || 'Initial Sighting Spot'}`,
                                                                 category: 'Initial Sighting',
                                                                 priority: 'Medium'
                                                             }] : []),

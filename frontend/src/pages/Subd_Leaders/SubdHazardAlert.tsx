@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import { useEffect, useState, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
@@ -512,8 +513,8 @@ const SubdHazardAlert = () => {
 
 
                     {/* Create Announcement Modal */}
-                    {showCreate && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={handleCloseCreateModal}>
+                    {showCreate && createPortal(
+                        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={handleCloseCreateModal}>
                             <div
                                 className="bg-white rounded-2xl shadow-2xl w-full max-w-[560px] max-h-[90vh] overflow-y-auto relative animate-[fadeInUp_0.25s_ease-out]"
                                 onClick={(e) => e.stopPropagation()}
@@ -710,9 +711,7 @@ const SubdHazardAlert = () => {
                                 </form>
                             </div>
                         </div>
-                    )}
-
-
+                    , document.body)}
 
                     {/* Statistics Row Grid */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-1">
@@ -877,8 +876,8 @@ const SubdHazardAlert = () => {
                     )}
 
                     {/* View Full Announcement Modal */}
-                    {selectedAnnouncement && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                    {selectedAnnouncement && createPortal(
+                        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
                             <div className="bg-white w-full max-w-2xl rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-2xl flex flex-col max-h-[90vh]">
                                 {/* Modal Header */}
                                 <div className="p-6 border-b border-gray-100 flex items-center justify-between">
@@ -1037,7 +1036,7 @@ const SubdHazardAlert = () => {
                                 </div>
                             </div>
                         </div>
-                    )}
+                    , document.body)}
                 </div>
             </main>
         </div>

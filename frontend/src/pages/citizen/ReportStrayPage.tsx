@@ -18,7 +18,8 @@ import {
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import SuccessModal from '../../components/Modals/SuccessModal';
-import { MapContainer, TileLayer, Marker, useMapEvents, Polygon, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMapEvents, Polygon, useMap } from 'react-leaflet';
+import { createLandmarkPinIcon, getLandmarkCategory } from '../../utils/landmarkIcons';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -194,6 +195,21 @@ export default function ReportStrayPage() {
     const currentUser = userStr ? JSON.parse(userStr) : null;
     const currentUserId = currentUser ? Number(currentUser.user_id || currentUser.id) : null;
     const currentSubdivisionId = currentUser ? Number(currentUser.subdivision_id || 1) : 1;
+    const [landmarks, setLandmarks] = useState<any[]>([]);
+
+    useEffect(() => {
+        const fetchLandmarks = async () => {
+            try {
+                const res = await axios.get('http://localhost:8000/landmarks');
+                if (res.data && Array.isArray(res.data)) {
+                    setLandmarks(res.data);
+                }
+            } catch (err) {
+                console.warn('Could not load landmarks:', err);
+            }
+        };
+        fetchLandmarks();
+    }, []);
 
     // Auto Reverse Geocode Location
     useEffect(() => {
@@ -701,18 +717,15 @@ export default function ReportStrayPage() {
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 {[
-                                    'Injured Animal',
-                                    'Sick Animal',
-                                    'Aggressive Animal',
-                                    'Possible Rabies Risk',
-                                    'Roaming Animal',
-                                    'Animal Needs Rescue',
-                                    'Dead Animal',
-                                    'Other'
-                                ].map((cat, idx) => (
+                                    { id: 1, name: 'Injured Animal', icon: '🩹', desc: 'Wounded, bleeding, or physically hurt' },
+                                    { id: 2, name: 'Aggressive Stray', icon: '⚠️', desc: 'Biting, barking aggressively, or chasing people' },
+                                    { id: 3, name: 'Possible Rabies Risk', icon: '🚨', desc: 'Foaming at mouth, disorientation, erratic behavior' },
+                                    { id: 4, name: 'Roaming', icon: '🐕', desc: 'Stray Roaming in the Neighborhood' },
+                                    { id: 5, name: 'Animal Rescue Needed', icon: '🆘', desc: 'Trapped, sick/weak, or in general distress' },
+                                ].map((cat) => (
                                     <label
-                                        key={cat}
-                                        className={`p-4 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${formData.category === cat
+                                        key={cat.id}
+                                        className={`p-4 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${formData.category_id === cat.id
                                                 ? 'border-[#F97316] bg-orange-50/50 shadow-sm'
                                                 : 'border-gray-100 bg-[#FAFAF9] hover:border-gray-200'
                                             }`}
@@ -720,12 +733,18 @@ export default function ReportStrayPage() {
                                         <input
                                             type="radio"
                                             name="catRadio"
-                                            value={cat}
-                                            checked={formData.category === cat}
-                                            onChange={() => setFormData(prev => ({ ...prev, category: cat, category_id: idx + 1 }))}
+                                            value={cat.id}
+                                            checked={formData.category_id === cat.id}
+                                            onChange={() => setFormData(prev => ({ ...prev, category: cat.name, category_id: cat.id }))}
                                             className="accent-[#F97316] w-4 h-4"
                                         />
-                                        <span className="text-xs font-black text-[#1a1208]">{cat}</span>
+                                        <div>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-sm">{cat.icon}</span>
+                                                <span className="text-xs font-black text-[#1a1208]">{cat.name}</span>
+                                            </div>
+                                            <p className="text-[10px] font-bold text-gray-400 mt-0.5">{cat.desc}</p>
+                                        </div>
                                     </label>
                                 ))}
                             </div>
@@ -1186,6 +1205,66 @@ export default function ReportStrayPage() {
                                         positions={SELERA_POLYGON.map(p => [p.lat, p.lng] as [number, number])}
                                         pathOptions={{ color: '#F97316', fillColor: '#F97316', fillOpacity: 0.1, weight: 2, dashArray: '5, 10' }}
                                     />
+
+                                    {/* Registered Landmarks on Map (exact style as SubdSettings) */}
+                                    {landmarks.map((lm) => (
+                                        <Marker
+                                            key={`standalone-lm-${lm.landmark_id}`}
+                                            position={[lm.latitude, lm.longitude]}
+                                            icon={createLandmarkPinIcon(lm.category, lm.is_holding_facility)}
+                                            eventHandlers={{
+                                                click: () => {
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        latitude: lm.latitude,
+                                                        longitude: lm.longitude,
+                                                        landmark: lm.name
+                                                    }));
+                                                }
+                                            }}
+                                        >
+                                            <Tooltip direction="top" offset={[0, -18]} className="custom-hover-tooltip font-bold">
+                                                <span>{getLandmarkCategory(lm.category, lm.is_holding_facility).emoji} {lm.name}</span>
+                                            </Tooltip>
+                                            <Popup>
+                                                <div className="p-2 text-xs min-w-[160px]">
+                                                    <div className="flex items-center gap-1.5 mb-1">
+                                                        <span>{getLandmarkCategory(lm.category, lm.is_holding_facility).emoji}</span>
+                                                        <strong className="font-bold text-gray-900">{lm.name}</strong>
+                                                    </div>
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                                        {getLandmarkCategory(lm.category, lm.is_holding_facility).label}
+                                                    </p>
+                                                    {lm.description && <p className="text-gray-600 text-[11px] mb-1">{lm.description}</p>}
+                                                    {lm.is_holding_facility && (
+                                                        <div className="mt-1 pt-1 border-t border-gray-100 text-emerald-700 font-bold text-[10px]">
+                                                            <p>Type: {lm.facility_type || 'Holding Pen'}</p>
+                                                            <p>Capacity: {lm.capacity || 'N/A'} animals</p>
+                                                            {lm.contact_person && <p>Caretaker: {lm.contact_person}</p>}
+                                                            {lm.contact_number && <p>Phone: {lm.contact_number}</p>}
+                                                        </div>
+                                                    )}
+                                                    <div className="mt-2 pt-1 border-t border-gray-100">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setFormData(prev => ({
+                                                                    ...prev,
+                                                                    latitude: lm.latitude,
+                                                                    longitude: lm.longitude,
+                                                                    landmark: lm.name
+                                                                }));
+                                                            }}
+                                                            className="w-full py-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg text-[10px] uppercase tracking-wider transition-all"
+                                                        >
+                                                            Select Location
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </Popup>
+                                        </Marker>
+                                    ))}
+
                                     <ReturnToSeleraButton />
                                 </MapContainer>
                             </div>
@@ -1216,6 +1295,38 @@ export default function ReportStrayPage() {
                                     value={formData.landmark}
                                     onChange={(e) => setFormData(prev => ({ ...prev, landmark: e.target.value }))}
                                 />
+
+                                {landmarks.length > 0 && (
+                                    <div className="pt-2">
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">
+                                            📍 Pick From Registered Landmarks:
+                                        </span>
+                                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+                                            {landmarks.map((lm) => (
+                                                <button
+                                                    key={lm.landmark_id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            latitude: lm.latitude,
+                                                            longitude: lm.longitude,
+                                                            landmark: lm.name
+                                                        }));
+                                                    }}
+                                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                                                        formData.landmark === lm.name
+                                                            ? 'bg-[#F97316] text-white border-[#F97316] shadow-sm'
+                                                            : 'bg-white hover:bg-orange-50/70 border-gray-200 text-gray-700 hover:border-orange-300'
+                                                    }`}
+                                                >
+                                                    <span>{getLandmarkCategory(lm.category, lm.is_holding_facility).emoji}</span>
+                                                    <span>{lm.name}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
