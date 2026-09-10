@@ -147,15 +147,15 @@ export const StraySafeLoading: React.FC<StraySafeLoadingProps> = ({
     }[size];
 
     const content = (
-        <div 
+        <div
             className={`flex flex-col items-center justify-center text-center ${className}`}
             role="status"
             aria-live="polite"
             aria-busy="true"
         >
             <div className={`relative w-full ${sizeConfig.card} bg-[#FAF6F0]/95 dark:bg-[#151C2C]/95 backdrop-blur-xl border border-orange-200/70 dark:border-orange-500/25 shadow-2xl shadow-orange-950/20 flex flex-col items-center transition-all duration-300 hover:scale-[1.01]`}>
-                
-                {/* Brand / Status Pill */}
+
+                {/* Brand / Status Pilll */}
                 {effectiveBadge && (
                     <div className={`inline-flex items-center gap-2 rounded-full bg-orange-100/80 dark:bg-orange-950/60 border border-orange-300/40 dark:border-orange-800/50 text-[#C2410C] dark:text-orange-400 font-black uppercase tracking-widest ${sizeConfig.badge}`}>
                         <span className="relative flex h-2 w-2">
