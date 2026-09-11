@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 
 // Directly bundle the GIFs in the component so it is 100% self-contained and reusable anywhere
-import catGifAsset from '../assets/running_cat.gif';
-import dogGifAsset from '../assets/straysafe_loading_edited.gif';
+import catGifAsset from '../assets/straysafe_running_cat.gif';
+import dogGifAsset from '../assets/straysafe_dog_running.gif';
 
-export const CAT_LOADING_GIF: string = catGifAsset || '/assets/running_cat.gif';
-export const DOG_LOADING_GIF: string = dogGifAsset || '/assets/straysafe_loading_edited.gif';
+export const CAT_LOADING_GIF: string = catGifAsset || '/assets/straysafe_running_cat.gif';
+export const DOG_LOADING_GIF: string = dogGifAsset || '/assets/straysaf_dog_running.gif';
 
 // Automatic silent preloader so both animations appear instantly with 0ms lag
 if (typeof window !== 'undefined') {
@@ -102,11 +102,11 @@ export const StraySafeLoading: React.FC<StraySafeLoadingProps> = ({
             if (imgSrc !== '/assets/running_cat.gif' && imgSrc !== '/assets/straysafe_loading.gif') {
                 setImgSrc('/assets/running_cat.gif');
             } else {
-                setImgSrc('/assets/straysafe_loading.gif');
+                setImgSrc('/assets/straysafe_dog_running.gif');
             }
         } else {
-            if (imgSrc !== '/assets/straysafe_loading_edited.gif') {
-                setImgSrc('/assets/straysafe_loading_edited.gif');
+            if (imgSrc !== '/assets/straysafe_dog_running.gif') {
+                setImgSrc('/assets/straysafe_dog_running.gif');
             } else if (imgSrc.includes('.gif')) {
                 setImgSrc('/assets/straysafe_loading_edited.webp');
             } else {

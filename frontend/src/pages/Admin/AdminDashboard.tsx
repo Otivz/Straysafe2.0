@@ -5,6 +5,7 @@ import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import MapComponent from '../../components/MapComponent';
 
+
 const AdminDashboard = () => {
     const navigate = useNavigate();
     const [reports, setReports] = useState<any[]>([]);
