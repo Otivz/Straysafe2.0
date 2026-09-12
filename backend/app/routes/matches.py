@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session, joinedload, selectinload
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import json
 import os
 from sqlalchemy import or_, and_, desc
@@ -144,20 +144,20 @@ def calculate_match_details(
     is_src_purebred = src_breed and (src_breed not in generic_breeds)
     is_cand_purebred = cand_breed and (cand_breed not in generic_breeds)
 
-    if src_breed and cand_breed:
-        sb_clean = src_breed.replace(" ", "").replace("-", "").replace("_", "")
-        cb_clean = cand_breed.replace(" ", "").replace("-", "").replace("_", "")
+    sb_clean = src_breed.replace(" ", "").replace("-", "").replace("_", "")
+    cb_clean = cand_breed.replace(" ", "").replace("-", "").replace("_", "")
 
+    if src_breed and cand_breed:
         if sb_clean == cb_clean or sb_clean in cb_clean or cb_clean in sb_clean:
-            attribute_score += 30
-            evidence_bullets.append(f"Breed Match: Both identified as {src_breed.title()}")
+            attribute_score += 35 if not is_pet else 30
+            evidence_bullets.append(f"Breed Match: Both identified as {src_breed.title()} (Closest Match)")
         elif is_src_purebred and is_cand_purebred:
             # Two completely different distinct purebreds (e.g. Chihuahua vs Shih Tzu)
-            attribute_score -= 40
+            attribute_score = 0 if not is_pet else (attribute_score - 40)
             has_breed_conflict = True
-            evidence_bullets.append(f"Breed Contrast: Sighted as {src_breed.title()} vs Registered {cand_breed.title()}")
+            evidence_bullets.append(f"Breed Conflict: Sighted as {src_breed.title()} vs {'Registered' if is_pet else 'Candidate'} {cand_breed.title()} (Different Breeds)")
         elif (is_src_purebred and cand_breed in generic_breeds) or (is_cand_purebred and src_breed in generic_breeds):
-            attribute_score -= 15
+            attribute_score -= 20 if not is_pet else 15
             evidence_bullets.append(f"Breed Difference: {src_breed.title()} vs {cand_breed.title()}")
         else:
             # Both are local mixed breeds
@@ -209,21 +209,21 @@ def calculate_match_details(
     if is_primary_color_conflict:
         attribute_score -= 35
         has_color_conflict = True
-        evidence_bullets.append(f"Color Contrast: Sighted primary color ({src_p_color.title() or 'Dark'}) clashes with pet ({cand_p_color.title() or 'Light'})")
+        evidence_bullets.append(f"Color Contrast: Sighted primary color ({src_p_color.title() or 'Dark'}) clashes with candidate ({cand_p_color.title() or 'Light'})")
     elif is_pet and candidate.primary_color and candidate.primary_color.lower() in src_colors:
         attribute_score += 30
         evidence_bullets.append(f"Color Match: Primary color matches ({candidate.primary_color.title()})")
     elif color_overlap and not is_primary_color_conflict:
-        attribute_score += 15
-        evidence_bullets.append(f"Color Overlap: Shared colors ({', '.join(color_overlap).title()})")
+        attribute_score += 20 if not is_pet else 15
+        evidence_bullets.append(f"Color Match: Shared color palette ({', '.join(color_overlap).title()})")
     elif src_colors and cand_colors:
         attribute_score -= 35
         has_color_conflict = True
-        evidence_bullets.append(f"Color Contrast: Sighted colors ({', '.join(src_colors).title()}) differ from pet ({', '.join(cand_colors).title()})")
+        evidence_bullets.append(f"Color Contrast: Sighted colors ({', '.join(src_colors).title()}) differ from candidate ({', '.join(cand_colors).title()})")
 
     if has_pattern_conflict:
         attribute_score -= 20
-        evidence_bullets.append("Coat Pattern Contrast: Sighted coat pattern clashes with registered pet coat pattern")
+        evidence_bullets.append("Coat Pattern Contrast: Sighted coat pattern clashes with candidate coat pattern")
 
     # 4. Size Category Comparison
     size_map = {"small": 1, "medium": 2, "large": 3}
@@ -236,8 +236,8 @@ def calculate_match_details(
     s_val = size_map.get(src_size, 2)
     c_val = size_map.get(cand_size, 2)
     if s_val == c_val:
-        attribute_score += 10
-        evidence_bullets.append(f"Size Category: Both match ({src_size.capitalize()})")
+        attribute_score += 15 if not is_pet else 10
+        evidence_bullets.append(f"Size Match: Both identified as {src_size.capitalize()}")
     elif abs(s_val - c_val) == 1:
         attribute_score -= 15
         evidence_bullets.append(f"Size Variance: {src_size.capitalize()} vs {cand_size.capitalize()}")
@@ -268,13 +268,18 @@ def calculate_match_details(
     c_lng = float(cand_lng_raw) if cand_lng_raw is not None else None
 
     dist_km = None
+    dist_m = None
     if s_lat is not None and s_lng is not None and c_lat is not None and c_lng is not None:
         lat_diff = (s_lat - c_lat) * 111.0
         lng_diff = (s_lng - c_lng) * 111.0 * 0.965
         dist_km = round((lat_diff ** 2 + lng_diff ** 2) ** 0.5, 2)
-        if dist_km <= 0.5:
-            attribute_score += 10
-            evidence_bullets.append(f"Location Proximity: Sighted within {int(dist_km * 1000)}m")
+        dist_m = int(dist_km * 1000)
+        if dist_km <= 0.1:
+            attribute_score += 20 if not is_pet else 15
+            evidence_bullets.append(f"Location Proximity: Sighted within {dist_m}m (Immediate vicinity)")
+        elif dist_km <= 0.5:
+            attribute_score += 15 if not is_pet else 10
+            evidence_bullets.append(f"Location Proximity: Sighted within {dist_m}m (Same neighborhood)")
         elif dist_km <= 2.0:
             attribute_score += 5
             evidence_bullets.append(f"Location Proximity: Sighted within {dist_km} km")
@@ -285,8 +290,117 @@ def calculate_match_details(
             attribute_score += 5
             evidence_bullets.append("Subdivision: Located in same subdivision")
 
-    # Hard conflict override: If color conflict OR pattern conflict OR breed conflict, cap score severely (< 30%)
-    if has_breed_conflict and (has_color_conflict or has_pattern_conflict):
+    # 7. Time Proximity (For duplicate report sightings)
+    time_diff_hrs = None
+    if not is_pet and getattr(source_report, "created_at", None) and getattr(candidate, "created_at", None):
+        s_dt = source_report.created_at.replace(tzinfo=None) if hasattr(source_report.created_at, "tzinfo") and source_report.created_at.tzinfo else source_report.created_at
+        c_dt = candidate.created_at.replace(tzinfo=None) if hasattr(candidate.created_at, "tzinfo") and candidate.created_at.tzinfo else candidate.created_at
+        time_diff_hrs = abs((c_dt - s_dt).total_seconds()) / 3600.0
+        if time_diff_hrs <= 2:
+            attribute_score += 15
+            mins = max(int(time_diff_hrs * 60), 1)
+            evidence_bullets.append(f"Time Proximity: Reported {mins} minutes apart (Concurrent sighting)")
+        elif time_diff_hrs <= 24:
+            attribute_score += 10
+            evidence_bullets.append(f"Time Proximity: Reported within {int(time_diff_hrs)} hours (Same day)")
+        elif time_diff_hrs <= 72:
+            attribute_score += 5
+            evidence_bullets.append(f"Time Proximity: Reported within {int(time_diff_hrs / 24)} days")
+
+    # 8. Compute Closest Matching Attribute Pills
+    closest_attributes = []
+    # Breed
+    is_breed_match = bool(src_breed and cand_breed and (sb_clean == cb_clean or sb_clean in cb_clean or cb_clean in sb_clean))
+    if is_breed_match:
+        closest_attributes.append({
+            "attribute": "Breed",
+            "source_value": src_breed.title(),
+            "candidate_value": cand_breed.title(),
+            "match_status": "Exact Match",
+            "is_match": True,
+            "badge": f"🐾 Breed: {src_breed.title()} (Exact Match)"
+        })
+    elif has_breed_conflict:
+        closest_attributes.append({
+            "attribute": "Breed",
+            "source_value": src_breed.title(),
+            "candidate_value": cand_breed.title(),
+            "match_status": "Breed Conflict",
+            "is_match": False,
+            "badge": f"⚠️ Breed Conflict: {src_breed.title()} vs {cand_breed.title()}"
+        })
+
+    # Color
+    if color_overlap and not has_color_conflict:
+        shared_str = ", ".join(color_overlap).title()
+        closest_attributes.append({
+            "attribute": "Coat Color",
+            "source_value": src_p_color.title() or "Matching",
+            "candidate_value": cand_p_color.title() or "Matching",
+            "match_status": f"Shared: {shared_str}",
+            "is_match": True,
+            "badge": f"🎨 Color: {shared_str}"
+        })
+    elif has_color_conflict:
+        closest_attributes.append({
+            "attribute": "Coat Color",
+            "source_value": src_p_color.title(),
+            "candidate_value": cand_p_color.title(),
+            "match_status": "Color Clash",
+            "is_match": False,
+            "badge": "⚠️ Color Clash"
+        })
+
+    # Size
+    if s_val == c_val:
+        closest_attributes.append({
+            "attribute": "Size",
+            "source_value": src_size.capitalize(),
+            "candidate_value": cand_size.capitalize(),
+            "match_status": "Same Size",
+            "is_match": True,
+            "badge": f"📏 Size: Both {src_size.capitalize()}"
+        })
+    elif abs(s_val - c_val) > 1:
+        closest_attributes.append({
+            "attribute": "Size",
+            "source_value": src_size.capitalize(),
+            "candidate_value": cand_size.capitalize(),
+            "match_status": "Size Conflict",
+            "is_match": False,
+            "badge": f"⚠️ Size Conflict: {src_size.capitalize()} vs {cand_size.capitalize()}"
+        })
+
+    # Distance
+    if dist_km is not None:
+        dist_str = f"{dist_m}m apart" if dist_km < 1.0 else f"{dist_km}km apart"
+        closest_attributes.append({
+            "attribute": "Distance",
+            "source_value": source_report.landmark or "Area",
+            "candidate_value": getattr(candidate, "landmark", None) or "Area",
+            "match_status": dist_str,
+            "is_match": dist_km <= 0.5,
+            "badge": f"📍 Location: {dist_str}"
+        })
+
+    # Time Window
+    if time_diff_hrs is not None:
+        time_str = f"{max(int(time_diff_hrs * 60), 1)} mins apart" if time_diff_hrs < 1.0 else (
+            f"{int(time_diff_hrs)} hrs apart" if time_diff_hrs < 24 else f"{int(time_diff_hrs / 24)} days apart"
+        )
+        closest_attributes.append({
+            "attribute": "Time Window",
+            "source_value": "Sighting",
+            "candidate_value": "Sighting",
+            "match_status": time_str,
+            "is_match": time_diff_hrs <= 24,
+            "badge": f"⏱️ Time: {time_str}"
+        })
+
+    # Hard conflict override: If purebred conflict on duplicate report, force score to 0!
+    if not is_pet and has_breed_conflict:
+        final_score = 0
+    elif has_breed_conflict and (has_color_conflict or has_pattern_conflict):
         final_score = min(max(attribute_score, 5), 15)
     elif has_color_conflict or is_primary_color_conflict or has_pattern_conflict:
         final_score = min(max(attribute_score, 10), 25)
@@ -299,6 +413,9 @@ def calculate_match_details(
     ai_evidence = {
         "species_match": True,
         "animal_type": src_type.capitalize(),
+        "breed_match": is_breed_match,
+        "breed_name": src_breed.title() if src_breed else "Mixed/Unknown",
+        "candidate_breed": cand_breed.title() if cand_breed else "Mixed/Unknown",
         "color_match": len(color_overlap) > 0 and not has_color_conflict,
         "shared_colors": list(color_overlap),
         "coat_pattern": src_pattern,
@@ -306,14 +423,20 @@ def calculate_match_details(
         "size_category": src_size.capitalize(),
         "distinctive_markings": shared_markings,
         "distance_km": dist_km,
+        "distance_meters": dist_m,
+        "time_diff_hours": round(time_diff_hrs, 1) if time_diff_hrs is not None else None,
+        "closest_attributes": closest_attributes,
         "key_evidence_bullets": evidence_bullets
     }
 
     subj_name = candidate.pet_name if is_pet else f"Report #{candidate.report_id}"
-    explanation = (
-        f"AI multi-attribute evaluation computed a {final_score}% match likelihood between Report #{source_report.report_id} "
-        f"and {subj_name} based on species, breed consistency, coat color distribution, and size."
-    )
+    if not is_pet and has_breed_conflict:
+        explanation = f"Species match, but distinct breed conflict detected ({src_breed.title()} vs {cand_breed.title()}). Reports do not represent the same animal."
+    else:
+        explanation = (
+            f"AI evaluated closest information between Report #{source_report.report_id} and {subj_name}: "
+            f"{', '.join(evidence_bullets[:3])}."
+        )
 
     return {
         "score": final_score,
@@ -374,14 +497,9 @@ def is_pet_eligible_for_matching(pet: Pet) -> tuple[bool, str]:
 
 def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[ReportMatch]:
     """
-    Scans all eligible registered pets against a given report and creates AI_SUGGESTED match records.
-    Strictly follows REGISTERED PET ELIGIBILITY rules:
-    - Only candidates from registered/owned pets table
-    - Candidate must be Active/Eligible
-    - Candidate must NOT be Deceased, Inactive, Archived, Deleted, or Unregistered
-    - Candidate must have an active owner
-    - Candidate must have usable image and data
-    - Never treat arbitrary reports as owned pets
+    Scans:
+    1. All eligible registered pets against a given report (registered pet look-alike detection).
+    2. Other active stray reports within same subdivision / geographic radius for duplicate sightings (Phase 2).
     """
     report = db.query(Report).options(
         joinedload(Report.media),
@@ -389,20 +507,23 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
         joinedload(Report.reporter)
     ).filter(Report.report_id == report_id).first()
 
-    if not report or report.current_status_id == 12:  # Deceased reports cannot be matched
+    if not report or report.current_status_id in [3, 11, 12, 14, 18] or report.duplicate_of_report_id:
         return []
 
-    # Clean up any legacy report-to-report match records from previous runs
+    # Clean up previous unreviewed AI_SUGGESTED duplicate stray records for this report before rescanning.
+    # Preserves any human verified records (CONFIRMED_MATCH, NOT_A_MATCH, UNABLE_TO_VERIFY).
     db.query(ReportMatch).filter(
+        ReportMatch.status == "AI_SUGGESTED",
+        ReportMatch.matched_report_id.isnot(None),
         or_(
-            and_(ReportMatch.source_report_id == report.report_id, ReportMatch.matched_report_id.isnot(None)),
-            and_(ReportMatch.matched_report_id == report.report_id, ReportMatch.source_report_id.isnot(None))
+            ReportMatch.source_report_id == report.report_id,
+            ReportMatch.matched_report_id == report.report_id
         )
     ).delete(synchronize_session=False)
 
     created_matches = []
 
-    # Compare ONLY against Eligible Registered Pets (excluding Archived/Inactive/Deceased)
+    # ── PART 1: Compare Against Eligible Registered Pets ──
     all_registered_pets = db.query(Pet).options(
         joinedload(Pet.owner)
     ).filter(Pet.status.in_(["Active", "Lost", "Found", "Rescued"])).all()
@@ -455,6 +576,99 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
                 )
                 db.add(notif)
 
+    # ── PART 2: Compare Against Other Active Stray Reports for Duplicate Sightings (Phase 2) ──
+    if report.animal_type:
+        report_dt = report.created_at.replace(tzinfo=None) if hasattr(report.created_at, "tzinfo") and report.created_at.tzinfo else (report.created_at or datetime.now())
+        window_start = report_dt - timedelta(days=7)
+        window_end = report_dt + timedelta(days=7)
+        cand_reports = db.query(Report).options(
+            joinedload(Report.media),
+            joinedload(Report.category),
+            joinedload(Report.reporter)
+        ).filter(
+            Report.report_id != report.report_id,
+            Report.current_status_id.notin_([3, 9, 10, 11, 12, 14, 18]),
+            Report.duplicate_of_report_id.is_(None),
+            Report.animal_type == report.animal_type,
+            Report.created_at >= window_start,
+            Report.created_at <= window_end
+        ).all()
+
+        for cand in cand_reports:
+            # Geographic proximity check
+            is_near = False
+            dist_km = None
+            if report.latitude is not None and report.longitude is not None and cand.latitude is not None and cand.longitude is not None:
+                lat_diff = (float(report.latitude) - float(cand.latitude)) * 111.0
+                lng_diff = (float(report.longitude) - float(cand.longitude)) * 111.0 * 0.965
+                dist_km = (lat_diff ** 2 + lng_diff ** 2) ** 0.5
+                if dist_km <= 1.5:  # within 1.5 km
+                    is_near = True
+            elif report.subdivision_id and cand.subdivision_id and report.subdivision_id == cand.subdivision_id:
+                is_near = True
+
+            if not is_near:
+                continue
+
+            # Check if pair already exists or was evaluated
+            existing_pair = db.query(ReportMatch).filter(
+                ReportMatch.matched_report_id.isnot(None),
+                or_(
+                    and_(ReportMatch.source_report_id == report.report_id, ReportMatch.matched_report_id == cand.report_id),
+                    and_(ReportMatch.source_report_id == cand.report_id, ReportMatch.matched_report_id == report.report_id)
+                )
+            ).first()
+
+            if existing_pair and existing_pair.status in ["CONFIRMED_MATCH", "NOT_A_MATCH", "UNABLE_TO_VERIFY"]:
+                continue
+
+            dup_calc = calculate_match_details(report, cand, is_pet=False)
+            if dup_calc["score"] >= 65 and dup_calc["evidence"]:
+                # Prepend time proximity if within 24 hours
+                if cand.created_at and report.created_at:
+                    c_dt = cand.created_at.replace(tzinfo=None) if hasattr(cand.created_at, "tzinfo") and cand.created_at.tzinfo else cand.created_at
+                    r_dt = report.created_at.replace(tzinfo=None) if hasattr(report.created_at, "tzinfo") and report.created_at.tzinfo else report.created_at
+                    time_diff_hrs = abs((c_dt - r_dt).total_seconds()) / 3600.0
+                    if time_diff_hrs <= 24:
+                        hrs_str = f"{int(time_diff_hrs)}h" if time_diff_hrs >= 1 else f"{int(time_diff_hrs * 60)}m"
+                        dup_calc["evidence"].setdefault("key_evidence_bullets", []).insert(
+                            0, f"Time Proximity: Reported within {hrs_str} of each other"
+                        )
+
+                if existing_pair:
+                    existing_pair.similarity_score = dup_calc["score"]
+                    existing_pair.ai_explanation = f"Suspected duplicate sighting ({dup_calc['score']}% similarity): {dup_calc['explanation']}"
+                    existing_pair.ai_evidence = dup_calc["evidence"]
+                    created_matches.append(existing_pair)
+                else:
+                    new_dup = ReportMatch(
+                        source_report_id=report.report_id,
+                        matched_report_id=cand.report_id,
+                        similarity_score=dup_calc["score"],
+                        status="AI_SUGGESTED",
+                        ai_explanation=f"Suspected duplicate sighting ({dup_calc['score']}% similarity): {dup_calc['explanation']}",
+                        ai_evidence=dup_calc["evidence"]
+                    )
+                    db.add(new_dup)
+                    db.flush()
+                    created_matches.append(new_dup)
+
+                    # Notify Subdivision Leader if report is in a subdivision
+                    target_subd = report.subdivision_id or cand.subdivision_id
+                    if target_subd:
+                        officers = db.query(User).filter(User.subdivision_id == target_subd, User.role_id == 2).all()
+                        for off in officers:
+                            db.add(Notification(
+                                user_id=off.user_id,
+                                title=f"⚠️ Suspected Duplicate: #{report.report_id} & #{cand.report_id}",
+                                message=(
+                                    f"AI flagged potential duplicate sighting between Report #{report.report_id} and #{cand.report_id} "
+                                    f"({dup_calc['score']}% similarity). Review and confirm to merge."
+                                ),
+                                type="alert",
+                                related_id=report.report_id
+                            ))
+
     try:
         db.commit()
     except Exception as e:
@@ -506,6 +720,98 @@ def get_matches(
     return matches
 
 
+@router.get("/duplicates", response_model=List[ReportMatchResponse])
+def get_duplicate_matches(
+    subdivision_id: Optional[int] = None,
+    status_filter: Optional[str] = None,
+    report_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    List all AI suspected duplicate report matches (Report-to-Report).
+    """
+    query = db.query(ReportMatch).options(
+        joinedload(ReportMatch.source_report).joinedload(Report.media),
+        joinedload(ReportMatch.source_report).joinedload(Report.category),
+        joinedload(ReportMatch.source_report).joinedload(Report.reporter),
+        joinedload(ReportMatch.matched_report).joinedload(Report.media),
+        joinedload(ReportMatch.matched_report).joinedload(Report.category),
+        joinedload(ReportMatch.matched_report).joinedload(Report.reporter),
+        joinedload(ReportMatch.reviewer)
+    ).filter(
+        ReportMatch.matched_report_id.isnot(None),
+        ReportMatch.matched_pet_id.is_(None)
+    )
+
+    if status_filter and status_filter != 'ALL':
+        query = query.filter(ReportMatch.status == status_filter)
+
+    if report_id is not None:
+        query = query.filter(
+            or_(
+                ReportMatch.source_report_id == report_id,
+                ReportMatch.matched_report_id == report_id
+            )
+        )
+
+    if subdivision_id is not None:
+        query = query.join(Report, ReportMatch.source_report_id == Report.report_id).filter(
+            or_(
+                Report.subdivision_id == subdivision_id,
+                ReportMatch.matched_report.has(Report.subdivision_id == subdivision_id)
+            )
+        )
+
+    matches = query.order_by(desc(ReportMatch.similarity_score), desc(ReportMatch.created_at)).all()
+    return matches
+
+
+@router.get("/duplicates/report/{report_id}", response_model=List[ReportMatchResponse])
+def get_duplicates_for_report(report_id: int, db: Session = Depends(get_db)):
+    """
+    Fetch all suspected duplicate report matches involving a specific report (either as source or candidate).
+    If no matches exist, automatically trigger scan_and_generate_matches_for_report to compute matches on the fly.
+    """
+    matches = db.query(ReportMatch).options(
+        joinedload(ReportMatch.source_report).joinedload(Report.media),
+        joinedload(ReportMatch.source_report).joinedload(Report.category),
+        joinedload(ReportMatch.source_report).joinedload(Report.reporter),
+        joinedload(ReportMatch.matched_report).joinedload(Report.media),
+        joinedload(ReportMatch.matched_report).joinedload(Report.category),
+        joinedload(ReportMatch.matched_report).joinedload(Report.reporter),
+        joinedload(ReportMatch.reviewer)
+    ).filter(
+        ReportMatch.matched_report_id.isnot(None),
+        ReportMatch.matched_pet_id.is_(None),
+        or_(
+            ReportMatch.source_report_id == report_id,
+            ReportMatch.matched_report_id == report_id
+        )
+    ).order_by(desc(ReportMatch.similarity_score)).all()
+
+    if not matches:
+        scan_and_generate_matches_for_report(report_id, db)
+        db.commit()
+        matches = db.query(ReportMatch).options(
+            joinedload(ReportMatch.source_report).joinedload(Report.media),
+            joinedload(ReportMatch.source_report).joinedload(Report.category),
+            joinedload(ReportMatch.source_report).joinedload(Report.reporter),
+            joinedload(ReportMatch.matched_report).joinedload(Report.media),
+            joinedload(ReportMatch.matched_report).joinedload(Report.category),
+            joinedload(ReportMatch.matched_report).joinedload(Report.reporter),
+            joinedload(ReportMatch.reviewer)
+        ).filter(
+            ReportMatch.matched_report_id.isnot(None),
+            ReportMatch.matched_pet_id.is_(None),
+            or_(
+                ReportMatch.source_report_id == report_id,
+                ReportMatch.matched_report_id == report_id
+            )
+        ).order_by(desc(ReportMatch.similarity_score)).all()
+
+    return matches
+
+
 @router.get("/{match_id}", response_model=ReportMatchResponse)
 def get_match_by_id(match_id: int, db: Session = Depends(get_db)):
     """Get single match with complete side-by-side evidence."""
@@ -513,6 +819,9 @@ def get_match_by_id(match_id: int, db: Session = Depends(get_db)):
         joinedload(ReportMatch.source_report).joinedload(Report.media),
         joinedload(ReportMatch.source_report).joinedload(Report.category),
         joinedload(ReportMatch.source_report).joinedload(Report.reporter),
+        joinedload(ReportMatch.matched_report).joinedload(Report.media),
+        joinedload(ReportMatch.matched_report).joinedload(Report.category),
+        joinedload(ReportMatch.matched_report).joinedload(Report.reporter),
         joinedload(ReportMatch.matched_pet).joinedload(Pet.owner),
         joinedload(ReportMatch.reviewer)
     ).filter(ReportMatch.match_id == match_id).first()
@@ -642,6 +951,12 @@ def verify_match(
             remarks=f"Match confirmed by {actor.name} ({actor_role}): {payload.notes}"
         )
         db.add(hist)
+        if match.matched_report_id:
+            hist_matched = StatusHistory(
+                report_id=match.matched_report_id,
+                remarks=f"Confirmed duplicate match with Report #{match.source_report_id} by {actor.name} ({actor_role}): {payload.notes}"
+            )
+            db.add(hist_matched)
 
         # Notify source reporter
         if match.source_report and match.source_report.user_id:

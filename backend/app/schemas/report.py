@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, Any, Union
 from datetime import datetime
 from app.schemas.landmark import LandmarkResponse
@@ -206,6 +206,36 @@ class ReportResponse(ReportBase):
     behavior_finding: Optional[str] = None
     disputes: Optional[list['ReportDisputeResponse']] = []
 
+    # Duplicate & Merge Tracking
+    duplicate_of_report_id: Optional[int] = None
+    merged_at: Optional[datetime] = None
+    merged_by: Optional[int] = None
+    merged_by_name: Optional[str] = None
+    merge_notes: Optional[str] = None
+    merged_reports: Optional[list[Any]] = []
+    has_duplicate_flag: Optional[bool] = False
+    duplicate_match_count: Optional[int] = 0
+
+    @field_validator("merged_reports", mode="before")
+    @classmethod
+    def serialize_merged_reports(cls, v):
+        if not v:
+            return []
+        result = []
+        for r in v:
+            if hasattr(r, "report_id"):
+                result.append({
+                    "report_id": r.report_id,
+                    "animal_type": getattr(r, "animal_type", None),
+                    "animal_breed": getattr(r, "animal_breed", None),
+                    "landmark": getattr(r, "landmark", None),
+                    "current_status_id": getattr(r, "current_status_id", None),
+                    "created_at": getattr(r, "created_at", None),
+                })
+            elif isinstance(r, dict):
+                result.append(r)
+        return result
+
     class Config:
         from_attributes = True
 
@@ -260,6 +290,17 @@ class ReportVerifyRequest(BaseModel):
     verified_injury: Optional[bool] = False
     verified_aggressive: Optional[bool] = False
     behavior_finding: Optional[str] = "Unsubstantiated / Friendly"
+
+
+class ReportMergeRequest(BaseModel):
+    user_id: int
+    primary_report_id: int
+    notes: str
+
+
+class ReportUnmergeRequest(BaseModel):
+    user_id: int
+    reason: str
 
 
 class ReportClaimRequest(BaseModel):

@@ -15,7 +15,8 @@ export const REPORT_STATUS_MAP: Record<number, string> = {
     14: 'False Alarm / Dismissed',
     15: 'Disputed',
     16: 'Under Investigation',
-    17: 'Animal Cannot Be Found'
+    17: 'Animal Cannot Be Found',
+    18: 'Merged — Duplicate'
 };
 
 export const getReportStatusLabel = (statusId: number | null | undefined): string => {
@@ -49,6 +50,9 @@ export const getReportStatusBadgeStyle = (statusId: number | null | undefined): 
     } else if (id === 17) {
         // Animal Cannot Be Found
         return 'bg-amber-50 text-amber-800 border-amber-300';
+    } else if (id === 18) {
+        // Merged — Duplicate
+        return 'bg-stone-100 text-stone-700 border-stone-300';
     } else if ([3, 12, 14].includes(id)) {
         // Rejected, Deceased, False Alarm
         return 'bg-rose-50 text-rose-700 border-rose-200';

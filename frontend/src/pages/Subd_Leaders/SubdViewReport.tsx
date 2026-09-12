@@ -20,6 +20,9 @@ import RejectTransferModal from '../../components/Modals/RejectTransferModal';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from '../../components/PetRecords/types';
 import { getReportStatusLabel, getReportStatusBadgeStyle, REPORT_STATUS_MAP } from '../../utils/reportStatus';
+import MergeReportModal from '../../components/Modals/MergeReportModal';
+import UnmergeReportModal from '../../components/Modals/UnmergeReportModal';
+import AIMatchReviewModal from '../../components/Modals/AIMatchReviewModal';
 
 interface Report {
     report_id: number;
@@ -33,6 +36,7 @@ interface Report {
     animal_type: string;
     animal_color?: string | null;
     breed?: string;
+    animal_breed?: string;
     condition: string;
     behavior_tags?: string;
     description: string;
@@ -103,6 +107,14 @@ interface Report {
     initial_landmark?: string | null;
     facility_id?: number | null;
     custody_status?: string | null;
+    duplicate_of_report_id?: number | null;
+    merged_at?: string | null;
+    merged_by?: number | null;
+    merged_by_name?: string | null;
+    merge_notes?: string | null;
+    merged_reports?: any[];
+    has_duplicate_flag?: boolean;
+    duplicate_match_count?: number;
     facility?: {
         landmark_id?: number;
         name: string;
@@ -176,6 +188,12 @@ const SubdViewReport = () => {
     const [reviewingDisputeId, setReviewingDisputeId] = useState<number | null>(null);
     const [disputeReviewNotes, setDisputeReviewNotes] = useState('');
     const [isReviewingDispute, setIsReviewingDispute] = useState(false);
+
+    // Duplicate & Merge State
+    const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
+    const [isUnmergeModalOpen, setIsUnmergeModalOpen] = useState(false);
+    const [duplicateMatches, setDuplicateMatches] = useState<any[]>([]);
+    const [activeReviewMatch, setActiveReviewMatch] = useState<any | null>(null);
 
     const handleOpenPetDetail = async (petId?: number | null) => {
         if (!petId) return;
@@ -363,11 +381,38 @@ const SubdViewReport = () => {
             } else {
                 setReport(null);
             }
+
+            // Fetch duplicate matches for this report
+            try {
+                const dupRes = await axios.get(`http://localhost:8000/matches/duplicates/report/${id}`);
+                if (dupRes.data && Array.isArray(dupRes.data)) {
+                    setDuplicateMatches(dupRes.data.filter((m: any) => m.status === 'AI_SUGGESTED'));
+                }
+            } catch (dupErr) {
+                console.error('Error fetching duplicate matches:', dupErr);
+            }
         } catch (error) {
             console.error('Error fetching report details:', error);
             setReport(null);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleDismissDuplicate = async (matchId: number) => {
+        try {
+            await axios.put(`http://localhost:8000/matches/${matchId}/verify`, {
+                status: 'NOT_A_MATCH',
+                verified_by_user_id: currentUserId,
+                verification_notes: 'Staff dismissed duplicate sighting suggestion: Separate animals'
+            });
+            setDuplicateMatches(prev => prev.filter(m => m.match_id !== matchId));
+            if (report) {
+                setReport({ ...report, has_duplicate_flag: false, duplicate_match_count: Math.max(0, (report.duplicate_match_count || 1) - 1) });
+            }
+        } catch (err) {
+            console.error('Failed to dismiss duplicate match:', err);
+            alert('Could not dismiss duplicate match. Please try again.');
         }
     };
 
@@ -917,8 +962,9 @@ const SubdViewReport = () => {
                                     </div>
                                 )}
 
-                                {/* Case Handler Ownership Banner */}
-                                {!report.assigned_leader_id ? (
+                                {/* Case Handler Ownership Banner - Active Cases Only */}
+                                {report.status_id !== 18 && !report.duplicate_of_report_id && ![3, 9, 10, 11, 12, 14, 18].includes(report.status_id) && (
+                                    !report.assigned_leader_id ? (
                                     <div className="p-5 rounded-3xl bg-amber-500/10 border border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                         <div className="flex items-center gap-3.5">
                                             <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl font-black shadow-md shadow-amber-500/20 shrink-0">
@@ -1048,10 +1094,120 @@ const SubdViewReport = () => {
                                             </div>
                                         )}
                                     </div>
+                                ))}
+
+                                {/* AI Suspected Duplicate Stray Sighting Alert Banner */}
+                                {report.status_id !== 18 && !report.duplicate_of_report_id && (duplicateMatches.length > 0 || report.has_duplicate_flag) && (
+                                    <div className="p-5 rounded-3xl bg-amber-500/10 border-2 border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300 mb-4">
+                                        <div className="flex items-start sm:items-center gap-3.5">
+                                            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl font-black shadow-md shadow-amber-500/20 shrink-0">
+                                                ⚠️
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <h4 className="text-xs font-black text-amber-900 uppercase tracking-widest">
+                                                        Possible Duplicate Sighting Detected
+                                                    </h4>
+                                                    <span className="px-2.5 py-0.5 bg-amber-200/80 border border-amber-400 text-amber-900 rounded-full text-[10px] font-black uppercase tracking-wider">
+                                                        {duplicateMatches.length > 0 ? `${duplicateMatches.length} Similar Stray Report${duplicateMatches.length > 1 ? 's' : ''}` : 'Suspected Duplicate'}
+                                                    </span>
+                                                    {duplicateMatches[0] && (
+                                                        <span className="px-2 py-0.5 bg-amber-100 border border-amber-300 text-amber-800 rounded-md text-[10px] font-black">
+                                                            {Math.round(duplicateMatches[0].similarity_score > 1 ? duplicateMatches[0].similarity_score : duplicateMatches[0].similarity_score * 100)}% Match
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-amber-800 font-medium mt-1 leading-relaxed">
+                                                    Straysafe AI identified another active report in this area with matching visual features and timeframe. 
+                                                    Compare the sightings side-by-side to consolidate duplicate dispatches.
+                                                </p>
+                                                {duplicateMatches[0]?.matched_report && (
+                                                    <p className="text-[11px] text-amber-700 font-bold mt-1">
+                                                        Potential duplicate: Case #{duplicateMatches[0].matched_report.report_id} 
+                                                        {duplicateMatches[0].matched_report.animal_name ? ` ("${duplicateMatches[0].matched_report.animal_name}")` : ''} 
+                                                        {duplicateMatches[0].matched_report.created_at ? ` • Reported ${new Date(duplicateMatches[0].matched_report.created_at).toLocaleDateString()}` : ''}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                                            {duplicateMatches.length > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setActiveReviewMatch(duplicateMatches[0])}
+                                                    className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md shadow-amber-600/20 flex items-center gap-1.5 cursor-pointer"
+                                                >
+                                                    <span>🔍 Compare Side-by-Side</span>
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsMergeModalOpen(true)}
+                                                className="px-3.5 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer"
+                                            >
+                                                <span>🔗 Merge Case</span>
+                                            </button>
+                                            {duplicateMatches[0] && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDismissDuplicate(duplicateMatches[0].match_id)}
+                                                    className="px-3 py-2.5 bg-white hover:bg-amber-50 text-amber-900 border border-amber-300 text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                                                    title="Dismiss duplicate alert (separate animals)"
+                                                >
+                                                    <span>Dismiss</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
                                 )}
 
-                                {/* Status Alert Banners: False Alarm / Disputed / Verified */}
-                                {report.status_id === 14 || report.verification_status === 'false_alarm' ? (
+                                {/* Status Alert Banners: Merged / False Alarm / Disputed / Verified */}
+                                {report.status_id === 18 || report.duplicate_of_report_id ? (
+                                    <div className="p-5 rounded-3xl bg-stone-100 border-2 border-stone-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300">
+                                        <div className="flex items-start sm:items-center gap-3.5">
+                                            <div className="w-11 h-11 rounded-2xl bg-stone-800 text-white flex items-center justify-center text-xl font-black shadow-md shadow-stone-800/20 shrink-0">
+                                                🔗
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className="text-xs font-black text-stone-900 uppercase tracking-widest">
+                                                        Merged Duplicate Report
+                                                    </h4>
+                                                    <span className="px-2 py-0.5 bg-stone-300 text-stone-900 rounded-md text-[9px] font-black uppercase">
+                                                        Case #{report.duplicate_of_report_id || 'Active'}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-stone-700 font-medium mt-1 leading-relaxed">
+                                                    This sighting has been confirmed as the same animal and consolidated into active Case #{report.duplicate_of_report_id}. 
+                                                    {report.merge_notes && ` Note: "${report.merge_notes}"`}
+                                                </p>
+                                                {report.merged_by_name && (
+                                                    <p className="text-[10px] text-stone-500 font-bold mt-1">
+                                                        Merged by: {report.merged_by_name} {report.merged_at ? `• ${new Date(report.merged_at).toLocaleDateString()}` : ''}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                                            {report.duplicate_of_report_id && (
+                                                <Link
+                                                    to={`/subd/reports/${report.duplicate_of_report_id}`}
+                                                    className="px-4 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                                                >
+                                                    <span>View Primary Case #{report.duplicate_of_report_id}</span>
+                                                    <span>→</span>
+                                                </Link>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsUnmergeModalOpen(true)}
+                                                className="px-3.5 py-2 bg-white hover:bg-stone-50 text-stone-700 border border-stone-300 text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                                            >
+                                                <span>Separate / Unmerge</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : report.status_id === 14 || report.verification_status === 'false_alarm' ? (
                                     <div className="p-5 rounded-3xl bg-rose-500/10 border border-rose-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300">
                                         <div className="flex items-start sm:items-center gap-3.5">
                                             <div className="w-11 h-11 rounded-2xl bg-rose-600 text-white flex items-center justify-center text-xl font-black shadow-md shadow-rose-600/20 shrink-0">
@@ -1259,7 +1415,7 @@ const SubdViewReport = () => {
 
                                             {/* 2. Previous Facility Holding Location(s) */}
                                             {custodyProgression.steps.filter(s => !s.isCurrent).map((prevStep, idx) => (
-                                                <div key={idx} className="flex items-start gap-3 bg-white/80 p-3.5 rounded-2xl border border-amber-200/80 shadow-2xs">
+                                                <div key={`custody-step-${prevStep.name || idx}-${idx}`} className="flex items-start gap-3 bg-white/80 p-3.5 rounded-2xl border border-amber-200/80 shadow-2xs">
                                                     <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-sm shrink-0 font-black">
                                                         🏡
                                                     </div>
@@ -1482,8 +1638,8 @@ const SubdViewReport = () => {
                                         </div>
 
                                         <div className="space-y-4">
-                                            {report.disputes.map((dispute) => (
-                                                <div key={dispute.dispute_id} className="bg-white p-5 rounded-2xl border border-amber-100 shadow-xs space-y-4">
+                                            {report.disputes.map((dispute, idx) => (
+                                                <div key={dispute.dispute_id || (dispute as any).id || `dispute-${idx}`} className="bg-white p-5 rounded-2xl border border-amber-100 shadow-xs space-y-4">
                                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
                                                         <div>
                                                             <span className="text-xs font-black text-gray-900 uppercase">
@@ -1815,7 +1971,7 @@ const SubdViewReport = () => {
                                                         !url.endsWith('.txt');
                                                 }).map((m: any, idx: number) => (
                                                     <div
-                                                        key={m.media_id}
+                                                        key={m.media_id || m.id || m.file_url || `report-media-${idx}`}
                                                         onClick={() => {
                                                             const filtered = report.media!.filter(m => {
                                                                 const url = m.file_url.toLowerCase();
@@ -1868,40 +2024,81 @@ const SubdViewReport = () => {
                                         </div>
                                     )}
 
-                                {/* AI Insights & Data Assessment */}
-                                <div className="bg-orange-50/50 rounded-2xl p-6 border border-orange-100/50">
-                                    <h5 className="text-[11px] font-bold text-[#F97316] uppercase tracking-widest mb-4 flex items-center gap-2">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                        </svg>
-                                        AI Insights & Data Assessment
-                                    </h5>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                        <div className="bg-white p-4 rounded-xl shadow-sm border border-orange-100">
-                                            <span className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Area Risk Level</span>
-                                            <div className="flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                                                <span className="text-sm font-bold text-gray-900">High Risk Hotspot</span>
+                                    {/* Consolidated Sighting Evidence from Merged Duplicate Reports */}
+                                    {report.merged_reports && report.merged_reports.length > 0 && (
+                                        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-orange-200/80 shadow-xs space-y-4">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] border border-orange-200 flex items-center justify-center text-lg font-black shrink-0">
+                                                        🔗
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">
+                                                            Consolidated Sighting Evidence ({report.merged_reports.length} Merged {report.merged_reports.length === 1 ? 'Report' : 'Reports'})
+                                                        </h3>
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                                            Photos and sightings from other residents confirmed for this same animal
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                                                {report.merged_reports.map((mr: any, mrIdx: number) => (
+                                                    <div key={mr.report_id || mr.id || `merged-report-${mrIdx}`} className="p-4 rounded-2xl bg-stone-50/70 border border-stone-200 space-y-3">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-xs font-black text-gray-900">
+                                                                    Report #{mr.report_id}
+                                                                </span>
+                                                                <span className="px-2 py-0.5 rounded-md bg-stone-200 text-stone-700 text-[9px] font-black uppercase">
+                                                                    Merged Duplicate
+                                                                </span>
+                                                            </div>
+                                                            <Link
+                                                                to={`/subd/reports/${mr.report_id}`}
+                                                                className="text-[10px] font-black text-[#F97316] hover:underline"
+                                                            >
+                                                                View Report Details →
+                                                            </Link>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-2.5 text-xs text-gray-600">
+                                                            <span>👤</span>
+                                                            <span className="font-bold text-gray-800">{mr.reporter_name}</span>
+                                                            {mr.landmark && (
+                                                                <>
+                                                                    <span>•</span>
+                                                                    <span className="truncate">📍 {mr.landmark}</span>
+                                                                </>
+                                                            )}
+                                                        </div>
+
+                                                        {mr.description && (
+                                                            <p className="text-xs text-gray-600 italic bg-white p-2.5 rounded-xl border border-stone-100">
+                                                                "{mr.description}"
+                                                            </p>
+                                                        )}
+
+                                                        {mr.media && mr.media.length > 0 && (
+                                                            <div className="flex gap-2 overflow-x-auto py-1">
+                                                                {mr.media.map((m: any, mIdx: number) => (
+                                                                    <div
+                                                                        key={m.media_id || m.id || m.file_url || `merged-media-${mIdx}`}
+                                                                        onClick={() => window.open(m.file_url, '_blank')}
+                                                                        className="w-20 h-20 rounded-xl overflow-hidden bg-gray-200 shrink-0 border border-stone-200 cursor-pointer hover:scale-105 transition-transform"
+                                                                    >
+                                                                        <img src={m.file_url} alt="" className="w-full h-full object-cover" />
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
                                             </div>
                                         </div>
-                                        <div className="bg-white p-4 rounded-xl shadow-sm border border-orange-100">
-                                            <span className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Duplicate Check</span>
-                                            <div className="flex items-center gap-2">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                </svg>
-                                                <span className="text-sm font-bold text-gray-900">Unique Report</span>
-                                            </div>
-                                        </div>
-                                        <div className="bg-white p-4 rounded-xl shadow-sm border border-orange-100">
-                                            <span className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">AI Classification</span>
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="px-2 py-0.5 bg-orange-100 text-[#F97316] text-[10px] font-bold rounded-md">{report.ai_animal_type || 'Unknown'}</span>
-                                                <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md ${report.ai_suggested_risk_level?.toLowerCase().includes('high') ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>{report.ai_suggested_risk_level || 'Low Risk'}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                                    )}
+
 
                                 {/* Comments Section */}
                                 <div className="bg-white border border-gray-100 rounded-2xl p-6 pt-5 shadow-sm">
@@ -1923,12 +2120,12 @@ const SubdViewReport = () => {
                                                 report.comments
                                                     .filter((c: any) => !c.parent_comment_id)
                                                     .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                                                    .map((c: any) => {
+                                                    .map((c: any, cIdx: number) => {
                                                         const replies = report.comments
                                                             ?.filter((reply: any) => reply.parent_comment_id === c.comment_id)
                                                             .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) || [];
                                                         return (
-                                                            <div key={c.comment_id} className="mb-4 last:mb-0">
+                                                            <div key={c.comment_id || c.id || `comment-${cIdx}`} className="mb-4 last:mb-0">
                                                                 <div className="flex gap-3 relative">
                                                                     <div className="relative flex flex-col items-center shrink-0">
                                                                         <img 
@@ -1960,7 +2157,7 @@ const SubdViewReport = () => {
                                                                         {replies.length > 0 && (
                                                                             <div className="mt-4 space-y-4">
                                                                                 {replies.map((reply: any, index: number) => (
-                                                                                    <div key={reply.comment_id} className="flex gap-3 relative">
+                                                                                    <div key={reply.comment_id || reply.id || `reply-${reply.parent_comment_id || c.comment_id}-${index}`} className="flex gap-3 relative">
                                                                                         <div className="absolute top-[-10px] left-[-28px] w-[28px] h-[26px] border-b-[2px] border-l-[2px] border-gray-100 rounded-bl-[12px] z-0 pointer-events-none"></div>
                                                                                         {index === replies.length - 1 && replyingTo?.commentId !== c.comment_id && (
                                                                                             <div className="absolute top-[16px] bottom-[-100px] left-[-30px] w-[6px] bg-white z-0 pointer-events-none"></div>
@@ -2112,7 +2309,7 @@ const SubdViewReport = () => {
                                         )}
 
                                         {/* CASE IS UNASSIGNED */}
-                                        {!report.assigned_leader_id && ![11, 12, 14, 3].includes(report.status_id) && (
+                                        {!report.assigned_leader_id && report.status_id !== 18 && !report.duplicate_of_report_id && ![3, 9, 10, 11, 12, 14, 18].includes(report.status_id) && (
                                             <div className="p-5 rounded-2xl bg-amber-50/80 border border-amber-200 text-center space-y-2">
                                                 <p className="text-xs font-bold text-amber-900">
                                                     ⚠️ Please claim this incident report to unlock verification, warning citations, and resolution actions.
@@ -2129,7 +2326,7 @@ const SubdViewReport = () => {
                                         )}
 
                                         {/* OPERATIONAL CONTROLS - ACTIVE FOR ASSIGNED HANDLER */}
-                                        {report.assigned_leader_id === currentUserId && ![11, 12, 14, 3].includes(report.status_id) && (
+                                        {report.assigned_leader_id === currentUserId && report.status_id !== 18 && !report.duplicate_of_report_id && ![3, 9, 10, 11, 12, 14, 18].includes(report.status_id) && (
                                             <>
                                                 {/* OPTION: ADD PET RECORD IF UNREGISTERED */}
                                                 {/* STEP 0: ESCALATED TO BARANGAY (Strictly Read-Only / Tracking Mode) */}
@@ -2285,26 +2482,38 @@ const SubdViewReport = () => {
                                                             </button>
                                                         )}
 
-                                                        {/* STEP 4: TRANSFER CASE TO ANOTHER LEADER */}
-                                                        {![11, 12, 14, 3].includes(report.status_id) && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setIsTransferModalOpen(true)}
-                                                                className="w-full py-3.5 border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 text-purple-800 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs hover:scale-[1.01] active:scale-95"
-                                                            >
-                                                                <span className="text-base">🔄</span>
-                                                                <span>Transfer Report to Another Leader</span>
-                                                            </button>
-                                                        )}
+                                                         {/* STEP 4: TRANSFER CASE TO ANOTHER LEADER */}
+                                                         {![11, 12, 14, 3, 18].includes(report.status_id) && !report.duplicate_of_report_id && (
+                                                             <button
+                                                                 type="button"
+                                                                 onClick={() => setIsTransferModalOpen(true)}
+                                                                 className="w-full py-3.5 border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 text-purple-800 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs hover:scale-[1.01] active:scale-95"
+                                                             >
+                                                                 <span className="text-base">🔄</span>
+                                                                 <span>Transfer Report to Another Leader</span>
+                                                             </button>
+                                                         )}
 
-                                                        {(report.status_id === 1 || report.status_id === 2) && (
-                                                            <button
-                                                                onClick={handleReject}
-                                                                className="w-full py-3 border border-gray-100 rounded-2xl text-[10px] font-bold text-gray-400 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all uppercase tracking-widest cursor-pointer"
-                                                            >
-                                                                Reject Report
-                                                            </button>
-                                                        )}
+                                                         {/* STEP 4.5: MARK AS DUPLICATE / MERGE */}
+                                                         {![3, 11, 12, 14, 18].includes(report.status_id) && !report.duplicate_of_report_id && (
+                                                             <button
+                                                                 type="button"
+                                                                 onClick={() => setIsMergeModalOpen(true)}
+                                                                 className="w-full py-3.5 border border-stone-300 bg-stone-50 hover:bg-stone-100 text-stone-800 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                                                             >
+                                                                 <span className="text-base">🔗</span>
+                                                                 <span>Mark as Duplicate / Merge Report</span>
+                                                             </button>
+                                                         )}
+
+                                                         {(report.status_id === 1 || report.status_id === 2) && (
+                                                             <button
+                                                                 onClick={handleReject}
+                                                                 className="w-full py-3 border border-gray-100 rounded-2xl text-[10px] font-bold text-gray-400 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all uppercase tracking-widest cursor-pointer"
+                                                             >
+                                                                 Reject Report
+                                                             </button>
+                                                         )}
                                                     </>
                                                 )}
                                             </>
@@ -2430,7 +2639,7 @@ const SubdViewReport = () => {
                                             </div>
 
                                             {/* History / Transfer / Status entries */}
-                                            {report.history && report.history.filter((h: any) => h.remarks !== 'Initial report submitted by resident.').map((hist: any) => {
+                                            {report.history && report.history.filter((h: any) => h.remarks !== 'Initial report submitted by resident.').map((hist: any, histIdx: number) => {
                                                 const remarksLower = (hist.remarks || '').toLowerCase();
                                                 const isFacilityRelocation = (remarksLower.startsWith('transferred to') || remarksLower.startsWith('relocated to') || remarksLower.startsWith('animal relocated') || hist.report_status_id === 8);
                                                 const isTransfer = remarksLower.includes('transfer');
@@ -2489,7 +2698,7 @@ const SubdViewReport = () => {
                                                 }
 
                                                 return (
-                                                    <div key={hist.history_id} className="relative flex items-start gap-4 group animate-in fade-in duration-300">
+                                                    <div key={hist.history_id || hist.id || `history-${histIdx}`} className="relative flex items-start gap-4 group animate-in fade-in duration-300">
                                                         <div className={`absolute -left-6 mt-1 w-5 h-5 rounded-full ${dotColor} border-4 border-white shadow-xs flex items-center justify-center text-white text-[8px]`}>
                                                             {icon}
                                                         </div>
@@ -3372,6 +3581,55 @@ const SubdViewReport = () => {
                         </form>
                     </div>
                 </div>
+            )}
+
+            {/* Merge Duplicate Report Modal */}
+            {report && (
+                <MergeReportModal
+                    isOpen={isMergeModalOpen}
+                    onClose={() => setIsMergeModalOpen(false)}
+                    secondaryReport={report}
+                    currentUserId={currentUserId}
+                    onSuccess={(updated) => {
+                        setReport(updated);
+                        setShowSuccess(true);
+                    }}
+                />
+            )}
+
+            {/* Unmerge Report Modal */}
+            {report && (
+                <UnmergeReportModal
+                    isOpen={isUnmergeModalOpen}
+                    onClose={() => setIsUnmergeModalOpen(false)}
+                    reportId={report.report_id}
+                    primaryReportId={report.duplicate_of_report_id}
+                    currentUserId={currentUserId}
+                    onSuccess={(updated) => {
+                        setReport(updated);
+                        setShowSuccess(true);
+                    }}
+                />
+            )}
+
+            {/* AI Duplicate Match Review Modal */}
+            {activeReviewMatch && (
+                <AIMatchReviewModal
+                    isOpen={!!activeReviewMatch}
+                    onClose={() => setActiveReviewMatch(null)}
+                    match={activeReviewMatch}
+                    isStaff={true}
+                    onVerified={(updated) => {
+                        setActiveReviewMatch(null);
+                        setDuplicateMatches(prev => prev.filter(m => m.match_id !== updated.match_id));
+                        fetchReportDetails();
+                    }}
+                    onMerged={(mergedRep) => {
+                        setActiveReviewMatch(null);
+                        setReport(mergedRep);
+                        fetchReportDetails();
+                    }}
+                />
             )}
         </div>
     );

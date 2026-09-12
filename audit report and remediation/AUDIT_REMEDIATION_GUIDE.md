@@ -2,9 +2,26 @@
 
 > **Purpose:** Step-by-step implementation guide to resolve every finding from the System Audit Report.  
 > **Approach:** 4 phases, ordered by risk. Each phase is independently deployable.  
-> **Estimated total effort:** ~2–3 days of sessions with Antigravity + your review/verification time
+> **Original estimated total effort:** ~2–3 days of sessions with Antigravity + your review/verification time  
+> **Original Audit Date:** 2026-09-09 | **Last Reviewed:** 2026-09-11
 >
 > **Time estimates assume agentic coding via Antigravity.** Most mechanical work (search-replace, file splitting, boilerplate generation, code transforms) takes minutes, not hours. Your time is spent on: reviewing changes, rotating keys on external dashboards, and verifying behavior.
+
+---
+
+## Current Progress (as of 2026-09-11)
+
+> [!CAUTION]
+> **0 of 20 remediation tasks have been started.** All critical security vulnerabilities remain open. Two findings have worsened since the audit:
+> - **Finding #5 (`reports.py`):** Grew from 3,041 → **3,589 lines** (+548 lines) since audit date
+> - **Finding #7 (hardcoded localhost URLs):** Grew from 108+ → **200+ matching lines** in frontend
+
+| Phase | Tasks | Status |
+|:---|:---|:---|
+| Phase 1 — Critical Security | 1.1 – 1.5 | ❌ Not started |
+| Phase 2 — Architecture Debt | 2.1 – 2.4 | ❌ Not started |
+| Phase 3 — UI & Accessibility | 3.1 – 3.5 | ❌ Not started |
+| Phase 4 — Compliance & Testing | 4.1 – 4.7 | ❌ Not started |
 
 ---
 
@@ -25,7 +42,8 @@
 
 ### Task 1.1 — Rotate All Secrets & Purge Git History
 **Audit Ref:** Finding #1 · Priority #1  
-**⏱ Est:** ~20 min (mostly you on dashboards — Antigravity handles code/git changes)
+**⏱ Est:** ~20 min (mostly you on dashboards — Antigravity handles code/git changes)  
+**Current State:** ❌ `.env` still committed. Hardcoded JWT fallback still at [`auth.py:L13`](file:///c:/Users/User/Desktop/Straysafe2.0/backend/app/utils/auth.py#L13): `SECRET_KEY = os.getenv("JWT_SECRET_KEY", "straysafe_super_secret_jwt_key_2026_safe_hash_897162")`
 
 **What's wrong:**  
 `.env` contains Cloudinary API key/secret, Gemini API key, admin password (`password123`), and seed credentials — all committed to git.
@@ -87,7 +105,8 @@
 
 ### Task 1.2 — Remove Client-Side Auth Bypass in ProtectedRoute
 **Audit Ref:** Finding #3 · Priority #2  
-**⏱ Est:** ~2 min (single code edit)
+**⏱ Est:** ~2 min (single code edit)  
+**Current State:** ❌ Fallback still exists at [`ProtectedRoute.tsx:L71-87`](file:///c:/Users/User/Desktop/Straysafe2.0/frontend/src/components/ProtectedRoute.tsx#L71-L87). When backend returns a non-401/403 error, the code reads `rawUser` from localStorage and grants access.
 
 **What's wrong:**  
 `frontend/src/components/ProtectedRoute.tsx` lines 71–87: when the backend returns a network error (not 401/403), the code falls back to reading `localStorage` and granting access. An attacker can forge `localStorage` and access any role's pages.
@@ -112,7 +131,8 @@
 
 ### Task 1.3 — Replace All Hardcoded Localhost URLs
 **Audit Ref:** Finding #7 · Priority #3  
-**⏱ Est:** ~15 min (Antigravity batch-replaces all 108+ instances across all files in one pass)
+**⏱ Est:** ~15 min (Antigravity batch-replaces all 200+ instances across all files in one pass)  
+**Current State:** ❌ Now **200+ matching lines** (was 108+ at audit). Spread across 46 files including components, Barangay, Admin, and Citizen pages.
 
 **What's wrong:**  
 108+ instances of `http://localhost:8000` and `http://127.0.0.1:8000` scattered across frontend pages, bypassing the centralized `api` instance (which attaches the JWT `Authorization` header).
@@ -181,7 +201,8 @@
 
 ### Task 1.4 — Add Rate Limiting to Backend
 **Audit Ref:** Finding #2 · Priority #4  
-**⏱ Est:** ~5 min (install + wire middleware)
+**⏱ Est:** ~5 min (install + wire middleware)  
+**Current State:** ❌ `slowapi` is not in `requirements.txt`. No rate limiting on any endpoint.
 
 **Steps:**
 
@@ -220,7 +241,8 @@
 
 ### Task 1.5 — Protect `/auth/me` Endpoint from Leaking Password Hash
 **Audit Ref:** Finding #12  
-**⏱ Est:** ~3 min (create schema + apply to endpoint)
+**⏱ Est:** ~3 min (create schema + apply to endpoint)  
+**Current State:** ❌ No `UserPublicResponse` schema exists. The endpoint returns the raw ORM object. Additionally, `?token=` query param acceptance is still present at [`auth.py:L81-82`](file:///c:/Users/User/Desktop/Straysafe2.0/backend/app/utils/auth.py#L81-L82) (Finding #15) — remove it alongside this task.
 
 **Steps:**
 
@@ -781,10 +803,10 @@ After completing all phases, run through this final checklist:
 
 | Phase | Tasks | Est. (Antigravity + You) | Your Time | Status |
 |:---|:---|:---|:---|:---|
-| **Phase 1** — Critical Security | 1.1 – 1.5 | ~45 min coding | ~20 min (rotate keys on dashboards, review) | ⬜ Not started |
-| **Phase 2** — Architecture Debt | 2.1 – 2.4 | ~4–6 hours coding | ~1 hour (review splits, verify rendering) | ⬜ Not started |
-| **Phase 3** — UI & Accessibility | 3.1 – 3.5 | ~1.5–2 hours coding | ~30 min (confirm visual direction, check contrast) | ⬜ Not started |
-| **Phase 4** — Compliance & Testing | 4.1 – 4.7 | ~2.5–3 hours coding | ~30 min (run tests, verify cookies in DevTools) | ⬜ Not started |
+| **Phase 1** — Critical Security | 1.1 – 1.5 | ~45 min coding | ~20 min (rotate keys on dashboards, review) | ❌ Not started |
+| **Phase 2** — Architecture Debt | 2.1 – 2.4 | ~4–6 hours coding | ~1 hour (review splits, verify rendering) | ❌ Not started |
+| **Phase 3** — UI & Accessibility | 3.1 – 3.5 | ~1.5–2 hours coding | ~30 min (confirm visual direction, check contrast) | ❌ Not started |
+| **Phase 4** — Compliance & Testing | 4.1 – 4.7 | ~2.5–3 hours coding | ~30 min (run tests, verify cookies in DevTools) | ❌ Not started |
 | | **TOTAL** | **~9–12 hours** | **~2.5 hours** | |
 
 > [!TIP]

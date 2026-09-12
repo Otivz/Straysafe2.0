@@ -104,6 +104,12 @@ class Report(Base):
     pending_transfer_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     pending_transfer_created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
+    # Duplicate & Merge Tracking Fields
+    duplicate_of_report_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("reports.report_id", ondelete="SET NULL"), nullable=True)
+    merged_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    merged_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    merge_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # Relationships
@@ -112,6 +118,8 @@ class Report(Base):
     pending_transfer_to: Mapped[Optional["User"]] = relationship("User", foreign_keys=[pending_transfer_to_id])
     pending_transfer_from: Mapped[Optional["User"]] = relationship("User", foreign_keys=[pending_transfer_from_id])
     verified_by_user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[verified_by_user_id])
+    primary_report: Mapped[Optional["Report"]] = relationship("Report", foreign_keys=[duplicate_of_report_id], remote_side="[Report.report_id]", backref="merged_reports")
+    merged_by_user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[merged_by])
     category = relationship("ReportCategory")
     status = relationship("ReportStatus")
     subdivision = relationship("Subdivision")
@@ -131,6 +139,7 @@ class Report(Base):
     assigned_leader_photo: Optional[str] = None
     pending_transfer_to_name: Optional[str] = None
     pending_transfer_from_name: Optional[str] = None
+    merged_by_name: Optional[str] = None
 
 
 class LetterStatus(Base):

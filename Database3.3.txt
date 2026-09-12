@@ -212,6 +212,8 @@ INSERT INTO `report_status` (`status_id`, `status_name`) VALUES (13, 'Approved')
 INSERT INTO `report_status` (`status_id`, `status_name`) VALUES (14, 'False Alarm / Dismissed');
 INSERT INTO `report_status` (`status_id`, `status_name`) VALUES (15, 'Disputed');
 INSERT INTO `report_status` (`status_id`, `status_name`) VALUES (16, 'Under Investigation');
+INSERT INTO `report_status` (`status_id`, `status_name`) VALUES (17, 'Animal Cannot Be Found');
+INSERT INTO `report_status` (`status_id`, `status_name`) VALUES (18, 'Merged — Duplicate');
 
 -- =========================================
 -- TABLE: RESCUE_STATUS
@@ -476,6 +478,10 @@ CREATE TABLE `reports` (
   `verification_notes` text,
   `verified_by_user_id` int DEFAULT NULL,
   `verified_at` timestamp NULL DEFAULT NULL,
+  `duplicate_of_report_id` int DEFAULT NULL,
+  `merged_at` timestamp NULL DEFAULT NULL,
+  `merged_by` int DEFAULT NULL,
+  `merge_notes` text,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`report_id`),
   KEY `fk_reports_subdivision` (`subdivision_id`),
@@ -484,12 +490,16 @@ CREATE TABLE `reports` (
   KEY `fk_reports_facility` (`facility_id`),
   KEY `fk_reports_assigned_leader` (`assigned_leader_id`),
   KEY `fk_reports_verified_by` (`verified_by_user_id`),
+  KEY `fk_reports_duplicate_of` (`duplicate_of_report_id`),
+  KEY `fk_reports_merged_by` (`merged_by`),
   KEY `idx_reports_location` (`latitude`,`longitude`),
   KEY `idx_reports_user` (`user_id`),
   KEY `idx_reports_status` (`current_status_id`),
   CONSTRAINT `fk_reports_assigned_leader` FOREIGN KEY (`assigned_leader_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_category` FOREIGN KEY (`category_id`) REFERENCES `report_categories` (`category_id`),
+  CONSTRAINT `fk_reports_duplicate_of` FOREIGN KEY (`duplicate_of_report_id`) REFERENCES `reports` (`report_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_facility` FOREIGN KEY (`facility_id`) REFERENCES `landmarks` (`landmark_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_reports_merged_by` FOREIGN KEY (`merged_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_status` FOREIGN KEY (`current_status_id`) REFERENCES `report_status` (`status_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_subdivision` FOREIGN KEY (`subdivision_id`) REFERENCES `subdivisions` (`subdivision_id`),
