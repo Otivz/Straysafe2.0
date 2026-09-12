@@ -1,15 +1,35 @@
 # StraySafe 2.0 — Reporting Process Audit
 
-**Date:** 2026-09-09  
+**Original Audit Date:** 2026-09-09  
+**Last Reviewed:** 2026-09-11  
 **Auditor:** Senior Software & Process Auditor  
 **Scope:** Full reporting lifecycle — from report submission to resolution/completion  
 **Files Audited:**
-- [`backend/app/routes/reports.py`](file:///c:/Users/User/Desktop/Straysafe2.0/backend/app/routes/reports.py) (3,051 lines)
+- [`backend/app/routes/reports.py`](file:///c:/Users/User/Desktop/Straysafe2.0/backend/app/routes/reports.py) (originally 3,051 lines — **now 3,589 lines / 170KB** as of 2026-09-11)
 - [`backend/app/routes/rescue.py`](file:///c:/Users/User/Desktop/Straysafe2.0/backend/app/routes/rescue.py) (815 lines)
 - [`backend/app/routes/holding.py`](file:///c:/Users/User/Desktop/Straysafe2.0/backend/app/routes/holding.py) (565 lines)
 
 > **This document is audit-only. No system modifications have been made.**
 > All line-number references are anchored to the files as reviewed on the audit date.
+
+---
+
+## Remediation Status (as of 2026-09-11)
+
+> [!CAUTION]
+> **Zero findings from this audit have been resolved.** The authentication gap (RP-01 through RP-11) remains completely unaddressed — all 20+ reporting endpoints still accept `user_id` from the request body rather than verifying a JWT token. The `reports.py` file has grown by 538 lines since the audit was conducted, deepening the architectural debt.
+
+| Summary | Count |
+|:---|:---|
+| Critical findings open | **12** |
+| High findings open | **17** |
+| Medium findings open | **8** |
+| Low findings open | **3** |
+| **Total open** | **40** |
+| Resolved | **0** |
+
+**Root cause still unresolved:** Not one of the 20+ reporting-related endpoints uses JWT token verification. All user identity is still derived from request body `user_id` fields. See the [Authentication Gap section](#authentication-gap-affects-every-stage) for full impact.
+
 
 ---
 

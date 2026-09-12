@@ -120,6 +120,9 @@ interface Report {
     verified_injury?: boolean | null;
     verified_aggressive?: boolean | null;
     behavior_finding?: string | null;
+    duplicate_of_report_id?: number | null;
+    has_duplicate_flag?: boolean;
+    duplicate_match_count?: number;
 }
 
 const statusMap = REPORT_STATUS_MAP;
@@ -565,9 +568,23 @@ const AdminReport = () => {
                                     header: "Status",
                                     key: "status",
                                     render: (rep) => (
-                                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || 'Pending')}`}>
-                                            {statusMap[rep.status_id] || 'Pending'}
-                                        </span>
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || 'Pending')}`}>
+                                                {statusMap[rep.status_id] || 'Pending'}
+                                            </span>
+                                            {rep.has_duplicate_flag && rep.status_id !== 18 && !rep.duplicate_of_report_id && (
+                                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1" title="AI detected suspected duplicate sighting">
+                                                    <span>⚠️</span>
+                                                    <span>Dup?</span>
+                                                </span>
+                                            )}
+                                            {(rep.status_id === 18 || rep.duplicate_of_report_id) && (
+                                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-stone-100 text-stone-700 border border-stone-300 flex items-center gap-1" title={`Merged duplicate into Case #${rep.duplicate_of_report_id}`}>
+                                                    <span>🔗</span>
+                                                    <span>Merged</span>
+                                                </span>
+                                            )}
+                                        </div>
                                     )
                                 },
                                 {

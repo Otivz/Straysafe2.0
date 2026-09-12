@@ -74,6 +74,9 @@ interface Report {
     takeover_cooldown_remaining_seconds?: number;
     takeover_inactivity_hours_threshold?: number;
     last_activity_at?: string | null;
+    duplicate_of_report_id?: number | null;
+    has_duplicate_flag?: boolean;
+    duplicate_match_count?: number;
 }
 
 const formatCooldownTimer = (seconds?: number): string => {
@@ -669,10 +672,13 @@ const SubdReports = () => {
         }
     };
 
-    // Queue counts (excluding resolved/inactive/dismissed)
-    const unassignedCount = reports.filter(r => !r.assigned_leader_id && ![11, 12, 3, 9, 10, 14].includes(r.status_id)).length;
-    const myReportsCount = reports.filter(r => r.assigned_leader_id === currentUserId && ![11, 12, 3, 9, 10, 14].includes(r.status_id)).length;
-    const allActiveCount = reports.filter(r => ![11, 12, 3, 9, 10, 14].includes(r.status_id)).length;
+    // Helper to identify terminal (closed/resolved/rejected) or merged duplicate reports
+    const isTerminalOrMerged = (r: Report) => [11, 12, 3, 9, 10, 14, 18].includes(r.status_id) || Boolean(r.duplicate_of_report_id);
+
+    // Queue counts (excluding resolved/inactive/dismissed/merged)
+    const unassignedCount = reports.filter(r => !r.assigned_leader_id && !isTerminalOrMerged(r)).length;
+    const myReportsCount = reports.filter(r => r.assigned_leader_id === currentUserId && !isTerminalOrMerged(r)).length;
+    const allActiveCount = reports.filter(r => !isTerminalOrMerged(r)).length;
 
     const filteredReports = reports.filter(rep => {
         const catName = categoryMap[rep.category_id]?.toLowerCase() || '';
@@ -692,13 +698,13 @@ const SubdReports = () => {
         // Queue filter
         let matchesQueue = true;
         if (reportQueue === 'unassigned') {
-            matchesQueue = !rep.assigned_leader_id;
+            matchesQueue = !rep.assigned_leader_id && !isTerminalOrMerged(rep);
         } else if (reportQueue === 'my_reports') {
             matchesQueue = rep.assigned_leader_id === currentUserId;
         }
 
-        // Exclude resolved (11), deceased (12), rejected (3), claimed (9), released (10), and false alarm/dismissed (14) reports from active ongoing list
-        const isActive = rep.status_id !== 11 && rep.status_id !== 12 && rep.status_id !== 3 && rep.status_id !== 9 && rep.status_id !== 10 && rep.status_id !== 14;
+        // Exclude resolved (11), deceased (12), rejected (3), claimed (9), released (10), false alarm/dismissed (14), and merged (18) reports from active ongoing list
+        const isActive = !isTerminalOrMerged(rep);
 
         return matchesSearch && matchesStatus && matchesQueue && isActive;
     });
@@ -978,11 +984,23 @@ const SubdReports = () => {
                                                     <div>
                                                         {/* Top Card Header */}
                                                         <div className="flex items-center justify-between gap-2 mb-3">
-                                                            <div className="flex items-center space-x-2">
+                                                            <div className="flex items-center space-x-2 flex-wrap">
                                                                 <span className="text-xs font-mono font-bold text-gray-400">#{rep.report_id.toString().padStart(4, '0')}</span>
                                                                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getPriorityColor(getEffectivePriority(rep))}`}>
                                                                     {getEffectivePriority(rep)}
                                                                 </span>
+                                                                {rep.has_duplicate_flag && rep.status_id !== 18 && !rep.duplicate_of_report_id && (
+                                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1 shadow-xs" title="AI detected suspected duplicate sighting">
+                                                                        <span>⚠️</span>
+                                                                        <span>Dup?</span>
+                                                                    </span>
+                                                                )}
+                                                                {(rep.status_id === 18 || rep.duplicate_of_report_id) && (
+                                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-stone-100 text-stone-700 border border-stone-300 flex items-center gap-1 shadow-xs" title={`Merged duplicate into Case #${rep.duplicate_of_report_id}`}>
+                                                                        <span>🔗</span>
+                                                                        <span>Merged</span>
+                                                                    </span>
+                                                                )}
                                                             </div>
 
                                                             <div className="flex items-center space-x-2">
@@ -1181,7 +1199,16 @@ const SubdReports = () => {
 
                                                     {/* Handler Ownership Footer */}
                                                     <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
-                                                        {!rep.assigned_leader_id ? (
+                                                        {(rep.status_id === 18 || rep.duplicate_of_report_id) ? (
+                                                            <div className="flex items-center justify-between w-full">
+                                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-stone-100 text-stone-700 text-[11px] font-bold border border-stone-200">
+                                                                    🔗 Merged into #{rep.duplicate_of_report_id || 'Active'}
+                                                                </span>
+                                                                <span className="text-[10px] text-gray-400 font-bold">
+                                                                    Claim Linked
+                                                                </span>
+                                                            </div>
+                                                        ) : !rep.assigned_leader_id ? (
                                                             <div className="flex items-center justify-between w-full">
                                                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 text-[11px] font-black border border-amber-200/60">
                                                                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
@@ -1341,7 +1368,7 @@ const SubdReports = () => {
                                                 key: "status",
                                                 render: (rep) => {
                                                     return (
-                                                        <div className="flex items-center gap-1.5">
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
                                                             <ReportChatBadge
                                                                 reportId={rep.report_id}
                                                                 currentUserId={currentUserId}
@@ -1354,6 +1381,16 @@ const SubdReports = () => {
                                                             <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || 'Pending')}`}>
                                                                 {statusMap[rep.status_id] || 'Pending'}
                                                             </span>
+                                                            {rep.has_duplicate_flag && rep.status_id !== 18 && !rep.duplicate_of_report_id && (
+                                                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300" title="AI detected suspected duplicate sighting">
+                                                                    ⚠️ Dup?
+                                                                </span>
+                                                            )}
+                                                            {(rep.status_id === 18 || rep.duplicate_of_report_id) && (
+                                                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-stone-100 text-stone-700 border border-stone-300" title={`Merged duplicate into Case #${rep.duplicate_of_report_id}`}>
+                                                                    🔗 Merged
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     );
                                                 }
@@ -1363,6 +1400,13 @@ const SubdReports = () => {
                                                 key: "handler",
                                                 render: (rep) => {
                                                     if (!rep.assigned_leader_id) {
+                                                        if (rep.status_id === 18 || rep.duplicate_of_report_id || [3, 9, 10, 11, 12, 14, 18].includes(rep.status_id)) {
+                                                            return (
+                                                                <span className="text-xs text-gray-400 font-bold italic">
+                                                                    {rep.status_id === 18 || rep.duplicate_of_report_id ? 'Merged' : 'Closed'}
+                                                                </span>
+                                                            );
+                                                        }
                                                         return (
                                                             <button
                                                                 type="button"

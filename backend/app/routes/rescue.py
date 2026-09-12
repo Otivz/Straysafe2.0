@@ -134,8 +134,14 @@ def _populate_rescue_fields(rescue: Optional[Rescue], db: Session) -> Optional[R
 @router.post("/", response_model=RescueRequestResponse)
 def create_rescue_request(request_in: RescueRequestCreate, db: Session = Depends(get_db)):
     try:
+        # If the report is merged as duplicate, attach to the primary case to maintain single active rescue assignment
+        target_report_id = request_in.report_id
+        target_report = db.query(Report).filter(Report.report_id == request_in.report_id).first()
+        if target_report and (target_report.duplicate_of_report_id or target_report.current_status_id == 18):
+            target_report_id = target_report.duplicate_of_report_id or request_in.report_id
+
         # Check if a Rescue record already exists for this report
-        existing_rescue = db.query(Rescue).filter(Rescue.report_id == request_in.report_id).first()
+        existing_rescue = db.query(Rescue).filter(Rescue.report_id == target_report_id).first()
         if existing_rescue:
             db_rescue = existing_rescue
             if request_in.leader_id:
@@ -144,7 +150,7 @@ def create_rescue_request(request_in: RescueRequestCreate, db: Session = Depends
                 db_rescue.notes = request_in.description
         else:
             rescue_data = {
-                "report_id": request_in.report_id,
+                "report_id": target_report_id,
                 "staff_id": request_in.barangay_staff_id if hasattr(request_in, 'barangay_staff_id') else None,
                 "leader_id": request_in.leader_id if hasattr(request_in, 'leader_id') else None,
                 "status_id": request_in.status_id,
@@ -157,24 +163,24 @@ def create_rescue_request(request_in: RescueRequestCreate, db: Session = Depends
         if request_in.leader_id:
             # Find the latest evidence file uploaded for this report
             media_file = db.query(ReportMedia).filter(
-                ReportMedia.report_id == request_in.report_id,
+                ReportMedia.report_id == target_report_id,
                 ReportMedia.is_evidence == True
             ).order_by(ReportMedia.media_id.desc()).first()
             file_url = media_file.file_url if media_file else None
 
-            existing_letter = db.query(EndorsementLetter).filter(EndorsementLetter.report_id == request_in.report_id).first()
+            existing_letter = db.query(EndorsementLetter).filter(EndorsementLetter.report_id == target_report_id).first()
             if existing_letter:
                 existing_letter.leader_id = request_in.leader_id
-                existing_letter.title = request_in.title or f"Endorsement for Report #{request_in.report_id}"
+                existing_letter.title = request_in.title or f"Endorsement for Report #{target_report_id}"
                 existing_letter.letter_content = request_in.description or "Official subdivision endorsement letter."
                 if file_url:
                     existing_letter.file_url = file_url
                 existing_letter.status_id = 2 # Sent
             else:
                 db_letter = EndorsementLetter(
-                    report_id=request_in.report_id,
+                    report_id=target_report_id,
                     leader_id=request_in.leader_id,
-                    title=request_in.title or f"Endorsement for Report #{request_in.report_id}",
+                    title=request_in.title or f"Endorsement for Report #{target_report_id}",
                     letter_content=request_in.description or "Official subdivision endorsement letter.",
                     file_url=file_url,
                     status_id=2 # Sent

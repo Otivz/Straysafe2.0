@@ -13,6 +13,9 @@ import SuccessModal from '../../components/Modals/SuccessModal';
 import { api } from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
+import MergeReportModal from '../../components/Modals/MergeReportModal';
+import UnmergeReportModal from '../../components/Modals/UnmergeReportModal';
+import AIMatchReviewModal from '../../components/Modals/AIMatchReviewModal';
 
 interface Report {
     report_id: number;
@@ -73,6 +76,14 @@ interface Report {
     verified_by_user_id?: number | null;
     verified_by_name?: string | null;
     verified_at?: string | null;
+    duplicate_of_report_id?: number | null;
+    merged_at?: string | null;
+    merged_by?: number | null;
+    merged_by_name?: string | null;
+    merge_notes?: string | null;
+    merged_reports?: any[];
+    has_duplicate_flag?: boolean;
+    duplicate_match_count?: number;
     verified_actual_bite?: boolean | null;
     verified_chasing?: boolean | null;
     verified_attempted_bite?: boolean | null;
@@ -210,6 +221,12 @@ const BrgyReportView = () => {
     const [personnelSearch, setPersonnelSearch] = useState('');
     const [isSubmittingAssign, setIsSubmittingAssign] = useState(false);
 
+    // Duplicate & Merge State
+    const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
+    const [isUnmergeModalOpen, setIsUnmergeModalOpen] = useState(false);
+    const [duplicateMatches, setDuplicateMatches] = useState<any[]>([]);
+    const [activeReviewMatch, setActiveReviewMatch] = useState<any | null>(null);
+
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
     const currentUserId = currentUser ? currentUser.user_id : 1;
@@ -315,6 +332,16 @@ const BrgyReportView = () => {
                         setIsGeocoding(false);
                     }
                 }
+
+                // Fetch duplicate matches for this report
+                try {
+                    const dupRes = await axios.get(`http://localhost:8000/matches/duplicates/report/${loadedReport.report_id}`);
+                    if (dupRes.data && Array.isArray(dupRes.data)) {
+                        setDuplicateMatches(dupRes.data.filter((m: any) => m.status === 'AI_SUGGESTED'));
+                    }
+                } catch (dupErr) {
+                    console.error('Error fetching duplicate matches:', dupErr);
+                }
             } else {
                 setReport(null);
             }
@@ -323,6 +350,23 @@ const BrgyReportView = () => {
             setReport(null);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleDismissDuplicate = async (matchId: number) => {
+        try {
+            await axios.put(`http://localhost:8000/matches/${matchId}/verify`, {
+                status: 'NOT_A_MATCH',
+                verified_by_user_id: currentUserId,
+                verification_notes: 'Staff dismissed duplicate sighting suggestion: Separate animals'
+            });
+            setDuplicateMatches(prev => prev.filter(m => m.match_id !== matchId));
+            if (report) {
+                setReport({ ...report, has_duplicate_flag: false, duplicate_match_count: Math.max(0, (report.duplicate_match_count || 1) - 1) });
+            }
+        } catch (err) {
+            console.error('Failed to dismiss duplicate match:', err);
+            alert('Could not dismiss duplicate match. Please try again.');
         }
     };
 
@@ -909,16 +953,143 @@ const BrgyReportView = () => {
                                             </button>
                                         )}
 
-                                        <button
-                                            type="button"
-                                            onClick={() => openStatusModal(report.status_id === 4 ? 13 : report.status_id === 13 ? 5 : report.status_id === 5 ? 6 : 11)}
-                                            className="px-5 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer"
-                                        >
-                                            <span>⚡</span>
-                                            <span>Update Status</span>
-                                        </button>
+                                        {![3, 9, 10, 11, 12, 14, 18].includes(report.status_id) && !report.duplicate_of_report_id && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsMergeModalOpen(true)}
+                                                className="px-4 py-2 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-800 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                                title="Mark as duplicate of another active case"
+                                            >
+                                                <span>🔗</span>
+                                                <span>Mark Duplicate</span>
+                                            </button>
+                                        )}
+
+                                        {![3, 9, 10, 11, 12, 14, 18].includes(report.status_id) && !report.duplicate_of_report_id && (
+                                            <button
+                                                type="button"
+                                                onClick={() => openStatusModal(report.status_id === 4 ? 13 : report.status_id === 13 ? 5 : report.status_id === 5 ? 6 : 11)}
+                                                className="px-5 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                                            >
+                                                <span>⚡</span>
+                                                <span>Update Status</span>
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
+
+                                {/* AI Suspected Duplicate Stray Sighting Alert Banner */}
+                                {report.status_id !== 18 && !report.duplicate_of_report_id && (duplicateMatches.length > 0 || report.has_duplicate_flag) && (
+                                    <div className="p-5 rounded-3xl bg-amber-500/10 border-2 border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300 mb-4">
+                                        <div className="flex items-start sm:items-center gap-3.5">
+                                            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl font-black shadow-md shadow-amber-500/20 shrink-0">
+                                                ⚠️
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <h4 className="text-xs font-black text-amber-900 uppercase tracking-widest">
+                                                        Possible Duplicate Sighting Detected
+                                                    </h4>
+                                                    <span className="px-2.5 py-0.5 bg-amber-200/80 border border-amber-400 text-amber-900 rounded-full text-[10px] font-black uppercase tracking-wider">
+                                                        {duplicateMatches.length > 0 ? `${duplicateMatches.length} Similar Stray Report${duplicateMatches.length > 1 ? 's' : ''}` : 'Suspected Duplicate'}
+                                                    </span>
+                                                    {duplicateMatches[0] && (
+                                                        <span className="px-2 py-0.5 bg-amber-100 border border-amber-300 text-amber-800 rounded-md text-[10px] font-black">
+                                                            {Math.round(duplicateMatches[0].similarity_score > 1 ? duplicateMatches[0].similarity_score : duplicateMatches[0].similarity_score * 100)}% Match
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-amber-800 font-medium mt-1 leading-relaxed">
+                                                    Straysafe AI identified another active report in this area with matching visual features and timeframe. 
+                                                    Compare the sightings side-by-side to consolidate duplicate dispatches.
+                                                </p>
+                                                {duplicateMatches[0]?.matched_report && (
+                                                    <p className="text-[11px] text-amber-700 font-bold mt-1">
+                                                        Potential duplicate: Case #{duplicateMatches[0].matched_report.report_id} 
+                                                        {duplicateMatches[0].matched_report.animal_name ? ` ("${duplicateMatches[0].matched_report.animal_name}")` : ''} 
+                                                        {duplicateMatches[0].matched_report.created_at ? ` • Reported ${new Date(duplicateMatches[0].matched_report.created_at).toLocaleDateString()}` : ''}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                                            {duplicateMatches.length > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setActiveReviewMatch(duplicateMatches[0])}
+                                                    className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md shadow-amber-600/20 flex items-center gap-1.5 cursor-pointer"
+                                                >
+                                                    <span>🔍 Compare Side-by-Side</span>
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsMergeModalOpen(true)}
+                                                className="px-3.5 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer"
+                                            >
+                                                <span>🔗 Merge Case</span>
+                                            </button>
+                                            {duplicateMatches[0] && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDismissDuplicate(duplicateMatches[0].match_id)}
+                                                    className="px-3 py-2.5 bg-white hover:bg-amber-50 text-amber-900 border border-amber-300 text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                                                    title="Dismiss duplicate alert (separate animals)"
+                                                >
+                                                    <span>Dismiss</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Merged Duplicate Alert Banner */}
+                                {(report.status_id === 18 || report.duplicate_of_report_id) && (
+                                    <div className="p-5 rounded-3xl bg-stone-100 border-2 border-stone-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300">
+                                        <div className="flex items-start sm:items-center gap-3.5">
+                                            <div className="w-11 h-11 rounded-2xl bg-stone-800 text-white flex items-center justify-center text-xl font-black shadow-md shadow-stone-800/20 shrink-0">
+                                                🔗
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className="text-xs font-black text-stone-900 uppercase tracking-widest">
+                                                        Merged Duplicate Report
+                                                    </h4>
+                                                    <span className="px-2 py-0.5 bg-stone-300 text-stone-900 rounded-md text-[9px] font-black uppercase">
+                                                        Case #{report.duplicate_of_report_id || 'Active'}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-stone-700 font-medium mt-1 leading-relaxed">
+                                                    This sighting has been confirmed as the same animal and consolidated into active Case #{report.duplicate_of_report_id}.
+                                                    {report.merge_notes && ` Note: "${report.merge_notes}"`}
+                                                </p>
+                                                {report.merged_by_name && (
+                                                    <p className="text-[10px] text-stone-500 font-bold mt-1">
+                                                        Merged by: {report.merged_by_name} {report.merged_at ? `• ${new Date(report.merged_at).toLocaleDateString()}` : ''}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                                            {report.duplicate_of_report_id && (
+                                                <Link
+                                                    to={`/barangay/reports/${report.duplicate_of_report_id}`}
+                                                    className="px-4 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                                                >
+                                                    <span>View Primary Case #{report.duplicate_of_report_id}</span>
+                                                    <span>→</span>
+                                                </Link>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsUnmergeModalOpen(true)}
+                                                className="px-3.5 py-2 bg-white hover:bg-stone-50 text-stone-700 border border-stone-300 text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                                            >
+                                                <span>Separate / Unmerge</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                                     {/* LEFT COLUMN: Main Report Dossier */}
@@ -1049,6 +1220,81 @@ const BrgyReportView = () => {
                                                 verifiedAt={report.verified_at ? String(report.verified_at) : null}
                                             />
                                         </div>
+
+                                        {/* Consolidated Sighting Evidence from Merged Duplicate Reports */}
+                                        {report.merged_reports && report.merged_reports.length > 0 && (
+                                            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-orange-200/80 shadow-xs space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] border border-orange-200 flex items-center justify-center text-lg font-black shrink-0">
+                                                            🔗
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">
+                                                                Consolidated Sighting Evidence ({report.merged_reports.length} Merged {report.merged_reports.length === 1 ? 'Report' : 'Reports'})
+                                                            </h3>
+                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                                                Photos and sightings from other residents confirmed for this same animal
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                                                    {report.merged_reports.map((mr: any) => (
+                                                        <div key={mr.report_id} className="p-4 rounded-2xl bg-stone-50/70 border border-stone-200 space-y-3">
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-xs font-black text-gray-900">
+                                                                        Report #{mr.report_id}
+                                                                    </span>
+                                                                    <span className="px-2 py-0.5 rounded-md bg-stone-200 text-stone-700 text-[9px] font-black uppercase">
+                                                                        Merged Duplicate
+                                                                    </span>
+                                                                </div>
+                                                                <Link
+                                                                    to={`/barangay/reports/${mr.report_id}`}
+                                                                    className="text-[10px] font-black text-[#F97316] hover:underline"
+                                                                >
+                                                                    View Report Details →
+                                                                </Link>
+                                                            </div>
+
+                                                            <div className="flex items-center gap-2.5 text-xs text-gray-600">
+                                                                <span>👤</span>
+                                                                <span className="font-bold text-gray-800">{mr.reporter_name}</span>
+                                                                {mr.landmark && (
+                                                                    <>
+                                                                        <span>•</span>
+                                                                        <span className="truncate">📍 {mr.landmark}</span>
+                                                                    </>
+                                                                )}
+                                                            </div>
+
+                                                            {mr.description && (
+                                                                <p className="text-xs text-gray-600 italic bg-white p-2.5 rounded-xl border border-stone-100">
+                                                                    "{mr.description}"
+                                                                </p>
+                                                            )}
+
+                                                            {mr.media && mr.media.length > 0 && (
+                                                                <div className="flex gap-2 overflow-x-auto py-1">
+                                                                    {mr.media.map((m: any) => (
+                                                                        <div
+                                                                            key={m.media_id}
+                                                                            onClick={() => window.open(m.file_url, '_blank')}
+                                                                            className="w-20 h-20 rounded-xl overflow-hidden bg-gray-200 shrink-0 border border-stone-200 cursor-pointer hover:scale-105 transition-transform"
+                                                                        >
+                                                                            <img src={m.file_url} alt="" className="w-full h-full object-cover" />
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
 
                                         {/* Incident Specifications & Citizen Reporter (Consolidated) */}
                                         <div className="bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-6">
@@ -2453,6 +2699,61 @@ const BrgyReportView = () => {
                         profile_picture: currentUser.profile_picture
                     } : null}
                     threadMode="report"
+                />
+            )}
+
+            {/* Merge Duplicate Report Modal */}
+            {report && (
+                <MergeReportModal
+                    isOpen={isMergeModalOpen}
+                    onClose={() => setIsMergeModalOpen(false)}
+                    secondaryReport={report}
+                    currentUserId={currentUserId}
+                    onSuccess={(updated) => {
+                        setReport(updated);
+                        setSuccessMessage('Report successfully merged into primary active case.');
+                        setShowSuccess(true);
+                    }}
+                />
+            )}
+
+            {/* Unmerge Report Modal */}
+            {report && (
+                <UnmergeReportModal
+                    isOpen={isUnmergeModalOpen}
+                    onClose={() => setIsUnmergeModalOpen(false)}
+                    reportId={report.report_id}
+                    primaryReportId={report.duplicate_of_report_id}
+                    currentUserId={currentUserId}
+                    onSuccess={(updated) => {
+                        setReport(updated);
+                        setSuccessMessage('Report successfully separated back into an independent active case.');
+                        setShowSuccess(true);
+                    }}
+                />
+            )}
+
+            {/* AI Duplicate Match Review Modal */}
+            {activeReviewMatch && (
+                <AIMatchReviewModal
+                    isOpen={!!activeReviewMatch}
+                    onClose={() => setActiveReviewMatch(null)}
+                    match={activeReviewMatch}
+                    isStaff={true}
+                    onVerified={(updated) => {
+                        setActiveReviewMatch(null);
+                        setDuplicateMatches(prev => prev.filter(m => m.match_id !== updated.match_id));
+                        if (report) {
+                            fetchReportDetails();
+                        }
+                    }}
+                    onMerged={(mergedRep) => {
+                        setActiveReviewMatch(null);
+                        setReport(mergedRep);
+                        setSuccessMessage('Report successfully merged into primary active case.');
+                        setShowSuccess(true);
+                        fetchReportDetails();
+                    }}
                 />
             )}
         </div>

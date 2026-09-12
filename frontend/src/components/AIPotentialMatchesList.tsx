@@ -24,6 +24,7 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
     const [loading, setLoading] = useState(true);
     const [activeMatch, setActiveMatch] = useState<any | null>(null);
     const [statusFilter, setStatusFilter] = useState<string>('ALL');
+    const [matchType, setMatchType] = useState<'pets' | 'duplicates'>('pets');
     const [isScanning, setIsScanning] = useState(false);
     const [selectedPetRecord, setSelectedPetRecord] = useState<PetRecord | null>(null);
 
@@ -52,7 +53,11 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
             if (petId) params.pet_id = petId;
             if (statusFilter !== 'ALL') params.status_filter = statusFilter;
 
-            const res = await axios.get('http://localhost:8000/matches/', { params });
+            const endpoint = matchType === 'duplicates'
+                ? (reportId ? `http://localhost:8000/matches/duplicates/report/${reportId}` : 'http://localhost:8000/matches/duplicates')
+                : 'http://localhost:8000/matches/';
+
+            const res = await axios.get(endpoint, { params: matchType === 'duplicates' && reportId ? {} : params });
             setMatches(Array.isArray(res.data) ? res.data : []);
         } catch (err) {
             console.error('Error loading AI matches:', err);
@@ -63,7 +68,7 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
 
     useEffect(() => {
         fetchMatches();
-    }, [subdivisionId, reportId, petId, statusFilter]);
+    }, [subdivisionId, reportId, petId, statusFilter, matchType]);
 
     const handleScan = async () => {
         setIsScanning(true);
@@ -146,6 +151,32 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                 </div>
             </div>
 
+            {/* Match Category Switcher (Registered Pets vs Duplicate Stray Sightings) */}
+            <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-2xl border border-gray-200/70">
+                <button
+                    onClick={() => setMatchType('pets')}
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                        matchType === 'pets'
+                            ? 'bg-white text-gray-900 shadow-sm border border-gray-200/60'
+                            : 'text-gray-500 hover:text-gray-900'
+                    }`}
+                >
+                    <span>🐾</span>
+                    <span>Registered Pet Look-Alikes</span>
+                </button>
+                <button
+                    onClick={() => setMatchType('duplicates')}
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                        matchType === 'duplicates'
+                            ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm'
+                            : 'text-gray-500 hover:text-gray-900'
+                    }`}
+                >
+                    <span>⚠️</span>
+                    <span>Suspected Duplicate Sightings (Report ↔ Report)</span>
+                </button>
+            </div>
+
             {/* Content List */}
             {loading ? (
                 <div className="p-8 text-center bg-white rounded-2xl border border-gray-100 text-xs font-semibold text-gray-400">
@@ -157,9 +188,13 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                         ✓
                     </div>
                     <div>
-                        <h4 className="text-xs font-bold text-gray-800">No Potential Matches in Queue</h4>
+                        <h4 className="text-xs font-bold text-gray-800">
+                            {matchType === 'duplicates' ? 'No Suspected Duplicate Reports' : 'No Potential Matches in Queue'}
+                        </h4>
                         <p className="text-xs text-gray-500 max-w-sm mx-auto font-medium mt-0.5">
-                            The AI hasn't detected eligible unreviewed registered pet matches for this criteria.
+                            {matchType === 'duplicates'
+                                ? 'The AI has not detected suspected duplicate sightings matching this report in the area.'
+                                : "The AI hasn't detected eligible unreviewed registered pet matches for this criteria."}
                         </p>
                     </div>
                 </div>
@@ -208,12 +243,12 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                                                     <span className="text-amber-600 font-bold group-hover:translate-x-0.5 transition-transform text-[10px]">↗</span>
                                                 </button>
                                             ) : (
-                                                <span className="bg-amber-50 border border-amber-200 text-amber-900 px-2 py-0.5 rounded">
-                                                    Report #{m.matched_report_id}
+                                                <span className="bg-amber-100 border border-amber-300 text-amber-950 px-2 py-0.5 rounded font-bold">
+                                                    Candidate Report #{m.matched_report_id}
                                                 </span>
                                             )}
                                         </h4>
-                                        {isPet && (
+                                        {isPet ? (
                                             <div className="flex items-center gap-2 text-[10px] text-gray-500 font-semibold flex-wrap">
                                                 <button
                                                     type="button"
@@ -229,6 +264,25 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                                                     <>
                                                         <span>•</span>
                                                         <span>Owner: {m.matched_pet.owner.name}</span>
+                                                    </>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-2 text-[10px] text-gray-500 font-semibold flex-wrap">
+                                                <span className="text-amber-700 font-extrabold flex items-center gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                                    Suspected Duplicate Stray
+                                                </span>
+                                                {m.matched_report?.landmark && (
+                                                    <>
+                                                        <span>•</span>
+                                                        <span>{m.matched_report.landmark}</span>
+                                                    </>
+                                                )}
+                                                {m.matched_report?.reporter?.name && (
+                                                    <>
+                                                        <span>•</span>
+                                                        <span>Reporter: {m.matched_report.reporter.name}</span>
                                                     </>
                                                 )}
                                             </div>
@@ -251,12 +305,12 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                                         <div className="h-28 rounded-lg overflow-hidden bg-gray-200 relative border border-gray-100">
                                             <img
                                                 src={tgtImg}
-                                                alt="Registered Pet"
+                                                alt={isPet ? "Registered Pet" : "Candidate Sighting"}
                                                 className="w-full h-full object-cover"
                                                 onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
                                             />
                                             <span className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-amber-600/90 text-white text-[9px] font-bold rounded">
-                                                Registered Pet Photo
+                                                {isPet ? "Registered Pet Photo" : "Candidate Photo"}
                                             </span>
                                         </div>
                                     </div>
@@ -264,18 +318,18 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                                     {/* AI Evidence Bullets */}
                                     <div className="space-y-1.5">
                                         <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">
-                                            AI Evidence Points:
+                                            AI Matched Indicators
                                         </span>
                                         <ul className="space-y-1">
-                                            {bullets.slice(0, 3).map((b, i) => (
-                                                <li key={i} className="text-xs text-gray-700 font-medium flex items-start gap-1.5">
-                                                    <span className="text-emerald-500 font-bold shrink-0">✓</span>
-                                                    <span className="line-clamp-1">{b}</span>
+                                            {bullets.slice(0, 3).map((bullet, idx) => (
+                                                <li key={idx} className="text-xs text-gray-600 flex items-start gap-1.5">
+                                                    <span className="text-emerald-500 font-bold text-xs mt-0.5">✓</span>
+                                                    <span className="leading-tight">{bullet}</span>
                                                 </li>
                                             ))}
                                             {bullets.length > 3 && (
-                                                <li className="text-[11px] text-[#F97316] font-semibold">
-                                                    +{bullets.length - 3} more matching attributes
+                                                <li className="text-[11px] text-gray-400 italic">
+                                                    +{bullets.length - 3} more heuristic indicators
                                                 </li>
                                             )}
                                         </ul>
@@ -307,6 +361,10 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                     match={activeMatch}
                     isStaff={isStaff}
                     onVerified={() => {
+                        fetchMatches();
+                        if (onMatchesUpdated) onMatchesUpdated();
+                    }}
+                    onMerged={() => {
                         fetchMatches();
                         if (onMatchesUpdated) onMatchesUpdated();
                     }}

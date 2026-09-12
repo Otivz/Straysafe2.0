@@ -770,6 +770,7 @@ def list_user_threads(
     """
     results = []
     seen_thread_ids = set()
+    assigned_rescue_report_ids = []
 
     # 1. REPORT CASE THREADS (thread_type == 'Report')
     report_query = db.query(ChatThread).filter(ChatThread.thread_type == "Report").join(Report, ChatThread.related_id == Report.report_id)
@@ -833,8 +834,8 @@ def list_user_threads(
 
         memorable_title = generate_memorable_report_title(report, reporter)
 
-        can_interact = can_user_interact_with_report_chat(t.related_id, current_user, db) if report else True
-        is_assigned = is_user_assigned_to_report(t.related_id, current_user.user_id, db) if report else False
+        can_interact = can_user_interact_with_report_chat(report.report_id, current_user, db) if report else True
+        is_assigned = is_user_assigned_to_report(report.report_id, current_user.user_id, db) if report else False
 
         results.append({
             "thread_id": t.thread_id,
@@ -919,6 +920,7 @@ def list_user_threads(
         pet = db.query(Pet).filter(Pet.pet_id == match.matched_pet_id).first() if match.matched_pet_id else None
         owner = db.query(User).filter(User.user_id == pet.owner_id).first() if (pet and pet.owner_id) else None
         reporter = db.query(User).filter(User.user_id == report.user_id).first() if (report and report.user_id) else None
+        assigned_leader = db.query(User).filter(User.user_id == report.assigned_leader_id).first() if (report and report.assigned_leader_id) else None
         # Match threads remain open for coordination during Claimed by Owner (ID 9)
         is_resolved = ((report.current_status_id or report.status_id) in [3, 11, 12, 14]) if report else False
         if t.is_closed != is_resolved:

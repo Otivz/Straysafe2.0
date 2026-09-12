@@ -6,12 +6,14 @@ import AddPetModal from '../PetRecords/AddPetModal';
 import PetDetailPanel from '../PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from '../PetRecords/types';
 import ReportChatDrawer from '../Chat/ReportChatDrawer';
+import MergeReportModal from './MergeReportModal';
 
 interface AIMatchReviewModalProps {
     isOpen: boolean;
     onClose: () => void;
     match: any;
     onVerified?: (updatedMatch: any) => void;
+    onMerged?: (updatedReport: any) => void;
     isStaff?: boolean; // true for leader, brgy, admin; false for resident
 }
 
@@ -49,6 +51,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     onClose,
     match,
     onVerified,
+    onMerged,
     isStaff = true
 }) => {
     const [selectedDecision, setSelectedDecision] = useState<'CONFIRMED_MATCH' | 'NOT_A_MATCH' | 'UNABLE_TO_VERIFY' | null>(null);
@@ -57,6 +60,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     const [submitError, setSubmitError] = useState('');
     const [activeTab, setActiveTab] = useState<'comparison' | 'audit'>('comparison');
     const [isAddPetModalOpen, setIsAddPetModalOpen] = useState(false);
+    const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [selectedPetRecord, setSelectedPetRecord] = useState<PetRecord | null>(null);
     const [isLoadingPetRecord, setIsLoadingPetRecord] = useState(false);
@@ -180,7 +184,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                         <div>
                             <div className="flex items-center gap-2.5 flex-wrap">
                                 <h2 className="text-xl font-black text-gray-900 tracking-tight">
-                                    Potential Match Review
+                                    {isPetMatch ? "Potential Match Review" : "⚠️ Suspected Duplicate Sighting Review"}
                                 </h2>
                                 <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-extrabold text-xs rounded-full shadow-sm">
                                     {match.similarity_score}% Similarity
@@ -199,22 +203,20 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                 onClick={() => setActiveTab('comparison')}
                                 className={`px-3 py-1.5 rounded-lg transition-all ${activeTab === 'comparison' ? 'bg-white text-gray-900 shadow-sm' : 'hover:text-gray-900'}`}
                             >
-                                Side-by-Side Review
+                                Side-by-Side
                             </button>
                             <button
                                 onClick={() => setActiveTab('audit')}
                                 className={`px-3 py-1.5 rounded-lg transition-all ${activeTab === 'audit' ? 'bg-white text-gray-900 shadow-sm' : 'hover:text-gray-900'}`}
                             >
-                                Audit Trail
+                                Verification Log
                             </button>
                         </div>
                         <button
                             onClick={onClose}
-                            className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all"
+                            className="w-9 h-9 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-all cursor-pointer"
                         >
-                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
+                            ✕
                         </button>
                     </div>
                 </div>
@@ -225,24 +227,41 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                     {activeTab === 'comparison' ? (
                         <>
                             {/* ── AI Evidence Banner ── */}
-                            <div className="bg-gradient-to-br from-amber-50/80 via-orange-50/50 to-white border border-amber-200/80 rounded-2xl p-5 shadow-sm">
-                                <div className="flex items-start gap-4">
-                                    <div className="p-3 bg-amber-500 text-white rounded-xl shadow-md shrink-0">
-                                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                        </svg>
+                            <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-transparent border border-orange-200/60 rounded-2xl p-4.5 space-y-3">
+                                <div className="flex items-start gap-3.5">
+                                    <div className="w-10 h-10 rounded-2xl bg-[#F97316] text-white flex items-center justify-center text-lg font-black shadow-md shadow-orange-500/20 shrink-0">
+                                        ⚡
                                     </div>
-                                    <div className="space-y-2.5 flex-1">
+                                    <div className="space-y-1 flex-1">
                                         <div className="flex items-center justify-between flex-wrap gap-2">
-                                            <h3 className="text-sm font-extrabold text-amber-950 uppercase tracking-wider flex items-center gap-2">
-                                                AI Supporting Evidence & Heuristics
+                                            <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                                                AI Visual & Characteristic Correlation Engine
                                             </h3>
-                                            {getOwnerFeedbackBadge(match.owner_confirmation_status)}
+                                            {isPetMatch && getOwnerFeedbackBadge(match.owner_confirmation_status)}
                                         </div>
                                         <p className="text-xs text-gray-700 leading-relaxed font-medium">
                                             {match.ai_explanation || "AI algorithm analyzed species, coat colors, pattern, size, and location proximity."}
                                         </p>
                                         
+                                        {/* Closest Attribute Comparison Pills */}
+                                        {evidence.closest_attributes && evidence.closest_attributes.length > 0 && (
+                                            <div className="flex flex-wrap gap-1.5 pt-1">
+                                                {evidence.closest_attributes.map((attr: any, i: number) => (
+                                                    <span key={i} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border shadow-2xs ${
+                                                        attr.is_match
+                                                            ? 'bg-emerald-50 text-emerald-950 border-emerald-300'
+                                                            : 'bg-rose-50 text-rose-950 border-rose-300'
+                                                    }`}>
+                                                        <span className={attr.is_match ? 'text-emerald-600 font-black' : 'text-rose-600 font-black'}>
+                                                            {attr.is_match ? '✓' : '✕'}
+                                                        </span>
+                                                        <span className="text-gray-500">{attr.attribute}:</span>
+                                                        <span className="font-black text-gray-900">{attr.match_status || attr.source_value}</span>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+
                                         {/* Evidence Badges */}
                                         {bullets.length > 0 && (
                                             <div className="flex flex-wrap gap-2 pt-1">
@@ -257,8 +276,8 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                 </div>
                             </div>
 
-                            {/* ── Look-Alike Direct Confirmation & Message Callout ── */}
-                            {(() => {
+                            {/* ── Callout: Look-Alike Owned Pet OR Duplicate Stray Sighting ── */}
+                            {isPetMatch ? (() => {
                                 const isOwner = isPetMatch && currentUser?.user_id && (targetPet?.owner_id === currentUser.user_id || targetPet?.owner?.user_id === currentUser.user_id);
                                 const ownerName = targetPet?.owner?.name || (isOwner ? "You" : "Registered Owner");
                                 const petName = targetPet?.pet_name || "Registered Pet";
@@ -297,7 +316,36 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                         </button>
                                     </div>
                                 );
-                            })()}
+                            })() : (
+                                <div className="bg-gradient-to-r from-amber-50/90 via-orange-50/40 to-white border border-amber-200/80 rounded-2xl p-4.5 flex flex-wrap items-center justify-between gap-4 shadow-xs">
+                                    <div className="flex items-start gap-3.5 flex-1 min-w-[280px]">
+                                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center text-lg font-black shadow-md shadow-amber-500/20 shrink-0">
+                                            ⚠️
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide flex items-center gap-2">
+                                                <span>Suspected Duplicate Stray Sighting</span>
+                                                <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-[10px] font-extrabold lowercase">
+                                                    Report ↔ Report
+                                                </span>
+                                            </h4>
+                                            <p className="text-xs text-gray-600 font-medium leading-relaxed">
+                                                AI detected that Report #{match.source_report_id} and Report #{match.matched_report_id} share {match.similarity_score}% appearance similarity in the same vicinity. Review the photos, landmarks, and descriptions below. If they are the same animal, confirm and merge them into a single active case.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {isStaff && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsMergeModalOpen(true)}
+                                            className="px-4 py-2.5 bg-gradient-to-r from-amber-600 to-[#F97316] hover:from-amber-700 hover:to-[#ea580c] active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center gap-2 cursor-pointer whitespace-nowrap"
+                                        >
+                                            <span>🔗</span>
+                                            <span>Confirm Duplicate & Merge</span>
+                                        </button>
+                                    )}
+                                </div>
+                            )}
 
                             {/* ── Side-by-Side Comparison Columns ── */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -571,7 +619,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                         </Button>
                                     </div>
                                 </div>
-                            ) : (
+                            ) : isPetMatch ? (
                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                     <div className="text-xs text-gray-500 font-medium">
                                         <strong className="text-gray-800">Final Verification Rule:</strong> AI recommendations require staff confirmation before officially matching cases.
@@ -602,6 +650,33 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shadow-emerald-600/20"
                                         >
                                             <span>✓</span> Confirm Match
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div className="text-xs text-gray-500 font-medium">
+                                        <strong className="text-gray-800">Duplicate Action:</strong> If confirmed as the same stray sighting, merge secondary report into primary to consolidate evidence.
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                                        <button
+                                            onClick={() => { setSelectedDecision('NOT_A_MATCH'); setVerificationNotes('Staff confirmed these are separate/different stray animals.'); }}
+                                            className="px-4 py-2.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                        >
+                                            <span>✕</span> Separate / Different Animal
+                                        </button>
+                                        <button
+                                            onClick={() => { setSelectedDecision('UNABLE_TO_VERIFY'); setVerificationNotes('Inconclusive evidence to confirm duplicate sighting.'); }}
+                                            className="px-4 py-2.5 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                        >
+                                            <span>?</span> Unable to Verify
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsMergeModalOpen(true)}
+                                            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-[#F97316] hover:from-amber-700 hover:to-[#ea580c] text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shadow-orange-500/20 cursor-pointer"
+                                        >
+                                            <span>🔗</span> Confirm Duplicate & Merge Reports
                                         </button>
                                     </div>
                                 </div>
@@ -726,6 +801,24 @@ Please review the comparison photos above and let us know if this is your pet.`;
                         />
                     </div>
                 </div>
+            )}
+
+            {/* Nested Merge Report Modal for Duplicate Stray Sightings */}
+            {isMergeModalOpen && !isPetMatch && (
+                <MergeReportModal
+                    isOpen={isMergeModalOpen}
+                    onClose={() => setIsMergeModalOpen(false)}
+                    secondaryReport={targetReport || { report_id: match.matched_report_id, subdivision_id: source?.subdivision_id }}
+                    initialPrimaryReportId={source?.report_id || match.source_report_id}
+                    initialNotes={`AI confirmed duplicate stray sighting (${match.similarity_score}% visual/attribute match). Consolidated case.`}
+                    currentUserId={currentUser?.user_id || 1}
+                    onSuccess={(mergedRep) => {
+                        setIsMergeModalOpen(false);
+                        if (onMerged) onMerged(mergedRep);
+                        if (onVerified) onVerified({ ...match, status: 'CONFIRMED_MATCH' });
+                        onClose();
+                    }}
+                />
             )}
         </div>
     );

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, useLocation, Link } from 'react-router-dom';
 import axios from 'axios';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import MapComponent from '../../components/MapComponent';
@@ -786,6 +786,46 @@ const ResiViewReport = () => {
                                                 </p>
                                             </div>
                                         </div>
+
+                                        {/* Merged Duplicate Information Card for Citizen */}
+                                        {(report.status_id === 18 || report.duplicate_of_report_id) && (
+                                            <div className="p-5 rounded-3xl bg-stone-50 border-2 border-stone-200 text-stone-900 space-y-3 shadow-2xs">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-2xl bg-stone-200 text-stone-800 flex items-center justify-center text-xl font-black shrink-0">
+                                                        🔗
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <h4 className="text-xs font-black uppercase tracking-widest text-stone-900">
+                                                                Linked Sighting Case
+                                                            </h4>
+                                                            <span className="px-2 py-0.5 rounded-full bg-stone-200 text-stone-700 text-[9px] font-black uppercase">
+                                                                Active Case #{report.duplicate_of_report_id || 'Active'}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-xs font-bold text-stone-600 mt-0.5">
+                                                            Consolidated into active rescue operation
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <p className="text-xs text-stone-700 font-medium leading-relaxed bg-white p-3.5 rounded-2xl border border-stone-100">
+                                                    <strong>Thank you for your report!</strong> Responding officers confirmed that this animal is currently being tracked under active <strong>Case #{report.duplicate_of_report_id}</strong>. Your submitted photo and sighting details have been credited and added to the official case record to assist the rescue team.
+                                                </p>
+
+                                                {report.duplicate_of_report_id && (
+                                                    <div className="pt-1">
+                                                        <Link
+                                                            to={`/resident/report/${report.duplicate_of_report_id}`}
+                                                            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-xs"
+                                                        >
+                                                            <span>Track Active Case #{report.duplicate_of_report_id}</span>
+                                                            <span>→</span>
+                                                        </Link>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
 
                                         {/* Verified Record / Investigation Finding Banner */}
                                         {report.verification_status === 'verified_true' && (

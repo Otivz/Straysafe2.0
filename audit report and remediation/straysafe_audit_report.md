@@ -1,9 +1,41 @@
 # StraySafe 2.0 — Product Design & Architecture Audit Report
 
-**Date:** 2026-09-09  
+**Original Audit Date:** 2026-09-09  
+**Last Reviewed:** 2026-09-11  
 **Auditor:** Senior Product Design + Software Architecture Auditor  
 **System:** StraySafe 2.0 — Stray Animal Reporting & Rescue Coordination Platform  
 **Stack:** React 19 / TypeScript / Tailwind CSS 4 (Frontend) · FastAPI / Python 3.12 / SQLAlchemy 2.0 / MySQL (Backend)
+
+---
+
+## Remediation Status (as of 2026-09-11)
+
+> [!IMPORTANT]
+> **No critical or high-severity findings have been resolved since the original audit (2026-09-09).** One minor code quality fix was applied. All active attack vectors remain open.
+
+| Finding | Status | Notes |
+|:---|:---|:---|
+| Finding #1 — Committed secrets | ❌ Open | `.env` still committed; hardcoded JWT fallback still at `auth.py:L13` |
+| Finding #2 — No rate limiting | ❌ Open | `slowapi` not installed; no rate limiting anywhere |
+| Finding #3 — ProtectedRoute auth bypass | ❌ Open | Fallback still at `ProtectedRoute.tsx` lines 71–87 |
+| Finding #4 — `main.py` DDL migration mess | ❌ Open | Alembic not adopted |
+| Finding #5 — `reports.py` monolith (3,589 lines, now grown) | ❌ Open | File has grown from 3,041 to **3,589 lines** since audit |
+| Finding #6 — `ResiHomePage.tsx` monolith | ❌ Open | Not split |
+| Finding #7 — 108+ hardcoded localhost URLs | ❌ Open | Now **200+ matching lines** across frontend |
+| Finding #8 — PII in localStorage | ❌ Open | httpOnly cookies not implemented |
+| Finding #9 — Zero tests | ❌ Open | No test files added |
+| Finding #10 — WCAG contrast failures | ❌ Open | No color updates applied |
+| Finding #11 — Login page 60-30-10 violation | ❌ Open | Login pages unchanged |
+| Finding #12 — `/auth/me` leaks password hash | ❌ Open | No `UserPublicResponse` schema added |
+| Finding #13 — JWT in localStorage, 7-day expiry | ❌ Open | No token refresh implemented |
+| Finding #14 — No pagination on list endpoints | ❌ Open | Unbounded queries remain |
+| Finding #15 — Token via query param (`?token=`) | ❌ Open | Lines 81–82 in `auth.py` still present |
+| Finding #16 — No security headers | ❌ Open | No middleware added |
+| Finding #17 — Login portals visually identical | ❌ Open | No portal differentiation applied |
+| Finding #18 — Dark mode `!important` overrides | ❌ Open | CSS unchanged |
+| Finding #19 — No data retention/deletion | ❌ Open | No export/deletion endpoints |
+| Finding #20 — `EscelatedMissions.tsx` typo | ❌ Open | File still misnamed |
+| Code Quality — `sb_clean` may be uninitialized | ✅ Fixed (2026-09-11) | Variable moved outside conditional block in `matches.py` |
 
 ---
 
@@ -140,28 +172,31 @@ StraySafe 2.0 is a functional multi-role application (Resident → Subdivision L
 
 ## Findings Table
 
-| # | Severity | Area | Issue | Why It Matters | Fix |
+> **Status key:** ❌ Open · ⚠️ Partially addressed · ✅ Resolved
+
+| # | Severity | Area | Issue | Status (2026-09-11) | Fix |
 |:---|:---|:---|:---|:---|:---|
-| 1 | **Critical** | Security | Secrets (API keys, admin password, JWT fallback) committed in `.env` and source code | Any repo access leaks all credentials | Rotate all keys immediately. Move secrets to a vault or CI secrets manager. Remove `.env` from git history with `git filter-repo`. |
-| 2 | **Critical** | Security | No rate limiting on login or any endpoint | Brute-force login attacks are trivially easy | Add `slowapi` middleware with rate limits: 5 attempts/min on `/auth/login`, 60 req/min on general endpoints. |
-| 3 | **Critical** | Security | `ProtectedRoute` fallback grants access from client-side `localStorage` when backend is unreachable | Auth is fully client-side on network failure — attacker can forge `localStorage` | Remove the fallback (lines 71-87 in `ProtectedRoute.tsx`). If server is unreachable, deny access. |
-| 4 | **Critical** | Architecture | `main.py` contains 30+ inline DDL migration functions (931 lines) | No rollback, no history, races on multi-instance deploy, slows every startup | Adopt Alembic. Extract all `ensure_*` functions into versioned migration scripts. |
-| 5 | **Critical** | Architecture | `reports.py` is 3,041 lines (140KB) with 40+ endpoints and mixed business logic | Unmaintainable, untestable, merge-conflict magnet | Extract into service layer + sub-routers: `reports/`, `reports/disputes/`, `reports/transfers/`, `reports/verification/`. |
-| 6 | **Critical** | Architecture | `ResiHomePage.tsx` is 4,003 lines (289KB) — single React component | Cannot be maintained, reviewed, or tested | Split into composition: `<ReportMap />`, `<ReportForm />`, `<ReportList />`, `<ReportFilters />`, etc. |
-| 7 | **Critical** | Security | 108+ hardcoded `http://localhost:8000` URLs in frontend pages bypass auth interceptor | Requests skip token attachment; breaks in any non-localhost deployment | Replace all with `api.get()` / `api.post()` from the centralized `utils/api.ts` module. |
-| 8 | **Critical** | Data | Full user PII (name, email, phone, address, GPS) stored in `localStorage` unencrypted | XSS attack exfiltrates all user data; violates data protection principles | Store only the JWT token in an `httpOnly` cookie. Fetch user profile on-demand from `/auth/me`. |
-| 9 | **Critical** | Quality | Zero automated tests in the entire repository | No regression safety net; every change is a roll of the dice | Add pytest for backend (auth, reports CRUD) and Vitest for frontend (ProtectedRoute, API interceptor). |
-| 10 | **High** | UI/A11Y | 5/5 sampled text elements fail WCAG AA contrast (ratios 2.5:1 – 3.2:1) | Excludes users with low vision; legal liability under accessibility regulations | Darken text colors: body text → `#374151` (gray-700), labels → `#4B5563` (gray-600), footer → `#6B7280` (gray-500). Use `#EA580C` (orange-600) for CTA buttons. |
-| 11 | **High** | UI | Login accent color (orange) occupies 50% of viewport, violating 60-30-10 | CTA button has no visual prominence; user's eye has nowhere to anchor | Reduce left panel to a subtle gradient/illustration. Reserve saturated orange exclusively for the CTA. |
-| 12 | **High** | Security | `/auth/me` returns raw User ORM object, potentially including hashed password | Leaks internal data structure and password hash to client | Add a `response_model=UserPublicResponse` Pydantic schema that excludes `password`, `created_at`, internal IDs. |
-| 13 | **High** | Security | JWT token stored in `localStorage` with 7-day expiry, no refresh mechanism | Token theft gives 7 days of access with no way to revoke | Implement short-lived access tokens (15 min) + refresh token rotation with server-side revocation. |
-| 14 | **High** | Architecture | No pagination on list endpoints (`GET /reports/`, `GET /users/`) | Response time degrades linearly with data; can OOM on large datasets | Add `skip` + `limit` query params with defaults (e.g., `limit=50`). Return total count in headers or response. |
-| 15 | **Medium** | Security | Token accepted via URL query parameter (`?token=...`) | Token leaks into server logs, proxy logs, browser history, referer headers | Remove query-param token extraction from `get_current_user()`. Require `Authorization` header only. |
-| 16 | **Medium** | Security | No security headers (`X-Frame-Options`, `CSP`, `X-Content-Type-Options`) | Clickjacking, MIME-type confusion, XSS via content injection | Add `starlette-security-headers` or manual middleware to set security headers. |
-| 17 | **Medium** | UI | All three login portals are visually identical | Users may enter credentials into the wrong portal with no friction | Differentiate: Resident = orange/warm theme, Staff = blue/teal, Admin = dark/slate. Add role badges. |
-| 18 | **Medium** | Architecture | Dark mode CSS is 170 lines of `!important` overrides targeting specific Tailwind classes | Breaks on any new utility class; unmaintainable | Use CSS custom properties (`var(--bg-surface)`) consistently via Tailwind `theme.extend`. Remove all `!important` overrides. |
-| 19 | **Medium** | Compliance | No data retention or deletion mechanism | No path to comply with data subject access/erasure requests | Add user data export + deletion endpoints. Implement TTL-based cleanup for audit logs and expired sessions. |
-| 20 | **Low** | Quality | Filename typo: `EscelatedMissions.tsx` | Confuses developers, harms codebase searchability | Rename to `EscalatedMissions.tsx` and update all imports. |
+| 1 | **Critical** | Security | Secrets (API keys, admin password, JWT fallback) committed in `.env` and source code | ❌ Open — Hardcoded JWT fallback still at [`auth.py:L13`](file:///c:/Users/User/Desktop/Straysafe2.0/backend/app/utils/auth.py#L13) | Rotate all keys immediately. Move secrets to a vault or CI secrets manager. Remove `.env` from git history with `git filter-repo`. |
+| 2 | **Critical** | Security | No rate limiting on login or any endpoint | ❌ Open — `slowapi` not in `requirements.txt` | Add `slowapi` middleware with rate limits: 5 attempts/min on `/auth/login`, 60 req/min on general endpoints. |
+| 3 | **Critical** | Security | `ProtectedRoute` fallback grants access from client-side `localStorage` when backend is unreachable | ❌ Open — Fallback still at [`ProtectedRoute.tsx:L71-87`](file:///c:/Users/User/Desktop/Straysafe2.0/frontend/src/components/ProtectedRoute.tsx#L71-L87) | Remove the fallback. If server is unreachable, deny access. |
+| 4 | **Critical** | Architecture | `main.py` contains 30+ inline DDL migration functions | ❌ Open — Alembic not adopted | Adopt Alembic. Extract all `ensure_*` functions into versioned migration scripts. |
+| 5 | **Critical** | Architecture | `reports.py` was 3,041 lines at audit — now **3,589 lines (170KB)** and still growing | ❌ Worsened — file grew by 548 lines since audit | Extract into service layer + sub-routers: `reports/`, `reports/disputes/`, `reports/transfers/`, `reports/verification/`. |
+| 6 | **Critical** | Architecture | `ResiHomePage.tsx` is 4,003+ lines — single React component | ❌ Open — Not split | Split into composition: `<ReportMap />`, `<ReportForm />`, `<ReportList />`, `<ReportFilters />`, etc. |
+| 7 | **Critical** | Security | 108+ hardcoded `http://localhost:8000` URLs in frontend pages bypass auth interceptor | ❌ Worsened — now **200+ matching lines** across the codebase | Replace all with `api.get()` / `api.post()` from the centralized `utils/api.ts` module. |
+| 8 | **Critical** | Data | Full user PII (name, email, phone, address, GPS) stored in `localStorage` unencrypted | ❌ Open | Store only the JWT token in an `httpOnly` cookie. Fetch user profile on-demand from `/auth/me`. |
+| 9 | **Critical** | Quality | Zero automated tests in the entire repository | ❌ Open — No test files added | Add pytest for backend (auth, reports CRUD) and Vitest for frontend (ProtectedRoute, API interceptor). |
+| 10 | **High** | UI/A11Y | 5/5 sampled text elements fail WCAG AA contrast (ratios 2.5:1 – 3.2:1) | ❌ Open | Darken text colors: body text → `#374151` (gray-700), labels → `#4B5563` (gray-600), footer → `#6B7280` (gray-500). Use `#EA580C` (orange-600) for CTA buttons. |
+| 11 | **High** | UI | Login accent color (orange) occupies 50% of viewport, violating 60-30-10 | ❌ Open | Reduce left panel to a subtle gradient/illustration. Reserve saturated orange exclusively for the CTA. |
+| 12 | **High** | Security | `/auth/me` returns raw User ORM object, potentially including hashed password | ❌ Open — No `UserPublicResponse` schema added | Add a `response_model=UserPublicResponse` Pydantic schema that excludes `password`, `created_at`, internal IDs. |
+| 13 | **High** | Security | JWT token stored in `localStorage` with 7-day expiry, no refresh mechanism | ❌ Open | Implement short-lived access tokens (15 min) + refresh token rotation with server-side revocation. |
+| 14 | **High** | Architecture | No pagination on list endpoints (`GET /reports/`, `GET /users/`) | ❌ Open | Add `skip` + `limit` query params with defaults (e.g., `limit=50`). Return total count in headers or response. |
+| 15 | **Medium** | Security | Token accepted via URL query parameter (`?token=...`) | ❌ Open — Lines 81–82 in [`auth.py`](file:///c:/Users/User/Desktop/Straysafe2.0/backend/app/utils/auth.py#L81-L82) still present | Remove query-param token extraction from `get_current_user()`. Require `Authorization` header only. |
+| 16 | **Medium** | Security | No security headers (`X-Frame-Options`, `CSP`, `X-Content-Type-Options`) | ❌ Open | Add `starlette-security-headers` or manual middleware to set security headers. |
+| 17 | **Medium** | UI | All three login portals are visually identical | ❌ Open | Differentiate: Resident = orange/warm theme, Staff = blue/teal, Admin = dark/slate. Add role badges. |
+| 18 | **Medium** | Architecture | Dark mode CSS is 170 lines of `!important` overrides targeting specific Tailwind classes | ❌ Open | Use CSS custom properties (`var(--bg-surface)`) consistently via Tailwind `theme.extend`. Remove all `!important` overrides. |
+| 19 | **Medium** | Compliance | No data retention or deletion mechanism | ❌ Open | Add user data export + deletion endpoints. Implement TTL-based cleanup for audit logs and expired sessions. |
+| 20 | **Low** | Quality | Filename typo: `EscelatedMissions.tsx` | ❌ Open — File still misnamed | Rename to `EscalatedMissions.tsx` and update all imports. |
+| 21 | **Low** | Code Quality | `sb_clean` / `cb_clean` defined inside conditional block — potentially uninitialized at point of use in `matches.py` | ✅ Fixed (2026-09-11) | Variables moved outside the `if src_breed and cand_breed:` block. |
 
 ---
 
@@ -188,7 +223,7 @@ StraySafe 2.0 is a functional multi-role application (Resident → Subdivision L
 | MT-5 | **Add foundational test suites**: pytest for backend auth + report CRUD; Vitest for ProtectedRoute + API interceptor | Catches regressions before they reach users; prerequisite for any refactoring | M | **High** |
 | MT-6 | **Add React Query (TanStack Query)** or SWR for server-state management | Eliminates hundreds of duplicated `useEffect` + `useState` patterns; adds caching, deduplication, retry | M | **Med** |
 
-### 3. ![alt text](image.png) (Design-system or architecture-level investment)
+### 3. Long-Term Investments (Design-system or architecture-level investment)
 
 | # | What to Change | Why It Helps | Effort | Impact |
 |:---|:---|:---|:---|:---|
