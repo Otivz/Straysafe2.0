@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
-from app.schemas.auth import LoginRequest, LoginResponse, GoogleAuthRequest
+from app.schemas.auth import LoginRequest, LoginResponse, GoogleAuthRequest, UserPublicResponse
 from app.utils.auth import verify_password, create_access_token, get_current_user
 from app.utils.audit import log_activity
+from app.limiter import limiter
 
 router = APIRouter(
     prefix="/auth",
@@ -12,9 +13,10 @@ router = APIRouter(
 )
 
 @router.post("/login", response_model=LoginResponse)
-def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def login(request: Request, login_request: LoginRequest, db: Session = Depends(get_db)):
     # Find user by email
-    user = db.query(User).filter(User.email == request.email).first()
+    user = db.query(User).filter(User.email == login_request.email).first()
     
     if not user:
         # Log failed login — unknown user
@@ -22,9 +24,9 @@ def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
             db=db,
             action="FAILED_LOGIN",
             target_table="auth",
-            description=f"Failed login attempt for email: {request.email} (user not found)",
+            description=f"Failed login attempt for email: {login_request.email} (user not found)",
             log_type="security",
-            request=req
+            request=request
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -33,7 +35,7 @@ def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
         )
     
     # Verify password
-    if not verify_password(request.password, str(user.password)):
+    if not verify_password(login_request.password, user.password):
         log_activity(
             db=db,
             action="FAILED_LOGIN",
@@ -42,7 +44,7 @@ def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
             description=f"Failed login attempt for user: {user.name} ({user.email}) — wrong password",
             user_id=user.user_id,
             log_type="security",
-            request=req
+            request=request
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -60,7 +62,7 @@ def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
             description=f"Login blocked for inactive account: {user.name} ({user.email})",
             user_id=user.user_id,
             log_type="security",
-            request=req
+            request=request
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -85,7 +87,7 @@ def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
         description=f"Successful login: {user.name} ({user.email})",
         user_id=user.user_id,
         log_type="security",
-        request=req
+        request=request
     )
     
     # Get location and position names
@@ -154,7 +156,7 @@ def verify_session_by_id(
         "is_head_officer": current_user.is_head_officer
     }
 
-@router.get("/me")
+@router.get("/me", response_model=UserPublicResponse)
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
@@ -164,7 +166,7 @@ def google_auth(request: GoogleAuthRequest, req: Request, db: Session = Depends(
     import secrets
     from app.utils.auth import get_password_hash
 
-    email_clean = str(request.email).strip().lower()
+    email_clean = request.email.strip().lower()
     user = db.query(User).filter(User.email == email_clean).first()
 
     if not user:

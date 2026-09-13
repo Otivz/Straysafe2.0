@@ -68,7 +68,7 @@ def get_current_user(
     db: Session = Depends(get_db)
 ) -> User:
     """
-    Extract JWT token from Authorization header or query parameter, decode it, and return DB User.
+    Extract JWT token from Authorization header, decode it, and return DB User.
     """
     token = None
     if credentials:
@@ -78,8 +78,6 @@ def get_current_user(
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header.split(" ")[1]
-        elif "token" in request.query_params:
-            token = request.query_params.get("token")
 
     if not token:
         raise HTTPException(

@@ -40,3 +40,25 @@ class GoogleAuthRequest(BaseModel):
     profile_picture: Optional[str] = None
     credential: Optional[str] = None
 
+
+class UserPublicResponse(BaseModel):
+    user_id: int
+    name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    role_id: int
+    subdivision_id: Optional[int] = None
+    barangay_id: Optional[int] = None
+    position_id: Optional[int] = None
+    is_head_officer: bool = False
+    profile_picture: Optional[str] = None
+    address: Optional[str] = None
+    status: Optional[str] = None
+    is_verified: bool = False
+    created_at: Optional[datetime] = None
+
+    model_config = {
+        "from_attributes": True
+    }
+
+

@@ -199,7 +199,7 @@
 
 ---
 
-### Task 1.4 — Add Rate Limiting to Backend
+### Task 1.4 — Add Rate Limiting to Backend - Done
 **Audit Ref:** Finding #2 · Priority #4  
 **⏱ Est:** ~5 min (install + wire middleware)  
 **Current State:** ❌ `slowapi` is not in `requirements.txt`. No rate limiting on any endpoint.
@@ -239,7 +239,7 @@
 
 ---
 
-### Task 1.5 — Protect `/auth/me` Endpoint from Leaking Password Hash
+### Task 1.5 — Protect `/auth/me` Endpoint from Leaking Password Hash - DONE
 **Audit Ref:** Finding #12  
 **⏱ Est:** ~3 min (create schema + apply to endpoint)  
 **Current State:** ❌ No `UserPublicResponse` schema exists. The endpoint returns the raw ORM object. Additionally, `?token=` query param acceptance is still present at [`auth.py:L81-82`](file:///c:/Users/User/Desktop/Straysafe2.0/backend/app/utils/auth.py#L81-L82) (Finding #15) — remove it alongside this task.

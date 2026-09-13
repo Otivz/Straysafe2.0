@@ -48,7 +48,7 @@ def _populate_rescue_fields(rescue: Optional[Rescue], db: Session) -> Optional[R
         official_actions = [h for h in rescue.report.history if h.updater and h.updater.role_id == 2]
         if official_actions:
             # Use the most recent official action
-            latest_official = sorted(official_actions, key=lambda x: x.created_at, reverse=True)[0].updater
+            latest_official = sorted(official_actions, key=lambda x: x.created_at or datetime.min, reverse=True)[0].updater
             if latest_official:
                 rescue.leader_name = latest_official.name
                 rescue.leader_position = latest_official.position.position_name if latest_official.position else "Subdivision Leader"
