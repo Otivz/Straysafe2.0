@@ -1,11 +1,15 @@
 import sys
 import os
 import asyncio
+from typing import Any, cast
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from app.limiter import limiter
 
 # Add the 'backend' directory to sys.path so 'app' can be imported correctly
 # when running from the project root.
@@ -891,6 +895,8 @@ async def lifespan(app: FastAPI):
         pass
 
 app = FastAPI(title="StraySafe API", lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, cast(Any, _rate_limit_exceeded_handler))
 
 # Configure CORS
 app.add_middleware(

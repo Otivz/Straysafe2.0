@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 import os
 import uuid
+from datetime import datetime, timedelta
 from decimal import Decimal
 from sqlalchemy.orm import Session, joinedload, selectinload
 from typing import List, Optional
@@ -356,9 +357,10 @@ def populate_duplicate_and_merge_info(rep_data: ReportResponse, rep: Report, db:
             rep_data.merged_by_name = m_user.name if m_user else f"Officer #{rep.merged_by}"
 
         # If primary report with merged children, populate merged_reports summaries
-        if rep.merged_reports:
+        merged_children = getattr(rep, "merged_reports", None) or []
+        if merged_children:
             merged_list = []
-            for m_rep in rep.merged_reports:
+            for m_rep in merged_children:
                 sec_user = m_rep.reporter.name if m_rep.reporter else f"Resident #{m_rep.user_id}"
                 sec_media = [{"file_url": med.file_url, "media_type": med.media_type} for med in (m_rep.media or [])]
                 merged_list.append({
