@@ -219,15 +219,42 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
     const navContent = (
         <>
             <div className="overflow-hidden flex-1 flex flex-col">
-                {/* Logo Area */}
-                <div className="pt-8 pb-4 px-6 flex items-center justify-between h-[80px]">
-                    <h2 className="text-xs font-extrabold text-[#F97316] uppercase tracking-widest animate-in fade-in duration-300">
-                        STRAY SAFE
-                    </h2>
+                {/* Brand / Logo Area */}
+                <div className={`pt-6 pb-4 ${isOpen || mobileOpen ? 'px-6' : 'px-2 justify-center'} flex items-center justify-between min-h-[76px] shrink-0`}>
+                    {(isOpen || mobileOpen) ? (
+                        <Link to="/subd/dashboard" className="flex items-center gap-2.5 group overflow-hidden select-none">
+                            <img
+                                src="/SSLOGO.png"
+                                alt="StraySafe Logo"
+                                className="w-8 h-8 sm:w-9 sm:h-9 object-contain shrink-0 transition-transform duration-300 group-hover:scale-105"
+                            />
+                            <div className="flex flex-col min-w-0">
+                                <div className="flex items-center gap-1 leading-none">
+                                    <span className="font-black text-sm tracking-tight text-[#0F172A] group-hover:text-black transition-colors">
+                                        STRAY
+                                    </span>
+                                    <span className="font-black text-sm tracking-tight text-[#F97316]">
+                                        SAFE
+                                    </span>
+                                </div>
+                                <span className="text-[8.5px] font-semibold text-slate-400 tracking-tight leading-tight mt-1 truncate">
+                                    Safer Communities. Happier Animals.
+                                </span>
+                            </div>
+                        </Link>
+                    ) : (
+                        <Link to="/subd/dashboard" className="flex items-center justify-center w-full group py-1">
+                            <img
+                                src="/SSLOGO.png"
+                                alt="StraySafe Logo"
+                                className="w-8 h-8 object-contain transition-transform duration-300 group-hover:scale-110"
+                            />
+                        </Link>
+                    )}
                     {onMobileClose && (
                         <button
                             onClick={onMobileClose}
-                            className="md:hidden p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100"
+                            className="md:hidden p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 shrink-0 cursor-pointer ml-1"
                         >
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
