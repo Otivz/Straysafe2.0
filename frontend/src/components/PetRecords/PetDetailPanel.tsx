@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { type PetRecord } from './types';
-import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
+import { DEFAULT_PET_AVATAR, getPetPicture, DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import api from '../../utils/api';
 
 interface PetDetailPanelProps {
@@ -32,6 +32,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
     const [incidentClaims, setIncidentClaims] = useState<any[]>([]);
     const [incidentReports, setIncidentReports] = useState<any[]>([]);
     const [isLoadingIncidents, setIsLoadingIncidents] = useState<boolean>(false);
+    const [historyFilter, setHistoryFilter] = useState<'all' | 'resolved' | 'ongoing'>('all');
 
     const handleOpenQrModal = async () => {
         if (!pet) return;
@@ -54,8 +55,38 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
     const [currentPhoto, setCurrentPhoto] = useState<string | null>(null);
     const photoInputRef = useRef<HTMLInputElement>(null);
 
+    // Role detection
+    const getCurrentUserRole = () => {
+        try {
+            const adminRaw = sessionStorage.getItem('admin_user') || localStorage.getItem('admin_user');
+            if (adminRaw) {
+                const u = JSON.parse(adminRaw);
+                if (Number(u?.role_id) === 4 || u?.role === 'Admin') return 4;
+            }
+            const staffRaw = sessionStorage.getItem('staff_user') || localStorage.getItem('staff_user');
+            if (staffRaw) {
+                const u = JSON.parse(staffRaw);
+                if (u?.role_id) return Number(u.role_id);
+            }
+            const resRaw = sessionStorage.getItem('resident_user') || localStorage.getItem('resident_user');
+            if (resRaw) {
+                const u = JSON.parse(resRaw);
+                if (u?.role_id) return Number(u.role_id);
+            }
+        } catch {}
+        const pathname = window.location.pathname;
+        if (pathname.startsWith('/admin')) return 4;
+        if (pathname.startsWith('/subd')) return 2;
+        if (pathname.startsWith('/brgy')) return 3;
+        return 1;
+    };
+
+    const userRoleId = getCurrentUserRole();
+    const isAdmin = userRoleId === 4;
+
     // Assign Owner State
     const [isAssignOwnerModalOpen, setIsAssignOwnerModalOpen] = useState(false);
+    const [isOfficialProcessConfirmed, setIsOfficialProcessConfirmed] = useState(false);
     const [assignOwnerMode, setAssignOwnerMode] = useState<'existing' | 'new'>('existing');
     const [usersList, setUsersList] = useState<any[]>([]);
     const [isLoadingUsers, setIsLoadingUsers] = useState(false);
@@ -122,12 +153,32 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                 const allReports = Array.isArray(reportsRes.data) ? reportsRes.data : [];
                 const claimReportIds = new Set(petClaims.map((c: any) => c.report_id));
 
-                // Strictly filter reports for THIS specific pet only, sorted with newest on top
+                // Find all reports directly linked to pet, or linked via claim, or linked via duplicate/primary relationship
+                const directPetReportIds = new Set(
+                    allReports
+                        .filter((r: any) => r.pet_id && Number(r.pet_id) === petId)
+                        .map((r: any) => r.report_id)
+                );
+
+                const linkedPrimaryReportIds = new Set(
+                    allReports
+                        .filter((r: any) => directPetReportIds.has(r.report_id) && r.duplicate_of_report_id)
+                        .map((r: any) => r.duplicate_of_report_id)
+                );
+
                 const matchedReports = allReports
                     .filter((r: any) => {
-                        if (r.pet_id && Number(r.pet_id) === petId) return true;
+                        if (directPetReportIds.has(r.report_id)) return true;
+                        if (linkedPrimaryReportIds.has(r.report_id)) return true;
                         if (claimReportIds.has(r.report_id)) return true;
                         return false;
+                    })
+                    .map((r: any) => {
+                        if (r.duplicate_of_report_id) {
+                            const primary = allReports.find((p: any) => p.report_id === r.duplicate_of_report_id);
+                            return { ...r, primaryReport: primary || null };
+                        }
+                        return r;
                     })
                     .sort((a: any, b: any) => {
                         const timeA = new Date(a.created_at || a.reported_at || 0).getTime();
@@ -154,6 +205,178 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
         };
     }, [pet?.id, activeTab]);
 
+    // Helper to evaluate incident/report status for pet history
+    const getReportHistoryStatus = (report: any, matchingClaim: any) => {
+        const claimStatus = matchingClaim?.status ? String(matchingClaim.status).trim() : null;
+        const claimStatusLower = claimStatus ? claimStatus.toLowerCase() : '';
+
+        const reportStatusId = report.current_status_id || report.status_id || report.status?.status_id;
+        const reportStatusName = (report.status?.status_name || report.status_name || '').trim();
+        const reportStatusLower = reportStatusName.toLowerCase();
+
+        // Check if this report was merged into a primary report (Status 18: Merged — Duplicate)
+        const isMergedDuplicate = reportStatusId === 18 || Boolean(report.duplicate_of_report_id);
+        if (isMergedDuplicate) {
+            const primary = report.primaryReport;
+            const priId = report.duplicate_of_report_id || (primary ? primary.report_id : null);
+            const priStatusId = primary ? (primary.current_status_id || primary.status_id) : null;
+            const priStatusName = (primary?.status?.status_name || primary?.status_name || '').toLowerCase();
+            const priClaim = primary ? incidentClaims.find((c: any) => c.report_id === primary.report_id) : null;
+            const priClaimStatus = (priClaim?.status || '').toLowerCase();
+
+            const isPriResolved = [
+                'handover complete',
+                'pet received',
+                'approved'
+            ].includes(priClaimStatus) ||
+            [9, 10, 11, 12].includes(priStatusId) ||
+            priStatusName.includes('resolved') ||
+            priStatusName.includes('claimed by owner') ||
+            priStatusName.includes('released');
+
+            if (isPriResolved) {
+                const priRef = priId ? `Case #${priId}` : 'Consolidated Case';
+                return {
+                    category: 'resolved' as const,
+                    isResolved: true,
+                    badgeLabel: priRef ? `Resolved • ${priRef}` : 'Resolved',
+                    statusPillText: 'Resolved',
+                    detailText: `Resolved via ${priRef}`,
+                    badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-2xs font-black',
+                    cardBorder: 'border-l-4 border-l-emerald-500',
+                    dotClass: 'bg-emerald-500',
+                    idBadgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                };
+            } else {
+                // Primary is ongoing!
+                const priRef = priId ? `Case #${priId}` : 'Primary Case';
+                return {
+                    category: 'ongoing' as const,
+                    isResolved: false,
+                    badgeLabel: `Ongoing • Merged into ${priRef}`,
+                    statusPillText: 'Ongoing',
+                    detailText: `Merged into ${priRef}`,
+                    badgeClass: 'bg-blue-50 text-blue-700 border-blue-200 shadow-2xs font-black',
+                    cardBorder: 'border-l-4 border-l-blue-500',
+                    dotClass: 'bg-blue-500',
+                    idBadgeClass: 'bg-blue-50 text-blue-700 border-blue-200'
+                };
+            }
+        }
+
+        // 1. Resolved / Done (Green)
+        const isClaimResolved = [
+            'handover complete',
+            'pet received',
+            'approved'
+        ].includes(claimStatusLower);
+
+        const isReportResolved = [9, 10, 11, 12, 14, 17].includes(reportStatusId) ||
+            reportStatusLower.includes('resolved') ||
+            reportStatusLower.includes('claimed by owner') ||
+            reportStatusLower.includes('released') ||
+            reportStatusLower.includes('deceased');
+
+        if (isClaimResolved || isReportResolved) {
+            let detail = '';
+            if (claimStatusLower === 'handover complete') detail = 'Handover Complete';
+            else if (claimStatusLower === 'pet received') detail = 'Pet Received';
+            else if (claimStatusLower === 'approved') detail = 'Claim Approved';
+            else if (reportStatusId === 9 || reportStatusLower.includes('claimed by owner')) detail = 'Claimed by Owner';
+            else if (reportStatusId === 10 || reportStatusLower.includes('released')) detail = 'Released';
+            else if (reportStatusId === 11 || reportStatusLower.includes('resolved')) detail = 'Incident Resolved';
+            else if (reportStatusId === 12 || reportStatusLower.includes('deceased')) detail = 'Deceased';
+            else if (reportStatusId === 14) detail = 'False Alarm';
+            else if (reportStatusId === 17) detail = 'Cannot Be Found';
+            else if (claimStatus) detail = claimStatus;
+            else if (reportStatusName) detail = reportStatusName;
+
+            const label = detail && detail.toLowerCase() !== 'resolved' ? `Resolved • ${detail}` : 'Resolved';
+
+            return {
+                category: 'resolved' as const,
+                isResolved: true,
+                badgeLabel: label,
+                statusPillText: 'Resolved',
+                detailText: detail || 'Resolved',
+                badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-2xs font-black',
+                cardBorder: 'border-l-4 border-l-emerald-500',
+                dotClass: 'bg-emerald-500',
+                idBadgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            };
+        }
+
+        // 2. Closed / Rejected (Red/Rose)
+        if (claimStatusLower === 'rejected' || reportStatusId === 3 || reportStatusLower.includes('rejected')) {
+            return {
+                category: 'rejected' as const,
+                isResolved: false,
+                badgeLabel: 'Closed • Rejected',
+                statusPillText: 'Closed',
+                detailText: 'Rejected',
+                badgeClass: 'bg-rose-50 text-rose-700 border-rose-200 shadow-2xs font-black',
+                cardBorder: 'border-l-4 border-l-rose-400',
+                dotClass: 'bg-rose-500',
+                idBadgeClass: 'bg-rose-50 text-rose-700 border-rose-200'
+            };
+        }
+
+        // 3. Ongoing (Blue)
+        let ongoingDetail = 'In Progress';
+        if (claimStatusLower === 'pending review') ongoingDetail = 'Pending Review';
+        else if (claimStatusLower === 'evidence requested') ongoingDetail = 'Evidence Requested';
+        else if (claimStatusLower === 'potential owner match' || claimStatusLower === 'possible match found') ongoingDetail = 'Potential Match';
+        else if (claimStatus) ongoingDetail = claimStatus;
+        else if (report.custody_status && report.custody_status !== 'Sighting') ongoingDetail = report.custody_status;
+        else if (reportStatusId === 1 || reportStatusLower === 'reported') ongoingDetail = 'Sighting Reported';
+        else if (reportStatusId === 2 || reportStatusLower === 'verified') ongoingDetail = 'Verified Sighting';
+        else if (reportStatusId === 4) ongoingDetail = 'Escalated to Barangay';
+        else if (reportStatusId === 5) ongoingDetail = 'Rescue In Progress';
+        else if (reportStatusId === 6) ongoingDetail = 'Picked Up';
+        else if (reportStatusId === 7) ongoingDetail = 'Under Observation';
+        else if (reportStatusId === 8) ongoingDetail = 'Impounded';
+        else if (reportStatusId === 15) ongoingDetail = 'Disputed';
+        else if (reportStatusId === 16) ongoingDetail = 'Under Investigation';
+        else if (reportStatusName) ongoingDetail = reportStatusName;
+
+        return {
+            category: 'ongoing' as const,
+            isResolved: false,
+            badgeLabel: `● Ongoing • ${ongoingDetail}`,
+            statusPillText: 'Ongoing',
+            detailText: ongoingDetail,
+            badgeClass: 'bg-blue-50 text-blue-700 border-blue-200 shadow-2xs font-black',
+            cardBorder: 'border-l-4 border-l-blue-500',
+            dotClass: 'bg-blue-500',
+            idBadgeClass: 'bg-blue-50 text-blue-700 border-blue-200'
+        };
+    };
+
+    const processedReports = useMemo(() => {
+        return incidentReports.map((report: any) => {
+            const matchingClaim = incidentClaims.find((c: any) => c.report_id === report.report_id);
+            const statusInfo = getReportHistoryStatus(report, matchingClaim);
+            return {
+                ...report,
+                matchingClaim,
+                statusInfo
+            };
+        });
+    }, [incidentReports, incidentClaims]);
+
+    const resolvedCount = useMemo(() => processedReports.filter(r => r.statusInfo.category === 'resolved').length, [processedReports]);
+    const ongoingCount = useMemo(() => processedReports.filter(r => r.statusInfo.category === 'ongoing').length, [processedReports]);
+
+    const filteredReports = useMemo(() => {
+        if (historyFilter === 'resolved') {
+            return processedReports.filter(r => r.statusInfo.category === 'resolved');
+        }
+        if (historyFilter === 'ongoing') {
+            return processedReports.filter(r => r.statusInfo.category === 'ongoing');
+        }
+        return processedReports;
+    }, [processedReports, historyFilter]);
+
     // Fetch users for owner assignment
     const fetchUsers = async () => {
         setIsLoadingUsers(true);
@@ -176,12 +399,26 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
             setNewOwnerPhone('');
             setNewOwnerAddress('');
             setAssignError(null);
+            setIsOfficialProcessConfirmed(false);
         }
     }, [isAssignOwnerModalOpen]);
 
     const handleAssignOwnerSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setAssignError(null);
+
+        // Security check: Only Admin can reassign an already registered pet
+        if (hasOwner && !isAdmin) {
+            setAssignError('Permission Denied: Only System Administrators can change or reassign the owner of an already registered pet.');
+            return;
+        }
+
+        // Verification check: Local staff assigning an unassigned pet must confirm official claim/adoption turnover
+        if (!hasOwner && !isAdmin && !isOfficialProcessConfirmed) {
+            setAssignError('Please verify and check the box confirming that this animal has completed an official claim verification or adoption turnover process.');
+            return;
+        }
+
         let targetOwnerId: number | null = null;
 
         if (assignOwnerMode === 'existing') {
@@ -220,7 +457,12 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 
         try {
             setIsAssigning(true);
-            await api.post(`/pets/${pet!.id}/assign-owner?owner_id=${targetOwnerId}`);
+            const queryParams = new URLSearchParams({
+                owner_id: String(targetOwnerId),
+                verified_claim: 'true',
+                process_type: hasOwner ? 'admin_reassignment' : 'official_claim_adoption'
+            });
+            await api.post(`/pets/${pet!.id}/assign-owner?${queryParams.toString()}`);
             setIsAssignOwnerModalOpen(false);
             if (onOwnerAssigned) {
                 onOwnerAssigned();
@@ -235,7 +477,12 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 
     if (!pet) return null;
 
-    const hasOwner = Boolean(pet.rawPetObj?.owner_id && !pet.ownerName.toLowerCase().includes('no owner') && !pet.ownerName.toLowerCase().includes('unknown'));
+    const hasOwner = Boolean(
+        (pet.owner_id || pet.rawPetObj?.owner_id || pet.rawPetObj?.owner?.user_id) &&
+        !pet.ownerName.toLowerCase().includes('no owner') &&
+        !pet.ownerName.toLowerCase().includes('unassigned') &&
+        !pet.ownerName.toLowerCase().includes('community')
+    );
 
     // Status pill style helper
     const getStatusStyle = (status: string) => {
@@ -389,7 +636,15 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 <div className="flex justify-between items-center">
                                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Owner</span>
                                     {hasOwner ? (
-                                        <span className="text-xs font-black text-[#1a1208] uppercase">{pet.ownerName}</span>
+                                        <div className="flex items-center gap-2 max-w-[170px]">
+                                            <img 
+                                                src={getProfilePicture(pet.ownerPhoto || pet.rawPetObj?.owner?.profile_picture)} 
+                                                alt={pet.ownerName}
+                                                className="w-5 h-5 rounded-full object-cover border border-gray-200 shrink-0"
+                                                onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR; }}
+                                            />
+                                            <span className="text-xs font-black text-[#1a1208] uppercase truncate">{pet.ownerName}</span>
+                                        </div>
                                     ) : (
                                         <span className="text-xs font-black text-amber-800 uppercase italic">No Owner (Unassigned)</span>
                                     )}
@@ -479,15 +734,28 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     </button>
                                 )}
 
-                                <button 
-                                    onClick={() => setIsAssignOwnerModalOpen(true)}
-                                    className={`w-full py-3.5 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                                        hasOwner ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-amber-600 hover:bg-amber-700'
-                                    }`}
-                                >
-                                    <span>👤</span>
-                                    {hasOwner ? 'Change / Reassign Owner' : '🐾 Assign / Register Owner'}
-                                </button>
+                                {/* Owner Assignment / Reassignment Action */}
+                                {hasOwner ? (
+                                    /* Only System Admin can change/reassign an already registered pet */
+                                    isAdmin && (
+                                        <button 
+                                            onClick={() => setIsAssignOwnerModalOpen(true)}
+                                            className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                        >
+                                            <span>👤</span>
+                                            Change / Reassign Owner
+                                        </button>
+                                    )
+                                ) : (
+                                    /* Subdivision Leaders, Barangay Staff, and Admin can assign an unassigned pet */
+                                    <button 
+                                        onClick={() => setIsAssignOwnerModalOpen(true)}
+                                        className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                    >
+                                        <span>🐾</span>
+                                        Assign Owner (Claim / Adoption)
+                                    </button>
+                                )}
 
                                 <button 
                                     onClick={handleOpenQrModal}
@@ -509,19 +777,172 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     Sighting History
                                 </button>
 
-                                <button 
-                                    onClick={() => setIsConfirmingDelete(true)}
-                                    className="w-full py-3.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl font-black text-xs uppercase tracking-widest border border-red-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                    Remove Pet Record
-                                </button>
+                                {/* Remove Pet Record: Only Admin can remove records from the officer/staff view */}
+                                {isAdmin && (
+                                    <button 
+                                        onClick={() => setIsConfirmingDelete(true)}
+                                        className="w-full py-3.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl font-black text-xs uppercase tracking-widest border border-red-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                        Remove Pet Record
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
                 </div>
+
+                {/* Pet Owner Profile & Information (Visible ONLY on Subd, Brgy, and Admin pet records) */}
+                {!hideRegisteredPets && (
+                    <div className="bg-gradient-to-br from-orange-50/40 via-amber-50/20 to-white rounded-[2rem] p-6 sm:p-7 border-2 border-orange-200/80 shadow-xs space-y-5 animate-in fade-in duration-300">
+                        <div className="flex items-center justify-between flex-wrap gap-3 border-b border-orange-200/60 pb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#F97316] to-[#ea580c] text-white flex items-center justify-center text-lg font-black shadow-md shadow-orange-500/20">
+                                    👤
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-tight flex items-center gap-2">
+                                        Pet Owner Information
+                                        {hasOwner ? (
+                                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                                Registered Owner
+                                            </span>
+                                        ) : (
+                                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300">
+                                                Community Animal
+                                            </span>
+                                        )}
+                                    </h3>
+                                    <p className="text-xs text-gray-500 font-medium">
+                                        {hasOwner ? 'Resident profile and contact details linked to this registered pet' : 'No pet parent or owner currently associated with this animal record'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Quick Action to Reassign / Register */}
+                            {hasOwner ? (
+                                isAdmin ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsAssignOwnerModalOpen(true)}
+                                        className="px-3.5 py-2 bg-white hover:bg-orange-50 text-[#F97316] hover:text-[#ea580c] text-xs font-black uppercase tracking-wider rounded-xl border border-orange-300 transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                        <span>✏️</span>
+                                        <span>Reassign Owner</span>
+                                    </button>
+                                ) : (
+                                    <span className="px-3 py-1.5 bg-white/80 text-gray-500 text-[10px] font-black uppercase tracking-wider rounded-xl border border-gray-200 flex items-center gap-1.5 shadow-2xs">
+                                        <span>🔒</span>
+                                        <span>Owner Record Locked</span>
+                                    </span>
+                                )
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => setIsAssignOwnerModalOpen(true)}
+                                    className="px-3.5 py-2 bg-white hover:bg-orange-50 text-[#F97316] hover:text-[#ea580c] text-xs font-black uppercase tracking-wider rounded-xl border border-orange-300 transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    <span>🐾</span>
+                                    <span>Assign Owner</span>
+                                </button>
+                            )}
+                        </div>
+
+                        {hasOwner ? (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch">
+                                {/* Profile Photo & Primary Identity */}
+                                <div className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-orange-100 shadow-2xs">
+                                    <div className="relative w-16 h-16 rounded-2xl overflow-hidden border-2 border-orange-200 shrink-0 shadow-sm bg-gray-50">
+                                        <img
+                                            src={getProfilePicture(pet.ownerPhoto || pet.rawPetObj?.owner?.profile_picture)}
+                                            alt={pet.ownerName}
+                                            className="w-full h-full object-cover"
+                                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR; }}
+                                        />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Owner Profile</p>
+                                        <h4 className="text-base font-black text-gray-900 truncate uppercase leading-tight">{pet.ownerName}</h4>
+                                        {(pet.owner_id || pet.rawPetObj?.owner_id) && (
+                                            <p className="text-[11px] font-bold text-gray-500 mt-0.5">
+                                                User ID: <span className="font-mono font-black text-[#F97316]">#{pet.owner_id || pet.rawPetObj?.owner_id}</span>
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Contact Information */}
+                                <div className="space-y-2.5 p-4 bg-white rounded-2xl border border-orange-100 shadow-2xs flex flex-col justify-center">
+                                    <div>
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Phone Number</span>
+                                        {pet.ownerPhone && pet.ownerPhone !== 'No Contact' && pet.ownerPhone !== 'No phone' ? (
+                                            <a
+                                                href={`tel:${pet.ownerPhone}`}
+                                                className="text-xs font-black text-gray-900 hover:text-[#F97316] transition-colors flex items-center gap-1.5 mt-0.5"
+                                            >
+                                                <span>📞</span>
+                                                <span>{pet.ownerPhone}</span>
+                                            </a>
+                                        ) : (
+                                            <span className="text-xs font-bold text-gray-400 italic">No phone number recorded</span>
+                                        )}
+                                    </div>
+                                    <div className="border-t border-gray-100 pt-2">
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Email Address</span>
+                                        {pet.ownerEmail && pet.ownerEmail !== 'No Email' && pet.ownerEmail !== 'No email' ? (
+                                            <a
+                                                href={`mailto:${pet.ownerEmail}`}
+                                                className="text-xs font-black text-gray-900 hover:text-[#F97316] transition-colors truncate block mt-0.5"
+                                            >
+                                                <span>✉️ {pet.ownerEmail}</span>
+                                            </a>
+                                        ) : (
+                                            <span className="text-xs font-bold text-gray-400 italic">No email provided</span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Address & Community Details */}
+                                <div className="p-4 bg-white rounded-2xl border border-orange-100 shadow-2xs space-y-2 flex flex-col justify-center">
+                                    <div>
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Registered Address</span>
+                                        <p className="text-xs font-black text-gray-800 leading-snug mt-0.5 flex items-start gap-1.5">
+                                            <span className="shrink-0 mt-0.5">📍</span>
+                                            <span>{pet.ownerAddress || pet.rawPetObj?.registered_address || pet.rawPetObj?.owner?.address || 'Community residence on file'}</span>
+                                        </p>
+                                    </div>
+                                    {pet.registeredByName && (
+                                        <div className="border-t border-gray-100 pt-1.5">
+                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Registered By</span>
+                                            <span className="text-[11px] font-black text-gray-700 truncate block">{pet.registeredByName}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="p-5 bg-amber-50/60 rounded-2xl border border-amber-200/80 flex items-center justify-between gap-4 flex-wrap">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-amber-200/70 text-amber-800 flex items-center justify-center text-lg font-black shrink-0">
+                                        🐾
+                                    </div>
+                                    <div>
+                                        <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide">Community Animal / Unassigned Pet</h4>
+                                        <p className="text-xs text-amber-800 font-medium">This pet currently has no registered owner profile associated with it.</p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsAssignOwnerModalOpen(true)}
+                                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer"
+                                >
+                                    + Assign Owner Now
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Styled Category Tabs */}
                 <div className="space-y-6">
@@ -824,130 +1245,201 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                         <div className="w-8 h-8 border-3 border-[#F97316] border-t-transparent rounded-full animate-spin"></div>
                                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Loading incident & claim records...</p>
                                     </div>
-                                ) : incidentClaims.length > 0 || incidentReports.length > 0 ? (
+                                ) : processedReports.length > 0 ? (
                                     <div className="space-y-6">
                                         <div className="flex items-center justify-between flex-wrap gap-4 border-b border-gray-100 pb-4">
                                             <div>
                                                 <h4 className="text-sm font-black text-[#1a1208] uppercase tracking-wider">Pet History & Report Summary</h4>
                                                 <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Reports and claim records strictly for {pet.name}</p>
                                             </div>
-                                            <span className="px-3.5 py-1.5 bg-orange-50 text-[#F97316] rounded-full text-[10px] font-black uppercase tracking-widest border border-orange-100">
-                                                {Math.max(incidentClaims.length, incidentReports.length)} Event(s) Recorded
-                                            </span>
+                                            
+                                            {/* Status Filter Tabs: All, Resolved (Green), Ongoing (Blue) */}
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setHistoryFilter('all')}
+                                                    className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                                        historyFilter === 'all'
+                                                            ? 'bg-[#1a1208] text-white shadow-xs'
+                                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                    }`}
+                                                >
+                                                    All ({processedReports.length})
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setHistoryFilter('resolved')}
+                                                    className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                                                        historyFilter === 'resolved'
+                                                            ? 'bg-emerald-600 text-white shadow-xs'
+                                                            : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/80'
+                                                    }`}
+                                                >
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${historyFilter === 'resolved' ? 'bg-white' : 'bg-emerald-500'}`}></span>
+                                                    Resolved ({resolvedCount})
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setHistoryFilter('ongoing')}
+                                                    className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                                                        historyFilter === 'ongoing'
+                                                            ? 'bg-blue-600 text-white shadow-xs'
+                                                            : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200/80'
+                                                    }`}
+                                                >
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${historyFilter === 'ongoing' ? 'bg-white' : 'bg-blue-500'}`}></span>
+                                                    Ongoing ({ongoingCount})
+                                                </button>
+                                            </div>
                                         </div>
 
-                                        <div className="space-y-6">
-                                            {incidentReports.map((report: any) => {
-                                                const matchingClaim = incidentClaims.find((c: any) => c.report_id === report.report_id);
-                                                const mediaPhoto = (report.media && report.media.length > 0) ? report.media[0].file_url : null;
-                                                const claimStatus = matchingClaim ? matchingClaim.status : (report.status?.status_name || 'Reported');
-                                                const isApproved = claimStatus?.toLowerCase() === 'approved' || report.current_status_id === 9;
+                                        {filteredReports.length === 0 ? (
+                                            <div className="bg-[#FAFAF9] rounded-3xl p-8 border border-dashed border-gray-200 text-center space-y-3">
+                                                <div className="w-12 h-12 mx-auto rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center text-xl">
+                                                    📋
+                                                </div>
+                                                <p className="text-xs font-black text-gray-700 uppercase tracking-wide">
+                                                    No {historyFilter === 'resolved' ? 'Resolved' : 'Ongoing'} Reports Found
+                                                </p>
+                                                <p className="text-[11px] text-gray-400 font-bold">
+                                                    There are currently no {historyFilter} reports recorded for {pet.name}.
+                                                </p>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setHistoryFilter('all')}
+                                                    className="px-4 py-2 bg-orange-50 hover:bg-orange-100 text-[#F97316] text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                                                >
+                                                    Show All Reports
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-6">
+                                                {filteredReports.map((report: any) => {
+                                                    const matchingClaim = report.matchingClaim;
+                                                    const statusInfo = report.statusInfo;
+                                                    const mediaPhoto = (report.media && report.media.length > 0) ? report.media[0].file_url : null;
 
-                                                return (
-                                                    <div key={report.report_id} className="bg-[#FAFAF9] rounded-3xl p-6 border border-gray-100 shadow-sm space-y-6">
-                                                        {/* Header Bar */}
-                                                        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200/60 pb-4">
-                                                            <div className="flex items-center gap-3">
-                                                                <span className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] font-black text-xs flex items-center justify-center border border-orange-100 shadow-sm">
-                                                                    #{report.report_id}
-                                                                </span>
-                                                                <div>
-                                                                    <h5 className="text-xs font-black text-[#1a1208] uppercase">Reported Stray / Lost Sighting for {pet.name}</h5>
-                                                                    <p className="text-[10px] text-gray-400 font-bold uppercase">
-                                                                        Date: {new Date(report.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-
-                                                            <div className="flex items-center gap-3">
-                                                                <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm ${
-                                                                    isApproved ? 'bg-green-50 text-green-600 border-green-100' :
-                                                                    claimStatus?.toLowerCase() === 'pending review' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                                                                    'bg-blue-50 text-blue-600 border-blue-100'
-                                                                }`}>
-                                                                    {isApproved ? '✓ Claimed & Approved' : `Claim State: ${claimStatus}`}
-                                                                </span>
-                                                                <button
-                                                                    onClick={() => navigate(`/resident/reports/${report.report_id}`)}
-                                                                    className="px-4 py-2.5 bg-[#1a1208] hover:bg-[#2c2010] text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center gap-1.5 shadow-sm hover:scale-[1.02]"
-                                                                >
-                                                                    View Report
-                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                                                                    </svg>
-                                                                </button>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Body Content */}
-                                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                            {/* Media preview if available */}
-                                                            {mediaPhoto ? (
-                                                                <div className="w-full h-44 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 shadow-sm relative group">
-                                                                    <img src={mediaPhoto} alt="Report Evidence" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                                                                    <span className="absolute bottom-2 left-2 px-2.5 py-1 bg-black/60 backdrop-blur-sm text-white rounded-lg text-[9px] font-bold uppercase tracking-wider">Sighting Media</span>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="w-full h-44 rounded-2xl bg-gray-100 border border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 text-xs font-bold uppercase gap-2">
-                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                                    </svg>
-                                                                    <span>No Photo Attached</span>
-                                                                </div>
-                                                            )}
-
-                                                            {/* Report Details */}
-                                                            <div className="md:col-span-2 space-y-4">
-                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
-                                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Sighting Location</span>
-                                                                        <span className="text-xs font-black text-[#1a1208] uppercase truncate block">{report.landmark || 'Selera Homes'}</span>
-                                                                    </div>
-                                                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
-                                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Condition / Priority</span>
-                                                                        <span className="text-xs font-black text-[#F97316] uppercase truncate block">{report.condition || report.priority_level || 'Medium'}</span>
-                                                                    </div>
-                                                                </div>
-
-                                                                {report.verification_status === 'verified_true' && (
-                                                                    <div className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-xs ${
-                                                                        (!report.verified_actual_bite && !report.verified_aggressive)
-                                                                            ? 'bg-emerald-50 border-emerald-200 text-emerald-950 font-bold'
-                                                                            : 'bg-rose-50 border-rose-200 text-rose-950 font-bold'
-                                                                    }`}>
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span>{(!report.verified_actual_bite && !report.verified_aggressive) ? '🛡️' : '⚠️'}</span>
-                                                                            <span>{(!report.verified_actual_bite && !report.verified_aggressive) ? 'Verified Clean Finding:' : 'Confirmed Incident:'} {report.behavior_finding || 'Verified'}</span>
-                                                                        </div>
-                                                                        {(!report.verified_actual_bite && !report.verified_aggressive) && (
-                                                                            <span className="text-[10px] px-2.5 py-0.5 bg-emerald-200 text-emerald-900 rounded-full uppercase tracking-wider font-extrabold">
-                                                                                Clean Record ✓
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                )}
-
-                                                                {report.description && (
-                                                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
-                                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Incident Report Notes</span>
-                                                                        <p className="text-xs font-semibold text-gray-700 leading-relaxed line-clamp-2">{report.description}</p>
-                                                                    </div>
-                                                                )}
-
-                                                                {matchingClaim && (
-                                                                    <div className="bg-orange-50/70 p-4 rounded-2xl border border-orange-100/80 shadow-xs space-y-1">
-                                                                        <span className="text-[9px] font-black text-[#F97316] uppercase tracking-widest block">Claim Resolution & Remarks</span>
-                                                                        <p className="text-xs font-bold text-[#1a1208]">
-                                                                            {matchingClaim.remarks || "Claim verified and confirmed by authorized subdivision and barangay personnel."}
+                                                    return (
+                                                        <div key={report.report_id} className={`bg-[#FAFAF9] rounded-3xl p-6 border border-gray-100 shadow-sm space-y-6 transition-all ${statusInfo.cardBorder}`}>
+                                                            {/* Header Bar */}
+                                                            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200/60 pb-4">
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className={`w-10 h-10 rounded-2xl font-black text-xs flex items-center justify-center border shadow-xs ${statusInfo.idBadgeClass}`}>
+                                                                        #{report.report_id}
+                                                                    </span>
+                                                                    <div>
+                                                                        <h5 className="text-xs font-black text-[#1a1208] uppercase">Reported Stray / Lost Sighting for {pet.name}</h5>
+                                                                        <p className="text-[10px] text-gray-400 font-bold uppercase">
+                                                                            Date: {new Date(report.created_at || report.reported_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                                                                         </p>
                                                                     </div>
+                                                                </div>
+
+                                                                <div className="flex items-center gap-3">
+                                                                    {/* Distinction Badge: Green for Resolved, Blue for Ongoing */}
+                                                                    <span className={`px-4 py-1.5 rounded-full text-[10px] uppercase tracking-wider border shadow-xs flex items-center gap-1.5 ${statusInfo.badgeClass}`}>
+                                                                        <span className={`w-2 h-2 rounded-full ${statusInfo.dotClass} ${statusInfo.category === 'ongoing' ? 'animate-pulse' : ''}`}></span>
+                                                                        <span>{statusInfo.badgeLabel}</span>
+                                                                    </span>
+                                                                    <button
+                                                                        onClick={() => navigate(`/resident/reports/${report.report_id}`)}
+                                                                        className="px-4 py-2.5 bg-[#1a1208] hover:bg-[#2c2010] text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center gap-1.5 shadow-sm hover:scale-[1.02]"
+                                                                    >
+                                                                        View Report
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                                                        </svg>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Body Content */}
+                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                                {/* Media preview if available */}
+                                                                {mediaPhoto ? (
+                                                                    <div className="w-full h-44 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 shadow-sm relative group">
+                                                                        <img src={mediaPhoto} alt="Report Evidence" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                                                        <span className="absolute bottom-2 left-2 px-2.5 py-1 bg-black/60 backdrop-blur-sm text-white rounded-lg text-[9px] font-bold uppercase tracking-wider">Sighting Media</span>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="w-full h-44 rounded-2xl bg-gray-100 border border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 text-xs font-bold uppercase gap-2">
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                                        </svg>
+                                                                        <span>No Photo Attached</span>
+                                                                    </div>
                                                                 )}
+
+                                                                {/* Report Details */}
+                                                                <div className="md:col-span-2 space-y-4">
+                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                                        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
+                                                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Sighting Location</span>
+                                                                            <span className="text-xs font-black text-[#1a1208] uppercase truncate block">{report.landmark || 'Selera Homes'}</span>
+                                                                        </div>
+                                                                        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
+                                                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Condition / Priority</span>
+                                                                            <span className="text-xs font-black text-[#F97316] uppercase truncate block">{report.condition || report.priority_level || 'Medium'}</span>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {report.verification_status === 'verified_true' && (
+                                                                        <div className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-xs ${
+                                                                            (!report.verified_actual_bite && !report.verified_aggressive)
+                                                                                ? 'bg-emerald-50 border-emerald-200 text-emerald-950 font-bold'
+                                                                                : 'bg-rose-50 border-rose-200 text-rose-950 font-bold'
+                                                                        }`}>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span>{(!report.verified_actual_bite && !report.verified_aggressive) ? '🛡️' : '⚠️'}</span>
+                                                                                <span>{(!report.verified_actual_bite && !report.verified_aggressive) ? 'Verified Clean Finding:' : 'Confirmed Incident:'} {report.behavior_finding || 'Verified'}</span>
+                                                                            </div>
+                                                                            {(!report.verified_actual_bite && !report.verified_aggressive) && (
+                                                                                <span className="text-[10px] px-2.5 py-0.5 bg-emerald-200 text-emerald-900 rounded-full uppercase tracking-wider font-extrabold">
+                                                                                    Clean Record ✓
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+
+                                                                    {report.description && (
+                                                                        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
+                                                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Incident Report Notes</span>
+                                                                            <p className="text-xs font-semibold text-gray-700 leading-relaxed line-clamp-2">{report.description}</p>
+                                                                        </div>
+                                                                    )}
+
+                                                                    {matchingClaim && (
+                                                                        <div className={`p-4 rounded-2xl border shadow-xs space-y-1 ${
+                                                                            statusInfo.category === 'resolved' 
+                                                                                ? 'bg-emerald-50/70 border-emerald-200/70' 
+                                                                                : 'bg-blue-50/70 border-blue-200/70'
+                                                                        }`}>
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className={`text-[9px] font-black uppercase tracking-widest block ${
+                                                                                    statusInfo.category === 'resolved' ? 'text-emerald-700' : 'text-blue-700'
+                                                                                }`}>
+                                                                                    {statusInfo.category === 'resolved' ? '✓ Claim Resolution & Handover Notes' : 'ℹ Claim & Processing Remarks'}
+                                                                                </span>
+                                                                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
+                                                                                    statusInfo.category === 'resolved' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                                                                                }`}>
+                                                                                    {matchingClaim.status}
+                                                                                </span>
+                                                                            </div>
+                                                                            <p className="text-xs font-bold text-[#1a1208]">
+                                                                                {matchingClaim.remarks || "Claim verified and confirmed by authorized subdivision and barangay personnel."}
+                                                                            </p>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1082,137 +1574,205 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                             </div>
                         )}
 
-                        {/* Mode Selection Tabs */}
-                        <div className="grid grid-cols-2 gap-2 p-1.5 bg-gray-100 rounded-2xl border border-gray-200 mb-6">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setAssignOwnerMode('existing');
-                                    setAssignError(null);
-                                }}
-                                className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 ${assignOwnerMode === 'existing' ? 'bg-white text-[#B35D25] shadow-md' : 'text-gray-500 hover:text-gray-800'}`}
-                            >
-                                Select Resident
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setAssignOwnerMode('new');
-                                    setAssignError(null);
-                                }}
-                                className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 ${assignOwnerMode === 'new' ? 'bg-[#B35D25] text-white shadow-md' : 'text-gray-500 hover:text-gray-800'}`}
-                            >
-                                + Create New Owner
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleAssignOwnerSubmit} className="space-y-4">
-                            {assignOwnerMode === 'existing' ? (
-                                <div className="space-y-3">
-                                    <input 
-                                        type="text" 
-                                        value={userSearchTerm}
-                                        onChange={(e) => setUserSearchTerm(e.target.value)}
-                                        placeholder="Search resident by name, email, or phone..." 
-                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-900 placeholder-gray-400 focus:bg-white focus:border-[#B35D25] outline-none"
-                                    />
-
-                                    {isLoadingUsers ? (
-                                        <div className="p-6 text-center text-xs text-gray-400">Loading residents...</div>
-                                    ) : filteredUsers.length === 0 ? (
-                                        <div className="p-6 text-center text-xs text-gray-400 bg-gray-50 rounded-2xl">
-                                            No matching residents found.
-                                        </div>
-                                    ) : (
-                                        <div className="max-h-44 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-                                            {filteredUsers.map((u) => {
-                                                const isSelected = selectedOwner?.user_id === u.user_id;
-                                                return (
-                                                    <div 
-                                                        key={u.user_id}
-                                                        onClick={() => setSelectedOwner(u)}
-                                                        className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${isSelected ? 'bg-orange-50/70 border-[#B35D25] ring-2 ring-[#B35D25]/20' : 'bg-gray-50/50 border-gray-100 hover:bg-gray-100'}`}
-                                                    >
-                                                        <div className="min-w-0">
-                                                            <h5 className="text-xs font-black text-gray-900 truncate">{u.name}</h5>
-                                                            <p className="text-[10px] text-gray-500 truncate">{u.email} {u.phone ? `• ${u.phone}` : ''}</p>
-                                                        </div>
-                                                        {isSelected && <span className="text-xs font-black text-[#B35D25]">✓</span>}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-
-                                    {selectedOwner && (
-                                        <div className="p-3 bg-teal-50 border border-teal-100 rounded-xl flex items-center justify-between text-xs font-extrabold text-teal-900">
-                                            <span>Selected: {selectedOwner.name} ({selectedOwner.email})</span>
-                                        </div>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Full Name *</label>
-                                        <input 
-                                            type="text" 
-                                            value={newOwnerName} 
-                                            onChange={(e) => setNewOwnerName(e.target.value)} 
-                                            placeholder="Owner's full name"
-                                            className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Email Address *</label>
-                                        <input 
-                                            type="email" 
-                                            value={newOwnerEmail} 
-                                            onChange={(e) => setNewOwnerEmail(e.target.value)} 
-                                            placeholder="owner@example.com"
-                                            className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Contact Phone</label>
-                                        <input 
-                                            type="tel" 
-                                            value={newOwnerPhone} 
-                                            onChange={(e) => setNewOwnerPhone(e.target.value)} 
-                                            placeholder="0917 123 4567"
-                                            className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Subdivision Address</label>
-                                        <input 
-                                            type="text" 
-                                            value={newOwnerAddress} 
-                                            onChange={(e) => setNewOwnerAddress(e.target.value)} 
-                                            placeholder="Lot / Block / Street"
-                                            className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
-                                        />
+                        {/* If pet already has owner and user is NOT Admin: block reassignment */}
+                        {hasOwner && !isAdmin ? (
+                            <div className="space-y-4 py-3">
+                                <div className="p-4.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
+                                    <span className="text-xl">🔒</span>
+                                    <div>
+                                        <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide">Owner Reassignment Restricted</h4>
+                                        <p className="text-xs text-amber-800 font-medium mt-1 leading-relaxed">
+                                            Only System Administrators are permitted to change or reassign the owner of an already registered pet. Subdivision Leaders and Barangay Staff have read-only access to existing ownership assignments.
+                                        </p>
                                     </div>
                                 </div>
-                            )}
-
-                            <div className="flex gap-3 pt-4 border-t border-gray-100">
                                 <button 
-                                    type="button"
+                                    type="button" 
                                     onClick={() => setIsAssignOwnerModalOpen(false)}
-                                    disabled={isAssigning}
-                                    className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-black uppercase tracking-wider"
+                                    className="w-full py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
                                 >
-                                    Cancel
-                                </button>
-                                <button 
-                                    type="submit"
-                                    disabled={isAssigning}
-                                    className="flex-1 py-3 bg-[#B35D25] hover:bg-[#974A1A] text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md disabled:opacity-50"
-                                >
-                                    {isAssigning ? 'Saving...' : 'Confirm Assignment'}
+                                    Close
                                 </button>
                             </div>
-                        </form>
+                        ) : (
+                            <>
+                                {/* Approved Claim on File notification if available */}
+                                {!hasOwner && (() => {
+                                    const approvedClaim = incidentClaims.find((c: any) => ['Approved', 'Handover Complete', 'Pet Received'].includes(c.status));
+                                    if (!approvedClaim) return null;
+                                    return (
+                                        <div className="p-3.5 mb-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3 text-xs">
+                                            <div className="flex items-center gap-2 text-emerald-950">
+                                                <span className="text-base">✓</span>
+                                                <div>
+                                                    <p className="font-black uppercase text-[10px] tracking-wider text-emerald-800">Official Claim Approved</p>
+                                                    <p className="text-[11px] font-bold text-emerald-900">Status: {approvedClaim.status}</p>
+                                                </div>
+                                            </div>
+                                            {approvedClaim.report?.reporter_name && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setUserSearchTerm(approvedClaim.report.reporter_name || '');
+                                                        setAssignOwnerMode('existing');
+                                                    }}
+                                                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider shadow-xs cursor-pointer"
+                                                >
+                                                    Search Claimant
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+
+                                {/* Mode Selection Tabs */}
+                                <div className="grid grid-cols-2 gap-2 p-1.5 bg-gray-100 rounded-2xl border border-gray-200 mb-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setAssignOwnerMode('existing');
+                                            setAssignError(null);
+                                        }}
+                                        className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 ${assignOwnerMode === 'existing' ? 'bg-white text-[#B35D25] shadow-md' : 'text-gray-500 hover:text-gray-800'}`}
+                                    >
+                                        Select Resident
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setAssignOwnerMode('new');
+                                            setAssignError(null);
+                                        }}
+                                        className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 ${assignOwnerMode === 'new' ? 'bg-[#B35D25] text-white shadow-md' : 'text-gray-500 hover:text-gray-800'}`}
+                                    >
+                                        + Create New Owner
+                                    </button>
+                                </div>
+
+                                <form onSubmit={handleAssignOwnerSubmit} className="space-y-4">
+                                    {assignOwnerMode === 'existing' ? (
+                                        <div className="space-y-3">
+                                            <input 
+                                                type="text" 
+                                                value={userSearchTerm}
+                                                onChange={(e) => setUserSearchTerm(e.target.value)}
+                                                placeholder="Search resident by name, email, or phone..." 
+                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-900 placeholder-gray-400 focus:bg-white focus:border-[#B35D25] outline-none"
+                                            />
+
+                                            {isLoadingUsers ? (
+                                                <div className="p-6 text-center text-xs text-gray-400">Loading residents...</div>
+                                            ) : filteredUsers.length === 0 ? (
+                                                <div className="p-6 text-center text-xs text-gray-400 bg-gray-50 rounded-2xl">
+                                                    No matching residents found.
+                                                </div>
+                                            ) : (
+                                                <div className="max-h-44 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                                                    {filteredUsers.map((u) => {
+                                                        const isSelected = selectedOwner?.user_id === u.user_id;
+                                                        return (
+                                                            <div 
+                                                                key={u.user_id}
+                                                                onClick={() => setSelectedOwner(u)}
+                                                                className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${isSelected ? 'bg-orange-50/70 border-[#B35D25] ring-2 ring-[#B35D25]/20' : 'bg-gray-50/50 border-gray-100 hover:bg-gray-100'}`}
+                                                            >
+                                                                <div className="min-w-0">
+                                                                    <h5 className="text-xs font-black text-gray-900 truncate">{u.name}</h5>
+                                                                    <p className="text-[10px] text-gray-500 truncate">{u.email} {u.phone ? `• ${u.phone}` : ''}</p>
+                                                                </div>
+                                                                {isSelected && <span className="text-xs font-black text-[#B35D25]">✓</span>}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+
+                                            {selectedOwner && (
+                                                <div className="p-3 bg-teal-50 border border-teal-100 rounded-xl flex items-center justify-between text-xs font-extrabold text-teal-900">
+                                                    <span>Selected: {selectedOwner.name} ({selectedOwner.email})</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Full Name *</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={newOwnerName} 
+                                                    onChange={(e) => setNewOwnerName(e.target.value)} 
+                                                    placeholder="Owner's full name"
+                                                    className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Email Address *</label>
+                                                <input 
+                                                    type="email" 
+                                                    value={newOwnerEmail} 
+                                                    onChange={(e) => setNewOwnerEmail(e.target.value)} 
+                                                    placeholder="owner@example.com"
+                                                    className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Contact Phone</label>
+                                                <input 
+                                                    type="tel" 
+                                                    value={newOwnerPhone} 
+                                                    onChange={(e) => setNewOwnerPhone(e.target.value)} 
+                                                    placeholder="0917 123 4567"
+                                                    className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Subdivision Address</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={newOwnerAddress} 
+                                                    onChange={(e) => setNewOwnerAddress(e.target.value)} 
+                                                    placeholder="Lot / Block / Street"
+                                                    className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Official claim/adoption confirmation for unassigned pets */}
+                                    {!hasOwner && !isAdmin && (
+                                        <label className="flex items-start gap-2.5 p-3.5 bg-amber-50/80 border border-amber-200 rounded-2xl cursor-pointer">
+                                            <input 
+                                                type="checkbox"
+                                                checked={isOfficialProcessConfirmed}
+                                                onChange={(e) => setIsOfficialProcessConfirmed(e.target.checked)}
+                                                className="mt-0.5 rounded text-[#B35D25] focus:ring-[#B35D25] w-4 h-4 cursor-pointer shrink-0"
+                                            />
+                                            <span className="text-[11px] font-bold text-amber-950 leading-snug">
+                                                I confirm that this animal has completed an official pet claim verification or adoption handover process.
+                                            </span>
+                                        </label>
+                                    )}
+
+                                    <div className="flex gap-3 pt-4 border-t border-gray-100">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setIsAssignOwnerModalOpen(false)}
+                                            disabled={isAssigning}
+                                            className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button 
+                                            type="submit"
+                                            disabled={isAssigning}
+                                            className="flex-1 py-3 bg-[#B35D25] hover:bg-[#974A1A] text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md disabled:opacity-50 cursor-pointer"
+                                        >
+                                            {isAssigning ? 'Saving...' : 'Confirm Assignment'}
+                                        </button>
+                                    </div>
+                                </form>
+                            </>
+                        )}
                     </div>
                 </div>
             )}

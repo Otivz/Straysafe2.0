@@ -83,6 +83,7 @@ const AppRoutes = () => {
                 <Route path="/resident-home" element={<ResiHomePage />} />
                 <Route path="/resident/report/new" element={<ReportStrayPage />} />
                 <Route path="/resident/reports/:id" element={<ResiViewReport />} />
+                <Route path="/resident/report/:id" element={<ResiViewReport />} />
                 <Route path="/resident/pets" element={<ResidentPet />} />
                 <Route path="/resident/profile" element={<ResiProfile />} />
                 <Route path="/resident/settings" element={<ResidentSettings />} />

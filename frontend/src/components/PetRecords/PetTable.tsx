@@ -1,6 +1,6 @@
 import React from 'react';
 import { type PetRecord } from './types';
-import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
+import { DEFAULT_PET_AVATAR, getPetPicture, DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 
 // Backward compatibility fallback mock data
 const defaultMockPets: PetRecord[] = [
@@ -213,12 +213,30 @@ const PetTable: React.FC<PetTableProps> = ({
                                             </div>
                                         </td>
 
-                                        {/* Owner (formatted name with email) */}
+                                        {/* Owner Profile & Info */}
                                         <td className="px-6 py-4.5">
-                                            <div>
-                                                <p className="text-xs font-black text-gray-900 leading-tight">{formatOwnerName(pet.ownerName)}</p>
-                                                <p className="text-[9px] font-bold text-gray-400 tracking-tight lowercase mt-0.5">{pet.ownerEmail}</p>
-                                            </div>
+                                            {pet.ownerName && !pet.ownerName.toLowerCase().includes('no owner') && !pet.ownerName.toLowerCase().includes('community') && !pet.ownerName.toLowerCase().includes('unassigned') ? (
+                                                <div className="flex items-center gap-2.5">
+                                                    <img 
+                                                        src={getProfilePicture(pet.ownerPhoto || pet.rawPetObj?.owner?.profile_picture)} 
+                                                        alt={pet.ownerName}
+                                                        className="w-8 h-8 rounded-full object-cover border border-gray-200 shrink-0 shadow-2xs"
+                                                        onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR; }}
+                                                    />
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-black text-gray-900 leading-tight truncate max-w-[140px]">{formatOwnerName(pet.ownerName)}</p>
+                                                        <p className="text-[10px] font-bold text-gray-400 tracking-tight lowercase truncate max-w-[140px]">{pet.ownerEmail || pet.ownerPhone || 'Resident'}</p>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-2 text-amber-700">
+                                                    <span className="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center text-xs">🐾</span>
+                                                    <div>
+                                                        <p className="text-[11px] font-black uppercase text-amber-800">Unassigned</p>
+                                                        <p className="text-[9px] text-amber-600 font-bold">Community Animal</p>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </td>
 
                                         {/* Status */}

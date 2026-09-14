@@ -131,6 +131,8 @@ const categoryMap: Record<number, string> = {
     4: 'Roaming Pack', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
 };
 
+const RESOLVED_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18];
+
 const AdminReport = () => {
     const [reports, setReports] = useState<Report[]>([]);
     const [loading, setLoading] = useState(true);
@@ -572,7 +574,7 @@ const AdminReport = () => {
                                             <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || 'Pending')}`}>
                                                 {statusMap[rep.status_id] || 'Pending'}
                                             </span>
-                                            {rep.has_duplicate_flag && rep.status_id !== 18 && !rep.duplicate_of_report_id && (
+                                            {rep.has_duplicate_flag && !RESOLVED_STATUS_IDS.includes(rep.status_id) && !rep.duplicate_of_report_id && (
                                                 <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1" title="AI detected suspected duplicate sighting">
                                                     <span>⚠️</span>
                                                     <span>Dup?</span>

@@ -4,8 +4,8 @@ import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import StatCard from '../../components/PetRecords/StatCard';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
-import { type PetRecord } from '../../components/PetRecords/types';
-import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
+import { type PetRecord, mapRawPetToPetRecord } from '../../components/PetRecords/types';
+import { DEFAULT_PET_AVATAR, getPetPicture, getProfilePicture, DEFAULT_AVATAR } from '../../utils/avatar';
 import { api } from '../../utils/api';
 import { invalidateCache } from '../../utils/cache';
 
@@ -36,36 +36,8 @@ const SubdRemovedPetRecords: React.FC = () => {
             const response = await api.get(url);
 
             const mapped: PetRecord[] = (response.data || []).map((pet: any) => ({
-                id: pet.pet_id.toString(),
-                name: pet.pet_name || 'Unnamed Animal',
-                gender: pet.gender || 'Unknown',
-                age: pet.estimated_age || 'Unknown',
-                breed: pet.breed || 'Unknown Breed',
-                species: pet.pet_type || 'Dog',
-                ownerName: pet.owner?.name || (pet.owner_id ? 'Registered Owner' : 'Community / Unassigned'),
-                ownerEmail: pet.owner?.email || 'No email',
-                ownerPhone: pet.emergency_contact_phone || pet.owner?.phone || 'No phone',
-                idNumber: `P-${pet.pet_id.toString().padStart(5, '0')}`,
-                status: 'Archived',
-                avatar: getPetPicture(pet.photo_url),
-                weight: pet.weight ? `${pet.weight}kg` : 'Unknown',
-                primaryColor: pet.primary_color || 'Unknown',
-                secondaryColor: pet.secondary_color || '',
-                tertiaryColor: pet.tertiary_color || '',
-                colorMarkings: pet.color_markings || pet.distinctive_markings || 'None',
-                sizeCategory: pet.size_category || 'Medium',
-                isVaccinated: pet.is_vaccinated || false,
-                vaccinationDate: pet.vaccination_date || null,
-                isNeutered: pet.is_neutered || false,
-                temperament: pet.temperament || 'Friendly',
-                hasBiteHistory: pet.has_bite_history || false,
-                chaseBehavior: pet.chase_behavior || false,
-                healthCondition: pet.health_condition || 'Healthy',
-                notes: pet.notes || '',
-                vaccineCardUrl: pet.vaccine_card_url || null,
-                registeredByName: pet.registered_by_name || 'Subdivision Leader / Staff',
-                registeredAt: pet.created_at || null,
-                rawPetObj: pet
+                ...mapRawPetToPetRecord(pet),
+                status: 'Archived'
             }));
 
             setRemovedPets(mapped);
@@ -364,10 +336,28 @@ const SubdRemovedPetRecords: React.FC = () => {
 
                                                     {/* Owner */}
                                                     <td className="px-6 py-4.5">
-                                                        <div>
-                                                            <p className="text-xs font-black text-gray-900 leading-tight">{pet.ownerName}</p>
-                                                            <p className="text-[9px] font-bold text-gray-400 tracking-tight lowercase mt-0.5">{pet.ownerEmail}</p>
-                                                        </div>
+                                                        {pet.ownerName && !pet.ownerName.toLowerCase().includes('no owner') && !pet.ownerName.toLowerCase().includes('community') && !pet.ownerName.toLowerCase().includes('unassigned') ? (
+                                                            <div className="flex items-center gap-2.5">
+                                                                <img 
+                                                                    src={getProfilePicture(pet.ownerPhoto || pet.rawPetObj?.owner?.profile_picture)} 
+                                                                    alt={pet.ownerName}
+                                                                    className="w-8 h-8 rounded-full object-cover border border-gray-200 shrink-0 shadow-2xs"
+                                                                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR; }}
+                                                                />
+                                                                <div className="min-w-0">
+                                                                    <p className="text-xs font-black text-gray-900 leading-tight truncate max-w-[140px]">{pet.ownerName}</p>
+                                                                    <p className="text-[10px] font-bold text-gray-400 tracking-tight lowercase truncate max-w-[140px]">{pet.ownerEmail || pet.ownerPhone || 'Resident'}</p>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center gap-2 text-amber-700">
+                                                                <span className="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center text-xs">🐾</span>
+                                                                <div>
+                                                                    <p className="text-[11px] font-black uppercase text-amber-800">Unassigned</p>
+                                                                    <p className="text-[9px] text-amber-600 font-bold">Community Animal</p>
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </td>
 
                                                     {/* Status Badge */}

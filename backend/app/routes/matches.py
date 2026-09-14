@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session, joinedload, selectinload, aliased
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 import json
@@ -19,6 +19,9 @@ from app.schemas.report_match import (
 )
 from app.utils.audit import log_activity
 from app.utils.auth import decode_access_token
+
+# Statuses representing closed, resolved, terminal, or consolidated cases
+RESOLVED_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18]
 
 router = APIRouter(
     prefix="/matches",
@@ -507,7 +510,7 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
         joinedload(Report.reporter)
     ).filter(Report.report_id == report_id).first()
 
-    if not report or report.current_status_id in [3, 11, 12, 14, 18] or report.duplicate_of_report_id:
+    if not report or report.current_status_id in RESOLVED_STATUS_IDS or report.duplicate_of_report_id:
         return []
 
     # Clean up previous unreviewed AI_SUGGESTED duplicate stray records for this report before rescanning.
@@ -587,7 +590,7 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
             joinedload(Report.reporter)
         ).filter(
             Report.report_id != report.report_id,
-            Report.current_status_id.notin_([3, 9, 10, 11, 12, 14, 18]),
+            Report.current_status_id.notin_(RESOLVED_STATUS_IDS),
             Report.duplicate_of_report_id.is_(None),
             Report.animal_type == report.animal_type,
             Report.created_at >= window_start,
@@ -729,7 +732,12 @@ def get_duplicate_matches(
 ):
     """
     List all AI suspected duplicate report matches (Report-to-Report).
+    When a report has been resolved, it will no longer appear under Suspected Duplicate Sightings.
+    Both source and candidate reports must be active and ongoing.
     """
+    SrcReport = aliased(Report)
+    CandReport = aliased(Report)
+
     query = db.query(ReportMatch).options(
         joinedload(ReportMatch.source_report).joinedload(Report.media),
         joinedload(ReportMatch.source_report).joinedload(Report.category),
@@ -741,6 +749,16 @@ def get_duplicate_matches(
     ).filter(
         ReportMatch.matched_report_id.isnot(None),
         ReportMatch.matched_pet_id.is_(None)
+    )
+
+    # Exclude any matches where either source_report or matched_report has been resolved, closed, or merged
+    query = query.join(SrcReport, ReportMatch.source_report_id == SrcReport.report_id).filter(
+        SrcReport.current_status_id.notin_(RESOLVED_STATUS_IDS),
+        SrcReport.duplicate_of_report_id.is_(None)
+    )
+    query = query.join(CandReport, ReportMatch.matched_report_id == CandReport.report_id).filter(
+        CandReport.current_status_id.notin_(RESOLVED_STATUS_IDS),
+        CandReport.duplicate_of_report_id.is_(None)
     )
 
     if status_filter and status_filter != 'ALL':
@@ -755,10 +773,10 @@ def get_duplicate_matches(
         )
 
     if subdivision_id is not None:
-        query = query.join(Report, ReportMatch.source_report_id == Report.report_id).filter(
+        query = query.filter(
             or_(
-                Report.subdivision_id == subdivision_id,
-                ReportMatch.matched_report.has(Report.subdivision_id == subdivision_id)
+                SrcReport.subdivision_id == subdivision_id,
+                CandReport.subdivision_id == subdivision_id
             )
         )
 
@@ -770,29 +788,18 @@ def get_duplicate_matches(
 def get_duplicates_for_report(report_id: int, db: Session = Depends(get_db)):
     """
     Fetch all suspected duplicate report matches involving a specific report (either as source or candidate).
-    If no matches exist, automatically trigger scan_and_generate_matches_for_report to compute matches on the fly.
+    When a report has been resolved, it will no longer appear under Suspected Duplicate Sightings.
+    However, if the report is still ongoing and another ongoing report exists, it will appear.
     """
-    matches = db.query(ReportMatch).options(
-        joinedload(ReportMatch.source_report).joinedload(Report.media),
-        joinedload(ReportMatch.source_report).joinedload(Report.category),
-        joinedload(ReportMatch.source_report).joinedload(Report.reporter),
-        joinedload(ReportMatch.matched_report).joinedload(Report.media),
-        joinedload(ReportMatch.matched_report).joinedload(Report.category),
-        joinedload(ReportMatch.matched_report).joinedload(Report.reporter),
-        joinedload(ReportMatch.reviewer)
-    ).filter(
-        ReportMatch.matched_report_id.isnot(None),
-        ReportMatch.matched_pet_id.is_(None),
-        or_(
-            ReportMatch.source_report_id == report_id,
-            ReportMatch.matched_report_id == report_id
-        )
-    ).order_by(desc(ReportMatch.similarity_score)).all()
+    curr_rep = db.query(Report).filter(Report.report_id == report_id).first()
+    if not curr_rep or curr_rep.current_status_id in RESOLVED_STATUS_IDS or curr_rep.duplicate_of_report_id:
+        return []
 
-    if not matches:
-        scan_and_generate_matches_for_report(report_id, db)
-        db.commit()
-        matches = db.query(ReportMatch).options(
+    SrcReport = aliased(Report)
+    CandReport = aliased(Report)
+
+    def build_query():
+        return db.query(ReportMatch).options(
             joinedload(ReportMatch.source_report).joinedload(Report.media),
             joinedload(ReportMatch.source_report).joinedload(Report.category),
             joinedload(ReportMatch.source_report).joinedload(Report.reporter),
@@ -807,7 +814,24 @@ def get_duplicates_for_report(report_id: int, db: Session = Depends(get_db)):
                 ReportMatch.source_report_id == report_id,
                 ReportMatch.matched_report_id == report_id
             )
-        ).order_by(desc(ReportMatch.similarity_score)).all()
+        ).join(
+            SrcReport, ReportMatch.source_report_id == SrcReport.report_id
+        ).filter(
+            SrcReport.current_status_id.notin_(RESOLVED_STATUS_IDS),
+            SrcReport.duplicate_of_report_id.is_(None)
+        ).join(
+            CandReport, ReportMatch.matched_report_id == CandReport.report_id
+        ).filter(
+            CandReport.current_status_id.notin_(RESOLVED_STATUS_IDS),
+            CandReport.duplicate_of_report_id.is_(None)
+        ).order_by(desc(ReportMatch.similarity_score))
+
+    matches = build_query().all()
+
+    if not matches and curr_rep.current_status_id not in RESOLVED_STATUS_IDS and not curr_rep.duplicate_of_report_id:
+        scan_and_generate_matches_for_report(report_id, db)
+        db.commit()
+        matches = build_query().all()
 
     return matches
 
