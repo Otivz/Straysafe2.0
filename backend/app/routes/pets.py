@@ -63,9 +63,45 @@ def get_subdivision_pets(subdivision_id: int, include_archived: bool = False, db
         query = query.filter(Pet.status.notin_(["Archived", "Inactive"]))
     return query.options(joinedload(Pet.owner)).all()
 
+def get_actor_user(req: Request, db: Session) -> Optional[User]:
+    """Helper to resolve the authenticated/calling user from headers or token."""
+    actor_id_str = req.headers.get("x-user-id") or req.headers.get("X-User-Id")
+    if actor_id_str:
+        try:
+            user = db.query(User).filter(User.user_id == int(actor_id_str)).first()
+            if user:
+                return user
+        except ValueError:
+            pass
+    auth_header = req.headers.get("Authorization") or req.headers.get("authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+        try:
+            from app.utils.auth import SECRET_KEY, ALGORITHM
+            import jwt
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            user_id = payload.get("sub") or payload.get("user_id")
+            if user_id:
+                user = db.query(User).filter(User.user_id == int(user_id)).first()
+                if user:
+                    return user
+        except Exception:
+            pass
+    return None
+
 @router.post("/{pet_id}/assign-owner", response_model=PetResponse)
-def assign_pet_owner(pet_id: int, owner_id: int, req: Request, db: Session = Depends(get_db)):
-    """Assigns or updates the registered owner for an unassigned or community pet."""
+def assign_pet_owner(
+    pet_id: int, 
+    owner_id: int, 
+    req: Request, 
+    verified_claim: Optional[bool] = None,
+    process_type: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Assigns an owner to an unassigned pet (Subd, Brgy, Admin) 
+    or reassigns an existing owner (Admin strictly only).
+    """
     pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not pet:
         raise HTTPException(status_code=404, detail="Pet not found")
@@ -74,22 +110,93 @@ def assign_pet_owner(pet_id: int, owner_id: int, req: Request, db: Session = Dep
     if not owner:
         raise HTTPException(status_code=404, detail="Owner user not found")
     
+    actor = get_actor_user(req, db)
+    actor_role = actor.role_id if actor else None
+    
     old_owner_id = pet.owner_id
-    pet.owner_id = owner_id
-    db.commit()
-    db.refresh(pet)
+    
+    # CASE 1: Pet ALREADY has an owner -> REASSIGNMENT / TRANSFER
+    # ONLY System Admin (role_id == 4) is permitted to reassign an established owner
+    if old_owner_id is not None and old_owner_id != owner_id:
+        if actor and actor_role != 4:
+            actor_role_name = "Subdivision Leaders" if actor_role == 2 else ("Barangay Staff" if actor_role == 3 else "Regular users")
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Permission Denied: {actor_role_name} cannot reassign the owner of an already registered pet. Only System Administrators can perform owner reassignments."
+            )
+        
+        old_owner = db.query(User).filter(User.user_id == old_owner_id).first()
+        old_owner_name = old_owner.name if old_owner else f"User #{old_owner_id}"
+        
+        pet.owner_id = owner_id
+        db.commit()
+        db.refresh(pet)
 
-    log_activity(
-        db=db,
-        action="ASSIGN_PET_OWNER",
-        target_table="pets",
-        target_id=pet_id,
-        description=f"Assigned owner {owner.name} (user_id={owner_id}) to pet {pet.pet_name} (pet_id={pet_id})",
-        log_type="operation",
-        old_values={"owner_id": old_owner_id},
-        new_values={"owner_id": owner_id, "owner_name": owner.name},
-        request=req
-    )
+        admin_name = actor.name if actor else "System Administrator"
+        log_activity(
+            db=db,
+            action="REASSIGN_PET_OWNER",
+            target_table="pets",
+            target_id=pet_id,
+            description=f"Admin {admin_name} reassigned pet '{pet.pet_name}' (ID #{pet_id}) from previous owner {old_owner_name} (ID #{old_owner_id}) to new owner {owner.name} (ID #{owner_id})",
+            log_type="security",
+            old_values={"owner_id": old_owner_id, "owner_name": old_owner_name},
+            new_values={"owner_id": owner_id, "owner_name": owner.name, "reassigned_by": admin_name},
+            user_id=actor.user_id if actor else None,
+            request=req
+        )
+        return pet
+
+    # CASE 2: Pet has NO registered owner yet -> INITIAL ASSIGNMENT (Claim / Adoption)
+    if old_owner_id is None:
+        if actor and actor_role == 1:
+            raise HTTPException(
+                status_code=403,
+                detail="Residents cannot directly assign pet ownership. Authorized officer or administrator approval is required."
+            )
+        
+        # Check claim or adoption status
+        from app.models.pet_claim import PetClaim
+        existing_claims = db.query(PetClaim).filter(PetClaim.pet_id == pet_id).all()
+        approved_claim = next((c for c in existing_claims if c.status in ["Approved", "Handover Complete", "Pet Received"]), None)
+        
+        # If there are pending claims that have not been approved, require approval first
+        if existing_claims and not approved_claim and actor_role in (2, 3) and not verified_claim:
+            pending = any(c.status in ["Pending Review", "Under Review", "Potential Owner Match"] for c in existing_claims)
+            if pending:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This pet has pending claims under review. Please approve the official claim before assigning the owner."
+                )
+
+        pet.owner_id = owner_id
+        if pet.status in ["Found", "Rescued"]:
+            pet.status = "Active"
+            
+        if approved_claim and approved_claim.status == "Approved":
+            approved_claim.status = "Handover Complete"
+
+        db.commit()
+        db.refresh(pet)
+
+        actor_title = "Admin" if actor_role == 4 else ("Subdivision Leader" if actor_role == 2 else ("Barangay Staff" if actor_role == 3 else "Authorized Officer"))
+        actor_name = actor.name if actor else actor_title
+        process_label = f" via {process_type}" if process_type else " via official claim/adoption turnover"
+
+        log_activity(
+            db=db,
+            action="ASSIGN_PET_OWNER",
+            target_table="pets",
+            target_id=pet_id,
+            description=f"{actor_title} {actor_name} assigned owner {owner.name} (user_id={owner_id}) to unassigned pet '{pet.pet_name}' (pet_id={pet_id}){process_label}",
+            log_type="operation",
+            old_values={"owner_id": None},
+            new_values={"owner_id": owner_id, "owner_name": owner.name, "assigned_by": actor_name},
+            user_id=actor.user_id if actor else None,
+            request=req
+        )
+        return pet
+
     return pet
 
 @router.post("/", response_model=PetResponse)
@@ -580,6 +687,24 @@ def remove_pet(pet_id: int, req: Request, db: Session = Depends(get_db)):
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
     
+    actor = get_actor_user(req, db)
+    actor_role = actor.role_id if actor else None
+
+    # Subdivision Leaders (role 2) and Barangay Staff (role 3) are strictly prohibited from removing pet records
+    if actor and actor_role in (2, 3):
+        role_label = "Subdivision Leaders" if actor_role == 2 else "Barangay Staff"
+        raise HTTPException(
+            status_code=403,
+            detail=f"Permission Denied: {role_label} do not have permission to remove pet records. Only System Administrators can remove or archive pet records."
+        )
+
+    # Citizen (role 1) can only remove their own registered pet
+    if actor and actor_role == 1 and db_pet.owner_id != actor.user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Permission Denied: Residents can only remove their own registered pets."
+        )
+
     old_status = db_pet.status
     pet_snapshot = {
         "pet_name": db_pet.pet_name,
@@ -606,15 +731,19 @@ def remove_pet(pet_id: int, req: Request, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_pet)
 
+    actor_title = "Admin" if actor_role == 4 else ("Resident" if actor_role == 1 else "Officer")
+    actor_name = actor.name if actor else actor_title
+
     log_activity(
         db=db,
         action="REMOVE_PET",
         target_table="pets",
         target_id=pet_id,
-        description=f"Removed pet from active list (Archived): {pet_snapshot['pet_name']} ({pet_snapshot['pet_type']}, pet_id={pet_id})",
+        description=f"{actor_title} {actor_name} removed pet from active list (Archived): {pet_snapshot['pet_name']} ({pet_snapshot['pet_type']}, pet_id={pet_id})",
         log_type="operation",
         old_values=pet_snapshot,
         new_values={"status": "Archived"},
+        user_id=actor.user_id if actor else None,
         request=req
     )
     return {

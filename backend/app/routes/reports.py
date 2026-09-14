@@ -3,9 +3,12 @@ import os
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session, joinedload, selectinload, aliased
 from typing import List, Optional
 from sqlalchemy import or_, and_
+
+# Statuses representing closed, resolved, terminal, or consolidated cases
+RESOLVED_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18]
 from app.database import get_db
 from app.models.report import Report, ReportMedia, Comment, StatusHistory, ReportCategory, EndorsementLetter, ReportStatus, Rescue, HoldingAnimal, HoldingTimeline, RescueAssignment
 from app.models.user import User, Subdivision
@@ -20,7 +23,7 @@ from app.models.warning import OwnerWarning
 from app.models.chat import ChatThread
 from app.schemas.report import (
     ReportCreate, ReportResponse, ReportStatusUpdate, ReportUpdate, 
-    ReportMediaResponse, CommentCreate, CommentResponse,
+    ReportMediaResponse, CommentCreate, CommentResponse, StatusHistoryResponse,
     ReportClaimRequest, ReportTakeoverRequest,
     ReportTransferRequest, ReportTransferActionRequest, ReportTransferRejectRequest,
     ReportDisputeCreate, ReportDisputeResponse, ReportDisputeReviewRequest,
@@ -376,17 +379,60 @@ def populate_duplicate_and_merge_info(rep_data: ReportResponse, rep: Report, db:
                     "media": sec_media
                 })
             rep_data.merged_reports = merged_list
+        elif rep.duplicate_of_report_id:
+            parent_rep = db.query(Report).options(
+                joinedload(Report.assigned_leader),
+                joinedload(Report.facility),
+                selectinload(Report.merged_reports).joinedload(Report.reporter),
+                selectinload(Report.merged_reports).selectinload(Report.media)
+            ).filter(Report.report_id == rep.duplicate_of_report_id).first()
+            if parent_rep:
+                if parent_rep.merged_reports:
+                    merged_list = []
+                    for m_rep in parent_rep.merged_reports:
+                        sec_user = m_rep.reporter.name if m_rep.reporter else f"Resident #{m_rep.user_id}"
+                        sec_media = [{"file_url": med.file_url, "media_type": med.media_type} for med in (m_rep.media or [])]
+                        merged_list.append({
+                            "report_id": m_rep.report_id,
+                            "reporter_name": sec_user,
+                            "created_at": m_rep.created_at,
+                            "landmark": m_rep.landmark,
+                            "description": m_rep.description,
+                            "animal_color": m_rep.animal_color,
+                            "estimated_size": m_rep.estimated_size,
+                            "merged_at": m_rep.merged_at,
+                            "merge_notes": m_rep.merge_notes,
+                            "media": sec_media
+                        })
+                    rep_data.merged_reports = merged_list
+                if not rep_data.assigned_leader_id and parent_rep.assigned_leader_id:
+                    rep_data.assigned_leader_id = parent_rep.assigned_leader_id
+                    rep_data.assigned_leader_name = parent_rep.assigned_leader.name if parent_rep.assigned_leader else None
+                    rep_data.assigned_leader_photo = parent_rep.assigned_leader.profile_picture if parent_rep.assigned_leader else None
+                if not rep_data.facility_id and parent_rep.facility_id:
+                    rep_data.facility_id = parent_rep.facility_id
 
         # Check for active AI duplicate suggestions for this report
-        if rep.current_status_id != 18 and not rep.duplicate_of_report_id:
-            dup_matches = db.query(ReportMatch).filter(
+        # When a report has been resolved, it will no longer appear or flag under Suspected Duplicate Sightings
+        if rep.current_status_id not in RESOLVED_STATUS_IDS and not rep.duplicate_of_report_id:
+            SrcRep = aliased(Report, name="dup_src_rep")
+            CandRep = aliased(Report, name="dup_cand_rep")
+            dup_matches = db.query(ReportMatch).join(
+                SrcRep, ReportMatch.source_report_id == SrcRep.report_id
+            ).join(
+                CandRep, ReportMatch.matched_report_id == CandRep.report_id
+            ).filter(
                 ReportMatch.matched_report_id.isnot(None),
                 ReportMatch.matched_pet_id.is_(None),
                 ReportMatch.status == "AI_SUGGESTED",
                 or_(
                     ReportMatch.source_report_id == rep.report_id,
                     ReportMatch.matched_report_id == rep.report_id
-                )
+                ),
+                SrcRep.current_status_id.notin_(RESOLVED_STATUS_IDS),
+                SrcRep.duplicate_of_report_id.is_(None),
+                CandRep.current_status_id.notin_(RESOLVED_STATUS_IDS),
+                CandRep.duplicate_of_report_id.is_(None)
             ).all()
             rep_data.duplicate_match_count = len(dup_matches)
             rep_data.has_duplicate_flag = len(dup_matches) > 0
@@ -1267,6 +1313,65 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
                     rep_data.history[i].updater_name = get_hist_updater_name(hist, report)
                     rep_data.history[i].updater_photo = hist.updater.profile_picture if hist.updater else None
 
+        # Synchronize and unify history for merged cases so primary and duplicate reports share the same rescue timeline
+        unified_history = list(rep_data.history or [])
+        seen_hist_keys = set((h.created_at, h.remarks) for h in unified_history)
+
+        def add_hist_entry(h_obj, r_ctx):
+            key = (h_obj.created_at, h_obj.remarks)
+            if key not in seen_hist_keys:
+                seen_hist_keys.add(key)
+                media_list = []
+                if hasattr(h_obj, 'media') and h_obj.media:
+                    for m in h_obj.media:
+                        media_list.append(ReportMediaResponse.model_validate(m))
+                unified_history.append(StatusHistoryResponse(
+                    history_id=h_obj.history_id,
+                    report_status_id=h_obj.report_status_id,
+                    rescue_status_id=getattr(h_obj, 'rescue_status_id', None),
+                    latitude=h_obj.latitude,
+                    longitude=h_obj.longitude,
+                    landmark=h_obj.landmark,
+                    facility_id=h_obj.facility_id,
+                    facility_name=getattr(h_obj, 'facility_name', None),
+                    remarks=h_obj.remarks,
+                    created_at=h_obj.created_at,
+                    updater_name=get_hist_updater_name(h_obj, r_ctx),
+                    updater_photo=h_obj.updater.profile_picture if getattr(h_obj, 'updater', None) else None,
+                    media=media_list
+                ))
+
+        # Case A: If this report is a duplicate of a parent report, merge parent's history
+        if report.duplicate_of_report_id:
+            parent_rep = db.query(Report).options(
+                joinedload(Report.assigned_leader),
+                joinedload(Report.reporter),
+                selectinload(Report.history).joinedload(StatusHistory.updater),
+                selectinload(Report.history).selectinload(StatusHistory.media)
+            ).filter(Report.report_id == report.duplicate_of_report_id).first()
+            if parent_rep and parent_rep.history:
+                for p_h in parent_rep.history:
+                    add_hist_entry(p_h, parent_rep)
+
+        # Case B: If this report is a primary report with merged children, merge child reports' histories
+        children_reps = []
+        if getattr(report, 'merged_reports', None):
+            children_reps = report.merged_reports
+        elif not report.duplicate_of_report_id:
+            children_reps = db.query(Report).options(
+                joinedload(Report.reporter),
+                selectinload(Report.history).joinedload(StatusHistory.updater),
+                selectinload(Report.history).selectinload(StatusHistory.media)
+            ).filter(Report.duplicate_of_report_id == report.report_id).all()
+
+        for c_rep in children_reps:
+            if hasattr(c_rep, 'history') and c_rep.history:
+                for c_h in c_rep.history:
+                    add_hist_entry(c_h, c_rep)
+
+        unified_history.sort(key=lambda h: h.created_at or datetime.min)
+        rep_data.history = unified_history
+
         if report.comments:
             for i, comment in enumerate(report.comments):  # type: ignore[arg-type]
                 if rep_data.comments and i < len(rep_data.comments):
@@ -1662,6 +1767,18 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
     # Update current_status_id (DB column name)
     report.current_status_id = status_update.status_id
 
+    # When a report transitions to a resolved status, clean up any unreviewed AI duplicate suggestions involving it
+    if status_update.status_id in RESOLVED_STATUS_IDS:
+        db.query(ReportMatch).filter(
+            ReportMatch.matched_report_id.isnot(None),
+            ReportMatch.matched_pet_id.is_(None),
+            ReportMatch.status == "AI_SUGGESTED",
+            or_(
+                ReportMatch.source_report_id == report_id,
+                ReportMatch.matched_report_id == report_id
+            )
+        ).delete(synchronize_session=False)
+
     # Update animal condition if provided
     new_animal_condition = status_update.animal_condition or status_update.condition_notes
     if new_animal_condition:
@@ -1855,6 +1972,7 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
                 rep_data.history[i].updater_photo = hist.updater.profile_picture if hist.updater else None
 
     populate_handler_info(rep_data, report)
+    populate_duplicate_and_merge_info(rep_data, report, db)
 
     status_names = {
         1: "Reported", 2: "Verified", 3: "Rejected", 4: "Escalated to Barangay",
@@ -3067,8 +3185,11 @@ def merge_duplicate_report(
     report.duplicate_of_report_id = primary_report.report_id
     report.merged_at = datetime.now()
     report.merged_by = actor.user_id
-    report.merge_notes = merge_in.notes
     report.current_status_id = 18  # Merged — Duplicate
+
+    # If duplicate report belongs to a registered pet, link primary report to the pet as well
+    if report.pet_id and not primary_report.pet_id:
+        primary_report.pet_id = report.pet_id
 
     # Reconcile claim & handler assignment (ensure single active claim for the animal)
     if primary_report.assigned_leader_id:

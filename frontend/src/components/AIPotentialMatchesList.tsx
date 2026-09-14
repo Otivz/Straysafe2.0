@@ -58,7 +58,18 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                 : 'http://localhost:8000/matches/';
 
             const res = await axios.get(endpoint, { params: matchType === 'duplicates' && reportId ? {} : params });
-            setMatches(Array.isArray(res.data) ? res.data : []);
+            let data = Array.isArray(res.data) ? res.data : [];
+            if (matchType === 'duplicates') {
+                const RESOLVED_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18];
+                data = data.filter((m: any) => {
+                    const srcStatus = m.source_report?.current_status_id ?? m.source_report?.status_id;
+                    const matchStatus = m.matched_report?.current_status_id ?? m.matched_report?.status_id;
+                    const srcResolved = (srcStatus !== undefined && RESOLVED_STATUS_IDS.includes(Number(srcStatus))) || Boolean(m.source_report?.duplicate_of_report_id);
+                    const matchResolved = (matchStatus !== undefined && RESOLVED_STATUS_IDS.includes(Number(matchStatus))) || Boolean(m.matched_report?.duplicate_of_report_id);
+                    return !srcResolved && !matchResolved;
+                });
+            }
+            setMatches(data);
         } catch (err) {
             console.error('Error loading AI matches:', err);
         } finally {

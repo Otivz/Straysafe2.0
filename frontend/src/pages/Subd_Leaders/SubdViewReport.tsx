@@ -155,6 +155,8 @@ const categoryMap: Record<number, string> = {
     4: 'Roaming Pack', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
 };
 
+const RESOLVED_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18];
+
 const SubdViewReport = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -386,7 +388,14 @@ const SubdViewReport = () => {
             try {
                 const dupRes = await axios.get(`http://localhost:8000/matches/duplicates/report/${id}`);
                 if (dupRes.data && Array.isArray(dupRes.data)) {
-                    setDuplicateMatches(dupRes.data.filter((m: any) => m.status === 'AI_SUGGESTED'));
+                    setDuplicateMatches(dupRes.data.filter((m: any) => {
+                        if (m.status !== 'AI_SUGGESTED') return false;
+                        const srcStatus = m.source_report?.current_status_id ?? m.source_report?.status_id;
+                        const matchStatus = m.matched_report?.current_status_id ?? m.matched_report?.status_id;
+                        const srcResolved = (srcStatus !== undefined && RESOLVED_STATUS_IDS.includes(Number(srcStatus))) || Boolean(m.source_report?.duplicate_of_report_id);
+                        const matchResolved = (matchStatus !== undefined && RESOLVED_STATUS_IDS.includes(Number(matchStatus))) || Boolean(m.matched_report?.duplicate_of_report_id);
+                        return !srcResolved && !matchResolved;
+                    }));
                 }
             } catch (dupErr) {
                 console.error('Error fetching duplicate matches:', dupErr);
@@ -1097,7 +1106,7 @@ const SubdViewReport = () => {
                                 ))}
 
                                 {/* AI Suspected Duplicate Stray Sighting Alert Banner */}
-                                {report.status_id !== 18 && !report.duplicate_of_report_id && (duplicateMatches.length > 0 || report.has_duplicate_flag) && (
+                                {!RESOLVED_STATUS_IDS.includes(report.status_id) && !report.duplicate_of_report_id && (duplicateMatches.length > 0 || report.has_duplicate_flag) && (
                                     <div className="p-5 rounded-3xl bg-amber-500/10 border-2 border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300 mb-4">
                                         <div className="flex items-start sm:items-center gap-3.5">
                                             <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl font-black shadow-md shadow-amber-500/20 shrink-0">

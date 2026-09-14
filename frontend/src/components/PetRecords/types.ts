@@ -10,6 +10,8 @@ export interface PetRecord {
     ownerName: string;
     ownerEmail: string;
     ownerPhone?: string;
+    ownerPhoto?: string | null;
+    ownerAddress?: string | null;
     idNumber: string;
     status: string;
     avatar: string;
@@ -63,6 +65,7 @@ export interface PetRecord {
 
 export const mapRawPetToPetRecord = (pet: any): PetRecord => {
     if (!pet) return {} as PetRecord;
+    const ownerObj = pet.owner || {};
     return {
         id: (pet.pet_id || pet.id || '').toString(),
         name: pet.pet_name || pet.name || 'Unknown',
@@ -70,9 +73,12 @@ export const mapRawPetToPetRecord = (pet: any): PetRecord => {
         age: pet.estimated_age || pet.age || 'Unknown',
         breed: pet.breed || 'Unknown',
         species: pet.pet_type || pet.species || 'Dog',
-        ownerName: pet.owner?.name || pet.owner_name || (pet.owner_id ? 'Unknown Owner' : 'No Owner (Community Animal)'),
-        ownerEmail: pet.owner?.email || pet.owner_email || (pet.owner_id ? 'No Email' : 'Unassigned'),
-        ownerPhone: pet.emergency_contact_phone || pet.owner?.phone || pet.owner_phone || (pet.owner_id ? 'No Contact' : 'Unassigned'),
+        ownerName: ownerObj.name || pet.owner_name || (pet.owner_id ? 'Unknown Owner' : 'No Owner (Community Animal)'),
+        ownerEmail: ownerObj.email || pet.owner_email || (pet.owner_id ? 'No Email' : 'Unassigned'),
+        ownerPhone: pet.emergency_contact_phone || ownerObj.phone || pet.owner_phone || (pet.owner_id ? 'No Contact' : 'Unassigned'),
+        ownerPhoto: ownerObj.profile_picture || pet.owner_photo || pet.owner_profile_picture || null,
+        ownerAddress: ownerObj.address || pet.registered_address || pet.owner_address || null,
+        owner_id: pet.owner_id || ownerObj.user_id || null,
         idNumber: `P-${(pet.pet_id || pet.id || '').toString().padStart(5, '0')}`,
         status: pet.status || 'Active',
         avatar: getPetPicture(pet.photo_url || pet.avatar),

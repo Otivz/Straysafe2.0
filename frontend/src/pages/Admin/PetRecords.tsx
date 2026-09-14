@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { getPetPicture } from '../../utils/avatar';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import StatCard from '../../components/PetRecords/StatCard';
 import PetTable from '../../components/PetRecords/PetTable';
-import { type PetRecord } from '../../components/PetRecords/types';
+import { type PetRecord, mapRawPetToPetRecord } from '../../components/PetRecords/types';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import Button from '../../components/Button';
 
@@ -21,33 +20,7 @@ const PetRecords = () => {
             const response = await axios.get('http://localhost:8000/pets/');
             
             // Map backend schema values into PetRecord structure
-            const mappedPets: PetRecord[] = response.data.map((pet: any) => ({
-                id: pet.pet_id.toString(),
-                name: pet.pet_name || 'Unknown',
-                gender: pet.gender || 'Unknown',
-                age: pet.estimated_age || 'Unknown',
-                breed: pet.breed || 'Unknown',
-                species: pet.pet_type || 'Dog',
-                ownerName: pet.owner?.name || 'Unknown Owner',
-                ownerEmail: pet.owner?.email || 'No Email',
-                ownerPhone: pet.emergency_contact_phone || pet.owner?.phone || 'No Contact',
-                idNumber: `P-${pet.pet_id.toString().padStart(5, '0')}`,
-                status: pet.status || 'Active',
-                avatar: getPetPicture(pet.photo_url),
-                weight: pet.weight ? `${pet.weight}kg` : 'Unknown',
-                colorMarkings: pet.color_markings || 'Unknown',
-                sizeCategory: pet.size_category || 'Medium',
-                isVaccinated: pet.is_vaccinated || false,
-                vaccinationDate: pet.vaccination_date || null,
-                isNeutered: pet.is_neutered || false,
-                temperament: pet.temperament || 'Friendly',
-                hasBiteHistory: pet.has_bite_history || false,
-                chaseBehavior: pet.chase_behavior || false,
-                healthCondition: pet.health_condition || 'Healthy and active',
-                notes: pet.notes || '',
-                vaccineCardUrl: pet.vaccine_card_url || null,
-                rawPetObj: pet
-            }));
+            const mappedPets: PetRecord[] = response.data.map((pet: any) => mapRawPetToPetRecord(pet));
             
             setPets(mappedPets);
         } catch (error) {

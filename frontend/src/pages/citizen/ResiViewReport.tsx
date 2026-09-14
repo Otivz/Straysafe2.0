@@ -11,6 +11,7 @@ import RescueTimeline from '../../components/RescueTimeline';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import { useReportChatCount } from '../../utils/chatUtils';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
+import { getProfilePicture, DEFAULT_AVATAR } from '../../utils/avatar';
 
 const reportStatusMap = REPORT_STATUS_MAP;
 
@@ -364,7 +365,8 @@ const ResiViewReport = () => {
                 // Fetch holding animal details if status suggests it is/was in holding
                 try {
                     const holdingRes = await axios.get('http://localhost:8000/holding/');
-                    const matchingAnimal = holdingRes.data.find((a: any) => a.report_id === Number(id));
+                    const targetReportId = response.data.duplicate_of_report_id ? Number(response.data.duplicate_of_report_id) : Number(id);
+                    const matchingAnimal = holdingRes.data.find((a: any) => a.report_id === Number(id) || a.report_id === targetReportId);
                     if (matchingAnimal) {
                         const detailRes = await axios.get(`http://localhost:8000/holding/${matchingAnimal.holding_id}`);
                         setHoldingAnimal(detailRes.data);
@@ -771,19 +773,48 @@ const ResiViewReport = () => {
 
                                 return (
                                     <div className="space-y-6">
-                                        {/* Rescue Status + Date row */}
-                                        <div className="grid grid-cols-2 gap-4 pb-6 border-b border-gray-50">
-                                            <div>
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Rescue Status</p>
-                                                <p className="text-sm font-black text-orange-600 uppercase">
-                                                    {reportStatusMap[report.status_id ?? report.current_status_id ?? report.status?.status_id ?? 1] || 'Reported'}
-                                                </p>
+                                        {/* Reporter Profile & Name + Rescue Status + Date */}
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-gray-100">
+                                            {/* Reporter Profile & Name */}
+                                            <div className="flex items-center gap-3.5">
+                                                <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-200 shadow-xs shrink-0 bg-gray-100 flex items-center justify-center">
+                                                    {report.reporter_photo ? (
+                                                        <img
+                                                            src={getProfilePicture(report.reporter_photo)}
+                                                            alt={report.reporter_name || 'Reporter'}
+                                                            className="w-full h-full object-cover"
+                                                            onError={(e) => {
+                                                                e.currentTarget.src = DEFAULT_AVATAR;
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-lg font-bold bg-orange-50 text-[#F97316]">
+                                                            {(report.reporter_name || 'U').charAt(0).toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Reported By</p>
+                                                    <h4 className="text-sm font-black text-gray-900 leading-tight">
+                                                        {report.reporter_name || (report.user_id ? `Resident #${report.user_id}` : 'Resident')}
+                                                    </h4>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Date Reported</p>
-                                                <p className="text-sm font-black text-[#1a1208] uppercase">
-                                                    <RelativeTimestamp date={report.created_at} />
-                                                </p>
+
+                                            {/* Rescue Status & Date Reported */}
+                                            <div className="flex items-center gap-6 sm:gap-8 shrink-0">
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Rescue Status</p>
+                                                    <p className="text-xs sm:text-sm font-black text-orange-600 uppercase tracking-tight">
+                                                        {reportStatusMap[report.status_id ?? report.current_status_id ?? report.status?.status_id ?? 1] || 'Reported'}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date Reported</p>
+                                                    <p className="text-xs sm:text-sm font-black text-[#1a1208] uppercase tracking-tight">
+                                                        <RelativeTimestamp date={report.created_at} />
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -816,7 +847,7 @@ const ResiViewReport = () => {
                                                 {report.duplicate_of_report_id && (
                                                     <div className="pt-1">
                                                         <Link
-                                                            to={`/resident/report/${report.duplicate_of_report_id}`}
+                                                            to={`/resident/reports/${report.duplicate_of_report_id}`}
                                                             className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-xs"
                                                         >
                                                             <span>Track Active Case #{report.duplicate_of_report_id}</span>
@@ -824,6 +855,85 @@ const ResiViewReport = () => {
                                                         </Link>
                                                     </div>
                                                 )}
+                                            </div>
+                                        )}
+
+                                        {/* Consolidated Sighting Evidence from Merged Duplicate Reports */}
+                                        {report.merged_reports && report.merged_reports.length > 0 && (
+                                            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-orange-200/80 shadow-xs space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] border border-orange-200 flex items-center justify-center text-lg font-black shrink-0">
+                                                            🔗
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">
+                                                                Consolidated Sighting Evidence ({report.merged_reports.length} Merged {report.merged_reports.length === 1 ? 'Report' : 'Reports'})
+                                                            </h3>
+                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                                                Photos and sightings from other residents confirmed for this same animal
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className={`grid grid-cols-1 ${report.merged_reports.length === 2 ? 'sm:grid-cols-2' : report.merged_reports.length >= 3 ? 'sm:grid-cols-2 lg:grid-cols-3' : ''} gap-4 pt-2`}>
+                                                    {report.merged_reports.map((mr: any, mrIdx: number) => (
+                                                        <div key={mr.report_id || mr.id || `merged-report-${mrIdx}`} className="p-4 rounded-2xl bg-stone-50/70 border border-stone-200 space-y-3 flex flex-col justify-between">
+                                                            <div className="space-y-3">
+                                                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-xs font-black text-gray-900">
+                                                                            Report #{mr.report_id}
+                                                                        </span>
+                                                                        <span className="px-2 py-0.5 rounded-md bg-stone-200 text-stone-700 text-[9px] font-black uppercase">
+                                                                            Merged Duplicate
+                                                                        </span>
+                                                                    </div>
+                                                                    <Link
+                                                                        to={`/resident/reports/${mr.report_id}`}
+                                                                        className="text-[10px] font-black text-[#F97316] hover:underline flex items-center gap-1"
+                                                                    >
+                                                                        <span>View Report</span>
+                                                                        <span>→</span>
+                                                                    </Link>
+                                                                </div>
+
+                                                                <div className="flex items-center gap-2.5 text-xs text-gray-600">
+                                                                    <span>👤</span>
+                                                                    <span className="font-bold text-gray-800">{mr.reporter_name}</span>
+                                                                    {mr.landmark && (
+                                                                        <>
+                                                                            <span>•</span>
+                                                                            <span className="truncate">📍 {mr.landmark}</span>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+
+                                                                {mr.description && (
+                                                                    <p className="text-xs text-gray-600 italic bg-white p-2.5 rounded-xl border border-stone-100 leading-relaxed">
+                                                                        "{mr.description}"
+                                                                    </p>
+                                                                )}
+                                                            </div>
+
+                                                            {mr.media && mr.media.length > 0 && (
+                                                                <div className="flex gap-2 overflow-x-auto py-1 mt-2">
+                                                                    {mr.media.map((m: any, mIdx: number) => (
+                                                                        <div
+                                                                            key={m.media_id || m.id || m.file_url || `merged-media-${mIdx}`}
+                                                                            onClick={() => window.open(m.file_url, '_blank')}
+                                                                            className="w-20 h-20 rounded-xl overflow-hidden bg-gray-200 shrink-0 border border-stone-200 cursor-pointer hover:scale-105 transition-transform"
+                                                                            title="Click to view full photo"
+                                                                        >
+                                                                            <img src={m.file_url} alt="" className="w-full h-full object-cover" />
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
                                         )}
 

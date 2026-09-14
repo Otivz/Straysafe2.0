@@ -99,6 +99,7 @@ class UserMini(BaseModel):
     address: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    profile_picture: Optional[str] = None
 
     class Config:
         from_attributes = True

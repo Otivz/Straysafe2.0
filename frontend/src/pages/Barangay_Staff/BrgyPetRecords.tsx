@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { getPetPicture, DEFAULT_PET_AVATAR } from '../../utils/avatar';
+import { DEFAULT_PET_AVATAR } from '../../utils/avatar';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import StatCard from '../../components/PetRecords/StatCard';
 import PetTable from '../../components/PetRecords/PetTable';
-import { type PetRecord } from '../../components/PetRecords/types';
+import { type PetRecord, mapRawPetToPetRecord } from '../../components/PetRecords/types';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import AddPetModal from '../../components/PetRecords/AddPetModal';
 import Button from '../../components/Button';
@@ -49,38 +49,7 @@ const BrgyPetRecords: React.FC = () => {
             }
             const response = await axios.get('http://localhost:8000/pets/');
 
-            const mappedPets: PetRecord[] = response.data.map((pet: any) => ({
-                id: pet.pet_id.toString(),
-                name: pet.pet_name || 'Unknown',
-                gender: pet.gender || 'Unknown',
-                age: pet.estimated_age || 'Unknown',
-                breed: pet.breed || 'Unknown',
-                species: pet.pet_type || 'Dog',
-                ownerName: pet.owner?.name || (pet.owner_id ? 'Unknown Owner' : 'No Owner (Community Animal)'),
-                ownerEmail: pet.owner?.email || (pet.owner_id ? 'No Email' : 'Unassigned'),
-                ownerPhone: pet.emergency_contact_phone || pet.owner?.phone || (pet.owner_id ? 'No Contact' : 'Unassigned'),
-                idNumber: `P-${pet.pet_id.toString().padStart(5, '0')}`,
-                status: pet.status || 'Active',
-                avatar: getPetPicture(pet.photo_url),
-                weight: pet.weight ? `${pet.weight}kg` : 'Unknown',
-                primaryColor: pet.primary_color || (pet.color_markings ? pet.color_markings.split(' ')[0] : 'Unknown'),
-                secondaryColor: pet.secondary_color || '',
-                tertiaryColor: pet.tertiary_color || '',
-                colorMarkings: pet.color_markings || pet.distinctive_markings || 'None',
-                sizeCategory: pet.size_category || 'Medium',
-                isVaccinated: pet.is_vaccinated || false,
-                vaccinationDate: pet.vaccination_date || null,
-                isNeutered: pet.is_neutered || false,
-                temperament: pet.temperament || 'Friendly',
-                hasBiteHistory: pet.has_bite_history || false,
-                chaseBehavior: pet.chase_behavior || false,
-                healthCondition: pet.health_condition || 'Healthy and active',
-                notes: pet.notes || '',
-                vaccineCardUrl: pet.vaccine_card_url || null,
-                registeredByName: pet.registered_by_name || pet.registered_by?.name || (pet.owner?.name ? `${pet.owner.name} (Resident Owner)` : 'Barangay Staff / Animal Control'),
-                registeredAt: pet.created_at || null,
-                rawPetObj: pet
-            }));
+            const mappedPets: PetRecord[] = response.data.map((pet: any) => mapRawPetToPetRecord(pet));
 
             setPets(mappedPets);
             setCachedData('brgy_pet_records', mappedPets);
@@ -101,36 +70,8 @@ const BrgyPetRecords: React.FC = () => {
             const response = await api.get('/pets/removed');
 
             const mapped: PetRecord[] = (response.data || []).map((pet: any) => ({
-                id: pet.pet_id.toString(),
-                name: pet.pet_name || 'Unnamed Animal',
-                gender: pet.gender || 'Unknown',
-                age: pet.estimated_age || 'Unknown',
-                breed: pet.breed || 'Unknown Breed',
-                species: pet.pet_type || 'Dog',
-                ownerName: pet.owner?.name || (pet.owner_id ? 'Registered Owner' : 'Community / Unassigned'),
-                ownerEmail: pet.owner?.email || 'No email',
-                ownerPhone: pet.emergency_contact_phone || pet.owner?.phone || 'No phone',
-                idNumber: `P-${pet.pet_id.toString().padStart(5, '0')}`,
-                status: 'Archived',
-                avatar: getPetPicture(pet.photo_url),
-                weight: pet.weight ? `${pet.weight}kg` : 'Unknown',
-                primaryColor: pet.primary_color || 'Unknown',
-                secondaryColor: pet.secondary_color || '',
-                tertiaryColor: pet.tertiary_color || '',
-                colorMarkings: pet.color_markings || pet.distinctive_markings || 'None',
-                sizeCategory: pet.size_category || 'Medium',
-                isVaccinated: pet.is_vaccinated || false,
-                vaccinationDate: pet.vaccination_date || null,
-                isNeutered: pet.is_neutered || false,
-                temperament: pet.temperament || 'Friendly',
-                hasBiteHistory: pet.has_bite_history || false,
-                chaseBehavior: pet.chase_behavior || false,
-                healthCondition: pet.health_condition || 'Healthy',
-                notes: pet.notes || '',
-                vaccineCardUrl: pet.vaccine_card_url || null,
-                registeredByName: pet.registered_by_name || 'Barangay Staff / Animal Control',
-                registeredAt: pet.created_at || null,
-                rawPetObj: pet
+                ...mapRawPetToPetRecord(pet),
+                status: 'Archived'
             }));
 
             setRemovedPets(mapped);
