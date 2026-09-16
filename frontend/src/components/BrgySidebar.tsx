@@ -212,17 +212,42 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
 
     const renderSidebarContent = (showFullText: boolean, isMobileView: boolean) => (
         <div className="overflow-hidden flex flex-col h-full">
-            {/* Menu Title / Logo */}
-            <div className="pt-8 pb-4 px-6 flex items-center justify-between h-[80px] shrink-0">
-                {showFullText && (
-                    <h2 className="text-xs font-extrabold text-[#F97316] uppercase tracking-widest animate-in fade-in duration-300">
-                        BARANGAY OPS
-                    </h2>
+            {/* Brand / Logo Area */}
+            <div className={`pt-6 pb-4 ${showFullText ? 'px-6' : 'px-2 justify-center'} flex items-center justify-between min-h-[76px] shrink-0`}>
+                {showFullText ? (
+                    <Link to="/brgy/dashboard" className="flex items-center gap-2.5 group overflow-hidden select-none">
+                        <img
+                            src="/SSLOGO.png"
+                            alt="StraySafe Logo"
+                            className="w-8 h-8 sm:w-9 sm:h-9 object-contain shrink-0 transition-transform duration-300 group-hover:scale-105"
+                        />
+                        <div className="flex flex-col min-w-0">
+                            <div className="flex items-center gap-1 leading-none">
+                                <span className="font-black text-sm tracking-tight text-[#0F172A] group-hover:text-black transition-colors">
+                                    STRAY
+                                </span>
+                                <span className="font-black text-sm tracking-tight text-[#F97316]">
+                                    SAFE
+                                </span>
+                            </div>
+                            <span className="text-[8.5px] font-semibold text-slate-400 tracking-tight leading-tight mt-1 truncate">
+                                Safer Communities. Happier Animals.
+                            </span>
+                        </div>
+                    </Link>
+                ) : (
+                    <Link to="/brgy/dashboard" className="flex items-center justify-center w-full group py-1">
+                        <img
+                            src="/SSLOGO.png"
+                            alt="StraySafe Logo"
+                            className="w-8 h-8 object-contain transition-transform duration-300 group-hover:scale-110"
+                        />
+                    </Link>
                 )}
                 {isMobileView && handleDrawerClose && (
                     <button 
                         onClick={handleDrawerClose}
-                        className="text-gray-400 hover:text-gray-600 p-1.5 hover:bg-gray-50 rounded-xl transition-all"
+                        className="text-gray-400 hover:text-gray-600 p-1.5 hover:bg-gray-50 rounded-xl transition-all shrink-0 cursor-pointer ml-1"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
