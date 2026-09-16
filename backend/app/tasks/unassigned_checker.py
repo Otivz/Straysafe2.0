@@ -101,12 +101,12 @@ def check_and_notify_unassigned_reports(threshold_minutes: int = 30) -> int:
     return processed_count
 
 
-def check_and_notify_overdue_holding_animals(default_stay_days: int = 3) -> int:
+def check_and_notify_overdue_holding_animals(default_stay_days: int = 0) -> int:
     """
     Checks for active holding animals that:
     1. Are not resolved/discharged (facility_status not in 3, 4, 5, 7, 8)
     2. Have an intake_date
-    3. Have exceeded the stay duration limit (default 3 days)
+    3. Have exceeded the stay duration limit (default 0 days for testing)
     4. Have not been notified yet (overdue_notified is False or None)
 
     Sends a high-priority holding_overdue_alert notification to all active
@@ -204,7 +204,7 @@ async def start_unassigned_reports_watcher(interval_seconds: int = 60, threshold
     while True:
         try:
             await asyncio.to_thread(check_and_notify_unassigned_reports, threshold_minutes)
-            await asyncio.to_thread(check_and_notify_overdue_holding_animals, 3)
+            await asyncio.to_thread(check_and_notify_overdue_holding_animals, 0)
         except asyncio.CancelledError:
             logger.info("Operations Watcher stopped.")
             break

@@ -339,7 +339,7 @@ def promote_to_adoption(
         )
 
     now = datetime.now(timezone.utc)
-    stay_limit = float(req.min_stay_days) if req.min_stay_days is not None and req.min_stay_days >= 1 else 3.0
+    stay_limit = float(req.min_stay_days) if req.min_stay_days is not None and req.min_stay_days >= 0 else 0.0
     if animal.intake_date:
         # Normalize intake_date if naive
         intake_dt = animal.intake_date

@@ -72,7 +72,7 @@ interface BrgySettingsPreferences {
 const DEFAULT_BRGY_PREFERENCES: BrgySettingsPreferences = {
     quarantineDays: 14,
     capacityWarningThreshold: 80,
-    adoptionGraceDays: 3,
+    adoptionGraceDays: 0,
     autoArchiveResolvedDays: 30,
     soundOnEscalation: true,
     urgentBiteSiren: true,
@@ -113,7 +113,7 @@ const BrgySettings: React.FC = () => {
             const savedStay = localStorage.getItem('holding_impound_stay_duration');
             if (savedStay) {
                 const parsedStay = parseInt(savedStay, 10);
-                if (!isNaN(parsedStay) && parsedStay > 0) {
+                if (!isNaN(parsedStay) && parsedStay >= 0) {
                     base.adoptionGraceDays = parsedStay;
                 }
             }
@@ -1239,7 +1239,7 @@ const BrgySettings: React.FC = () => {
                                                     <div className="flex items-center gap-2">
                                                         <p className="text-xs font-bold text-gray-900 uppercase tracking-wider">Holding Stay & Impoundment Duration</p>
                                                         <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200">
-                                                            Default: 3 Days
+                                                            Default: 0 Days (Testing)
                                                         </span>
                                                     </div>
                                                     <p className="text-xs text-gray-500 font-medium mt-0.5">
@@ -1249,7 +1249,7 @@ const BrgySettings: React.FC = () => {
                                                 <div className="flex flex-wrap items-center gap-3">
                                                     {/* Quick Presets */}
                                                     <div className="flex items-center space-x-1.5 bg-white p-1 rounded-xl border border-gray-200 shadow-xs">
-                                                        {[3, 5, 7, 14].map((days) => (
+                                                        {[0, 3, 5, 7, 14].map((days) => (
                                                             <button
                                                                 key={days}
                                                                 type="button"
@@ -1260,7 +1260,7 @@ const BrgySettings: React.FC = () => {
                                                                         : 'text-gray-600 hover:bg-gray-100'
                                                                 }`}
                                                             >
-                                                                {days}d {days === 3 ? '★' : ''}
+                                                                {days}d {days === 0 ? '★' : ''}
                                                             </button>
                                                         ))}
                                                     </div>
@@ -1269,8 +1269,9 @@ const BrgySettings: React.FC = () => {
                                                     <div className="flex items-center space-x-1 bg-white border border-gray-200 rounded-xl px-2 py-1 shadow-xs">
                                                         <button
                                                             type="button"
-                                                            onClick={() => setPrefs(prev => ({ ...prev, adoptionGraceDays: Math.max(1, prev.adoptionGraceDays - 1) }))}
-                                                            className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold flex items-center justify-center transition-colors text-sm"
+                                                            onClick={() => setPrefs(prev => ({ ...prev, adoptionGraceDays: Math.max(0, prev.adoptionGraceDays - 1) }))}
+                                                            disabled={prefs.adoptionGraceDays <= 0}
+                                                            className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-gray-100 text-gray-700 font-bold flex items-center justify-center transition-colors text-sm"
                                                             title="Decrease stay duration"
                                                         >
                                                             -
@@ -1278,13 +1279,13 @@ const BrgySettings: React.FC = () => {
                                                         <div className="flex items-baseline space-x-1 px-2">
                                                             <input
                                                                 type="number"
-                                                                min={1}
+                                                                min={0}
                                                                 max={90}
                                                                 value={prefs.adoptionGraceDays}
                                                                 onChange={(e) => {
                                                                     const val = parseInt(e.target.value, 10);
                                                                     if (!isNaN(val)) {
-                                                                        setPrefs(prev => ({ ...prev, adoptionGraceDays: Math.min(90, Math.max(1, val)) }));
+                                                                        setPrefs(prev => ({ ...prev, adoptionGraceDays: Math.min(90, Math.max(0, val)) }));
                                                                     }
                                                                 }}
                                                                 className="w-10 text-center text-sm font-black text-gray-900 focus:outline-hidden"

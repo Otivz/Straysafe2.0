@@ -98,7 +98,7 @@ interface Metrics {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const IMPOUND_DAYS = 3;
+const IMPOUND_DAYS = 0; // Temporarily 0 for testing adoption & impound
 
 const FACILITY_STATUSES = [
     { id: 1, name: 'Need Treatment', color: 'bg-red-50 text-red-600 border-red-200' },
@@ -208,30 +208,38 @@ const BrgyHoldingFacility = () => {
     const [promoteError, setPromoteError] = useState<string | null>(null);
     const [promoteSuccess, setPromoteSuccess] = useState<string | null>(null);
 
-    // Number spinner for stay duration before impoundment (Default 3 days, synced with Settings)
+    // Number spinner for stay duration before impoundment (Default 0 days for testing)
     const [impoundStayDuration, setImpoundStayDuration] = useState<number>(() => {
         const saved = localStorage.getItem('holding_impound_stay_duration');
-        if (saved) {
+        if (saved !== null) {
             const parsed = parseInt(saved, 10);
-            if (!isNaN(parsed) && parsed > 0 && parsed <= 90) return parsed;
+            if (!isNaN(parsed) && parsed >= 0 && parsed <= 90) return parsed;
         }
         const brgySettings = localStorage.getItem('straysafe_brgy_settings');
         if (brgySettings) {
             try {
                 const parsedObj = JSON.parse(brgySettings);
-                if (parsedObj?.adoptionGraceDays) return parsedObj.adoptionGraceDays;
+                if (typeof parsedObj?.adoptionGraceDays === 'number' && parsedObj.adoptionGraceDays >= 0) return parsedObj.adoptionGraceDays;
             } catch {}
         }
-        return 3;
+        return 0;
     });
 
     const handleDurationChange = (newVal: number) => {
-        const clamped = Math.max(1, Math.min(90, isNaN(newVal) ? 3 : newVal));
+        const clamped = Math.max(0, Math.min(90, isNaN(newVal) ? 0 : newVal));
         setImpoundStayDuration(clamped);
         localStorage.setItem('holding_impound_stay_duration', String(clamped));
     };
 
     // Quick Impound Confirmation State
+    const userStr = localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user') || localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
+    const currentUser = userStr ? JSON.parse(userStr) : null;
+    const isAdmin = currentUser?.role_id === 4;
+    const isSubdLeader = currentUser?.role_id === 2;
+    const isHeadOfficer = Boolean(currentUser?.is_head_officer || isAdmin);
+    const defaultSubdId = currentUser?.subdivision_id;
+    const defaultBrgyId = currentUser?.barangay_id;
+
     const [quickImpoundAnimal, setQuickImpoundAnimal] = useState<HoldingAnimal | null>(null);
     const [isQuickImpounding, setIsQuickImpounding] = useState(false);
 
@@ -248,8 +256,10 @@ const BrgyHoldingFacility = () => {
             if (selected?.holding_id === animal.holding_id) {
                 setSelected(null);
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error('Failed to impound animal:', err);
+            const errMsg = err?.response?.data?.detail || err?.message || 'Failed to impound animal';
+            alert(`Impoundment failed: ${errMsg}`);
         } finally {
             setIsQuickImpounding(false);
         }
@@ -262,14 +272,6 @@ const BrgyHoldingFacility = () => {
         setPromoteSuccess(null);
         setPromoteModalOpen(true);
     };
-
-    const userStr = localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user') || localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
-    const currentUser = userStr ? JSON.parse(userStr) : null;
-    const isAdmin = currentUser?.role_id === 4;
-    const isSubdLeader = currentUser?.role_id === 2;
-    const isHeadOfficer = Boolean(currentUser?.is_head_officer || isAdmin);
-    const defaultSubdId = currentUser?.subdivision_id;
-    const defaultBrgyId = currentUser?.barangay_id;
 
     useEffect(() => {
         if (!userStr) {
@@ -912,7 +914,7 @@ const BrgyHoldingFacility = () => {
                                     <button
                                         type="button"
                                         onClick={() => handleDurationChange(impoundStayDuration - 1)}
-                                        disabled={impoundStayDuration <= 1}
+                                        disabled={impoundStayDuration <= 0}
                                         className="w-7 h-7 flex items-center justify-center text-amber-900 hover:bg-amber-100 disabled:opacity-30 disabled:hover:bg-transparent font-black text-sm transition-colors cursor-pointer"
                                         title="Decrease stay limit"
                                     >
@@ -920,7 +922,7 @@ const BrgyHoldingFacility = () => {
                                     </button>
                                     <input
                                         type="number"
-                                        min={1}
+                                        min={0}
                                         max={90}
                                         value={impoundStayDuration}
                                         onChange={(e) => handleDurationChange(Number(e.target.value))}

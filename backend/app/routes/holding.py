@@ -26,7 +26,7 @@ router = APIRouter(prefix="/holding", tags=["holding-facility"])
 
 # Status IDs that mean the case is resolved / discharged
 RESOLVED_STATUSES = {3, 4, 5, 7, 8}  # Claimed, Deceased, Transferred, Adopted/Released, Impounded
-IMPOUND_DAYS = 3                # default days before stay limit / impoundment triggers
+IMPOUND_DAYS = 0                # default days before stay limit / impoundment triggers (0 for immediate testing)
 EXPIRY_WARNING_DAYS = 2         # warn when ≤ 2 days remain
 
 CATEGORY_MAP = {
@@ -273,7 +273,7 @@ def get_metrics(
             )
         )
 
-    effective_impound_days = impound_days if (impound_days is not None and impound_days > 0) else IMPOUND_DAYS
+    effective_impound_days = impound_days if (impound_days is not None and impound_days >= 0) else IMPOUND_DAYS
 
     # Run check & notify for overdue animals
     try:
@@ -488,21 +488,6 @@ def update_animal(holding_id: int, body: HoldingAnimalUpdate, db: Session = Depe
         if new_status in RESOLVED_STATUSES and old_status not in RESOLVED_STATUSES:
             animal.discharge_date = datetime.now(timezone.utc).replace(tzinfo=None)
 
-            # Close the linked report (status 11 = Resolved)
-            report = db.query(Report).filter(Report.report_id == animal.report_id).first()
-            if report:
-                report.current_status_id = 11
-                if new_status == 8:
-                    report.custody_status = "Impounded"
-                    # Record official impoundment in status history
-                    impound_hist = StatusHistory(
-                        report_id=report.report_id,
-                        report_status_id=8,
-                        changed_by_user_id=updated_by or animal.intake_staff_id,
-                        remarks=update_notes or f"Animal officially impounded after reaching maximum holding stay at {animal.facility_name or 'Holding Facility'}. Case resolved.",
-                    )
-                    db.add(impound_hist)
-
             # Determine outcome label
             outcome_labels = {
                 3: "Claimed by Owner",
@@ -512,6 +497,29 @@ def update_animal(holding_id: int, body: HoldingAnimalUpdate, db: Session = Depe
                 8: "Impounded",
             }
             outcome_label = outcome_labels.get(new_status, "Resolved")
+
+            # Close the linked report (status 11 = Resolved)
+            report = db.query(Report).filter(Report.report_id == animal.report_id).first()
+            if report:
+                report.current_status_id = 11
+                if new_status == 8:
+                    report.custody_status = "Impounded"
+                elif new_status == 7:
+                    report.custody_status = "Adopted"
+                elif new_status == 3:
+                    report.custody_status = "Claimed by Owner"
+                elif new_status == 4:
+                    report.custody_status = "Deceased"
+
+                # Record official impoundment/resolution in status history
+                history_status_id = 8 if new_status == 8 else 11
+                impound_hist = StatusHistory(
+                    report_id=report.report_id,
+                    report_status_id=history_status_id,
+                    updated_by=updated_by or animal.intake_staff_id,
+                    remarks=update_notes or f"Animal officially marked as '{outcome_label}' after holding facility stay at {animal.facility_name or 'Holding Facility'}. Case resolved.",
+                )
+                db.add(impound_hist)
 
             # Timeline entry for outcome
             db_log = HoldingTimeline(

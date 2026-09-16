@@ -75,7 +75,7 @@ interface FacilityOption {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const IMPOUND_DAYS = 3;
+const IMPOUND_DAYS = 0; // Temporarily 0 for testing adoption & impound
 
 const FACILITY_STATUSES = [
     { id: 1, name: 'Need Treatment', color: 'bg-red-50 text-red-600 border-red-200' },
@@ -187,13 +187,13 @@ const SubdHoldingFacility = () => {
         const saved = localStorage.getItem('subd_holding_stay_duration');
         if (saved) {
             const parsed = parseInt(saved, 10);
-            if (!isNaN(parsed) && parsed >= 1 && parsed <= 90) return parsed;
+            if (!isNaN(parsed) && parsed >= 0 && parsed <= 90) return parsed;
         }
-        return 3;
+        return 0;
     });
 
     const handleDurationChange = (newVal: number) => {
-        const clamped = Math.max(1, Math.min(90, isNaN(newVal) ? 3 : newVal));
+        const clamped = Math.max(0, Math.min(90, isNaN(newVal) ? 0 : newVal));
         setImpoundStayDuration(clamped);
         localStorage.setItem('subd_holding_stay_duration', clamped.toString());
     };
@@ -761,7 +761,7 @@ const SubdHoldingFacility = () => {
                                     <button
                                         type="button"
                                         onClick={() => handleDurationChange(impoundStayDuration - 1)}
-                                        disabled={impoundStayDuration <= 1}
+                                        disabled={impoundStayDuration <= 0}
                                         className="w-7 h-7 flex items-center justify-center text-amber-900 hover:bg-amber-100 disabled:opacity-30 disabled:hover:bg-transparent font-black text-sm transition-colors cursor-pointer"
                                         title="Decrease stay limit"
                                     >
@@ -769,7 +769,7 @@ const SubdHoldingFacility = () => {
                                     </button>
                                     <input
                                         type="number"
-                                        min={1}
+                                        min={0}
                                         max={90}
                                         value={impoundStayDuration}
                                         onChange={(e) => handleDurationChange(Number(e.target.value))}
