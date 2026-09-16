@@ -442,15 +442,28 @@ class Adoption(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
+    id_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    id_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    id_photo_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    is_handed_over: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    handover_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    staff_handed_over: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    staff_handover_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    staff_handover_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    created_pet_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("pets.pet_id", ondelete="SET NULL"), nullable=True)
+
     # Transient fields for API responses
     animal_name: Optional[str] = None
     animal_type: Optional[str] = None
     animal_breed: Optional[str] = None
     animal_photo: Optional[str] = None
     reviewer_name: Optional[str] = None
+    staff_handover_name: Optional[str] = None
 
     # Relationships
-    animal    = relationship("HoldingAnimal", back_populates="adoptions")
-    applicant = relationship("User", foreign_keys=[applicant_id])
-    reviewer  = relationship("User", foreign_keys=[reviewed_by])
+    animal         = relationship("HoldingAnimal", back_populates="adoptions")
+    applicant      = relationship("User", foreign_keys=[applicant_id])
+    reviewer       = relationship("User", foreign_keys=[reviewed_by])
+    handover_staff = relationship("User", foreign_keys=[staff_handover_by])
+    created_pet    = relationship("Pet", foreign_keys=[created_pet_id])
 

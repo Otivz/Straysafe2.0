@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Button from '../../components/Button';
 import { EyeIcon, EyeOffIcon } from '../../components/icon';
 import SuccessModal from '../../components/Modals/SuccessModal';
@@ -29,6 +29,8 @@ const GoogleIcon = () => (
 
 const ResidentsLogin = () => {
     const navigate = useNavigate();
+    const location = useLocation();
+    const destinationPath = (location.state as any)?.from || '/adopt';
     const { setTheme } = useTheme();
 
     useEffect(() => {
@@ -68,11 +70,11 @@ const ResidentsLogin = () => {
             const timer = setTimeout(() => {
                 clearAuthStorage();
                 localStorage.setItem('resident_user', JSON.stringify(registeredUserData));
-                navigate('/resident-home');
+                navigate(destinationPath);
             }, 3000); // 3 seconds delay
             return () => clearTimeout(timer);
         }
-    }, [showSuccess, registeredUserData, navigate]);
+    }, [showSuccess, registeredUserData, navigate, destinationPath]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -109,7 +111,7 @@ const ResidentsLogin = () => {
                 localStorage.setItem('access_token', data.access_token);
             }
             localStorage.setItem('resident_user', JSON.stringify(data));
-            navigate('/resident-home');
+            navigate(destinationPath);
         } catch (err) {
             setError('Cannot connect to server. Make sure the backend is running.');
         } finally {
@@ -230,7 +232,7 @@ const ResidentsLogin = () => {
                 setSuccessMessage(`Welcome, ${data.name || 'Resident'}! Your Google account has been connected.`);
                 setShowSuccess(true);
             } else {
-                navigate('/resident-home');
+                navigate(destinationPath);
             }
         } catch (err) {
             setError('Cannot connect to server. Make sure the backend is running.');

@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
@@ -12,7 +12,9 @@ from app.models.report import (
     Report,
     ReportMedia,
     Adoption,
+    StatusHistory,
 )
+from app.models.pet import Pet
 from app.models.landmark import Landmark
 from app.models.user import User, Barangay, Subdivision
 from app.models.notification import Notification
@@ -23,9 +25,11 @@ from app.utils.auth import (
     get_optional_user,
 )
 from app.utils.audit import log_activity
+from app.utils.cloudinary_config import upload_to_cloudinary
 from app.schemas.adoption import (
     AdoptionApplyRequest,
     AdoptionReviewRequest,
+    AdoptionHandoverConfirmRequest,
     PromoteToAdoptionRequest,
     LateClaimInfoResponse,
     CatalogAnimalResponse,
@@ -65,7 +69,150 @@ def _can_manage_adoption(current_user: User, animal: HoldingAnimal, db: Session)
         if report.subdivision and report.subdivision.barangay_id != current_user.barangay_id:
             return False
         return True
-    return False
+def _build_adoption_response(app: Adoption) -> AdoptionResponse:
+    animal = app.animal
+    photo = None
+    if animal and animal.report and animal.report.media:
+        img = next((m.file_url for m in animal.report.media if m.media_type == "Image"), None)
+        photo = img
+
+    staff_name = None
+    if app.handover_staff:
+        staff_name = app.handover_staff.name
+
+    return AdoptionResponse(
+        adoption_id=app.adoption_id,
+        holding_id=app.holding_id,
+        applicant_id=app.applicant_id,
+        status=app.status,
+        full_name=app.full_name,
+        address=app.address,
+        contact_no=app.contact_no,
+        has_other_pets=app.has_other_pets,
+        living_space=app.living_space,
+        reason=app.reason,
+        reviewed_by=app.reviewed_by,
+        reviewer_role=app.reviewer_role,
+        reviewer_name=app.reviewer.name if app.reviewer else None,
+        review_notes=app.review_notes,
+        reviewed_at=app.reviewed_at,
+        created_at=app.created_at,
+        updated_at=app.updated_at,
+        animal_name=animal.animal_name if animal else None,
+        animal_type=animal.animal_type if animal else None,
+        animal_breed=animal.breed if animal else None,
+        animal_photo=photo,
+        id_type=app.id_type,
+        id_number=app.id_number,
+        id_photo_url=app.id_photo_url,
+        is_handed_over=app.is_handed_over,
+        handover_date=app.handover_date,
+        staff_handed_over=app.staff_handed_over,
+        staff_handover_date=app.staff_handover_date,
+        staff_handover_by=app.staff_handover_by,
+        staff_handover_name=staff_name,
+        created_pet_id=app.created_pet_id,
+    )
+
+
+def _finalize_adoption_if_ready(
+    app: Adoption,
+    db: Session,
+    current_user: User,
+    notes: Optional[str] = None
+) -> bool:
+    """
+    Check if both staff_handed_over AND is_handed_over (adopter confirmed) are True.
+    If so, officially mark animal as Adopted (status 7), create registered Pet record for adopter,
+    log timeline event, and notify both parties.
+    """
+    if not (app.staff_handed_over and app.is_handed_over):
+        return False
+
+    animal = app.animal
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    # 1. Transition animal to facility_status=7 (Adopted/Released)
+    if animal:
+        animal.facility_status = 7
+        animal.discharge_date = now
+
+    # 2. Automatically create registered Pet record if not yet created
+    if not app.created_pet_id and animal:
+        primary_photo = None
+        if animal.report and animal.report.media:
+            primary_photo = next((m.file_url for m in animal.report.media if m.media_type == "Image"), None)
+
+        pet_type_val = "Dog"
+        if animal.animal_type and animal.animal_type.lower() == "cat":
+            pet_type_val = "Cat"
+
+        new_pet = Pet(
+            owner_id=app.applicant_id,
+            pet_name=animal.animal_name or "Adopted Pet",
+            pet_type=pet_type_val,
+            breed=animal.breed or "Mixed Breed",
+            color_markings=animal.color,
+            gender="Unknown",
+            photo_url=primary_photo,
+            health_condition=animal.medical_notes or "Adopted via Barangay Animal Services",
+            is_vaccinated=True,
+            temperament="Friendly",
+        )
+        db.add(new_pet)
+        db.flush()
+        app.created_pet_id = new_pet.pet_id
+
+    # 3. Update report custody status and add StatusHistory entry
+    if animal and animal.report:
+        animal.report.current_status_id = 11  # Incident Resolved
+        animal.report.custody_status = "Adopted"
+        impound_hist = StatusHistory(
+            report_id=animal.report.report_id,
+            report_status_id=11,
+            updated_by=app.staff_handover_by or current_user.user_id,
+            remarks=f"Pet officially claimed by adopter {app.full_name} and handed over by staff. Case resolved.",
+        )
+        db.add(impound_hist)
+
+    # 4. Add HoldingTimeline outcome entry
+    staff_name = app.handover_staff.name if app.handover_staff else (current_user.name if current_user.role_id in [3, 4] else "Authorized Staff")
+    timeline_entry = HoldingTimeline(
+        holding_id=animal.holding_id if animal else app.holding_id,
+        event_type="outcome",
+        title=f"Official Adoption Completed — {app.full_name}",
+        notes=f"Two-way handover confirmed. Animal officially handed over by {staff_name} and received by adopter {app.full_name}. Pet registered to adopter's account (Pet #{app.created_pet_id}). {notes or ''}",
+        logged_by=app.staff_handover_by or current_user.user_id,
+    )
+    db.add(timeline_entry)
+
+    # 5. Send notifications
+    try:
+        # To Adopter
+        notif_adopter = Notification(
+            user_id=app.applicant_id,
+            title="Adoption Officially Completed! 🐾",
+            message=f"Congratulations! The adoption procedure for {animal.animal_name if animal else 'your pet'} is officially complete. The pet has been registered to your account.",
+            notification_type="adoption_completed",
+            related_id=app.adoption_id,
+        )
+        db.add(notif_adopter)
+
+        # To Staff / Head Officer
+        head_officers = db.query(User).filter(User.role_id == 3, User.is_head_officer == True).all()
+        for ho in head_officers:
+            notif_staff = Notification(
+                user_id=ho.user_id,
+                title="Adoption Claiming Completed",
+                message=f"Adoption #{app.adoption_id} for {animal.animal_name if animal else 'pet'} has been completed. Pet officially claimed by {app.full_name}.",
+                notification_type="adoption_completed",
+                related_id=app.adoption_id,
+            )
+            db.add(notif_staff)
+    except Exception as e:
+        logger.warning(f"Could not send completion notifications: {e}")
+
+    return True
 
 
 # ── GET /adoptions/catalog ───────────────────────────────────────────────────
@@ -386,6 +533,27 @@ def promote_to_adoption(
     return {"message": "Animal successfully listed in the public Adoption Catalog.", "holding_id": animal.holding_id}
 
 
+# ── POST /adoptions/upload-id ────────────────────────────────────────────────
+@router.post("/upload-id")
+async def upload_adoption_id(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_resident),
+):
+    """Upload Government ID document image for adoption application."""
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image (JPEG, PNG, WEBP).")
+
+    file_content = await file.read()
+    if len(file_content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File size must be under 10MB.")
+
+    url = upload_to_cloudinary(file_content, folder="adoption_ids", filename=file.filename)
+    if not url:
+        raise HTTPException(status_code=500, detail="Failed to upload ID document. Please try again.")
+
+    return {"url": url}
+
+
 # ── POST /adoptions/apply ────────────────────────────────────────────────────
 @router.post("/apply", status_code=status.HTTP_201_CREATED)
 def apply_for_adoption(
@@ -401,6 +569,21 @@ def apply_for_adoption(
 
     if animal.facility_status != 6:
         raise HTTPException(status_code=400, detail="This animal is currently not available for public adoption.")
+
+    # Check if another applicant is already approved and waiting for claiming
+    approved_for_other = (
+        db.query(Adoption)
+        .filter(
+            Adoption.holding_id == req.holding_id,
+            Adoption.status == "Approved",
+        )
+        .first()
+    )
+    if approved_for_other:
+        raise HTTPException(
+            status_code=400,
+            detail="This pet has already been approved for adoption by another applicant and is reserved for claiming.",
+        )
 
     # Prevent duplicate pending application
     existing = (
@@ -421,6 +604,17 @@ def apply_for_adoption(
     if len(req.reason.strip()) < 20:
         raise HTTPException(status_code=400, detail="Please provide a more detailed reason for adoption (at least 20 characters).")
 
+    # Automatically set has_other_pets = True if resident has registered pets on file
+    user_pets_count = (
+        db.query(Pet)
+        .filter(
+            Pet.owner_id == current_user.user_id,
+            Pet.status.notin_(["Archived", "Inactive"]),
+        )
+        .count()
+    )
+    final_has_other_pets = req.has_other_pets or (user_pets_count > 0)
+
     new_app = Adoption(
         holding_id=req.holding_id,
         applicant_id=current_user.user_id,
@@ -428,9 +622,12 @@ def apply_for_adoption(
         full_name=req.full_name,
         address=req.address,
         contact_no=req.contact_no,
-        has_other_pets=req.has_other_pets,
+        has_other_pets=final_has_other_pets,
         living_space=req.living_space,
         reason=req.reason,
+        id_type=req.id_type,
+        id_number=req.id_number,
+        id_photo_url=req.id_photo_url,
     )
     db.add(new_app)
     db.commit()
@@ -482,46 +679,13 @@ def get_my_adoption_applications(
         .options(
             joinedload(Adoption.animal).joinedload(HoldingAnimal.report).joinedload(Report.media),
             joinedload(Adoption.reviewer),
+            joinedload(Adoption.handover_staff),
         )
         .filter(Adoption.applicant_id == current_user.user_id)
         .order_by(Adoption.created_at.desc())
         .all()
     )
-
-    out: List[AdoptionResponse] = []
-    for app in apps:
-        animal = app.animal
-        photo = None
-        if animal and animal.report and animal.report.media:
-            img = next((m.file_url for m in animal.report.media if m.media_type == "Image"), None)
-            photo = img
-
-        out.append(
-            AdoptionResponse(
-                adoption_id=app.adoption_id,
-                holding_id=app.holding_id,
-                applicant_id=app.applicant_id,
-                status=app.status,
-                full_name=app.full_name,
-                address=app.address,
-                contact_no=app.contact_no,
-                has_other_pets=app.has_other_pets,
-                living_space=app.living_space,
-                reason=app.reason,
-                reviewed_by=app.reviewed_by,
-                reviewer_role=app.reviewer_role,
-                reviewer_name=app.reviewer.name if app.reviewer else None,
-                review_notes=app.review_notes,
-                reviewed_at=app.reviewed_at,
-                created_at=app.created_at,
-                updated_at=app.updated_at,
-                animal_name=animal.animal_name if animal else None,
-                animal_type=animal.animal_type if animal else None,
-                animal_breed=animal.breed if animal else None,
-                animal_photo=photo,
-            )
-        )
-    return out
+    return [_build_adoption_response(app) for app in apps]
 
 
 # ── GET /adoptions/applications ──────────────────────────────────────────────
@@ -543,6 +707,7 @@ def get_barangay_adoption_applications(
             joinedload(Adoption.animal).joinedload(HoldingAnimal.report).joinedload(Report.media),
             joinedload(Adoption.animal).joinedload(HoldingAnimal.report).joinedload(Report.subdivision),
             joinedload(Adoption.reviewer),
+            joinedload(Adoption.handover_staff),
         )
     )
 
@@ -551,41 +716,33 @@ def get_barangay_adoption_applications(
         query = query.join(HoldingAnimal, Adoption.holding_id == HoldingAnimal.holding_id).join(Report, HoldingAnimal.report_id == Report.report_id).join(Subdivision, Report.subdivision_id == Subdivision.subdivision_id).filter(Subdivision.barangay_id == current_user.barangay_id)
 
     apps = query.order_by(Adoption.created_at.desc()).all()
+    return [_build_adoption_response(app) for app in apps]
 
-    out: List[AdoptionResponse] = []
-    for app in apps:
-        animal = app.animal
-        photo = None
-        if animal and animal.report and animal.report.media:
-            img = next((m.file_url for m in animal.report.media if m.media_type == "Image"), None)
-            photo = img
 
-        out.append(
-            AdoptionResponse(
-                adoption_id=app.adoption_id,
-                holding_id=app.holding_id,
-                applicant_id=app.applicant_id,
-                status=app.status,
-                full_name=app.full_name,
-                address=app.address,
-                contact_no=app.contact_no,
-                has_other_pets=app.has_other_pets,
-                living_space=app.living_space,
-                reason=app.reason,
-                reviewed_by=app.reviewed_by,
-                reviewer_role=app.reviewer_role,
-                reviewer_name=app.reviewer.name if app.reviewer else None,
-                review_notes=app.review_notes,
-                reviewed_at=app.reviewed_at,
-                created_at=app.created_at,
-                updated_at=app.updated_at,
-                animal_name=animal.animal_name if animal else None,
-                animal_type=animal.animal_type if animal else None,
-                animal_breed=animal.breed if animal else None,
-                animal_photo=photo,
-            )
+# ── GET /adoptions/my-adopted-pets ───────────────────────────────────────────
+@router.get("/my-adopted-pets", response_model=List[AdoptionResponse])
+def get_my_adopted_pets(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_resident),
+):
+    """Get all officially completed adoptions for the logged-in resident."""
+    apps = (
+        db.query(Adoption)
+        .options(
+            joinedload(Adoption.animal).joinedload(HoldingAnimal.report).joinedload(Report.media),
+            joinedload(Adoption.reviewer),
+            joinedload(Adoption.handover_staff),
         )
-    return out
+        .filter(
+            Adoption.applicant_id == current_user.user_id,
+            Adoption.status == "Approved",
+            Adoption.is_handed_over == True,
+            Adoption.staff_handed_over == True,
+        )
+        .order_by(Adoption.handover_date.desc())
+        .all()
+    )
+    return [_build_adoption_response(app) for app in apps]
 
 
 # ── PUT /adoptions/review/{adoption_id} ──────────────────────────────────────
@@ -615,7 +772,7 @@ def review_adoption_application(
     if decision not in ["Approved", "Rejected"]:
         raise HTTPException(status_code=400, detail="Decision must be 'Approved' or 'Rejected'")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     app.status = decision
     app.reviewed_by = current_user.user_id
     app.reviewer_role = "Barangay Head Officer" if current_user.role_id == 3 else "Admin"
@@ -625,11 +782,10 @@ def review_adoption_application(
     animal = app.animal
 
     if decision == "Approved":
-        # 1. Transition animal to facility_status=7 (Adopted/Released)
-        animal.facility_status = 7
-        animal.discharge_date = now
+        # Note: Animal remains reserved for this adopter awaiting physical claiming & two-way confirmation.
+        # It is NOT marked facility_status=7 until handover confirmation is completed.
 
-        # 2. Automatically reject other pending applications for the same animal
+        # 1. Automatically reject other pending applications for the same animal
         other_pending = (
             db.query(Adoption)
             .filter(
@@ -658,22 +814,22 @@ def review_adoption_application(
             except Exception:
                 pass
 
-        # 3. Add timeline entry
+        # 2. Add timeline entry
         timeline_entry = HoldingTimeline(
-            holding_id=animal.holding_id,
-            event_type="outcome",
-            title=f"Adopted by {app.full_name}",
-            notes=f"Adoption application approved by {current_user.name}. Animal successfully turned over.",
+            holding_id=animal.holding_id if animal else app.holding_id,
+            event_type="status_change",
+            title=f"Adoption Application Approved — {app.full_name}",
+            notes=f"Adoption application #{app.adoption_id} approved by {current_user.name}. Animal awaiting physical pickup and two-way handover confirmation.",
             logged_by=current_user.user_id,
         )
         db.add(timeline_entry)
 
-        # 4. Notify winning adopter
+        # 3. Notify winning adopter
         try:
             notif = Notification(
                 user_id=app.applicant_id,
-                title="Adoption Approved!",
-                message=f"Congratulations! Your adoption application for {animal.animal_name or 'your new pet'} has been Approved. Please coordinate with the Barangay Animal Facility for pickup.",
+                title="Adoption Application Approved! 🎉",
+                message=f"Congratulations! Your adoption application for {animal.animal_name or 'your new pet'} has been Approved. Please proceed to the Barangay Animal Facility for pet pickup and confirmation.",
                 notification_type="adoption_approved",
                 related_id=app.adoption_id,
             )
@@ -710,6 +866,141 @@ def review_adoption_application(
     db.commit()
     db.refresh(app)
     return {"message": f"Application successfully marked as {decision}.", "status": decision}
+
+
+# ── POST /adoptions/{adoption_id}/staff-confirm-handover ──────────────────────
+@router.post("/{adoption_id}/staff-confirm-handover")
+def staff_confirm_handover(
+    adoption_id: int,
+    body: AdoptionHandoverConfirmRequest,
+    http_req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
+):
+    """Barangay Staff / Admin confirms that the adopter has arrived and claimed the pet."""
+    app = (
+        db.query(Adoption)
+        .options(
+            joinedload(Adoption.animal).joinedload(HoldingAnimal.report).joinedload(Report.media),
+            joinedload(Adoption.handover_staff),
+        )
+        .filter(Adoption.adoption_id == adoption_id)
+        .first()
+    )
+    if not app:
+        raise HTTPException(status_code=404, detail="Adoption application not found")
+
+    if app.status != "Approved":
+        raise HTTPException(status_code=400, detail="Only Approved applications can be confirmed for pet handover.")
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    app.staff_handed_over = True
+    app.staff_handover_date = now
+    app.staff_handover_by = current_user.user_id
+
+    # Notify adopter to confirm receipt if not yet confirmed
+    if not app.is_handed_over:
+        try:
+            notif = Notification(
+                user_id=app.applicant_id,
+                title="Pet Handover Confirmed by Staff",
+                message=f"Staff member {current_user.name} has confirmed the handover of {app.animal.animal_name if app.animal else 'your pet'}. Please click 'Confirm Pet Received' in your applications page to finalize the adoption.",
+                notification_type="adoption_handover_pending",
+                related_id=app.adoption_id,
+            )
+            db.add(notif)
+        except Exception:
+            pass
+
+    completed = _finalize_adoption_if_ready(app, db, current_user, notes=body.notes)
+
+    log_activity(
+        db=db,
+        action="STAFF_CONFIRM_ADOPTION_HANDOVER",
+        target_table="adoptions",
+        target_id=app.adoption_id,
+        description=f"Staff {current_user.name} confirmed pet handover for Adoption #{app.adoption_id} to {app.full_name}.",
+        log_type="operation",
+        user_id=current_user.user_id,
+        request=http_req,
+    )
+
+    db.commit()
+    db.refresh(app)
+    return {
+        "message": "Pet handover confirmed by staff." + (" Adoption officially completed!" if completed else " Awaiting adopter confirmation."),
+        "staff_handed_over": True,
+        "is_completed": completed,
+    }
+
+
+# ── POST /adoptions/{adoption_id}/adopter-confirm-received ───────────────────
+@router.post("/{adoption_id}/adopter-confirm-received")
+def adopter_confirm_received(
+    adoption_id: int,
+    body: AdoptionHandoverConfirmRequest,
+    http_req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_resident),
+):
+    """Adopter confirms that they have received and claimed the pet."""
+    app = (
+        db.query(Adoption)
+        .options(
+            joinedload(Adoption.animal).joinedload(HoldingAnimal.report).joinedload(Report.media),
+            joinedload(Adoption.handover_staff),
+        )
+        .filter(Adoption.adoption_id == adoption_id)
+        .first()
+    )
+    if not app:
+        raise HTTPException(status_code=404, detail="Adoption application not found")
+
+    if app.applicant_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="You can only confirm adoptions submitted from your own account.")
+
+    if app.status != "Approved":
+        raise HTTPException(status_code=400, detail="Only Approved applications can be confirmed.")
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    app.is_handed_over = True
+    app.handover_date = now
+
+    # Notify staff
+    try:
+        head_officers = db.query(User).filter(User.role_id == 3, User.is_head_officer == True).all()
+        for ho in head_officers:
+            notif = Notification(
+                user_id=ho.user_id,
+                title="Adopter Confirmed Pet Receipt",
+                message=f"Adopter {app.full_name} has confirmed the safe receipt and adoption of {app.animal.animal_name if app.animal else 'pet'} (App #{app.adoption_id}).",
+                notification_type="adopter_receipt_confirmed",
+                related_id=app.adoption_id,
+            )
+            db.add(notif)
+    except Exception:
+        pass
+
+    completed = _finalize_adoption_if_ready(app, db, current_user, notes=body.notes)
+
+    log_activity(
+        db=db,
+        action="ADOPTER_CONFIRM_PET_RECEIVED",
+        target_table="adoptions",
+        target_id=app.adoption_id,
+        description=f"Adopter {current_user.name} confirmed safe receipt and adoption of pet (App #{app.adoption_id}).",
+        log_type="operation",
+        user_id=current_user.user_id,
+        request=http_req,
+    )
+
+    db.commit()
+    db.refresh(app)
+    return {
+        "message": "Pet receipt confirmed!" + (" Adoption officially completed! The pet is now registered to your account." if completed else " Awaiting staff handover confirmation."),
+        "is_handed_over": True,
+        "is_completed": completed,
+    }
 
 
 # ── GET /adoptions/late-claim-info/{holding_id} ──────────────────────────────
