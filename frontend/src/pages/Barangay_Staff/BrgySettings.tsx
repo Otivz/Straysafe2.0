@@ -72,7 +72,7 @@ interface BrgySettingsPreferences {
 const DEFAULT_BRGY_PREFERENCES: BrgySettingsPreferences = {
     quarantineDays: 14,
     capacityWarningThreshold: 80,
-    adoptionGraceDays: 7,
+    adoptionGraceDays: 3,
     autoArchiveResolvedDays: 30,
     soundOnEscalation: true,
     urgentBiteSiren: true,
@@ -109,7 +109,15 @@ const BrgySettings: React.FC = () => {
     const [prefs, setPrefs] = useState<BrgySettingsPreferences>(() => {
         try {
             const saved = localStorage.getItem('straysafe_brgy_settings');
-            return saved ? { ...DEFAULT_BRGY_PREFERENCES, ...JSON.parse(saved) } : DEFAULT_BRGY_PREFERENCES;
+            const base = saved ? { ...DEFAULT_BRGY_PREFERENCES, ...JSON.parse(saved) } : { ...DEFAULT_BRGY_PREFERENCES };
+            const savedStay = localStorage.getItem('holding_impound_stay_duration');
+            if (savedStay) {
+                const parsedStay = parseInt(savedStay, 10);
+                if (!isNaN(parsedStay) && parsedStay > 0) {
+                    base.adoptionGraceDays = parsedStay;
+                }
+            }
+            return base;
         } catch {
             return DEFAULT_BRGY_PREFERENCES;
         }
@@ -377,6 +385,8 @@ const BrgySettings: React.FC = () => {
     const handleSavePreferences = () => {
         try {
             localStorage.setItem('straysafe_brgy_settings', JSON.stringify(prefs));
+            localStorage.setItem('holding_impound_stay_duration', prefs.adoptionGraceDays.toString());
+            window.dispatchEvent(new Event('storage'));
             showToast('success', 'Barangay operational preferences saved!');
         } catch (e) {
             showToast('error', 'Failed to save preferences to browser storage.');
@@ -1224,26 +1234,72 @@ const BrgySettings: React.FC = () => {
                                                 </div>
                                             </div>
 
-                                            <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                            <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                                                 <div>
-                                                    <p className="text-xs font-bold text-gray-900 uppercase tracking-wider">Unclaimed Stray Adoption Grace Period</p>
-                                                    <p className="text-xs text-gray-500 font-medium mt-0.5">Days before an unclaimed stray transitions to public adoption / shelter care.</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="text-xs font-bold text-gray-900 uppercase tracking-wider">Holding Stay & Impoundment Duration</p>
+                                                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200">
+                                                            Default: 3 Days
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-gray-500 font-medium mt-0.5">
+                                                        Number of days an animal remains in the holding facility before scheduled impoundment or transfer to adoption.
+                                                    </p>
                                                 </div>
-                                                <div className="flex items-center space-x-2">
-                                                    {[3, 5, 7, 14].map((days) => (
+                                                <div className="flex flex-wrap items-center gap-3">
+                                                    {/* Quick Presets */}
+                                                    <div className="flex items-center space-x-1.5 bg-white p-1 rounded-xl border border-gray-200 shadow-xs">
+                                                        {[3, 5, 7, 14].map((days) => (
+                                                            <button
+                                                                key={days}
+                                                                type="button"
+                                                                onClick={() => setPrefs(prev => ({ ...prev, adoptionGraceDays: days }))}
+                                                                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
+                                                                    prefs.adoptionGraceDays === days
+                                                                        ? 'bg-[#F97316] text-white shadow-xs'
+                                                                        : 'text-gray-600 hover:bg-gray-100'
+                                                                }`}
+                                                            >
+                                                                {days}d {days === 3 ? '★' : ''}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+
+                                                    {/* Custom Spinner */}
+                                                    <div className="flex items-center space-x-1 bg-white border border-gray-200 rounded-xl px-2 py-1 shadow-xs">
                                                         <button
-                                                            key={days}
                                                             type="button"
-                                                            onClick={() => setPrefs(prev => ({ ...prev, adoptionGraceDays: days }))}
-                                                            className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all ${
-                                                                prefs.adoptionGraceDays === days
-                                                                    ? 'bg-[#F97316] text-white shadow-xs'
-                                                                    : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-100'
-                                                            }`}
+                                                            onClick={() => setPrefs(prev => ({ ...prev, adoptionGraceDays: Math.max(1, prev.adoptionGraceDays - 1) }))}
+                                                            className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold flex items-center justify-center transition-colors text-sm"
+                                                            title="Decrease stay duration"
                                                         >
-                                                            {days} Days
+                                                            -
                                                         </button>
-                                                    ))}
+                                                        <div className="flex items-baseline space-x-1 px-2">
+                                                            <input
+                                                                type="number"
+                                                                min={1}
+                                                                max={90}
+                                                                value={prefs.adoptionGraceDays}
+                                                                onChange={(e) => {
+                                                                    const val = parseInt(e.target.value, 10);
+                                                                    if (!isNaN(val)) {
+                                                                        setPrefs(prev => ({ ...prev, adoptionGraceDays: Math.min(90, Math.max(1, val)) }));
+                                                                    }
+                                                                }}
+                                                                className="w-10 text-center text-sm font-black text-gray-900 focus:outline-hidden"
+                                                            />
+                                                            <span className="text-[11px] font-bold text-gray-400 uppercase">days</span>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setPrefs(prev => ({ ...prev, adoptionGraceDays: Math.min(90, prev.adoptionGraceDays + 1) }))}
+                                                            className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold flex items-center justify-center transition-colors text-sm"
+                                                            title="Increase stay duration"
+                                                        >
+                                                            +
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { getStoredToken } from '../../utils/api';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import AdminSidebar from '../../components/AdminSidebar';
@@ -55,6 +56,8 @@ interface HoldingAnimal {
     total_duration_display?: string | null;
     current_facility_duration_display?: string | null;
     timeline: TimelineEntry[];
+    adoption_catalog_notes?: string | null;
+    promoted_at?: string | null;
     report_media?: {
         media_id: number;
         file_url: string;
@@ -90,11 +93,12 @@ interface Metrics {
     healthy: number;
     nearing_expiry: number;
     resolved_today: number;
+    needs_impoundment?: number;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const IMPOUND_DAYS = 7;
+const IMPOUND_DAYS = 3;
 
 const FACILITY_STATUSES = [
     { id: 1, name: 'Need Treatment', color: 'bg-red-50 text-red-600 border-red-200' },
@@ -102,9 +106,12 @@ const FACILITY_STATUSES = [
     { id: 3, name: 'Claimed by Owner', color: 'bg-blue-50 text-blue-600 border-blue-200' },
     { id: 4, name: 'Deceased', color: 'bg-gray-100 text-gray-500 border-gray-200' },
     { id: 5, name: 'Transferred to Shelter', color: 'bg-purple-50 text-purple-600 border-purple-200' },
+    { id: 6, name: 'For Adoption', color: 'bg-indigo-50 text-indigo-600 border-indigo-200' },
+    { id: 7, name: 'Adopted/Released', color: 'bg-teal-50 text-teal-600 border-teal-200' },
+    { id: 8, name: 'Impounded', color: 'bg-amber-50 text-amber-700 border-amber-200' },
 ];
 
-const RESOLVED_IDS = new Set([3, 4, 5]);
+const RESOLVED_IDS = new Set([3, 4, 5, 7, 8]);
 
 const EVENT_TYPE_META: Record<string, { icon: ReactNode; color: string }> = {
     intake: { icon: <span>🐾</span>, color: 'bg-emerald-100 text-emerald-700' },
@@ -125,9 +132,9 @@ function daysSince(dateStr: string | null): number {
     return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
 }
 
-function daysRemaining(dateStr: string | null): number {
+function daysRemaining(dateStr: string | null, limit: number = IMPOUND_DAYS): number {
     const days = daysSince(dateStr);
-    return Math.max(0, IMPOUND_DAYS - days);
+    return Math.max(0, limit - days);
 }
 
 function formatDate(dateStr: string | null): string {
@@ -179,10 +186,9 @@ const BrgyHoldingFacility = () => {
     // Update modal state
     const [isUpdating, setIsUpdating] = useState(false);
     const [updateForm, setUpdateForm] = useState({
-        facility_status: 1,
+        facility_status: 2,
         kennel_slot: '',
         medical_notes: '',
-        stay_duration: 3,
         update_notes: '',
     });
 
@@ -194,6 +200,68 @@ const BrgyHoldingFacility = () => {
     // Lightbox / media preview state
     const [lightboxMedia, setLightboxMedia] = useState<{ mediaList: any[]; index: number } | null>(null);
     const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+
+    // Promote to adoption state
+    const [promoteModalOpen, setPromoteModalOpen] = useState(false);
+    const [promoteNotes, setPromoteNotes] = useState('');
+    const [isPromoting, setIsPromoting] = useState(false);
+    const [promoteError, setPromoteError] = useState<string | null>(null);
+    const [promoteSuccess, setPromoteSuccess] = useState<string | null>(null);
+
+    // Number spinner for stay duration before impoundment (Default 3 days, synced with Settings)
+    const [impoundStayDuration, setImpoundStayDuration] = useState<number>(() => {
+        const saved = localStorage.getItem('holding_impound_stay_duration');
+        if (saved) {
+            const parsed = parseInt(saved, 10);
+            if (!isNaN(parsed) && parsed > 0 && parsed <= 90) return parsed;
+        }
+        const brgySettings = localStorage.getItem('straysafe_brgy_settings');
+        if (brgySettings) {
+            try {
+                const parsedObj = JSON.parse(brgySettings);
+                if (parsedObj?.adoptionGraceDays) return parsedObj.adoptionGraceDays;
+            } catch {}
+        }
+        return 3;
+    });
+
+    const handleDurationChange = (newVal: number) => {
+        const clamped = Math.max(1, Math.min(90, isNaN(newVal) ? 3 : newVal));
+        setImpoundStayDuration(clamped);
+        localStorage.setItem('holding_impound_stay_duration', String(clamped));
+    };
+
+    // Quick Impound Confirmation State
+    const [quickImpoundAnimal, setQuickImpoundAnimal] = useState<HoldingAnimal | null>(null);
+    const [isQuickImpounding, setIsQuickImpounding] = useState(false);
+
+    const handleConfirmImpound = async (animal: HoldingAnimal) => {
+        setIsQuickImpounding(true);
+        try {
+            await axios.patch(`http://localhost:8000/holding/${animal.holding_id}`, {
+                facility_status: 8, // Impounded
+                updated_by: currentUser?.user_id,
+                update_notes: `Animal officially impounded after reaching ${impoundStayDuration}-day holding stay limit at ${animal.facility_name || 'holding facility'}.`,
+            });
+            setQuickImpoundAnimal(null);
+            await fetchAll();
+            if (selected?.holding_id === animal.holding_id) {
+                setSelected(null);
+            }
+        } catch (err) {
+            console.error('Failed to impound animal:', err);
+        } finally {
+            setIsQuickImpounding(false);
+        }
+    };
+
+    const openPromoteModalForAnimal = (animal: HoldingAnimal) => {
+        setSelected(animal);
+        setPromoteNotes(animal.medical_notes || animal.adoption_catalog_notes || '');
+        setPromoteError(null);
+        setPromoteSuccess(null);
+        setPromoteModalOpen(true);
+    };
 
     const userStr = localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user') || localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -288,19 +356,20 @@ const BrgyHoldingFacility = () => {
                 }
                 if (selectedFacilityId !== 'all') params.facility_id = selectedFacilityId;
             }
+            params.impound_days = impoundStayDuration;
 
             const [animalsRes, metricsRes] = await Promise.all([
                 axios.get('http://localhost:8000/holding/', { params }),
                 axios.get('http://localhost:8000/holding/metrics', { params }),
             ]);
             setAnimals(animalsRes.data || []);
-            setMetrics(metricsRes.data || { total: 0, need_treatment: 0, healthy: 0, nearing_expiry: 0, resolved_today: 0 });
+            setMetrics(metricsRes.data || { total: 0, need_treatment: 0, healthy: 0, nearing_expiry: 0, resolved_today: 0, needs_impoundment: 0 });
         } catch (err) {
             console.error('Error fetching holding facility data:', err);
         } finally {
             setLoading(false);
         }
-    }, [isAdmin, isSubdLeader, defaultSubdId, defaultBrgyId, selectedScope, selectedFacilityId]);
+    }, [isAdmin, isSubdLeader, defaultSubdId, defaultBrgyId, selectedScope, selectedFacilityId, impoundStayDuration]);
 
     useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -328,6 +397,20 @@ const BrgyHoldingFacility = () => {
         );
     });
 
+    // Overdue and nearing expiry animals based on dynamic spinner duration
+    const overdueAnimals = useMemo(() => {
+        return filtered.filter(a => !RESOLVED_IDS.has(a.facility_status) && daysSince(a.intake_date) >= impoundStayDuration);
+    }, [filtered, impoundStayDuration]);
+
+    const nearingAnimals = useMemo(() => {
+        return filtered.filter(a => {
+            if (RESOLVED_IDS.has(a.facility_status)) return false;
+            const days = daysSince(a.intake_date);
+            const rem = impoundStayDuration - days;
+            return rem > 0 && rem <= 2;
+        });
+    }, [filtered, impoundStayDuration]);
+
     // ── Open detail modal ──────────────────────────────────────────────────────
 
     const openDetail = async (animal: HoldingAnimal) => {
@@ -339,7 +422,6 @@ const BrgyHoldingFacility = () => {
                 facility_status: res.data.facility_status,
                 kennel_slot: res.data.kennel_slot || '',
                 medical_notes: res.data.medical_notes || '',
-                stay_duration: daysSince(res.data.intake_date),
                 update_notes: '',
             });
             setDetailTab('info');
@@ -349,7 +431,6 @@ const BrgyHoldingFacility = () => {
                 facility_status: animal.facility_status,
                 kennel_slot: animal.kennel_slot || '',
                 medical_notes: animal.medical_notes || '',
-                stay_duration: daysSince(animal.intake_date),
                 update_notes: '',
             });
         }
@@ -361,10 +442,6 @@ const BrgyHoldingFacility = () => {
         if (!selected) return;
         setIsUpdating(true);
         try {
-            const d = new Date();
-            d.setDate(d.getDate() - updateForm.stay_duration);
-            const calculatedIntakeDate = d.toISOString();
-
             // 1. Upload files first if any
             const uploadedMediaIds: number[] = [];
             if (uploadFiles.length > 0) {
@@ -382,12 +459,11 @@ const BrgyHoldingFacility = () => {
                 setUploadFiles([]);
             }
 
-            // 2. Perform patching
+            // 2. Perform patching (preserving intake_date genuine start time)
             await axios.patch(`http://localhost:8000/holding/${selected.holding_id}`, {
                 facility_status: updateForm.facility_status,
                 kennel_slot: updateForm.kennel_slot,
                 medical_notes: updateForm.medical_notes,
-                intake_date: calculatedIntakeDate,
                 update_notes: updateForm.update_notes,
                 updated_by: currentUser?.user_id,
                 media_ids: uploadedMediaIds,
@@ -400,6 +476,40 @@ const BrgyHoldingFacility = () => {
             console.error('Update failed:', err);
         } finally {
             setIsUpdating(false);
+        }
+    };
+
+    // ── Promote to adoption ───────────────────────────────────────────────────
+
+    const handlePromoteToAdoption = async () => {
+        if (!selected) return;
+        setIsPromoting(true);
+        setPromoteError(null);
+        setPromoteSuccess(null);
+        try {
+            const token = getStoredToken();
+            await axios.post(
+                `http://localhost:8000/adoptions/promote/${selected.holding_id}`,
+                {
+                    adoption_catalog_notes: promoteNotes,
+                    notes: promoteNotes,
+                    min_stay_days: impoundStayDuration,
+                },
+                { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+            );
+            setPromoteSuccess('Animal successfully promoted to public Adoption Catalog!');
+            await fetchAll();
+            const res = await axios.get(`http://localhost:8000/holding/${selected.holding_id}`);
+            setSelected(res.data);
+            setTimeout(() => {
+                setPromoteModalOpen(false);
+                setPromoteSuccess(null);
+            }, 1200);
+        } catch (err: any) {
+            console.error('Promotion error:', err);
+            setPromoteError(err.response?.data?.detail || 'Failed to promote animal to adoption.');
+        } finally {
+            setIsPromoting(false);
         }
     };
 
@@ -462,11 +572,11 @@ const BrgyHoldingFacility = () => {
             border: 'border-green-100',
         },
         {
-            label: 'Nearing Expiry',
-            value: metrics.nearing_expiry,
-            icon: '⏰',
-            color: 'bg-amber-50 text-amber-600',
-            border: 'border-amber-100',
+            label: (metrics.needs_impoundment || overdueAnimals.length > 0) ? 'Needs Impound' : 'Nearing Expiry',
+            value: (metrics.needs_impoundment || overdueAnimals.length > 0) ? (metrics.needs_impoundment ?? overdueAnimals.length) : (metrics.nearing_expiry || nearingAnimals.length),
+            icon: (metrics.needs_impoundment || overdueAnimals.length > 0) ? '🚨' : '⏰',
+            color: (metrics.needs_impoundment || overdueAnimals.length > 0) ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600',
+            border: (metrics.needs_impoundment || overdueAnimals.length > 0) ? 'border-red-200 ring-1 ring-red-200' : 'border-amber-100',
         },
         {
             label: 'Discharged Today',
@@ -671,6 +781,106 @@ const BrgyHoldingFacility = () => {
                             ))}
                         </div>
 
+                        {/* ── Overdue Impoundment & Adoption Alert Banner ─────────────── */}
+                        {overdueAnimals.length > 0 && (
+                            <div className="bg-gradient-to-r from-red-500/10 via-amber-500/10 to-orange-500/5 rounded-3xl border-2 border-red-300 p-5 md:p-6 shadow-md animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-red-200/60">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-2xl bg-red-600 text-white flex items-center justify-center text-xl shadow-md shadow-red-500/30 animate-pulse shrink-0">
+                                            🚨
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <h3 className="text-base font-black text-red-950 tracking-tight">
+                                                    Impoundment & Adoption Alert
+                                                </h3>
+                                                <span className="px-2.5 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black tracking-wider uppercase shadow-xs">
+                                                    {overdueAnimals.length} Action Needed
+                                                </span>
+                                            </div>
+                                            <p className="text-xs font-semibold text-red-800/90 mt-0.5">
+                                                {overdueAnimals.length === 1 ? '1 animal has' : `${overdueAnimals.length} animals have`} reached or exceeded the <span className="font-extrabold underline decoration-red-400">{impoundStayDuration}-day maximum holding stay limit</span>. Review and choose: promote for adoption or mark as impounded.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="text-[10px] font-mono font-bold text-red-700 bg-red-100/80 px-3 py-1.5 rounded-xl border border-red-200 self-start sm:self-auto shrink-0">
+                                        Threshold: {impoundStayDuration} Days
+                                    </div>
+                                </div>
+
+                                {/* Overdue Animal Mini-Cards */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
+                                    {overdueAnimals.map((animal) => {
+                                        const days = daysSince(animal.intake_date);
+                                        const overDays = days - impoundStayDuration;
+                                        const thumbImg = animal.report_media?.find(
+                                            m => m.media_type === 'Image' || m.file_url.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i)
+                                        );
+
+                                        return (
+                                            <div 
+                                                key={animal.holding_id}
+                                                className="bg-white rounded-2xl border border-red-200 p-3.5 shadow-xs flex flex-col justify-between hover:border-red-400 hover:shadow-md transition-all gap-3"
+                                            >
+                                                <div className="flex items-start gap-3">
+                                                    <div className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 shrink-0 border border-gray-200 relative">
+                                                        {thumbImg ? (
+                                                            <img src={thumbImg.file_url} alt={animal.animal_name || 'Animal'} className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            <div className="w-full h-full flex items-center justify-center text-2xl">
+                                                                {animalIcon(animal.animal_type)}
+                                                            </div>
+                                                        )}
+                                                        <span className="absolute bottom-0 inset-x-0 bg-red-600 text-white text-[8px] font-black text-center uppercase tracking-wider py-0.5">
+                                                            {days}d held
+                                                        </span>
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-center justify-between gap-1">
+                                                            <span className="text-[9px] font-mono font-bold text-gray-400">
+                                                                #{animal.report_id.toString().padStart(4, '0')}
+                                                            </span>
+                                                            <span className="text-[9px] font-black text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
+                                                                {overDays > 0 ? `+${overDays}d over` : 'Due today'}
+                                                            </span>
+                                                        </div>
+                                                        <h4 className="text-xs font-black text-gray-900 truncate mt-0.5">
+                                                            {animal.animal_name || `${animal.animal_type || 'Animal'} #${animal.holding_id}`}
+                                                        </h4>
+                                                        <p className="text-[10px] text-gray-500 font-medium truncate">
+                                                            {animal.breed || 'Unknown Breed'} • 📍 {animal.facility_name || animal.report_landmark || 'Facility'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Dual Action Buttons: Adopt vs Impound */}
+                                                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-gray-100">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openPromoteModalForAnimal(animal)}
+                                                        className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-black rounded-lg border border-emerald-200 transition-all flex items-center justify-center gap-1 cursor-pointer shadow-2xs hover:scale-102"
+                                                        title="Make animal available for public adoption"
+                                                    >
+                                                        <span>🚀</span>
+                                                        <span>Adopt Out</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setQuickImpoundAnimal(animal)}
+                                                        className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-black rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer shadow-2xs hover:scale-102"
+                                                        title="Officially impound animal and close case"
+                                                    >
+                                                        <span>⚖️</span>
+                                                        <span>Impound</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
                         {/* ── Toolbar ───────────────────────────────────────── */}
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-col md:flex-row md:items-center gap-3">
                             <div className="relative flex-1 max-w-sm">
@@ -686,6 +896,47 @@ const BrgyHoldingFacility = () => {
                                     value={searchTerm}
                                     onChange={e => setSearchTerm(e.target.value)}
                                 />
+                            </div>
+
+                            {/* ── Stay Duration Before Impoundment Number Spinner ── */}
+                            <div className="flex items-center gap-2.5 bg-amber-50/80 border border-amber-200/90 px-3 py-1.5 rounded-xl shadow-2xs">
+                                <div className="flex flex-col">
+                                    <span className="text-[9px] font-black uppercase tracking-wider text-amber-950 leading-none">
+                                        Impound Stay Limit
+                                    </span>
+                                    <span className="text-[8px] font-bold text-amber-700/80 mt-0.5">
+                                        Duration Spinner
+                                    </span>
+                                </div>
+                                <div className="flex items-center bg-white rounded-lg border border-amber-300 shadow-2xs overflow-hidden">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDurationChange(impoundStayDuration - 1)}
+                                        disabled={impoundStayDuration <= 1}
+                                        className="w-7 h-7 flex items-center justify-center text-amber-900 hover:bg-amber-100 disabled:opacity-30 disabled:hover:bg-transparent font-black text-sm transition-colors cursor-pointer"
+                                        title="Decrease stay limit"
+                                    >
+                                        −
+                                    </button>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={90}
+                                        value={impoundStayDuration}
+                                        onChange={(e) => handleDurationChange(Number(e.target.value))}
+                                        className="w-10 text-center font-black text-xs text-amber-950 focus:outline-none bg-transparent"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDurationChange(impoundStayDuration + 1)}
+                                        disabled={impoundStayDuration >= 90}
+                                        className="w-7 h-7 flex items-center justify-center text-amber-900 hover:bg-amber-100 disabled:opacity-30 disabled:hover:bg-transparent font-black text-sm transition-colors cursor-pointer"
+                                        title="Increase stay limit"
+                                    >
+                                        +
+                                    </button>
+                                </div>
+                                <span className="text-xs font-black text-amber-900">days</span>
                             </div>
 
                             <select
@@ -737,9 +988,10 @@ const BrgyHoldingFacility = () => {
                                 {filtered.map(animal => {
                                     const statusMeta = getStatusMeta(animal.facility_status);
                                     const days = daysSince(animal.intake_date);
-                                    const remaining = daysRemaining(animal.intake_date);
+                                    const remaining = daysRemaining(animal.intake_date, impoundStayDuration);
                                     const isResolved = RESOLVED_IDS.has(animal.facility_status);
-                                    const isNearExpiry = !isResolved && remaining <= 2;
+                                    const isOverdue = !isResolved && days >= impoundStayDuration;
+                                    const isNearExpiry = !isResolved && !isOverdue && remaining <= 2;
                                     const firstImage = animal.report_media?.find(
                                         m => m.media_type === 'Image' || m.file_url.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i)
                                     ) || (animal.timeline ? animal.timeline.flatMap(t => (t as any).media || []).find((m: any) => m.file_url) : undefined);
@@ -748,8 +1000,12 @@ const BrgyHoldingFacility = () => {
                                         <div
                                             key={animal.holding_id}
                                             onClick={() => openDetail(animal)}
-                                            className={`bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:border-indigo-200 transition-all duration-300 flex flex-col overflow-hidden cursor-pointer group ${
-                                                isResolved ? 'opacity-75 bg-gray-50/50' : ''
+                                            className={`bg-white rounded-3xl border shadow-sm hover:shadow-xl hover:border-indigo-200 transition-all duration-300 flex flex-col overflow-hidden cursor-pointer group ${
+                                                isOverdue 
+                                                    ? 'border-red-300 ring-2 ring-red-200/60 shadow-md' 
+                                                    : isResolved 
+                                                        ? 'opacity-75 bg-gray-50/50 border-gray-150' 
+                                                        : 'border-gray-100'
                                             }`}
                                         >
                                             {/* Card Top / Prominent Image Hero */}
@@ -858,8 +1114,12 @@ const BrgyHoldingFacility = () => {
                                                     <div>
                                                         {isResolved ? (
                                                             <span className="text-xs text-gray-400 font-bold">Completed</span>
+                                                        ) : isOverdue ? (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-700 text-[11px] font-black rounded-lg border border-red-200 animate-pulse shadow-xs">
+                                                                🚨 Needs Impound / Adopt ({days}/{impoundStayDuration}d)
+                                                            </span>
                                                         ) : isNearExpiry ? (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-600 text-[11px] font-black rounded-lg border border-red-200 animate-pulse shadow-xs">
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-600 text-[11px] font-black rounded-lg border border-amber-200 shadow-xs">
                                                                 ⚠️ {remaining}d left
                                                             </span>
                                                         ) : (
@@ -880,16 +1140,45 @@ const BrgyHoldingFacility = () => {
                                             </div>
 
                                             {/* Card Action Footer */}
-                                            <div className="p-4 pt-3 bg-gray-50/60 border-t border-gray-100 flex items-center justify-between mt-auto">
-                                                <span className="text-[11px] text-gray-400 font-semibold group-hover:text-indigo-600 transition-colors">
-                                                    Click to view notes & logs
-                                                </span>
+                                            <div className="p-4 pt-3 bg-gray-50/60 border-t border-gray-100 flex items-center justify-between mt-auto gap-2 flex-wrap">
+                                                {isOverdue && !isSubdLeader ? (
+                                                    <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                                                        <button
+                                                            type="button"
+                                                            onClick={e => {
+                                                                e.stopPropagation();
+                                                                openPromoteModalForAnimal(animal);
+                                                            }}
+                                                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black rounded-xl transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                                                            title="Promote to Public Adoption Catalog"
+                                                        >
+                                                            <span>🚀</span>
+                                                            <span>Adopt</span>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={e => {
+                                                                e.stopPropagation();
+                                                                setQuickImpoundAnimal(animal);
+                                                            }}
+                                                            className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-black rounded-xl transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                                                            title="Officially Impound Animal"
+                                                        >
+                                                            <span>⚖️</span>
+                                                            <span>Impound</span>
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-[11px] text-gray-400 font-semibold group-hover:text-indigo-600 transition-colors">
+                                                        Click to view notes & logs
+                                                    </span>
+                                                )}
                                                 <button
                                                     onClick={e => {
                                                         e.stopPropagation();
                                                         openDetail(animal);
                                                     }}
-                                                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-black text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 shadow-md hover:shadow-lg transition-all uppercase tracking-wider"
+                                                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-black text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 shadow-md hover:shadow-lg transition-all uppercase tracking-wider ml-auto cursor-pointer"
                                                 >
                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -1079,6 +1368,147 @@ const BrgyHoldingFacility = () => {
                                         </div>
                                     )}
 
+                                    {/* ── Adoption Management (Barangay Exclusive) ──────── */}
+                                    {selected.facility_status === 6 && (
+                                        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl p-5 space-y-3 shadow-xs">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-lg shadow-sm">
+                                                        🐾
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <h4 className="text-sm font-black text-indigo-950">Active in Adoption Catalog</h4>
+                                                            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full">Status: For Adoption</span>
+                                                        </div>
+                                                        <p className="text-xs text-indigo-700 mt-0.5">
+                                                            This animal is actively listed for public citizen adoption.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {!isSubdLeader && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => navigate('/brgy/adoptions')}
+                                                        className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 shrink-0"
+                                                    >
+                                                        Adoptions Portal →
+                                                    </button>
+                                                )}
+                                            </div>
+                                            {selected.adoption_catalog_notes && (
+                                                <div className="bg-white/90 p-3 rounded-xl border border-indigo-100/80 text-xs text-indigo-900">
+                                                    <span className="font-bold text-indigo-700 text-[10px] uppercase tracking-wider block mb-0.5">Catalog Highlights:</span>
+                                                    {selected.adoption_catalog_notes}
+                                                </div>
+                                            )}
+                                            {isHeadOfficer && !isSubdLeader && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setPromoteNotes(selected.adoption_catalog_notes || '');
+                                                        setPromoteError(null);
+                                                        setPromoteSuccess(null);
+                                                        setPromoteModalOpen(true);
+                                                    }}
+                                                    className="text-xs text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer inline-block"
+                                                >
+                                                    ✏️ Edit Catalog Highlights
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {!RESOLVED_IDS.has(selected.facility_status) && selected.facility_status !== 6 && !isSubdLeader && (
+                                        <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-200 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                            <div className="flex items-start gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-lg shadow-sm shrink-0 mt-0.5">
+                                                    ✨
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <h4 className="text-sm font-black text-emerald-950">Promote to Adoption Catalog</h4>
+                                                        {daysSince(selected.intake_date) >= impoundStayDuration ? (
+                                                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full">
+                                                                Ready ({impoundStayDuration}+ Days)
+                                                            </span>
+                                                        ) : (
+                                                            <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full">
+                                                                Day {daysSince(selected.intake_date)} of {impoundStayDuration}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
+                                                        {daysSince(selected.intake_date) >= impoundStayDuration
+                                                            ? `${impoundStayDuration}-day stay limit reached. Make this pet available for public citizen adoption.`
+                                                            : `Holding period in progress (stay limit: ${impoundStayDuration} days). Head Officers can promote early if medical evaluation is complete.`}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            {(isHeadOfficer || daysSince(selected.intake_date) >= impoundStayDuration) ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setPromoteNotes(selected.medical_notes || '');
+                                                        setPromoteError(null);
+                                                        setPromoteSuccess(null);
+                                                        setPromoteModalOpen(true);
+                                                    }}
+                                                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-all shadow-md shadow-emerald-200 uppercase tracking-wider shrink-0 flex items-center justify-center gap-1.5 cursor-pointer"
+                                                >
+                                                    🚀 Promote Now
+                                                </button>
+                                            ) : (
+                                                <span className="text-[11px] font-bold text-gray-500 bg-white/80 px-3 py-1.5 rounded-xl border border-gray-200 shrink-0 text-center">
+                                                    Available at {impoundStayDuration} days or Head Officer Approval
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* ── Overdue Stay Limit Notice in Detail Modal ────── */}
+                                    {!RESOLVED_IDS.has(selected.facility_status) && daysSince(selected.intake_date) >= impoundStayDuration && (
+                                        <div className="bg-red-50/90 border-2 border-red-300 rounded-2xl p-4 shadow-xs space-y-3 animate-in fade-in duration-200">
+                                            <div className="flex items-start gap-3">
+                                                <div className="w-9 h-9 rounded-xl bg-red-600 text-white flex items-center justify-center text-lg shrink-0 shadow-sm animate-pulse">
+                                                    🚨
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <h4 className="text-sm font-black text-red-950">Action Required: Stay Limit Reached</h4>
+                                                        <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-black uppercase tracking-wider">
+                                                            {daysSince(selected.intake_date)} Days Held
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-red-800 mt-1 leading-relaxed">
+                                                        This animal has reached or exceeded the <strong>{impoundStayDuration}-day impoundment stay limit</strong>.
+                                                        Barangay staff can make this pet available for public adoption or officially record its impoundment.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            {!isSubdLeader && (
+                                                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-red-200/60">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openPromoteModalForAnimal(selected)}
+                                                        className="py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
+                                                    >
+                                                        <span>🚀</span>
+                                                        <span>Promote for Adoption</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setQuickImpoundAnimal(selected)}
+                                                        className="py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
+                                                    >
+                                                        <span>⚖️</span>
+                                                        <span>Mark as Impounded</span>
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
                                     {/* ── Update Form ──────────────────────── */}
                                     {!RESOLVED_IDS.has(selected.facility_status) && (
                                         <div className="border border-gray-100 rounded-2xl p-5 space-y-4 bg-gray-50/50">
@@ -1095,7 +1525,7 @@ const BrgyHoldingFacility = () => {
                                                         <option key={s.id} value={s.id}>{s.name}</option>
                                                     ))}
                                                 </select>
-                                                {[3, 4, 5].includes(updateForm.facility_status) && (
+                                                {RESOLVED_IDS.has(updateForm.facility_status) && (
                                                     <p className="text-[10px] text-amber-600 font-semibold mt-1.5">
                                                         ⚠️ This will discharge the animal and automatically close the linked report (Resolved).
                                                     </p>
@@ -1113,16 +1543,36 @@ const BrgyHoldingFacility = () => {
                                                 />
                                             </div>
 
-                                            <div>
-                                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Stay Duration (days)</label>
-                                                <input
-                                                    type="number"
-                                                    min={0}
-                                                    max={365}
-                                                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-200 outline-none"
-                                                    value={updateForm.stay_duration}
-                                                    onChange={e => setUpdateForm(f => ({ ...f, stay_duration: Number(e.target.value) }))}
-                                                />
+                                            {/* Holding Intake & Custody Timeline (Read-Only) */}
+                                            <div className="p-3.5 bg-gradient-to-r from-gray-50 to-slate-50 border border-gray-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Holding Intake Started</span>
+                                                        <span className="text-[9px] font-mono font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-sm">
+                                                            {formatDateTime(selected.intake_date)}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-gray-500 font-medium mt-0.5">
+                                                        Stay limit: <strong className="text-gray-800">{impoundStayDuration} days</strong> (configured in Station Settings)
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="text-right">
+                                                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Time in Custody</p>
+                                                        <p className="text-sm font-black text-indigo-700 leading-none mt-0.5">
+                                                            {selected.brgy_duration_display || `${daysSince(selected.intake_date)} days`}
+                                                        </p>
+                                                    </div>
+                                                    {daysSince(selected.intake_date) >= impoundStayDuration ? (
+                                                        <span className="px-2 py-1 bg-red-100 text-red-700 text-[10px] font-black rounded-lg border border-red-200 uppercase tracking-wider animate-pulse">
+                                                            🚨 Overdue
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-lg border border-emerald-200 uppercase tracking-wider">
+                                                            Active ({Math.max(0, impoundStayDuration - daysSince(selected.intake_date))}d left)
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
 
                                             <div>
@@ -1339,6 +1789,87 @@ const BrgyHoldingFacility = () => {
                 </div>
             )}
 
+            {/* ─── Promote to Adoption Modal (Barangay Exclusive) ─────────────── */}
+            {promoteModalOpen && selected && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-[70] p-4">
+                    <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scale-up">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg font-bold">
+                                    🐾
+                                </div>
+                                <div>
+                                    <h3 className="font-black text-gray-900 text-sm">Promote to Adoption</h3>
+                                    <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Barangay Adoption Portal</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    if (!isPromoting) setPromoteModalOpen(false);
+                                }}
+                                className="w-8 h-8 rounded-lg bg-gray-100 text-gray-400 hover:text-gray-600 flex items-center justify-center text-xs"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <p className="text-xs text-gray-600 leading-relaxed">
+                            Promoting <strong className="text-gray-900">{selected.animal_name || `Animal #${selected.holding_id}`}</strong> will set its status to <strong className="text-indigo-600 font-bold">For Adoption</strong> and publish its profile to the citizen <strong>Adopt a Pet</strong> catalog.
+                        </p>
+
+                        {promoteError && (
+                            <div className="p-3 bg-red-50 text-red-700 text-xs font-bold rounded-xl border border-red-200">
+                                ⚠️ {promoteError}
+                            </div>
+                        )}
+                        {promoteSuccess && (
+                            <div className="p-3 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-xl border border-emerald-200">
+                                ✅ {promoteSuccess}
+                            </div>
+                        )}
+
+                        <div>
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-gray-500 block mb-1">
+                                Personality & Highlights for Citizens
+                            </label>
+                            <textarea
+                                rows={3}
+                                placeholder="e.g. Friendly, playful, great with kids, fully vaccinated..."
+                                value={promoteNotes}
+                                onChange={e => setPromoteNotes(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs text-gray-800 focus:ring-2 focus:ring-indigo-200 outline-none resize-none"
+                            />
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                            <button
+                                type="button"
+                                disabled={isPromoting}
+                                onClick={() => setPromoteModalOpen(false)}
+                                className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                disabled={isPromoting}
+                                onClick={handlePromoteToAdoption}
+                                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-emerald-200 transition-all"
+                            >
+                                {isPromoting ? (
+                                    <>
+                                        <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        Publishing...
+                                    </>
+                                ) : (
+                                    'Publish to Catalog'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* ─── Lightbox / Media Viewer Modal ───────────────────────────────── */}
             {lightboxMedia && (
                 <div 
@@ -1448,6 +1979,65 @@ const BrgyHoldingFacility = () => {
                     {/* Image Counter / Caption */}
                     <div className="mt-4 text-xs font-bold text-gray-400 tracking-wider">
                         {lightboxMedia.index + 1} of {lightboxMedia.mediaList.length}
+                    </div>
+                </div>
+            )}
+
+            {/* ─── Quick Impound Confirmation Modal ─────────────────────────────── */}
+            {quickImpoundAnimal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4 border border-gray-150">
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center text-2xl shrink-0 shadow-2xs">
+                                ⚖️
+                            </div>
+                            <div>
+                                <h3 className="text-base font-black text-gray-900">
+                                    Confirm Official Impoundment
+                                </h3>
+                                <p className="text-xs text-gray-500 font-semibold">
+                                    Report #{quickImpoundAnimal.report_id} • {quickImpoundAnimal.animal_name || `${quickImpoundAnimal.animal_type || 'Animal'} #${quickImpoundAnimal.holding_id}`}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="bg-amber-50/90 border border-amber-200/80 p-4 rounded-2xl text-xs text-amber-900 space-y-2">
+                            <p className="font-bold">
+                                Animal has reached <span className="font-black text-amber-950 underline">{daysSince(quickImpoundAnimal.intake_date)} days</span> of holding stay (Threshold: {impoundStayDuration} days).
+                            </p>
+                            <p className="text-[11px] text-amber-800/90 leading-relaxed">
+                                Officially impounding will record its transfer to the Barangay impound custody log, update the status to <strong>Impounded</strong>, and resolve the linked incident report.
+                            </p>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                            <button
+                                type="button"
+                                onClick={() => setQuickImpoundAnimal(null)}
+                                disabled={isQuickImpounding}
+                                className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-100 transition-all cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleConfirmImpound(quickImpoundAnimal)}
+                                disabled={isQuickImpounding}
+                                className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer"
+                            >
+                                {isQuickImpounding ? (
+                                    <>
+                                        <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                                        <span>Impounding...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span>⚖️</span>
+                                        <span>Confirm Impoundment</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

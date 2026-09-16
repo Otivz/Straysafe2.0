@@ -496,6 +496,12 @@ const ResiNavbar = ({
                                             <Link to="/resident/pets" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
                                                 My Pets
                                             </Link>
+                                            <Link to="/adopt" className="flex items-center gap-2 px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
+                                                <span>🐾</span> Adopt a Pet
+                                            </Link>
+                                            <Link to="/adopt/applications" className="flex items-center gap-2 px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
+                                                <span>📋</span> My Adoption Requests
+                                            </Link>
                                             <button
                                                 type="button"
                                                 onClick={() => { setIsDropdownOpen(false); setIsQRScannerOpen(true); }}

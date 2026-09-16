@@ -54,6 +54,11 @@ import PetMatchReview from '../pages/citizen/PetMatchReview';
 import PetClaimsDashboard from '../pages/citizen/PetClaimsDashboard';
 import ReportStrayPage from '../pages/citizen/ReportStrayPage';
 import ResidentSettings from '../pages/citizen/ResidentSettings';
+import AdoptionCatalog from '../pages/citizen/AdoptionCatalog';
+import AnimalJourneyMap from '../pages/citizen/AnimalJourneyMap';
+import AdoptionApplyForm from '../pages/citizen/AdoptionApplyForm';
+import MyAdoptionApplications from '../pages/citizen/MyAdoptionApplications';
+import BrgyAdoptions from '../pages/Barangay_Staff/BrgyAdoptions';
 
 const AppRoutes = () => {
     return (
@@ -65,6 +70,8 @@ const AppRoutes = () => {
             <Route path="/staff/login" element={<CommunityStaffLogin />} />
             <Route path="/pet/scan/:token" element={<PetScanPage />} />
             <Route path="/pet/scan/:token/success" element={<PetScanSuccessPage />} />
+            <Route path="/adopt" element={<AdoptionCatalog />} />
+            <Route path="/adopt/journey/:id" element={<AnimalJourneyMap />} />
 
             {/* Shared Authenticated QR Tag & Scan History Routes (Roles: Resident, Subd, Brgy, Admin) */}
             <Route element={<ProtectedRoute allowedRoles={[1, 2, 3, 4]} />}>
@@ -89,6 +96,8 @@ const AppRoutes = () => {
                 <Route path="/resident/settings" element={<ResidentSettings />} />
                 <Route path="/resident/reports/:reportId/match-review" element={<PetMatchReview />} />
                 <Route path="/resident/pet/:petId/claims-dashboard" element={<PetClaimsDashboard />} />
+                <Route path="/adopt/apply/:id" element={<AdoptionApplyForm />} />
+                <Route path="/adopt/applications" element={<MyAdoptionApplications />} />
             </Route>
 
             {/* Protected Subdivision Leader Routes (Role ID = 2) */}
@@ -141,6 +150,12 @@ const AppRoutes = () => {
                 <Route path="/admin/logs" element={<AdminLogs />} />
                 <Route path="/admin/pets" element={<AdminPetManagement />} />
                 <Route path="/admin/holding-facility" element={<BrgyHoldingFacility />} />
+            </Route>
+
+            {/* Barangay Exclusive Adoptions Portal (Role 3: Barangay Staff, Role 4: System Admin) */}
+            <Route element={<ProtectedRoute allowedRoles={[3, 4]} />}>
+                <Route path="/brgy/adoptions" element={<BrgyAdoptions />} />
+                <Route path="/admin/adoptions" element={<BrgyAdoptions />} />
             </Route>
 
             {/* Catch-all Redirect to Login */}

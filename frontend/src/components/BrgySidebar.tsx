@@ -17,7 +17,9 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
     const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
     const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
     const [pendingClaimsCount, setPendingClaimsCount] = useState<number>(0);
+    const [pendingAdoptionsCount, setPendingAdoptionsCount] = useState<number>(0);
     const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
+    const [overdueHoldingCount, setOverdueHoldingCount] = useState<number>(0);
     const location = useLocation();
 
     // Support both prop naming styles for versatility
@@ -59,6 +61,27 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                 const chatRes = await api.get('/chat/unread-count');
                 if (chatRes.data && typeof chatRes.data.unread_count === 'number') {
                     setUnreadMessagesCount(chatRes.data.unread_count);
+                }
+            } catch (e) {
+                // ignore
+            }
+
+            try {
+                const adoptRes = await api.get('/adoptions/applications');
+                if (Array.isArray(adoptRes.data)) {
+                    const pending = adoptRes.data.filter((a: any) => a.status === 'Submitted' || a.status === 'Under Review').length;
+                    setPendingAdoptionsCount(pending);
+                }
+            } catch (e) {
+                // ignore
+            }
+
+            try {
+                const savedStay = localStorage.getItem('holding_impound_stay_duration');
+                const stayDays = savedStay ? parseInt(savedStay, 10) : 3;
+                const holdingRes = await axios.get(`http://localhost:8000/holding/metrics?impound_days=${stayDays}`);
+                if (holdingRes.data && typeof holdingRes.data.needs_impoundment === 'number') {
+                    setOverdueHoldingCount(holdingRes.data.needs_impoundment);
                 }
             } catch (e) {
                 // ignore
@@ -119,6 +142,7 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                 {
                     path: '/brgy/holding-facility',
                     label: 'Holding Facility',
+                    badgeCount: overdueHoldingCount,
                     icon: (
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
@@ -155,6 +179,16 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                     icon: (
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    )
+                },
+                {
+                    path: '/brgy/adoptions',
+                    label: 'Adoptions',
+                    badgeCount: pendingAdoptionsCount,
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
                         </svg>
                     )
                 },

@@ -196,6 +196,8 @@ const BrgyReportView = () => {
     const [activeMediaIndex, setActiveMediaIndex] = useState(0);
     const [isLightboxOpen, setIsLightboxOpen] = useState(false);
     const [isEndorsementModalOpen, setIsEndorsementModalOpen] = useState(false);
+    const [isMapExpanded, setIsMapExpanded] = useState(false);
+    const [isInlineMapExpanded, setIsInlineMapExpanded] = useState(false);
 
     // Chat Drawer state
     const [isChatOpen, setIsChatOpen] = useState(false);
@@ -605,7 +607,7 @@ const BrgyReportView = () => {
             let finalRemarks = statusRemarks.trim() || friendlyDefaults[targetStatusId] || `Status updated to ${statusMap[targetStatusId] || 'In Progress'}`;
             if (selectedFac && !statusRemarks.trim()) {
                 const caretakerInfo = selectedFac.contact_person ? ` • Caretaker: ${selectedFac.contact_person}` : '';
-                finalRemarks = `${friendlyDefaults[targetStatusId] || 'Animal placed in facility.'} Secured at ${selectedFac.name}${caretakerInfo}.`;
+                finalRemarks = `${friendlyDefaults[targetStatusId] || 'Animal admitted to holding facility.'} Secured in holding facility (${selectedFac.name})${caretakerInfo}.`;
             }
 
             const rescueId = rescueRequest?.rescue_id;
@@ -622,7 +624,10 @@ const BrgyReportView = () => {
                     remarks: finalRemarks,
                     animal_condition: conditionToSubmit
                 };
-                if (selectedFac) {
+                if (targetStatusId === 6) {
+                    payload.custody_status = 'Animal Picked Up';
+                    payload.facility_id = null;
+                } else if (selectedFac) {
                     payload.facility_id = selectedFac.landmark_id;
                     payload.latitude = parseFloat(selectedFac.latitude.toString());
                     payload.longitude = parseFloat(selectedFac.longitude.toString());
@@ -638,7 +643,10 @@ const BrgyReportView = () => {
                     assigned_staff_id: primaryStaffId,
                     animal_condition: conditionToSubmit
                 };
-                if (selectedFac) {
+                if (targetStatusId === 6) {
+                    reportPayload.custody_status = 'Animal Picked Up';
+                    reportPayload.facility_id = null;
+                } else if (selectedFac) {
                     reportPayload.facility_id = selectedFac.landmark_id;
                     reportPayload.latitude = parseFloat(selectedFac.latitude.toString());
                     reportPayload.longitude = parseFloat(selectedFac.longitude.toString());
@@ -777,7 +785,7 @@ const BrgyReportView = () => {
     const imagesList = rawImages.filter(m => !m.is_evidence).length > 0 ? rawImages.filter(m => !m.is_evidence) : rawImages;
     const activeImage = imagesList[activeMediaIndex] || imagesList[0] || null;
 
-    const isRelocatedToFacility = !!(report?.facility_id || report?.facility || report?.custody_status === 'Secured in Facility' || report?.custody_status === 'In Barangay Facility');
+    const isRelocatedToFacility = report?.status_id !== 6 && !!(report?.facility_id || report?.facility || report?.custody_status === 'Secured in Facility' || report?.custody_status === 'In Barangay Facility' || report?.custody_status === 'In Subdivision Facility');
     const activeFacilityLat = report?.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : null;
     const activeFacilityLng = report?.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : null;
 
@@ -798,6 +806,8 @@ const BrgyReportView = () => {
 
         if (report?.history && report.history.length > 0) {
             report.history.forEach((h: any) => {
+                // Ignore status 6 (Picked Up) as a facility step
+                if (h.report_status_id === 6) return;
                 const facName = h.facility_name || (h.facility_id ? h.landmark : null);
                 if (facName && facName !== originLandmark && !seenFacs.has(facName)) {
                     seenFacs.add(facName);
@@ -812,7 +822,7 @@ const BrgyReportView = () => {
             });
         }
 
-        const curFacName = report?.facility?.name || (report?.facility_id ? report.landmark : null);
+        const curFacName = (report?.status_id !== 6) ? (report?.facility?.name || (report?.facility_id ? report.landmark : null)) : null;
         if (curFacName && curFacName !== originLandmark && !seenFacs.has(curFacName)) {
             facilitySteps.push({
                 name: curFacName,
@@ -822,7 +832,7 @@ const BrgyReportView = () => {
 
         return {
             origin: originLandmark,
-            hasMoved: !!(report?.facility_id || report?.facility || facilitySteps.length > 0),
+            hasMoved: report?.status_id !== 6 && !!(report?.facility_id || report?.facility || facilitySteps.length > 0),
             steps: facilitySteps,
             currentFacility: curFacName || (facilitySteps.length > 0 ? facilitySteps[facilitySteps.length - 1].name : null)
         };
@@ -1767,23 +1777,64 @@ const BrgyReportView = () => {
 
                                         {/* Incident Location Map Card */}
                                         <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 sm:p-8 shadow-sm space-y-4">
-                                            <div className="flex items-center justify-between">
+                                            <div className="flex items-center justify-between gap-2 flex-wrap">
                                                 <div>
                                                     <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Sighting Geolocation</h3>
                                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
                                                         Route from Barangay Operations HQ
                                                     </p>
                                                 </div>
-                                                {roadDistance !== null && (
-                                                    <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-wider border border-emerald-200">
-                                                        {roadDistance < 1000 ? `${Math.round(roadDistance)}m` : `${(roadDistance / 1000).toFixed(1)}km`} away
-                                                    </span>
-                                                )}
+                                                <div className="flex items-center gap-2">
+                                                    {roadDistance !== null && (
+                                                        <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-wider border border-emerald-200">
+                                                            {roadDistance < 1000 ? `${Math.round(roadDistance)}m` : `${(roadDistance / 1000).toFixed(1)}km`} away
+                                                        </span>
+                                                    )}
+                                                    {/* Inline Resize Button */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsInlineMapExpanded(prev => !prev)}
+                                                        className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-2xs"
+                                                        title={isInlineMapExpanded ? "Compact map view" : "Taller map view"}
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d={isInlineMapExpanded ? "M4 8h16M4 16h16" : "M4 6h16M4 12h16M4 18h16"} />
+                                                        </svg>
+                                                        <span>{isInlineMapExpanded ? "Compact" : "Resize"}</span>
+                                                    </button>
+                                                    {/* Fullscreen Expand Button */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsMapExpanded(true)}
+                                                        className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] border border-orange-200 rounded-xl text-xs font-black uppercase tracking-wider transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-xs flex items-center gap-1.5"
+                                                        title="Expand Map to Fullscreen Modal"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+                                                        </svg>
+                                                        <span>Expand Map</span>
+                                                    </button>
+                                                </div>
                                             </div>
 
-                                            <div className="w-full h-72 rounded-3xl overflow-hidden border border-gray-200 shadow-inner">
+                                            <div className={`w-full ${isInlineMapExpanded ? 'h-[480px]' : 'h-72'} transition-all duration-300 rounded-3xl overflow-hidden border border-gray-200 shadow-inner relative`}>
+                                                {/* Floating Expand Map Button inside canvas */}
+                                                <div className="absolute top-3 right-3 z-[400]">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsMapExpanded(true)}
+                                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white/95 hover:bg-white text-gray-800 text-xs font-black rounded-xl shadow-md border border-gray-200 backdrop-blur-xs transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                                                        title="Expand Map to Fullscreen Modal"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-[#F97316]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+                                                        </svg>
+                                                        <span>Expand</span>
+                                                    </button>
+                                                </div>
+
                                                 {(() => {
-                                                    const isRelocated = !!report.facility_id || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || !!report.facility || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude));
+                                                    const isRelocated = report.status_id !== 6 && (!!report.facility_id || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || !!report.facility || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude)));
                                                     const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : null;
                                                     const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : null;
                                                     const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
@@ -1794,9 +1845,13 @@ const BrgyReportView = () => {
                                                             id: 1,
                                                             lat: sightingLat,
                                                             lng: sightingLng,
-                                                            title: isRelocated ? `Secured: ${report.facility?.name || report.landmark}` : (resolvedAddress || report.landmark || 'Sighting Location'),
+                                                            title: isRelocated 
+                                                                ? `Secured: ${report.facility?.name || report.landmark}` 
+                                                                : (report.status_id === 6 
+                                                                    ? `Animal Picked Up: ${resolvedAddress || report.landmark || 'Incident Location'}` 
+                                                                    : (resolvedAddress || report.landmark || 'Sighting Location')),
                                                             category: isRelocated ? 'Holding Facility' : (report.animal_type || 'Stray Animal'),
-                                                            color: 'orange',
+                                                            color: report.status_id === 6 ? 'blue' : 'orange',
                                                             rawData: report
                                                         },
                                                         ...(hasDifferentInitialSpot ? [{
@@ -1842,7 +1897,20 @@ const BrgyReportView = () => {
                                                     {sightingLat.toFixed(6)}, {sightingLng.toFixed(6)}
                                                 </p>
                                                 <div className="pt-1 flex flex-col gap-1 text-[11px] font-bold">
-                                                    {(report.facility_id || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || report.facility || custodyProgression.hasMoved) ? (
+                                                    {report.status_id === 6 ? (
+                                                        <div className="p-2.5 rounded-xl bg-blue-50/80 border border-blue-200/60 text-blue-900 space-y-1">
+                                                            <div className="flex items-center gap-1.5 font-black text-xs text-blue-900 uppercase tracking-wide">
+                                                                <span>🐾</span>
+                                                                <span>Animal Picked Up (In Transit)</span>
+                                                            </div>
+                                                            <p className="text-[11px] text-blue-800 leading-relaxed font-semibold">
+                                                                Animal has been secured by the Barangay Response Team. Click <span className="font-extrabold text-blue-950">"Move to Holding Facility"</span> below once delivered to a holding pen or facility.
+                                                            </p>
+                                                            <p className="text-[10px] text-blue-700/80 font-medium">
+                                                                📍 Pickup Origin: <span className="font-bold text-blue-900">{resolvedAddress || report.landmark || 'Incident Location'}</span>
+                                                            </p>
+                                                        </div>
+                                                    ) : (report.status_id !== 6 && (report.facility_id || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || report.facility || custodyProgression.hasMoved)) ? (
                                                         <>
                                                             <p className="text-amber-900">
                                                                 🏢 Current Holding Facility: <span className="font-extrabold">{report.facility?.name || custodyProgression.currentFacility || report.landmark}</span>
@@ -2764,6 +2832,149 @@ const BrgyReportView = () => {
                         fetchReportDetails();
                     }}
                 />
+            )}
+
+            {/* ENLARGED FULLSCREEN MAP MODAL */}
+            {isMapExpanded && report && (
+                <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl shadow-2xl w-[98%] sm:w-[95%] h-[95%] sm:h-[92%] flex flex-col p-4 sm:p-6 animate-in zoom-in-95 duration-200 border border-gray-100 overflow-hidden">
+                        {/* Header */}
+                        <div className="flex justify-between items-center mb-3 sm:mb-4 shrink-0 pb-3 border-b border-gray-100">
+                            <div className="flex items-center gap-2.5">
+                                <div className="p-2 bg-orange-100 text-[#F97316] rounded-2xl">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 className="text-base sm:text-lg font-black text-gray-900 uppercase tracking-tight">
+                                        Incident Geospatial Map View
+                                    </h3>
+                                    <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                                        Expanded view of Case #{report.report_id} & Barangay Route
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {roadDistance !== null && (
+                                    <span className="hidden sm:inline-flex px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-black uppercase tracking-wider border border-emerald-200">
+                                        {roadDistance < 1000 ? `${Math.round(roadDistance)}m` : `${(roadDistance / 1000).toFixed(1)}km`} from HQ
+                                    </span>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setIsMapExpanded(false)}
+                                    className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-700 cursor-pointer"
+                                    title="Close Map"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Info badge strip */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 mb-3 bg-orange-50/60 border border-orange-100 rounded-2xl shrink-0 text-xs">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">GPS Coordinates:</span>
+                                <span className="font-mono font-black text-[#F97316]">
+                                    {sightingLat.toFixed(6)}, {sightingLng.toFixed(6)}
+                                </span>
+                                {report.status_id === 6 ? (
+                                    <span className="bg-blue-600 text-white font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                        🐾 Picked Up (In Transit)
+                                    </span>
+                                ) : (report.status_id !== 6 && (report.facility_id || report.facility)) ? (
+                                    <span className="bg-orange-500 text-white font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                        🏢 {report.facility?.name || report.landmark}
+                                    </span>
+                                ) : report.landmark ? (
+                                    <span className="bg-orange-500 text-white font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                        📍 {report.landmark}
+                                    </span>
+                                ) : null}
+                            </div>
+                            <div className="text-[11px] font-bold text-gray-600 truncate max-w-xs sm:max-w-md">
+                                {report.status_id === 6 
+                                    ? `🐾 Animal Picked Up • Origin: ${resolvedAddress || report.landmark || 'Incident Location'}`
+                                    : `🏠 ${resolvedAddress || report.landmark || 'Sighting Location'}`}
+                            </div>
+                        </div>
+
+                        {/* Map Area */}
+                        <div className="flex-1 rounded-2xl overflow-hidden relative border border-gray-200 min-h-0 shadow-inner">
+                            {(() => {
+                                const isRelocated = report.status_id !== 6 && (!!report.facility_id || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || !!report.facility || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude)));
+                                const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : null;
+                                const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : null;
+                                const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
+                                const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && (Math.abs(initLat - sightingLat) > 0.0001 || Math.abs(initLng - sightingLng) > 0.0001);
+
+                                const brgyMarkers = [
+                                    {
+                                        id: 1,
+                                        lat: sightingLat,
+                                        lng: sightingLng,
+                                        title: isRelocated 
+                                            ? `Secured: ${report.facility?.name || report.landmark}` 
+                                            : (report.status_id === 6 
+                                                ? `Animal Picked Up: ${resolvedAddress || report.landmark || 'Incident Location'}` 
+                                                : (resolvedAddress || report.landmark || 'Sighting Location')),
+                                        category: isRelocated ? 'Holding Facility' : (report.animal_type || 'Stray Animal'),
+                                        color: report.status_id === 6 ? 'blue' : 'orange',
+                                        rawData: report
+                                    },
+                                    ...(hasDifferentInitialSpot ? [{
+                                        id: -999,
+                                        lat: initLat!,
+                                        lng: initLng!,
+                                        title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
+                                        category: 'Initial Sighting',
+                                        priority: 'Medium',
+                                        rawData: { ...report, landmark: report.initial_landmark || 'Initial Sighting Spot' }
+                                    }] : []),
+                                    {
+                                        id: 2,
+                                        lat: BRGY_OFFICE_COORDS[0],
+                                        lng: BRGY_OFFICE_COORDS[1],
+                                        title: 'Barangay San Vicente HQ',
+                                        category: 'HQ'
+                                    }
+                                ];
+
+                                return (
+                                    <MapComponent
+                                        height="100%"
+                                        center={[sightingLat, sightingLng]}
+                                        zoom={16.5}
+                                        showHeatmap={false}
+                                        showGeofence={true}
+                                        showLandmarks={true}
+                                        showConnectingLine={false}
+                                        onRouteCalculated={(dist) => setRoadDistance(dist)}
+                                        markers={brgyMarkers}
+                                    />
+                                );
+                            })()}
+                        </div>
+
+                        {/* Footer Controls */}
+                        <div className="flex items-center justify-between pt-3 sm:pt-4 border-t border-gray-100 shrink-0 gap-3">
+                            <span className="text-xs text-gray-400 font-medium hidden sm:inline">
+                                💡 Tip: Zoom in or pan to inspect surroundings, routes, and registered holding facility landmarks.
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setIsMapExpanded(false)}
+                                className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer ml-auto"
+                            >
+                                Close Map View
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

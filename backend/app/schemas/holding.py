@@ -35,7 +35,7 @@ class HoldingAnimalCreate(BaseModel):
     breed:           Optional[str] = None
     color:           Optional[str] = None
     estimated_size:  Optional[str] = None
-    facility_status: Optional[int] = 1
+    facility_status: Optional[int] = 2
     kennel_slot:     Optional[str] = None
     medical_notes:   Optional[str] = None
     intake_staff_id: Optional[int] = None
@@ -89,6 +89,7 @@ class HoldingAnimalResponse(BaseModel):
     total_duration_days: Optional[float] = None
     total_duration_display: Optional[str] = None
     current_facility_duration_display: Optional[str] = None
+    overdue_notified:  Optional[bool] = False
     timeline:          List[HoldingTimelineResponse] = []
 
     class Config:
@@ -99,5 +100,6 @@ class HoldingMetricsResponse(BaseModel):
     total:            int
     need_treatment:   int
     healthy:          int
-    nearing_expiry:   int   # intake_date within 2 days of 7-day deadline
+    nearing_expiry:   int   # intake_date within warn threshold of impound deadline
     resolved_today:   int   # discharged today
+    needs_impoundment: int = 0  # intake_date reached or exceeded impound deadline

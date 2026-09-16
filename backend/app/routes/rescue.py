@@ -483,8 +483,8 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                             caretaker_str = f" • Caretaker: {fac.contact_person} ({fac.contact_number})" if fac.contact_person else ""
                             if prev_fac_name and prev_fac_name != fac.name:
                                 relocation_note = f"Transferred to {fac.name}{caretaker_str} (Previously held at: {prev_fac_name})"
-                            elif report_status_id in (6, 7, 8):
-                                relocation_note = f"Secured at {fac.name}{caretaker_str}"
+                            elif report_status_id in (7, 8):
+                                relocation_note = f"Secured in holding facility ({fac.name}){caretaker_str}"
                     elif lat is not None and lng is not None:
                         report_obj.latitude = Decimal(str(lat))
                         report_obj.longitude = Decimal(str(lng))
@@ -492,8 +492,13 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                             report_obj.landmark = lmk
                         if custody_status:
                             report_obj.custody_status = custody_status
-                    elif report_status_id in (6, 7, 8) and not report_obj.facility_id:
-                        # Auto-resolve Barangay HQ location and custody status if picked up / under observation / impounded
+                    elif report_status_id == 6:
+                        # Animal Picked Up: animal is secured with responders in transit, NOT yet admitted into holding facility
+                        report_obj.custody_status = custody_status or "Animal Picked Up"
+                        report_obj.facility_id = None
+                        relocation_note = None
+                    elif report_status_id in (7, 8) and not report_obj.facility_id:
+                        # Auto-resolve Barangay HQ location and custody status only when moved to holding without specific facility
                         brgy = None
                         if report_obj.subdivision_id:
                             subd = db.query(Subdivision).filter(Subdivision.subdivision_id == report_obj.subdivision_id).first()
@@ -594,8 +599,9 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                         except Exception as notif_err:
                             print(f"Notice: Failed to create leader rescue notification: {notif_err}")
 
-                    # ── Auto-intake into Holding Facility or Log Relocation when Picked Up, Under Observation, Impounded, or Moved to Facility ──────
-                    if report_status_id in (6, 7, 8) or facility_id:
+                    # ── Auto-intake into Holding Facility or Log Relocation when Under Observation (7), Impounded (8), or Moved to Facility ──────
+                    # NOTE: Status 6 (Animal Picked Up) is in-transit only; intake happens only when moved to facility (Status 7/8 or explicit facility_id)
+                    if (report_status_id in (7, 8) or facility_id) and report_status_id != 6:
                         already_in = db.query(HoldingAnimal).filter(
                             HoldingAnimal.report_id == report_obj.report_id
                         ).first()
@@ -605,19 +611,16 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                             a_type = 'Dog' if ('dog' in raw_t or 'canine' in raw_t or 'puppy' in raw_t) else ('Cat' if ('cat' in raw_t or 'feline' in raw_t or 'kitten' in raw_t) else 'Unknown')
                             
                             # Derive initial facility_status based on animal condition
-                            cond_text = str(report_obj.condition or animal_condition or '').lower()
+                            cond_text = (str(getattr(report_obj, 'condition', '') or '') + ' ' + str(animal_condition or '') + ' ' + str(getattr(report_obj, 'description', '') or '')).lower()
                             is_deceased = 'deceased' in cond_text or 'dead' in cond_text
-                            is_injured = any(k in cond_text for k in ['injured', 'bleeding', 'limping', 'weak', 'sick', 'treatment', 'wound', 'trapped'])
-                            is_healthy = 'healthy' in cond_text or 'no condition' in cond_text
+                            is_injured = any(k in cond_text for k in ['injured', 'bleeding', 'limping', 'weak', 'sick', 'treatment', 'wound', 'trapped', 'fracture', 'broken', 'infection', 'rabid'])
 
                             if is_deceased:
                                 init_fac_status = 4  # Deceased
-                            elif is_healthy and not is_injured:
-                                init_fac_status = 2  # Healthy
                             elif is_injured:
                                 init_fac_status = 1  # Need Treatment
                             else:
-                                init_fac_status = 2 if 'healthy' in cond_text else 1
+                                init_fac_status = 2  # Healthy
 
                             new_holding = HoldingAnimal(
                                 report_id       = report_obj.report_id,
@@ -631,16 +634,16 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                             )
                             db.add(new_holding)
                             db.flush()  # get holding_id
+                            
                             # Resolve specific facility or Barangay HQ location
                             loc_name = None
                             if report_obj.facility_id:
                                 fac = db.query(Landmark).filter(Landmark.landmark_id == report_obj.facility_id).first()
                                 if fac:
                                     loc_name = fac.name
+                            if not loc_name and report_obj.landmark:
+                                loc_name = report_obj.landmark
                             if not loc_name:
-                                if report_obj.landmark:
-                                    loc_name = report_obj.landmark
-                            else:
                                 brgy = None
                                 if report_obj.subdivision_id:
                                     subd = db.query(Subdivision).filter(Subdivision.subdivision_id == report_obj.subdivision_id).first()

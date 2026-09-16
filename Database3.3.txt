@@ -262,11 +262,14 @@ CREATE TABLE `facility_status` (
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- SEED DATA: facility_status
+INSERT INTO `facility_status` (`status_id`, `status_name`) VALUES (1, 'Need Treatment');
+INSERT INTO `facility_status` (`status_id`, `status_name`) VALUES (2, 'Healthy');
 INSERT INTO `facility_status` (`status_id`, `status_name`) VALUES (3, 'Claimed by Owner');
 INSERT INTO `facility_status` (`status_id`, `status_name`) VALUES (4, 'Deceased');
-INSERT INTO `facility_status` (`status_id`, `status_name`) VALUES (2, 'Healthy');
-INSERT INTO `facility_status` (`status_id`, `status_name`) VALUES (1, 'Need Treatment');
 INSERT INTO `facility_status` (`status_id`, `status_name`) VALUES (5, 'Transferred to Shelter');
+INSERT INTO `facility_status` (`status_id`, `status_name`) VALUES (6, 'For Adoption');
+INSERT INTO `facility_status` (`status_id`, `status_name`) VALUES (7, 'Adopted/Released');
+INSERT INTO `facility_status` (`status_id`, `status_name`) VALUES (8, 'Impounded');
 
 -- =========================================
 -- TABLE: ANNOUNCEMENT_CATEGORIES
@@ -434,6 +437,7 @@ CREATE TABLE `pet_qr_scans` (
 
 
 -- =========================================
+-- =========================================
 -- TABLE: REPORTS
 -- =========================================
 DROP TABLE IF EXISTS `reports`;
@@ -470,6 +474,12 @@ CREATE TABLE `reports` (
   `ai_suggested_risk_level` varchar(50) DEFAULT NULL,
   `ai_suggested_priority` varchar(50) DEFAULT NULL,
   `ai_suggested_priority_reason` text,
+  `ai_behavior_chasing` tinyint(1) DEFAULT '0',
+  `ai_behavior_actual_bite` tinyint(1) DEFAULT '0',
+  `ai_behavior_attempted_bite` tinyint(1) DEFAULT '0',
+  `ai_behavior_injury` tinyint(1) DEFAULT '0',
+  `ai_behavior_aggressive` tinyint(1) DEFAULT '0',
+  `ai_behavior_explanation` text,
   `assigned_leader_id` int DEFAULT NULL,
   `claimed_at` timestamp NULL DEFAULT NULL,
   `unassigned_notified` tinyint(1) NOT NULL DEFAULT '0',
@@ -478,6 +488,16 @@ CREATE TABLE `reports` (
   `verification_notes` text,
   `verified_by_user_id` int DEFAULT NULL,
   `verified_at` timestamp NULL DEFAULT NULL,
+  `verified_actual_bite` tinyint(1) DEFAULT '0',
+  `verified_chasing` tinyint(1) DEFAULT '0',
+  `verified_attempted_bite` tinyint(1) DEFAULT '0',
+  `verified_injury` tinyint(1) DEFAULT '0',
+  `verified_aggressive` tinyint(1) DEFAULT '0',
+  `behavior_finding` varchar(100) DEFAULT NULL,
+  `pending_transfer_to_id` int DEFAULT NULL,
+  `pending_transfer_from_id` int DEFAULT NULL,
+  `pending_transfer_notes` text,
+  `pending_transfer_created_at` timestamp NULL DEFAULT NULL,
   `duplicate_of_report_id` int DEFAULT NULL,
   `merged_at` timestamp NULL DEFAULT NULL,
   `merged_by` int DEFAULT NULL,
@@ -490,6 +510,8 @@ CREATE TABLE `reports` (
   KEY `fk_reports_facility` (`facility_id`),
   KEY `fk_reports_assigned_leader` (`assigned_leader_id`),
   KEY `fk_reports_verified_by` (`verified_by_user_id`),
+  KEY `fk_reports_pending_transfer_to` (`pending_transfer_to_id`),
+  KEY `fk_reports_pending_transfer_from` (`pending_transfer_from_id`),
   KEY `fk_reports_duplicate_of` (`duplicate_of_report_id`),
   KEY `fk_reports_merged_by` (`merged_by`),
   KEY `idx_reports_location` (`latitude`,`longitude`),
@@ -500,14 +522,15 @@ CREATE TABLE `reports` (
   CONSTRAINT `fk_reports_duplicate_of` FOREIGN KEY (`duplicate_of_report_id`) REFERENCES `reports` (`report_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_facility` FOREIGN KEY (`facility_id`) REFERENCES `landmarks` (`landmark_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_merged_by` FOREIGN KEY (`merged_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_reports_pending_transfer_from` FOREIGN KEY (`pending_transfer_from_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_reports_pending_transfer_to` FOREIGN KEY (`pending_transfer_to_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_status` FOREIGN KEY (`current_status_id`) REFERENCES `report_status` (`status_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_subdivision` FOREIGN KEY (`subdivision_id`) REFERENCES `subdivisions` (`subdivision_id`),
   CONSTRAINT `fk_reports_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_reports_verified_by` FOREIGN KEY (`verified_by_user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- =========================================
 -- TABLE: STATUS_HISTORY
 -- =========================================
 DROP TABLE IF EXISTS `status_history`;
@@ -538,17 +561,6 @@ CREATE TABLE `status_history` (
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- =========================================
--- TABLE: FACILITY_STATUS
--- =========================================
-DROP TABLE IF EXISTS `facility_status`;
-CREATE TABLE `facility_status` (
-  `status_id` int NOT NULL AUTO_INCREMENT,
-  `status_name` varchar(50) NOT NULL,
-  PRIMARY KEY (`status_id`),
-  UNIQUE KEY `uq_facility_status_name` (`status_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- =========================================
 -- TABLE: HOLDING_ANIMALS
 -- =========================================
 DROP TABLE IF EXISTS `holding_animals`;
@@ -564,6 +576,9 @@ CREATE TABLE `holding_animals` (
   `facility_status` int NOT NULL DEFAULT '1',
   `kennel_slot` varchar(50) DEFAULT NULL,
   `medical_notes` text,
+  `adoption_catalog_notes` text DEFAULT NULL,
+  `promoted_at` timestamp NULL DEFAULT NULL,
+  `promoted_by` int DEFAULT NULL,
   `intake_date` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `discharge_date` timestamp NULL DEFAULT NULL,
   `intake_staff_id` int DEFAULT NULL,
@@ -573,10 +588,12 @@ CREATE TABLE `holding_animals` (
   KEY `fk_holding_rescue` (`rescue_id`),
   KEY `fk_holding_status` (`facility_status`),
   KEY `fk_holding_staff` (`intake_staff_id`),
+  KEY `fk_holding_promoted_by` (`promoted_by`),
   CONSTRAINT `fk_holding_report` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_holding_rescue` FOREIGN KEY (`rescue_id`) REFERENCES `rescues` (`rescue_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_holding_status` FOREIGN KEY (`facility_status`) REFERENCES `facility_status` (`status_id`),
-  CONSTRAINT `fk_holding_staff` FOREIGN KEY (`intake_staff_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+  CONSTRAINT `fk_holding_staff` FOREIGN KEY (`intake_staff_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_holding_promoted_by` FOREIGN KEY (`promoted_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- =========================================
@@ -597,6 +614,54 @@ CREATE TABLE `holding_timeline` (
   CONSTRAINT `fk_timeline_holding` FOREIGN KEY (`holding_id`) REFERENCES `holding_animals` (`holding_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_timeline_user` FOREIGN KEY (`logged_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- =========================================
+-- TABLE: ADOPTIONS
+-- =========================================
+DROP TABLE IF EXISTS `adoptions`;
+CREATE TABLE `adoptions` (
+  `adoption_id` int NOT NULL AUTO_INCREMENT,
+  `holding_id` int NOT NULL,
+  `applicant_id` int DEFAULT NULL,
+  `is_manual_walkin` tinyint(1) NOT NULL DEFAULT '0',
+  `manual_applicant_name` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `manual_applicant_phone` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `manual_applicant_email` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `manual_applicant_address` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `manual_id_type_number` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` enum('Pending','Approved','Rejected') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Pending',
+  `full_name` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `address` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `contact_no` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `has_other_pets` tinyint(1) NOT NULL DEFAULT '0',
+  `living_space` enum('House with yard','Apartment','Condo','Other') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'House with yard',
+  `reason` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `reviewed_by` int DEFAULT NULL,
+  `reviewer_role` enum('Subdivision Leader','Barangay Head Officer','Admin') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `review_notes` text COLLATE utf8mb4_unicode_ci,
+  `reviewed_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `is_handed_over` tinyint(1) NOT NULL DEFAULT '0',
+  `handover_date` datetime DEFAULT NULL,
+  `created_pet_id` int DEFAULT NULL,
+  `id_type` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `id_number` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `id_photo_url` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `handover_evidence_url` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `staff_handed_over` tinyint(1) NOT NULL DEFAULT '0',
+  `staff_handover_date` datetime DEFAULT NULL,
+  `staff_handover_by` int DEFAULT NULL,
+  PRIMARY KEY (`adoption_id`),
+  KEY `fk_adoption_holding` (`holding_id`),
+  KEY `fk_adoption_applicant` (`applicant_id`),
+  KEY `fk_adoption_reviewer` (`reviewed_by`),
+  KEY `fk_adoptions_pet` (`created_pet_id`),
+  CONSTRAINT `fk_adoption_applicant` FOREIGN KEY (`applicant_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_adoption_holding` FOREIGN KEY (`holding_id`) REFERENCES `holding_animals` (`holding_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_adoption_reviewer` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_adoptions_pet` FOREIGN KEY (`created_pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =========================================
 -- TABLE: REPORT_MEDIA
@@ -735,45 +800,15 @@ CREATE TABLE `endorsement_letters` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- =========================================
--- TABLE: HOLDING_ANIMALS
 -- =========================================
-DROP TABLE IF EXISTS `holding_animals`;
-CREATE TABLE `holding_animals` (
-  `holding_id` int NOT NULL AUTO_INCREMENT,
-  `report_id` int NOT NULL,
-  `rescue_id` int DEFAULT NULL,
-  `animal_type` enum('Dog','Cat','Unknown') DEFAULT 'Unknown',
-  `animal_name` varchar(100) DEFAULT NULL,
-  `breed` varchar(100) DEFAULT NULL,
-  `color` varchar(100) DEFAULT NULL,
-  `estimated_size` varchar(50) DEFAULT NULL,
-  `facility_status` int NOT NULL DEFAULT '1',
-  `kennel_slot` varchar(50) DEFAULT NULL,
-  `medical_notes` text,
-  `intake_date` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `discharge_date` timestamp NULL DEFAULT NULL,
-  `intake_staff_id` int DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`holding_id`),
-  KEY `fk_holding_report` (`report_id`),
-  KEY `fk_holding_rescue` (`rescue_id`),
-  KEY `fk_holding_facility_status` (`facility_status`),
-  KEY `fk_holding_staff` (`intake_staff_id`),
-  CONSTRAINT `fk_holding_facility_status` FOREIGN KEY (`facility_status`) REFERENCES `facility_status` (`status_id`),
-  CONSTRAINT `fk_holding_report` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_holding_rescue` FOREIGN KEY (`rescue_id`) REFERENCES `rescues` (`rescue_id`) ON DELETE SET NULL,
-  CONSTRAINT `fk_holding_staff` FOREIGN KEY (`intake_staff_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- =========================================
--- TABLE: PET_CLAIMS
+-- TABLE: PET_CLAIMS (Resident Pet Claim & Ownership Verification)
 -- =========================================
 DROP TABLE IF EXISTS `pet_claims`;
 CREATE TABLE `pet_claims` (
   `claim_id` int NOT NULL AUTO_INCREMENT,
   `report_id` int NOT NULL,
   `pet_id` int NOT NULL,
-  `status` enum('Potential Owner Match','Possible Match Found','Pending Review','Approved','Rejected','Evidence Requested') NOT NULL DEFAULT 'Potential Owner Match',
+  `status` enum('Potential Owner Match','Possible Match Found','Pending Review','Approved','Rejected','Evidence Requested','Handover Complete','Pet Received') NOT NULL DEFAULT 'Potential Owner Match',
   `evidence_url` varchar(255) DEFAULT NULL,
   `vaccine_card_url` varchar(255) DEFAULT NULL,
   `vet_record_url` varchar(255) DEFAULT NULL,
@@ -782,16 +817,15 @@ CREATE TABLE `pet_claims` (
   `distinctive_markings` text,
   `remarks` text,
   `match_score` int DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`claim_id`),
   KEY `fk_claims_report` (`report_id`),
   KEY `fk_claims_pet` (`pet_id`),
-  CONSTRAINT `fk_claims_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_claims_report` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  CONSTRAINT `fk_claims_report` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_claims_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =========================================
 -- TABLE: ANNOUNCEMENTS
 -- =========================================
 DROP TABLE IF EXISTS `announcements`;
@@ -840,6 +874,7 @@ CREATE TABLE `announcement_media` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- =========================================
+-- =========================================
 -- TABLE: ANNOUNCEMENT_COMMENTS
 -- =========================================
 DROP TABLE IF EXISTS `announcement_comments`;
@@ -850,6 +885,7 @@ CREATE TABLE `announcement_comments` (
   `parent_comment_id` int DEFAULT NULL,
   `comment` text NOT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`comment_id`),
   KEY `fk_ann_comments_announcement` (`announcement_id`),
   KEY `fk_ann_comments_user` (`user_id`),
@@ -859,7 +895,6 @@ CREATE TABLE `announcement_comments` (
   CONSTRAINT `fk_ann_comments_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- =========================================
 -- TABLE: ANNOUNCEMENT_REACTIONS
 -- =========================================
 DROP TABLE IF EXISTS `announcement_reactions`;
@@ -925,76 +960,6 @@ INSERT INTO `audit_logs` (`log_id`, `user_id`, `action`, `target_table`, `target
 INSERT INTO `audit_logs` (`log_id`, `user_id`, `action`, `target_table`, `target_id`, `description`, `ip_address`, `user_agent`, `log_type`, `old_values`, `new_values`, `created_at`) VALUES (2, NULL, 'DELETE_REPORT', 'reports', 3, 'Deleted report #3', 'testclient', 'testclient', 'operation', '{"report_id": 3, "status_id": 1, "animal_type": "Cat"}', 'null', '2026-07-31 18:44:42');
 
 -- =========================================
--- TABLE: CHAT_THREADS
--- =========================================
-DROP TABLE IF EXISTS `chat_threads`;
-CREATE TABLE `chat_threads` (
-  `thread_id` int NOT NULL AUTO_INCREMENT,
-  `thread_type` enum('Report','Pet_Claim','Direct') NOT NULL DEFAULT 'Report',
-  `related_id` int DEFAULT NULL,
-  `created_by` int NOT NULL,
-  `recipient_id` int NOT NULL,
-  `title` varchar(255) DEFAULT NULL,
-  `is_closed` tinyint(1) DEFAULT '0',
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`thread_id`),
-  KEY `fk_threads_creator` (`created_by`),
-  KEY `fk_threads_recipient` (`recipient_id`),
-  CONSTRAINT `fk_threads_creator` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_threads_recipient` FOREIGN KEY (`recipient_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- =========================================
--- TABLE: CHAT_MESSAGES
--- =========================================
-DROP TABLE IF EXISTS `chat_messages`;
-CREATE TABLE `chat_messages` (
-  `message_id` int NOT NULL AUTO_INCREMENT,
-  `thread_id` int NOT NULL,
-  `sender_id` int NOT NULL,
-  `message_text` text NOT NULL,
-  `media_url` varchar(255) DEFAULT NULL,
-  `is_read` tinyint(1) DEFAULT '0',
-  `is_system` tinyint(1) DEFAULT '0',
-  `sent_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`message_id`),
-  KEY `fk_messages_thread` (`thread_id`),
-  KEY `fk_messages_sender` (`sender_id`),
-  CONSTRAINT `fk_messages_sender` FOREIGN KEY (`sender_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_messages_thread` FOREIGN KEY (`thread_id`) REFERENCES `chat_threads` (`thread_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- =========================================
--- TABLE: OWNER_WARNINGS
--- =========================================
-DROP TABLE IF EXISTS `owner_warnings`;
-CREATE TABLE `owner_warnings` (
-  `warning_id` int NOT NULL AUTO_INCREMENT,
-  `user_id` int NOT NULL,
-  `pet_id` int DEFAULT NULL,
-  `report_id` int DEFAULT NULL,
-  `issued_by` int NOT NULL,
-  `warning_level` enum('Notice','1st Warning','2nd Warning','Final Notice / Escalation') NOT NULL DEFAULT '1st Warning',
-  `violation_type` enum('Free-Roaming Unleashed','Nuisance / Aggressive Behavior','Overdue Vaccination','Repeated Impoundment Retrieval','Other') NOT NULL DEFAULT 'Free-Roaming Unleashed',
-  `description` text NOT NULL,
-  `fine_amount` decimal(10,2) DEFAULT '0.00',
-  `status` enum('Pending','Acknowledged','Appealed','Resolved') NOT NULL DEFAULT 'Pending',
-  `acknowledged_at` timestamp NULL DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`warning_id`),
-  KEY `fk_warnings_user` (`user_id`),
-  KEY `fk_warnings_pet` (`pet_id`),
-  KEY `fk_warnings_report` (`report_id`),
-  KEY `fk_warnings_issuer` (`issued_by`),
-  CONSTRAINT `fk_warnings_issuer` FOREIGN KEY (`issued_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_warnings_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE SET NULL,
-  CONSTRAINT `fk_warnings_report` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE SET NULL,
-  CONSTRAINT `fk_warnings_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
--- =========================================
 -- TABLE: REPORT_MATCHES (AI Potential Pet Identification & Human Verification)
 -- =========================================
 DROP TABLE IF EXISTS `report_matches`;
@@ -1055,33 +1020,6 @@ CREATE TABLE `report_disputes` (
   CONSTRAINT `fk_disputes_reviewer` FOREIGN KEY (`reviewer_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- =========================================
--- TABLE: PET_CLAIMS (Resident Pet Claim & Ownership Verification)
--- =========================================
-DROP TABLE IF EXISTS `pet_claims`;
-CREATE TABLE `pet_claims` (
-  `claim_id` int NOT NULL AUTO_INCREMENT,
-  `report_id` int NOT NULL,
-  `pet_id` int NOT NULL,
-  `status` enum('Potential Owner Match','Possible Match Found','Pending Review','Approved','Rejected','Evidence Requested','Handover Complete','Pet Received') NOT NULL DEFAULT 'Potential Owner Match',
-  `evidence_url` varchar(255) DEFAULT NULL,
-  `vaccine_card_url` varchar(255) DEFAULT NULL,
-  `vet_record_url` varchar(255) DEFAULT NULL,
-  `registration_record_url` varchar(255) DEFAULT NULL,
-  `additional_photos_url` varchar(255) DEFAULT NULL,
-  `distinctive_markings` text,
-  `remarks` text,
-  `match_score` int DEFAULT NULL,
-  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`claim_id`),
-  KEY `fk_claims_report` (`report_id`),
-  KEY `fk_claims_pet` (`pet_id`),
-  CONSTRAINT `fk_claims_report` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_claims_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- =========================================
 -- TABLE: OWNER_WARNINGS (Pet Owner Citations & Violations)
 -- =========================================
 DROP TABLE IF EXISTS `owner_warnings`;

@@ -1500,7 +1500,7 @@ const ResiViewReport = () => {
                             </button>
 
                             {(() => {
-                                const isRelocated = [6, 7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || report.custody_status === 'In Subdivision Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude));
+                                const isRelocated = report.status_id !== 6 && ([7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || report.custody_status === 'In Subdivision Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude)));
                                 const activeFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : null;
                                 const activeFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : null;
 
@@ -1528,15 +1528,19 @@ const ResiViewReport = () => {
                                         id: report.report_id,
                                         lat: currentLat,
                                         lng: currentLng,
-                                        title: isRelocated ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}` : (report.landmark || 'Incident Location'),
+                                        title: isRelocated 
+                                            ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}` 
+                                            : (report.status_id === 6 
+                                                ? `Animal Picked Up: ${report.landmark || 'Incident Location'}` 
+                                                : (report.landmark || 'Incident Location')),
                                         category: isRelocated ? 'Holding Facility' : (report.animal_type || 'Stray Animal'),
-                                        color: (report.status_id === 6 || report.status_id === 11) ? 'green' : (report.status_id === 4 || report.status_id === 13) ? 'orange' : (report.status_id === 5) ? 'yellow' : 'red',
+                                        color: (report.status_id === 6) ? 'blue' : ((report.status_id === 11) ? 'green' : (report.status_id === 4 || report.status_id === 13) ? 'orange' : (report.status_id === 5) ? 'yellow' : 'red'),
                                         priority: report.priority_level || 'Medium',
                                         time: report.created_at ? new Date(report.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Live',
                                         rawData: {
                                             ...report,
-                                            facility: report.facility || (isRelocated ? { name: report.landmark || 'Holding Facility' } : undefined),
-                                            facility_name: report.facility?.name || report.landmark || 'Holding Facility'
+                                            facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Facility' }) : undefined,
+                                            facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Facility') : undefined
                                         }
                                     },
                                     ...(hasDifferentInitialSpot ? [{
@@ -1682,7 +1686,7 @@ const ResiViewReport = () => {
                             {/* Expanded Map Canvas */}
                             <div className="flex-1 rounded-2xl overflow-hidden relative border border-white/10 min-h-0">
                                 {(() => {
-                                    const isRelocated = [6, 7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || report.custody_status === 'In Subdivision Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude));
+                                    const isRelocated = report.status_id !== 6 && ([7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || report.custody_status === 'In Subdivision Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude)));
                                     const activeFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : null;
                                     const activeFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : null;
 
@@ -1710,15 +1714,19 @@ const ResiViewReport = () => {
                                             id: report.report_id,
                                             lat: currentLat,
                                             lng: currentLng,
-                                            title: isRelocated ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}` : (report.landmark || 'Incident Location'),
+                                            title: isRelocated 
+                                                ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}` 
+                                                : (report.status_id === 6 
+                                                    ? `Animal Picked Up: ${report.landmark || 'Incident Location'}` 
+                                                    : (report.landmark || 'Incident Location')),
                                             category: isRelocated ? 'Holding Facility' : (report.animal_type || 'Stray Animal'),
-                                            color: (report.status_id === 6 || report.status_id === 11) ? 'green' : (report.status_id === 4 || report.status_id === 13) ? 'orange' : (report.status_id === 5) ? 'yellow' : 'red',
+                                            color: (report.status_id === 6) ? 'blue' : ((report.status_id === 11) ? 'green' : (report.status_id === 4 || report.status_id === 13) ? 'orange' : (report.status_id === 5) ? 'yellow' : 'red'),
                                             priority: report.priority_level || 'Medium',
                                             time: report.created_at ? new Date(report.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Live',
                                             rawData: {
                                                 ...report,
-                                                facility: report.facility || (isRelocated ? { name: report.landmark || 'Holding Facility' } : undefined),
-                                                facility_name: report.facility?.name || report.landmark || 'Holding Facility'
+                                                facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Facility' }) : undefined,
+                                                facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Facility') : undefined
                                             }
                                         },
                                         ...(hasDifferentInitialSpot ? [{

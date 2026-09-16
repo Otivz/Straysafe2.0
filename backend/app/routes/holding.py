@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/holding", tags=["holding-facility"])
 
 # Status IDs that mean the case is resolved / discharged
-RESOLVED_STATUSES = {3, 4, 5}  # Claimed, Deceased, Transferred
-IMPOUND_DAYS = 7                # days before expiry warning triggers
+RESOLVED_STATUSES = {3, 4, 5, 7, 8}  # Claimed, Deceased, Transferred, Adopted/Released, Impounded
+IMPOUND_DAYS = 3                # default days before stay limit / impoundment triggers
 EXPIRY_WARNING_DAYS = 2         # warn when ≤ 2 days remain
 
 CATEGORY_MAP = {
@@ -75,12 +75,11 @@ def _populate(animal: HoldingAnimal) -> HoldingAnimal:
         if not animal.estimated_size and (animal.report.estimated_size or animal.report.ai_estimated_size):
             animal.estimated_size = animal.report.estimated_size or animal.report.ai_estimated_size
 
-        # If facility_status is default 1 (Need Treatment) and the report condition indicates Healthy without injuries
-        if animal.facility_status == 1 and animal.report.condition:
-            cond_text = str(animal.report.condition).lower()
-            is_injured = any(k in cond_text for k in ['injured', 'bleeding', 'limping', 'weak', 'sick', 'treatment', 'wound', 'trapped'])
-            is_healthy = 'healthy' in cond_text or 'no condition' in cond_text
-            if is_healthy and not is_injured:
+        # If facility_status is 1 (Need Treatment) but the animal has no injuries/wounds/illness, default to Healthy (2)
+        if animal.facility_status == 1:
+            cond_text = (str(animal.report.condition or '') + ' ' + str(getattr(animal.report, 'description', '') or '')).lower()
+            is_injured = any(k in cond_text for k in ['injured', 'bleeding', 'limping', 'weak', 'sick', 'treatment', 'wound', 'trapped', 'fracture', 'broken', 'infection', 'rabid'])
+            if not is_injured:
                 animal.facility_status = 2
                 animal.facility_status_name = "Healthy"
 
@@ -244,6 +243,7 @@ def get_metrics(
     barangay_id: Optional[int] = None,
     facility_id: Optional[int] = None,
     barangay_only: Optional[bool] = None,
+    impound_days: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
     query = (
@@ -273,15 +273,25 @@ def get_metrics(
             )
         )
 
+    effective_impound_days = impound_days if (impound_days is not None and impound_days > 0) else IMPOUND_DAYS
+
+    # Run check & notify for overdue animals
+    try:
+        from app.tasks.unassigned_checker import check_and_notify_overdue_holding_animals
+        check_and_notify_overdue_holding_animals(default_stay_days=effective_impound_days)
+    except Exception as notif_err:
+        logger.warning(f"Error checking overdue notifications in get_metrics: {notif_err}")
+
     animals = query.all()
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    deadline = timedelta(days=IMPOUND_DAYS)
+    deadline = timedelta(days=effective_impound_days)
     warn_threshold = timedelta(days=EXPIRY_WARNING_DAYS)
 
     total = len(animals)
     need_treatment = 0
     healthy = 0
     nearing_expiry = 0
+    needs_impoundment = 0
     resolved_today = 0
 
     for a in animals:
@@ -298,11 +308,12 @@ def get_metrics(
         elif eff_status == 2:
             healthy += 1
 
-        # Only count active animals for expiry
+        # Only count active animals for expiry / impoundment
         if a.facility_status not in RESOLVED_STATUSES and a.intake_date:
             time_in = now - a.intake_date
-            remaining = deadline - time_in
-            if timedelta(0) <= remaining <= warn_threshold:
+            if time_in >= deadline:
+                needs_impoundment += 1
+            elif (deadline - time_in) <= warn_threshold:
                 nearing_expiry += 1
 
         # Discharged today
@@ -314,6 +325,7 @@ def get_metrics(
         need_treatment=need_treatment,
         healthy=healthy,
         nearing_expiry=nearing_expiry,
+        needs_impoundment=needs_impoundment,
         resolved_today=resolved_today,
     )
 
@@ -459,6 +471,12 @@ def update_animal(holding_id: int, body: HoldingAnimalUpdate, db: Session = Depe
                         detail="This animal is currently in a Barangay facility and cannot be modified by Subdivision Leaders. You can only track its progress."
                     )
 
+                if update_data.get("facility_status") in (6, 7, 8):
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Only Barangay staff and administrators have the authority to manage adoption or mark an animal as Impounded."
+                    )
+
         for key, value in update_data.items():
             if hasattr(animal, key):
                 setattr(animal, key, value)
@@ -474,12 +492,24 @@ def update_animal(holding_id: int, body: HoldingAnimalUpdate, db: Session = Depe
             report = db.query(Report).filter(Report.report_id == animal.report_id).first()
             if report:
                 report.current_status_id = 11
+                if new_status == 8:
+                    report.custody_status = "Impounded"
+                    # Record official impoundment in status history
+                    impound_hist = StatusHistory(
+                        report_id=report.report_id,
+                        report_status_id=8,
+                        changed_by_user_id=updated_by or animal.intake_staff_id,
+                        remarks=update_notes or f"Animal officially impounded after reaching maximum holding stay at {animal.facility_name or 'Holding Facility'}. Case resolved.",
+                    )
+                    db.add(impound_hist)
 
             # Determine outcome label
             outcome_labels = {
                 3: "Claimed by Owner",
                 4: "Deceased",
                 5: "Transferred to Shelter",
+                7: "Adopted/Released",
+                8: "Impounded",
             }
             outcome_label = outcome_labels.get(new_status, "Resolved")
 

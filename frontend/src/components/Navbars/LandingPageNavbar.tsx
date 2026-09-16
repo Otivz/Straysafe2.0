@@ -15,10 +15,11 @@ const LandingPageNavbar = () => {
     }, []);
 
     const navLinks = [
-        { name: 'How It Works', href: '#how-it-works' },
-        { name: 'User Roles', href: '#roles' },
-        { name: 'AI Features', href: '#ai' },
-        { name: 'Contact', href: '#contact' },
+        { name: 'How It Works', href: '#how-it-works', isInternal: false },
+        { name: 'User Roles', href: '#roles', isInternal: false },
+        { name: 'AI Features', href: '#ai', isInternal: false },
+        { name: 'Adopt a Pet', href: '/adopt', isInternal: true },
+        { name: 'Contact', href: '#contact', isInternal: false },
     ];
 
     return (
@@ -54,13 +55,23 @@ const LandingPageNavbar = () => {
                 <ul className="hidden lg:flex items-center gap-10">
                     {navLinks.map((link) => (
                         <li key={link.name}>
-                            <a
-                                href={link.href}
-                                className="relative text-sm font-bold text-[#4a3b28] hover:text-[#F97316] transition-all duration-300 group py-2"
-                            >
-                                {link.name}
-                                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-[#F97316] transition-all duration-300 group-hover:w-full rounded-full" />
-                            </a>
+                            {link.isInternal ? (
+                                <Link
+                                    to={link.href}
+                                    className="relative text-sm font-bold text-[#4a3b28] hover:text-[#F97316] transition-all duration-300 group py-2 flex items-center gap-1.5"
+                                >
+                                    <span>🐾</span> {link.name}
+                                    <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-[#F97316] transition-all duration-300 group-hover:w-full rounded-full" />
+                                </Link>
+                            ) : (
+                                <a
+                                    href={link.href}
+                                    className="relative text-sm font-bold text-[#4a3b28] hover:text-[#F97316] transition-all duration-300 group py-2"
+                                >
+                                    {link.name}
+                                    <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-[#F97316] transition-all duration-300 group-hover:w-full rounded-full" />
+                                </a>
+                            )}
                         </li>
                     ))}
                 </ul>
@@ -94,15 +105,27 @@ const LandingPageNavbar = () => {
             <div className={`lg:hidden fixed inset-0 z-[99] bg-white/95 backdrop-blur-xl transition-all duration-500 ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto translate-y-0' : 'opacity-0 pointer-events-none -translate-y-10'}`}>
                 <div className="flex flex-col items-center justify-center h-full gap-8">
                     {navLinks.map((link, i) => (
-                        <a
-                            key={link.name}
-                            href={link.href}
-                            onClick={() => setIsMobileMenuOpen(false)}
-                            className="text-2xl font-plus-jakarta font-black text-[#1a1208] hover:text-[#F97316] transition-colors"
-                            style={{ transitionDelay: `${i * 100}ms` }}
-                        >
-                            {link.name}
-                        </a>
+                        link.isInternal ? (
+                            <Link
+                                key={link.name}
+                                to={link.href}
+                                onClick={() => setIsMobileMenuOpen(false)}
+                                className="text-2xl font-plus-jakarta font-black text-[#1a1208] hover:text-[#F97316] transition-colors flex items-center gap-2"
+                                style={{ transitionDelay: `${i * 100}ms` }}
+                            >
+                                <span>🐾</span> {link.name}
+                            </Link>
+                        ) : (
+                            <a
+                                key={link.name}
+                                href={link.href}
+                                onClick={() => setIsMobileMenuOpen(false)}
+                                className="text-2xl font-plus-jakarta font-black text-[#1a1208] hover:text-[#F97316] transition-colors"
+                                style={{ transitionDelay: `${i * 100}ms` }}
+                            >
+                                {link.name}
+                            </a>
+                        )
                     ))}
                     <div className="flex flex-col items-center gap-4 mt-8 w-full px-12">
                         <Button variant="primary" size="lg" className="w-full rounded-2xl">Report a Stray</Button>

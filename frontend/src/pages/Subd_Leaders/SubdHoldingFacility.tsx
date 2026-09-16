@@ -75,7 +75,7 @@ interface FacilityOption {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const IMPOUND_DAYS = 7;
+const IMPOUND_DAYS = 3;
 
 const FACILITY_STATUSES = [
     { id: 1, name: 'Need Treatment', color: 'bg-red-50 text-red-600 border-red-200' },
@@ -104,9 +104,9 @@ function daysSince(dateStr: string | null): number {
     return Math.floor(ms / (1000 * 60 * 60 * 24));
 }
 
-function daysRemaining(dateStr: string | null): number {
+function daysRemaining(dateStr: string | null, maxDays: number = IMPOUND_DAYS): number {
     const days = daysSince(dateStr);
-    return Math.max(0, IMPOUND_DAYS - days);
+    return Math.max(0, maxDays - days);
 }
 
 function formatDate(dateStr: string | null): string {
@@ -182,6 +182,22 @@ const SubdHoldingFacility = () => {
     const [showResolved, setShowResolved] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+    // Stay duration before handover / impoundment limit (in days)
+    const [impoundStayDuration, setImpoundStayDuration] = useState<number>(() => {
+        const saved = localStorage.getItem('subd_holding_stay_duration');
+        if (saved) {
+            const parsed = parseInt(saved, 10);
+            if (!isNaN(parsed) && parsed >= 1 && parsed <= 90) return parsed;
+        }
+        return 3;
+    });
+
+    const handleDurationChange = (newVal: number) => {
+        const clamped = Math.max(1, Math.min(90, isNaN(newVal) ? 3 : newVal));
+        setImpoundStayDuration(clamped);
+        localStorage.setItem('subd_holding_stay_duration', clamped.toString());
+    };
+
     // Selected animal detail modal
     const [selected, setSelected] = useState<HoldingAnimal | null>(null);
     const [detailTab, setDetailTab] = useState<'info' | 'timeline'>('info');
@@ -189,7 +205,7 @@ const SubdHoldingFacility = () => {
     // Update modal state
     const [isUpdating, setIsUpdating] = useState(false);
     const [updateForm, setUpdateForm] = useState({
-        facility_status: 1,
+        facility_status: 2,
         kennel_slot: '',
         medical_notes: '',
         update_notes: '',
@@ -284,11 +300,25 @@ const SubdHoldingFacility = () => {
     // Active occupancy count
     const activeOccupancy = activeAnimals.length;
 
+    // Dynamic overdue and nearing expiry animals based on spinner duration
+    const overdueAnimals = useMemo(() => {
+        return activeAnimals.filter(a => daysSince(a.intake_date) >= impoundStayDuration);
+    }, [activeAnimals, impoundStayDuration]);
+
+    const nearingAnimals = useMemo(() => {
+        return activeAnimals.filter(a => {
+            const days = daysSince(a.intake_date);
+            const rem = impoundStayDuration - days;
+            return rem > 0 && rem <= 2;
+        });
+    }, [activeAnimals, impoundStayDuration]);
+
     // Computed Metrics
     const computedMetrics = useMemo(() => {
         const needTreatment = activeAnimals.filter(a => a.facility_status === 1).length;
         const healthy = activeAnimals.filter(a => a.facility_status === 2).length;
-        const nearingExpiry = activeAnimals.filter(a => daysRemaining(a.intake_date) <= 2).length;
+        const nearingExpiry = nearingAnimals.length;
+        const needsTransfer = overdueAnimals.length;
         const transferredCount = historyAnimals.filter(a => a.facility_type === 'barangay_facility' || a.facility_name?.toLowerCase().includes('barangay')).length;
 
         return {
@@ -296,10 +326,11 @@ const SubdHoldingFacility = () => {
             needTreatment,
             healthy,
             nearingExpiry,
+            needsTransfer,
             pastTotal: historyAnimals.length,
             transferredToBrgy: transferredCount,
         };
-    }, [activeAnimals, historyAnimals]);
+    }, [activeAnimals, historyAnimals, overdueAnimals, nearingAnimals]);
 
     // ── Update Handler ─────────────────────────────────────────────────────────
     const handleUpdate = async () => {
@@ -369,11 +400,11 @@ const SubdHoldingFacility = () => {
             border: 'border-emerald-100',
         },
         {
-            label: 'Nearing Expiry (≤2d)',
-            value: computedMetrics.nearingExpiry,
-            icon: '⚠️',
-            color: 'bg-amber-50 text-amber-600',
-            border: 'border-amber-100',
+            label: computedMetrics.needsTransfer > 0 ? 'Needs Transfer' : 'Nearing Expiry',
+            value: computedMetrics.needsTransfer > 0 ? computedMetrics.needsTransfer : computedMetrics.nearingExpiry,
+            icon: computedMetrics.needsTransfer > 0 ? '🚨' : '⚠️',
+            color: computedMetrics.needsTransfer > 0 ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600',
+            border: computedMetrics.needsTransfer > 0 ? 'border-red-200 ring-1 ring-red-200' : 'border-amber-100',
         },
         {
             label: 'Past / Transferred History',
@@ -565,6 +596,98 @@ const SubdHoldingFacility = () => {
                             ))}
                         </div>
 
+                        {/* ── Overdue Stay Alert Banner ─────────────────────── */}
+                        {overdueAnimals.length > 0 && tabMode === 'active' && (
+                            <div className="bg-gradient-to-r from-red-500/10 via-amber-500/10 to-orange-500/5 rounded-3xl border-2 border-red-300 p-5 md:p-6 shadow-md animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-red-200/60">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-2xl bg-red-600 text-white flex items-center justify-center text-xl shadow-md shadow-red-500/30 animate-pulse shrink-0">
+                                            🚨
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <h3 className="text-base font-black text-red-950 tracking-tight">
+                                                    Temporary Stay Exceeded — Handover to Barangay Advised
+                                                </h3>
+                                                <span className="px-2.5 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black tracking-wider uppercase shadow-xs">
+                                                    {overdueAnimals.length} Action Needed
+                                                </span>
+                                            </div>
+                                            <p className="text-xs font-semibold text-red-800/90 mt-0.5">
+                                                {overdueAnimals.length === 1 ? '1 animal has' : `${overdueAnimals.length} animals have`} reached or exceeded the <span className="font-extrabold underline decoration-red-400">{impoundStayDuration}-day temporary holding stay limit</span>. Rescued animals exceeding temporary subdivision holding should be transferred to Barangay shelter facilities for impoundment or official adoption listing.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="text-[10px] font-mono font-bold text-red-700 bg-red-100/80 px-3 py-1.5 rounded-xl border border-red-200 self-start sm:self-auto shrink-0">
+                                        Threshold: {impoundStayDuration} Days
+                                    </div>
+                                </div>
+
+                                {/* Mini Cards for Overdue Animals */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
+                                    {overdueAnimals.map((animal) => {
+                                        const days = daysSince(animal.intake_date);
+                                        const overDays = days - impoundStayDuration;
+                                        const thumbImg = getAnimalPhoto(animal);
+
+                                        return (
+                                            <div
+                                                key={animal.holding_id}
+                                                className="bg-white rounded-2xl border border-red-200 p-3.5 shadow-xs flex flex-col justify-between hover:border-red-400 hover:shadow-md transition-all gap-3"
+                                            >
+                                                <div className="flex items-start gap-3">
+                                                    <div className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 shrink-0 border border-gray-200 relative">
+                                                        {thumbImg ? (
+                                                            <img src={thumbImg.startsWith('http') ? thumbImg : `http://localhost:8000${thumbImg}`} alt={animal.animal_name || 'Animal'} className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            <div className="w-full h-full flex items-center justify-center text-2xl">
+                                                                {animalIcon(animal.animal_type)}
+                                                            </div>
+                                                        )}
+                                                        <span className="absolute bottom-0 inset-x-0 bg-red-600 text-white text-[8px] font-black text-center uppercase tracking-wider py-0.5">
+                                                            {days}d held
+                                                        </span>
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-center justify-between gap-1">
+                                                            <span className="text-[9px] font-mono font-bold text-gray-400">
+                                                                #{animal.report_id.toString().padStart(4, '0')}
+                                                            </span>
+                                                            <span className="text-[9px] font-black text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
+                                                                {overDays > 0 ? `+${overDays}d over` : 'Due today'}
+                                                            </span>
+                                                        </div>
+                                                        <h4 className="text-xs font-black text-gray-900 truncate mt-0.5">
+                                                            {animal.animal_name || `${animal.animal_type || 'Animal'} #${animal.holding_id}`}
+                                                        </h4>
+                                                        <p className="text-[10px] text-gray-500 font-medium truncate">
+                                                            {animal.breed || 'Unknown Breed'} • 📍 {animal.facility_name || animal.report_landmark || 'Facility'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="pt-1 border-t border-gray-100 flex items-center justify-between gap-2">
+                                                    <span className="text-[10px] text-amber-800 font-bold">
+                                                        Exceeded stay limit ({days}/{impoundStayDuration}d)
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelected(animal);
+                                                            setDetailTab('info');
+                                                        }}
+                                                        className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-[11px] font-black rounded-lg transition-all shadow-xs cursor-pointer"
+                                                    >
+                                                        View Record
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
                         {/* ── Tabs & View Switcher ────────────────────────────── */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-gray-200 shadow-xs">
                             <div className="flex items-center gap-2 bg-gray-100 p-1.5 rounded-2xl">
@@ -624,6 +747,49 @@ const SubdHoldingFacility = () => {
                                 />
                             </div>
 
+                            {/* ── Stay Duration Before Handover/Impoundment Number Spinner ── */}
+                            <div className="flex items-center gap-2.5 bg-amber-50/80 border border-amber-200/90 px-3 py-1.5 rounded-xl shadow-2xs">
+                                <div className="flex flex-col">
+                                    <span className="text-[9px] font-black uppercase tracking-wider text-amber-950 leading-none">
+                                        Stay Limit
+                                    </span>
+                                    <span className="text-[8px] font-bold text-amber-700/80 mt-0.5">
+                                        Duration Spinner
+                                    </span>
+                                </div>
+                                <div className="flex items-center bg-white rounded-lg border border-amber-300 shadow-2xs overflow-hidden">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDurationChange(impoundStayDuration - 1)}
+                                        disabled={impoundStayDuration <= 1}
+                                        className="w-7 h-7 flex items-center justify-center text-amber-900 hover:bg-amber-100 disabled:opacity-30 disabled:hover:bg-transparent font-black text-sm transition-colors cursor-pointer"
+                                        title="Decrease stay limit"
+                                    >
+                                        −
+                                    </button>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={90}
+                                        value={impoundStayDuration}
+                                        onChange={(e) => handleDurationChange(Number(e.target.value))}
+                                        className="w-10 text-center text-xs font-black text-gray-900 outline-none border-x border-amber-200 py-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDurationChange(impoundStayDuration + 1)}
+                                        disabled={impoundStayDuration >= 90}
+                                        className="w-7 h-7 flex items-center justify-center text-amber-900 hover:bg-amber-100 disabled:opacity-30 disabled:hover:bg-transparent font-black text-sm transition-colors cursor-pointer"
+                                        title="Increase stay limit"
+                                    >
+                                        +
+                                    </button>
+                                </div>
+                                <span className="text-[10px] font-bold text-amber-800">
+                                    days
+                                </span>
+                            </div>
+
                             <select
                                 value={statusFilter}
                                 onChange={e => setStatusFilter(Number(e.target.value))}
@@ -681,17 +847,23 @@ const SubdHoldingFacility = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                                 {filtered.map((animal) => {
                                     const statusMeta = getStatusMeta(animal.facility_status);
-                                    const daysLeft = daysRemaining(animal.intake_date);
+                                    const daysLeft = daysRemaining(animal.intake_date, impoundStayDuration);
+                                    const days = daysSince(animal.intake_date);
                                     const isResolved = RESOLVED_IDS.has(animal.facility_status);
                                     const isTransferredToBrgy = animal.facility_type === 'barangay_facility' || (animal.facility_name && animal.facility_name.toLowerCase().includes('barangay'));
                                     const isHistoryItem = !isCurrentlyInSubd(animal);
+                                    const isOverdue = !isResolved && !isTransferredToBrgy && days >= impoundStayDuration;
                                     const photo = getAnimalPhoto(animal);
 
                                     return (
                                         <div
                                             key={animal.holding_id}
                                             className={`bg-white rounded-2xl border shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden ${
-                                                isHistoryItem ? 'border-indigo-100/80' : 'border-gray-100'
+                                                isOverdue
+                                                    ? 'border-red-300 ring-2 ring-red-200/70 shadow-md'
+                                                    : isHistoryItem
+                                                        ? 'border-indigo-100/80'
+                                                        : 'border-gray-100'
                                             }`}
                                         >
                                             {/* Photo Header */}
@@ -777,9 +949,15 @@ const SubdHoldingFacility = () => {
                                                     <div className="flex items-center justify-between text-[11px] font-bold text-gray-400">
                                                         <span>Admitted: {formatDate(animal.intake_date)}</span>
                                                         {!isResolved && !isTransferredToBrgy && (
-                                                            <span className={daysLeft <= 2 ? 'text-amber-600 font-extrabold' : 'text-gray-500'}>
-                                                                ⏳ {daysLeft}d left
-                                                            </span>
+                                                            isOverdue ? (
+                                                                <span className="text-red-600 font-black inline-flex items-center gap-1 animate-pulse">
+                                                                    🚨 Needs Transfer ({days}/{impoundStayDuration}d)
+                                                                </span>
+                                                            ) : (
+                                                                <span className={daysLeft <= 2 ? 'text-amber-600 font-extrabold' : 'text-gray-500'}>
+                                                                    ⏳ {daysLeft}d left
+                                                                </span>
+                                                            )
                                                         )}
                                                         {isTransferredToBrgy && (
                                                             <span className="text-indigo-600 font-extrabold">
@@ -884,6 +1062,29 @@ const SubdHoldingFacility = () => {
                             <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
                                 {detailTab === 'info' ? (
                                     <div className="space-y-5">
+                                        {/* Overdue Stay Limit Notice in Detail Modal */}
+                                        {!isSelectedInHistory && daysSince(selected.intake_date) >= impoundStayDuration && (
+                                            <div className="bg-red-50/90 border-2 border-red-300 rounded-2xl p-4 shadow-xs space-y-2 animate-in fade-in duration-200">
+                                                <div className="flex items-start gap-3">
+                                                    <div className="w-9 h-9 rounded-xl bg-red-600 text-white flex items-center justify-center text-lg shrink-0 shadow-sm animate-pulse">
+                                                        🚨
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <h4 className="text-sm font-black text-red-950">Stay Limit Reached: Transfer Recommended</h4>
+                                                            <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-black uppercase tracking-wider">
+                                                                {daysSince(selected.intake_date)} Days Held
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-xs text-red-800 mt-1 leading-relaxed">
+                                                            This animal has reached or exceeded the <strong>{impoundStayDuration}-day temporary holding stay limit</strong>.
+                                                            Coordinate with Barangay responders to transfer this animal to the Barangay Holding Pen for official impoundment or adoption promotion.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {/* Stay Duration Highlight Banner */}
                                         <div className="bg-gradient-to-br from-orange-50/80 via-amber-50/40 to-white p-4 rounded-2xl border border-orange-100 shadow-sm">
                                             <p className="text-[10px] font-black text-orange-950 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">

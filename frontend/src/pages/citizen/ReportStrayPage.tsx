@@ -13,7 +13,10 @@ import {
     Eye,
     Shield,
     Info,
-    Loader2
+    Loader2,
+    Maximize2,
+    Minimize2,
+    Check
 } from 'lucide-react';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
@@ -66,6 +69,21 @@ const RecenterMap = ({ center }: { center: [number, number] }) => {
     return null;
 };
 
+const InvalidateMapSize = ({ trigger }: { trigger?: any }) => {
+    const map = useMap();
+    useEffect(() => {
+        const t1 = setTimeout(() => map.invalidateSize(), 50);
+        const t2 = setTimeout(() => map.invalidateSize(), 200);
+        const t3 = setTimeout(() => map.invalidateSize(), 400);
+        return () => {
+            clearTimeout(t1);
+            clearTimeout(t2);
+            clearTimeout(t3);
+        };
+    }, [map, trigger]);
+    return null;
+};
+
 const steps = [
     { id: 1, title: 'Upload Media' },
     { id: 2, title: 'Report Category' },
@@ -87,6 +105,8 @@ export default function ReportStrayPage() {
     const [resolvedAddress, setResolvedAddress] = useState('');
     const [declaration, setDeclaration] = useState(false);
     const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [isMapExpandedModal, setIsMapExpandedModal] = useState(false);
+    const [isInlineMapExpanded, setIsInlineMapExpanded] = useState(false);
 
     // Live Camera State
     const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -1184,14 +1204,58 @@ export default function ReportStrayPage() {
                                 </div>
                             )}
 
+                            {/* Interactive Map Header Toolbar */}
+                            <div className="flex items-center justify-between gap-2 pt-1">
+                                <div className="flex items-center gap-1.5 text-xs text-gray-600 font-black uppercase tracking-wider">
+                                    <MapPin className="w-3.5 h-3.5 text-[#F97316]" />
+                                    <span>Interactive Pinpoint Map</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {/* Inline Resize Button */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsInlineMapExpanded(prev => !prev)}
+                                        className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-2xs"
+                                        title={isInlineMapExpanded ? "Compact map view" : "Taller map view"}
+                                    >
+                                        {isInlineMapExpanded ? <Minimize2 className="w-3 h-3 text-orange-600" /> : <Maximize2 className="w-3 h-3 text-orange-600" />}
+                                        <span>{isInlineMapExpanded ? "Compact" : "Resize"}</span>
+                                    </button>
+                                    {/* Fullscreen Expand Button */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsMapExpandedModal(true)}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-orange-50 hover:bg-orange-100 text-[#F97316] border border-orange-200 rounded-xl text-xs font-black uppercase tracking-wider transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-xs"
+                                        title="Expand map to fullscreen modal"
+                                    >
+                                        <Maximize2 className="w-3.5 h-3.5" />
+                                        <span>Expand Map</span>
+                                    </button>
+                                </div>
+                            </div>
+
                             {/* Interactive Map */}
-                            <div className="relative w-full h-64 rounded-3xl overflow-hidden border border-gray-100 shadow-inner">
+                            <div className={`relative w-full ${isInlineMapExpanded ? 'h-[460px]' : 'h-64'} transition-all duration-300 rounded-3xl overflow-hidden border border-gray-200 shadow-inner`}>
+                                {/* Floating Expand Map Button inside canvas */}
+                                <div className="absolute top-3 right-3 z-[400]">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsMapExpandedModal(true)}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white/95 hover:bg-white text-gray-800 text-xs font-black rounded-xl shadow-md border border-gray-200 backdrop-blur-xs transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                                        title="Expand Map to Fullscreen Modal"
+                                    >
+                                        <Maximize2 className="w-3.5 h-3.5 text-[#F97316]" />
+                                        <span>Expand Map</span>
+                                    </button>
+                                </div>
+
                                 <MapContainer
                                     center={[formData.latitude, formData.longitude]}
                                     zoom={17}
                                     className="h-full w-full"
                                     scrollWheelZoom={true}
                                 >
+                                    <InvalidateMapSize trigger={isInlineMapExpanded} />
                                     <TileLayer
                                         attribution='&copy; OpenStreetMap'
                                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -1494,6 +1558,175 @@ export default function ReportStrayPage() {
             </main>
 
             <ResiMobileNav feedTab="reports" onFeedTabChange={() => { }} isNavbarMenuOpen={false} isSearchOpen={false} onSearchClick={() => { }} onAddReportClick={() => navigate('/resident/report/new')} />
+
+            {/* EXPANDED FULLSCREEN MAP MODAL */}
+            {isMapExpandedModal && (
+                <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl h-[92vh] max-h-[92vh] flex flex-col p-4 sm:p-6 border border-gray-100 animate-in zoom-in-95 duration-200 overflow-hidden">
+                        {/* Modal Header */}
+                        <div className="flex items-start justify-between pb-3 sm:pb-4 border-b border-gray-100 shrink-0 gap-3">
+                            <div className="flex items-center gap-2.5">
+                                <div className="p-2 bg-orange-100 text-[#F97316] rounded-2xl">
+                                    <MapPin className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm sm:text-base font-black text-gray-900 uppercase tracking-tight">
+                                        Pinpoint Location & Community Landmarks
+                                    </h3>
+                                    <p className="text-[11px] font-bold text-gray-400">
+                                        Click anywhere on the map to place/move the pin, or click a landmark marker to select it
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsMapExpandedModal(false)}
+                                className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-all cursor-pointer shrink-0"
+                                title="Close"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Location Details Info Pill Strip */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 my-2.5 bg-orange-50/60 border border-orange-100 rounded-2xl shrink-0 text-xs">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Selected Coordinates:</span>
+                                <span className="font-mono font-black text-[#F97316]">
+                                    {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
+                                </span>
+                                {formData.landmark && (
+                                    <span className="bg-orange-500 text-white font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                                        <span>📍 {formData.landmark}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormData(prev => ({ ...prev, landmark: '' }))}
+                                            className="hover:text-black ml-0.5"
+                                            title="Clear landmark"
+                                        >
+                                            &times;
+                                        </button>
+                                    </span>
+                                )}
+                            </div>
+                            <div className="text-[11px] font-bold text-gray-600 truncate max-w-xs sm:max-w-md">
+                                🏠 {resolvedAddress || (isGeocoding ? 'Resolving street address...' : 'Selera Homes')}
+                            </div>
+                        </div>
+
+                        {/* Expanded Leaflet Map Canvas */}
+                        <div className="flex-1 rounded-2xl overflow-hidden relative border border-gray-200 min-h-0 shadow-inner">
+                            <MapContainer
+                                center={[formData.latitude, formData.longitude]}
+                                zoom={17}
+                                className="h-full w-full"
+                                scrollWheelZoom={true}
+                            >
+                                <InvalidateMapSize trigger={isMapExpandedModal} />
+                                <TileLayer
+                                    attribution='&copy; OpenStreetMap'
+                                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                />
+                                <RecenterMap center={[formData.latitude, formData.longitude]} />
+                                <LocationPicker
+                                    position={[formData.latitude, formData.longitude]}
+                                    onLocationSelect={(lat, lng) => setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }))}
+                                />
+                                <Polygon
+                                    positions={SELERA_POLYGON.map(p => [p.lat, p.lng] as [number, number])}
+                                    pathOptions={{ color: '#F97316', fillColor: '#F97316', fillOpacity: 0.1, weight: 2, dashArray: '5, 10' }}
+                                />
+
+                                {/* Registered Landmarks on Modal Map */}
+                                {landmarks.map((lm) => (
+                                    <Marker
+                                        key={`modal-lm-${lm.landmark_id}`}
+                                        position={[lm.latitude, lm.longitude]}
+                                        icon={createLandmarkPinIcon(lm.category, lm.is_holding_facility)}
+                                        eventHandlers={{
+                                            click: () => {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    latitude: lm.latitude,
+                                                    longitude: lm.longitude,
+                                                    landmark: lm.name
+                                                }));
+                                            }
+                                        }}
+                                    >
+                                        <Tooltip direction="top" offset={[0, -18]} className="custom-hover-tooltip font-bold">
+                                            <span>{getLandmarkCategory(lm.category, lm.is_holding_facility).emoji} {lm.name}</span>
+                                        </Tooltip>
+                                        <Popup>
+                                            <div className="p-2 text-xs min-w-[160px]">
+                                                <div className="flex items-center gap-1.5 mb-1">
+                                                    <span>{getLandmarkCategory(lm.category, lm.is_holding_facility).emoji}</span>
+                                                    <strong className="font-bold text-gray-900">{lm.name}</strong>
+                                                </div>
+                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                                    {getLandmarkCategory(lm.category, lm.is_holding_facility).label}
+                                                </p>
+                                                {lm.description && <p className="text-gray-600 text-[11px] mb-1">{lm.description}</p>}
+                                                {lm.is_holding_facility && (
+                                                    <div className="mt-1 pt-1 border-t border-gray-100 text-emerald-700 font-bold text-[10px]">
+                                                        <p>Type: {lm.facility_type || 'Holding Pen'}</p>
+                                                        <p>Capacity: {lm.capacity || 'N/A'} animals</p>
+                                                        {lm.contact_person && <p>Caretaker: {lm.contact_person}</p>}
+                                                        {lm.contact_number && <p>Phone: {lm.contact_number}</p>}
+                                                    </div>
+                                                )}
+                                                <div className="mt-2 pt-1 border-t border-gray-100">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                latitude: lm.latitude,
+                                                                longitude: lm.longitude,
+                                                                landmark: lm.name
+                                                            }));
+                                                        }}
+                                                        className="w-full py-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg text-[10px] uppercase tracking-wider transition-all"
+                                                    >
+                                                        Select Location
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </Popup>
+                                    </Marker>
+                                ))}
+
+                                <ReturnToSeleraButton />
+                            </MapContainer>
+                        </div>
+
+                        {/* Modal Footer Controls */}
+                        <div className="flex items-center justify-between pt-3 sm:pt-4 border-t border-gray-100 shrink-0 gap-3">
+                            <span className="text-xs text-gray-400 font-medium hidden sm:inline">
+                                💡 Tip: You can drag, zoom, and click anywhere to reposition the pin accurately.
+                            </span>
+                            <div className="flex items-center gap-2 ml-auto">
+                                <button
+                                    type="button"
+                                    onClick={handleGetUseCurrentLocation}
+                                    className="px-3.5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
+                                >
+                                    <MapPin className="w-3.5 h-3.5 text-orange-500" />
+                                    <span>My GPS Location</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsMapExpandedModal(false)}
+                                    className="px-5 py-2.5 bg-[#F97316] hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center gap-1.5"
+                                >
+                                    <Check className="w-4 h-4" />
+                                    <span>Confirm Location</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <SuccessModal
                 isOpen={showSuccessModal}

@@ -340,16 +340,20 @@ class HoldingAnimal(Base):
     color: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     estimated_size: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
-    # facility_status FK: 1=Need Treatment, 2=Healthy, 3=Claimed, 4=Deceased, 5=Transferred
-    facility_status: Mapped[int] = mapped_column(Integer, ForeignKey("facility_status.status_id"), default=1, nullable=False)
+    # facility_status FK: 1=Need Treatment, 2=Healthy, 3=Claimed, 4=Deceased, 5=Transferred, 6=For Adoption, 7=Adopted, 8=Impounded
+    facility_status: Mapped[int] = mapped_column(Integer, ForeignKey("facility_status.status_id"), default=2, nullable=False)
 
     kennel_slot: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     medical_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    adoption_catalog_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    promoted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    promoted_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
 
     intake_date: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     discharge_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     intake_staff_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    overdue_notified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # Transient fields populated at runtime
@@ -378,12 +382,18 @@ class HoldingAnimal(Base):
     # Relationships
     report       = relationship("Report")
     intake_staff = relationship("User", foreign_keys=[intake_staff_id])
+    promoted_by_user = relationship("User", foreign_keys=[promoted_by])
     status_obj   = relationship("FacilityStatus")
     timeline     = relationship(
         "HoldingTimeline",
         back_populates="animal",
         cascade="all, delete-orphan",
         order_by="HoldingTimeline.logged_at"
+    )
+    adoptions    = relationship(
+        "Adoption",
+        back_populates="animal",
+        cascade="all, delete-orphan"
     )
 
 
@@ -408,3 +418,39 @@ class HoldingTimeline(Base):
     animal = relationship("HoldingAnimal", back_populates="timeline")
     staff  = relationship("User", foreign_keys=[logged_by])
     media  = relationship("ReportMedia", back_populates="holding_log")
+
+
+class Adoption(Base):
+    """Public adoption application records reviewed exclusively by Barangay / Admin."""
+    __tablename__ = "adoptions"
+    __allow_unmapped__ = True
+
+    adoption_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    holding_id: Mapped[int] = mapped_column(Integer, ForeignKey("holding_animals.holding_id", ondelete="CASCADE"), nullable=False)
+    applicant_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    status: Mapped[str] = mapped_column(Enum("Pending", "Approved", "Rejected"), default="Pending", nullable=False)
+    full_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    address: Mapped[str] = mapped_column(Text, nullable=False)
+    contact_no: Mapped[str] = mapped_column(String(20), nullable=False)
+    has_other_pets: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    living_space: Mapped[str] = mapped_column(Enum("House with yard", "Apartment", "Condo", "Other"), default="House with yard", nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    reviewed_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    reviewer_role: Mapped[Optional[str]] = mapped_column(Enum("Barangay Head Officer", "Barangay Staff", "Admin"), nullable=True)
+    review_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    # Transient fields for API responses
+    animal_name: Optional[str] = None
+    animal_type: Optional[str] = None
+    animal_breed: Optional[str] = None
+    animal_photo: Optional[str] = None
+    reviewer_name: Optional[str] = None
+
+    # Relationships
+    animal    = relationship("HoldingAnimal", back_populates="adoptions")
+    applicant = relationship("User", foreign_keys=[applicant_id])
+    reviewer  = relationship("User", foreign_keys=[reviewed_by])
+

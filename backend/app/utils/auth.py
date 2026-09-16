@@ -153,3 +153,37 @@ def get_current_staff_or_admin(
             detail="Access forbidden: Staff or Admin role required"
         )
     return current_user
+
+
+def get_optional_user(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    """
+    Extract optional authenticated user without raising 401 on missing or invalid token.
+    """
+    token = None
+    if credentials:
+        token = credentials.credentials
+    else:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ")[1]
+
+    if not token:
+        return None
+
+    payload = decode_access_token(token)
+    if not payload:
+        return None
+
+    user_id = payload.get("user_id") or payload.get("sub")
+    if not user_id:
+        return None
+
+    try:
+        return db.query(User).filter(User.user_id == int(user_id)).first()
+    except Exception:
+        return None
+

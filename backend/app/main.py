@@ -17,7 +17,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Local imports (now safe to import after path fix)
 from app.database import engine, Base
-from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches, landmarks
+from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches, landmarks, adoptions
 from app.routes import audit_logs as audit_logs_router
 from app.models.pet_qr import PetQRCode, PetQRScan
 from app.models.audit_log import AuditLog  # noqa: F401 — ensures table is in Base.metadata
@@ -866,6 +866,19 @@ def ensure_report_location_columns():
         except Exception:
             pass
 
+def ensure_holding_animals_columns():
+    with engine.begin() as conn:
+        res = conn.execute(text(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'holding_animals' "
+            "AND COLUMN_NAME = 'overdue_notified'"
+        ))
+        if res.scalar() == 0:
+            try:
+                conn.execute(text("ALTER TABLE holding_animals ADD COLUMN overdue_notified BOOLEAN DEFAULT FALSE"))
+            except Exception as e:
+                print(f"Error adding overdue_notified to holding_animals: {e}")
+
 ensure_announcement_tables_columns()
 ensure_rescue_tables_columns()
 ensure_report_verifications_columns()
@@ -879,6 +892,7 @@ ensure_report_transfer_columns()
 ensure_report_disputes_table()
 ensure_landmarks_table()
 ensure_report_location_columns()
+ensure_holding_animals_columns()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -929,6 +943,7 @@ app.include_router(chat.router)
 app.include_router(warnings.router)
 app.include_router(matches.router)
 app.include_router(landmarks.router)
+app.include_router(adoptions.router)
 
 @app.get("/")
 def read_root():
