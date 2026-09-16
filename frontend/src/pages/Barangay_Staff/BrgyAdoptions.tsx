@@ -17,7 +17,10 @@ import {
     AlertCircle, 
     FileText, 
     X,
-    ExternalLink
+    ExternalLink,
+    CreditCard,
+    Eye,
+    Sparkles
 } from 'lucide-react';
 
 interface AdoptionApp {
@@ -31,6 +34,15 @@ interface AdoptionApp {
     has_other_pets: boolean;
     living_space: string;
     reason: string;
+    id_type?: string | null;
+    id_number?: string | null;
+    id_photo_url?: string | null;
+    is_handed_over?: boolean;
+    handover_date?: string | null;
+    staff_handed_over?: boolean;
+    staff_handover_date?: string | null;
+    staff_handover_name?: string | null;
+    created_pet_id?: number | null;
     reviewed_by: number | null;
     reviewer_role: string | null;
     reviewer_name: string | null;
@@ -84,6 +96,9 @@ const BrgyAdoptions = () => {
     const [selectedApp, setSelectedApp] = useState<AdoptionApp | null>(null);
     const [reviewModalType, setReviewModalType] = useState<'approve' | 'reject' | null>(null);
     const [reviewNotes, setReviewNotes] = useState('');
+    const [handoverModalApp, setHandoverModalApp] = useState<AdoptionApp | null>(null);
+    const [handoverNotes, setHandoverNotes] = useState('');
+    const [previewIdPhotoUrl, setPreviewIdPhotoUrl] = useState<string | null>(null);
     const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
     const showToast = (text: string, type: 'success' | 'error' = 'success') => {
@@ -158,6 +173,26 @@ const BrgyAdoptions = () => {
         } catch (err: any) {
             console.error("Review application error", err);
             showToast(err.response?.data?.detail || "Failed to process review decision.", "error");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleStaffConfirmHandover = async () => {
+        if (!handoverModalApp) return;
+        setActionLoading(true);
+        try {
+            const res = await api.post(`/adoptions/${handoverModalApp.adoption_id}/staff-confirm-handover`, {
+                notes: handoverNotes.trim() || undefined,
+            });
+            showToast(res.data?.message || "Pet handover officially confirmed by Barangay Staff!");
+            setHandoverModalApp(null);
+            setHandoverNotes('');
+            fetchApplications();
+            fetchCatalog();
+        } catch (err: any) {
+            console.error("Staff confirm handover error", err);
+            showToast(err.response?.data?.detail || "Failed to confirm pet handover.", "error");
         } finally {
             setActionLoading(false);
         }
@@ -355,9 +390,94 @@ const BrgyAdoptions = () => {
                                                         <p><strong className="text-gray-900">Other Pets:</strong> {app.has_other_pets ? 'Yes' : 'No'}</p>
                                                     </div>
 
+                                                    {/* Government ID Info */}
+                                                    {app.id_type && (
+                                                        <div className="mt-2 bg-gray-50/90 p-2.5 rounded-xl border border-gray-100 flex items-center justify-between flex-wrap gap-2 text-xs">
+                                                            <div className="flex items-center gap-2">
+                                                                <CreditCard className="w-4 h-4 text-orange-500 shrink-0" />
+                                                                <span className="font-bold text-gray-800">Gov ID:</span>
+                                                                <span className="text-gray-700">{app.id_type} (#{app.id_number || 'Registered'})</span>
+                                                            </div>
+                                                            {app.id_photo_url && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setPreviewIdPhotoUrl(app.id_photo_url || null)}
+                                                                    className="text-xs font-bold text-orange-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                                                                >
+                                                                    <Eye className="w-3.5 h-3.5" /> View Uploaded ID
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
+
                                                     <p className="text-xs text-gray-500 mt-2 line-clamp-2 bg-gray-50 p-2.5 rounded-xl border border-gray-100 italic">
                                                         "{app.reason}"
                                                     </p>
+
+                                                    {/* Two-Way Handover Status Box for Approved Applications */}
+                                                    {app.status === 'Approved' && (
+                                                        <div className="mt-3 p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/90 text-xs space-y-2.5">
+                                                            <div className="flex items-center justify-between flex-wrap gap-2 font-bold text-amber-950">
+                                                                <span className="flex items-center gap-1.5">
+                                                                    <Shield className="w-4 h-4 text-amber-600" />
+                                                                    Two-Way Handover & Claiming Status:
+                                                                </span>
+                                                                {app.staff_handed_over && app.is_handed_over ? (
+                                                                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-black border border-emerald-300 flex items-center gap-1">
+                                                                        <Sparkles className="w-3 h-3 text-emerald-600" /> Completed & Registered
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold border border-amber-300">
+                                                                        Awaiting Physical Claiming
+                                                                    </span>
+                                                                )}
+                                                            </div>
+
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] bg-white/70 p-2.5 rounded-xl border border-amber-100">
+                                                                <div>
+                                                                    <span className="text-gray-500 block">1. Barangay Staff Release:</span>
+                                                                    {app.staff_handed_over ? (
+                                                                        <span className="font-bold text-emerald-700 flex items-center gap-1 mt-0.5">
+                                                                            <CheckCircle2 className="w-3.5 h-3.5" /> Handed Over ({app.staff_handover_name || 'Staff'})
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="font-semibold text-amber-700 flex items-center gap-1 mt-0.5">
+                                                                            <Clock className="w-3.5 h-3.5" /> Pending Physical Release
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+
+                                                                <div>
+                                                                    <span className="text-gray-500 block">2. Adopter Receipt Confirmation:</span>
+                                                                    {app.is_handed_over ? (
+                                                                        <span className="font-bold text-emerald-700 flex items-center gap-1 mt-0.5">
+                                                                            <CheckCircle2 className="w-3.5 h-3.5" /> Confirmed by Adopter
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="font-semibold text-amber-700 flex items-center gap-1 mt-0.5">
+                                                                            <Clock className="w-3.5 h-3.5" /> Pending Adopter Receipt
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            {!app.staff_handed_over && (
+                                                                <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
+                                                                    <span className="text-[11px] text-gray-500">
+                                                                        Verify applicant identity against presented ID before releasing pet.
+                                                                    </span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setHandoverModalApp(app)}
+                                                                        className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                                                    >
+                                                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                                                        <span>Confirm Pet Handed Over</span>
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
 
@@ -365,9 +485,15 @@ const BrgyAdoptions = () => {
                                             <div className="flex flex-col sm:flex-row md:flex-col items-start sm:items-center md:items-end justify-between gap-3 shrink-0 pt-3 md:pt-0 border-t md:border-t-0 border-gray-100">
                                                 <div>
                                                     {app.status === 'Approved' && (
-                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-black border border-emerald-200">
-                                                            <CheckCircle2 className="w-3.5 h-3.5" /> Approved
-                                                        </span>
+                                                        app.staff_handed_over && app.is_handed_over ? (
+                                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black border border-emerald-300 shadow-2xs">
+                                                                <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Officially Adopted
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-black border border-emerald-200">
+                                                                <CheckCircle2 className="w-3.5 h-3.5" /> Approved (Awaiting Handover)
+                                                            </span>
+                                                        )
                                                     )}
                                                     {app.status === 'Rejected' && (
                                                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-700 text-xs font-black border border-red-200">
@@ -528,7 +654,7 @@ const BrgyAdoptions = () => {
                             {reviewModalType === 'approve' ? (
                                 <>
                                     You are approving <strong>{selectedApp.full_name}</strong> to adopt{' '}
-                                    <strong>{selectedApp.animal_name || `Rescue #${selectedApp.holding_id}`}</strong>. This will set the animal's status to <strong>Adopted (status 7)</strong> and automatically notify the adopter for physical pickup.
+                                    <strong>{selectedApp.animal_name || `Rescue #${selectedApp.holding_id}`}</strong>. The animal will be reserved exclusively for this applicant awaiting physical claiming and two-way handover confirmation.
                                 </>
                             ) : (
                                 <>
@@ -548,7 +674,7 @@ const BrgyAdoptions = () => {
                                 onChange={(e) => setReviewNotes(e.target.value)}
                                 placeholder={
                                     reviewModalType === 'approve'
-                                        ? "Please visit the Barangay Animal Facility Mon-Fri between 9AM-4PM with valid Government ID..."
+                                        ? "Please visit the Barangay Animal Facility Mon-Fri between 9AM-4PM with your valid Government ID..."
                                         : "State the reason for rejecting this application (e.g. living space unsuitable, conflicting applications)..."
                                 }
                                 className="w-full p-3 text-xs rounded-xl border border-gray-200 focus:border-orange-500 focus:outline-hidden resize-none bg-gray-50 focus:bg-white"
@@ -573,6 +699,107 @@ const BrgyAdoptions = () => {
                             >
                                 {actionLoading ? 'Processing...' : reviewModalType === 'approve' ? 'Confirm Approval' : 'Confirm Rejection'}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Staff Handover Confirmation Modal */}
+            {handoverModalApp && (
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center">
+                                    <Shield className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-black text-gray-900">
+                                        Official Pet Handover Confirmation
+                                    </h2>
+                                    <p className="text-xs text-gray-500">
+                                        Barangay Animal Welfare Custody Release
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setHandoverModalApp(null)}
+                                className="p-1.5 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 mb-4 text-xs text-amber-950 space-y-2">
+                            <p className="leading-relaxed">
+                                You are officially recording that the rescue animal{' '}
+                                <strong>{handoverModalApp.animal_name || `Rescue Animal #${handoverModalApp.holding_id}`}</strong>{' '}
+                                has been physically claimed and handed over to applicant{' '}
+                                <strong>{handoverModalApp.full_name}</strong>.
+                            </p>
+                            <div className="bg-white/90 p-2.5 rounded-xl border border-amber-200/80 text-[11px] space-y-1">
+                                <div><strong>ID Document Type:</strong> {handoverModalApp.id_type || 'Government ID'}</div>
+                                <div><strong>ID Number:</strong> {handoverModalApp.id_number || 'Registered on file'}</div>
+                                <div><strong>Applicant Contact:</strong> {handoverModalApp.contact_no}</div>
+                            </div>
+                        </div>
+
+                        <div className="mb-6">
+                            <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                                Staff Handover Remarks / Verification Notes (Optional)
+                            </label>
+                            <textarea
+                                rows={3}
+                                value={handoverNotes}
+                                onChange={(e) => setHandoverNotes(e.target.value)}
+                                placeholder="e.g. Verified physical PhilSys ID, collar provided, adopter briefed on pet care..."
+                                className="w-full p-3 text-xs rounded-xl border border-gray-200 focus:border-amber-500 focus:outline-hidden resize-none bg-gray-50 focus:bg-white"
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2.5">
+                            <button
+                                onClick={() => setHandoverModalApp(null)}
+                                className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleStaffConfirmHandover}
+                                disabled={actionLoading}
+                                className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                            >
+                                {actionLoading ? 'Recording Handover...' : 'Confirm Handover & Release Pet'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ID Photo Lightbox Modal */}
+            {previewIdPhotoUrl && (
+                <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-gray-200 relative">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2">
+                                <CreditCard className="w-5 h-5 text-orange-500" />
+                                <h3 className="font-bold text-sm text-gray-900">
+                                    Applicant Government-Issued ID Photo
+                                </h3>
+                            </div>
+                            <button
+                                onClick={() => setPreviewIdPhotoUrl(null)}
+                                className="p-1.5 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="rounded-2xl overflow-hidden border border-gray-200 bg-black/5 flex items-center justify-center max-h-[70vh]">
+                            <img
+                                src={previewIdPhotoUrl}
+                                alt="Applicant Government ID"
+                                className="w-full h-auto max-h-[70vh] object-contain"
+                            />
                         </div>
                     </div>
                 </div>

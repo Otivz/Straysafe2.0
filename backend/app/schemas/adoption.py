@@ -11,6 +11,14 @@ class AdoptionApplyRequest(BaseModel):
     has_other_pets: bool = False
     living_space: str = "House with yard"
     reason: str
+    id_type: Optional[str] = None
+    id_number: Optional[str] = None
+    id_photo_url: Optional[str] = None
+
+
+class AdoptionHandoverConfirmRequest(BaseModel):
+    notes: Optional[str] = None
+    handover_evidence_url: Optional[str] = None
 
 
 class AdoptionReviewRequest(BaseModel):
@@ -107,5 +115,15 @@ class AdoptionResponse(BaseModel):
     animal_type: Optional[str] = None
     animal_breed: Optional[str] = None
     animal_photo: Optional[str] = None
+    id_type: Optional[str] = None
+    id_number: Optional[str] = None
+    id_photo_url: Optional[str] = None
+    is_handed_over: bool = False
+    handover_date: Optional[datetime] = None
+    staff_handed_over: bool = False
+    staff_handover_date: Optional[datetime] = None
+    staff_handover_by: Optional[int] = None
+    staff_handover_name: Optional[str] = None
+    created_pet_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)

@@ -37,9 +37,10 @@ const AdoptionCatalog = () => {
     const [typeFilter, setTypeFilter] = useState<'all' | 'dog' | 'cat'>('all');
     const [searchQuery, setSearchQuery] = useState('');
 
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token') || localStorage.getItem('access_token');
     const rawUser = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
-    const isResidentLoggedIn = Boolean(token && rawUser);
+    const residentObj = rawUser ? JSON.parse(rawUser) : null;
+    const isResidentLoggedIn = Boolean((token || residentObj) && residentObj);
 
     useEffect(() => {
         const fetchCatalog = async () => {
@@ -188,6 +189,50 @@ const AdoptionCatalog = () => {
 
             {/* Catalog Grid Section */}
             <main className="max-w-6xl mx-auto px-4 sm:px-8 pb-20">
+                {/* Logged-in Resident Account Card */}
+                {isResidentLoggedIn && residentObj && (
+                    <div className="bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 rounded-3xl p-6 sm:p-7 mb-8 text-white shadow-lg border border-orange-400/30">
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+                            <div className="flex items-start sm:items-center gap-4">
+                                <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center font-black text-2xl border border-white/30 text-white shrink-0 shadow-xs">
+                                    {residentObj.name?.[0]?.toUpperCase() || 'R'}
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h2 className="text-xl font-black tracking-tight">{residentObj.name}</h2>
+                                        <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-white/25 backdrop-blur-md text-white font-bold tracking-wide uppercase">
+                                            Logged-In Resident
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-orange-100 mt-1.5 font-medium">
+                                        <span>📧 {residentObj.email}</span>
+                                        {residentObj.phone && <span>📞 {residentObj.phone}</span>}
+                                        {residentObj.address && <span>📍 {residentObj.address}</span>}
+                                    </div>
+                                    <p className="text-[11px] text-orange-100/90 mt-2">
+                                        ✨ Your account details will automatically pre-populate in any pet adoption form you submit.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2.5 flex-wrap w-full md:w-auto shrink-0 pt-3 md:pt-0 border-t md:border-t-0 border-white/20">
+                                <Link
+                                    to="/adopt/applications"
+                                    className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-white text-orange-700 font-bold text-xs hover:bg-orange-50 transition-all shadow-xs text-center"
+                                >
+                                    📋 Track Applications
+                                </Link>
+                                <Link
+                                    to="/resident/pets"
+                                    className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-black/20 hover:bg-black/30 backdrop-blur-md text-white font-bold text-xs transition-all border border-white/20 text-center"
+                                >
+                                    🐾 My Pets
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="flex items-center justify-between mb-6">
                     <p className="text-sm font-semibold text-gray-500">
                         Showing <span className="text-gray-900 font-bold">{filteredAnimals.length}</span> adoptable {filteredAnimals.length === 1 ? 'animal' : 'animals'}

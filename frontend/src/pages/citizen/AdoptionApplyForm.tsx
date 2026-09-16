@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { api } from '../../utils/api';
 import { getPetPicture } from '../../utils/avatar';
-import { ArrowLeft, Heart, Shield, Phone, MapPin, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Heart, Shield, Phone, MapPin, AlertCircle, CheckCircle2, Upload, CreditCard } from 'lucide-react';
 
 interface AnimalDetail {
     holding_id: number;
@@ -35,9 +35,40 @@ const AdoptionApplyForm = () => {
     const [livingSpace, setLivingSpace] = useState('House with yard');
     const [reason, setReason] = useState('');
 
+    // Government ID fields
+    const [idType, setIdType] = useState('PhilSys National ID');
+    const [idNumber, setIdNumber] = useState('');
+    const [idPhotoUrl, setIdPhotoUrl] = useState<string | null>(null);
+    const [uploadingId, setUploadingId] = useState(false);
+
+    // Auto-detected registered pets
+    const [registeredPets, setRegisteredPets] = useState<any[]>([]);
+
     const [submitting, setSubmitting] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+    useEffect(() => {
+        const checkRegisteredPets = async () => {
+            const uid = user?.user_id || user?.id;
+            if (!uid) return;
+            try {
+                const res = await axios.get(`http://localhost:8000/pets/owner/${uid}`);
+                const list = Array.isArray(res.data) ? res.data : [];
+                const activePets = list.filter(
+                    (p: any) => !['archived', 'inactive'].includes((p.status || '').toLowerCase())
+                );
+                setRegisteredPets(activePets);
+                if (activePets.length > 0) {
+                    setHasOtherPets(true);
+                }
+            } catch (err) {
+                console.error("Failed to check registered pets for user:", err);
+            }
+        };
+
+        checkRegisteredPets();
+    }, [user?.user_id, user?.id]);
 
     useEffect(() => {
         const fetchAnimal = async () => {
@@ -57,12 +88,49 @@ const AdoptionApplyForm = () => {
         fetchAnimal();
     }, [id]);
 
+    const handleIdFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (file.size > 5 * 1024 * 1024) {
+            setFormError("ID photo file size must be less than 5MB.");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+        setUploadingId(true);
+        setFormError(null);
+
+        try {
+            const res = await api.post('/adoptions/upload-id', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            setIdPhotoUrl(res.data.url);
+        } catch (err: any) {
+            console.error("ID upload error", err);
+            setFormError(err.response?.data?.detail || "Failed to upload ID photo. Please try again.");
+        } finally {
+            setUploadingId(false);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setFormError(null);
 
         if (!fullName.trim() || !address.trim() || !contactNo.trim()) {
             setFormError("Please fill in your complete contact details.");
+            return;
+        }
+
+        if (!idNumber.trim()) {
+            setFormError("Please provide your valid ID number.");
+            return;
+        }
+
+        if (!idPhotoUrl) {
+            setFormError("Please upload a clear photo or scan of your valid Government ID.");
             return;
         }
 
@@ -81,6 +149,9 @@ const AdoptionApplyForm = () => {
                 has_other_pets: hasOtherPets,
                 living_space: livingSpace,
                 reason: reason.trim(),
+                id_type: idType,
+                id_number: idNumber.trim(),
+                id_photo_url: idPhotoUrl,
             });
 
             setSuccessMessage("Application submitted successfully! Redirecting to your applications...");
@@ -241,16 +312,139 @@ const AdoptionApplyForm = () => {
                             </div>
                         </div>
 
+                        {/* Government ID Verification */}
+                        <div className="space-y-4 pt-2">
+                            <div className="border-b border-gray-100 pb-2 flex items-center justify-between">
+                                <h3 className="font-bold text-sm text-gray-900 flex items-center gap-2">
+                                    <CreditCard className="w-4 h-4 text-orange-500" />
+                                    2. Government-Issued Identification (Required)
+                                </h3>
+                                <span className="text-[11px] font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200">
+                                    Identity Verification
+                                </span>
+                            </div>
+
+                            <p className="text-xs text-gray-500">
+                                As required by Barangay Animal Welfare Regulations, official pet adoption and ownership registration requires one valid government-issued ID.
+                            </p>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                                        ID Document Type <span className="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        value={idType}
+                                        onChange={(e) => setIdType(e.target.value)}
+                                        className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 focus:border-orange-500 focus:outline-hidden transition-all bg-gray-50/50 focus:bg-white font-medium"
+                                    >
+                                        <option value="PhilSys National ID">Philippine National ID (PhilSys)</option>
+                                        <option value="Driver's License">Driver's License (LTO)</option>
+                                        <option value="Philippine Passport">Philippine Passport (DFA)</option>
+                                        <option value="UMID">Unified Multi-Purpose ID (UMID)</option>
+                                        <option value="SSS / GSIS ID">SSS / GSIS ID Card</option>
+                                        <option value="PRC ID">PRC ID (Professional Regulation Commission)</option>
+                                        <option value="Voter's ID / Certificate">Voter's ID / Certificate (COMELEC)</option>
+                                        <option value="Postal ID">Postal ID (PhlPost)</option>
+                                        <option value="Barangay ID">Barangay Clearance / Resident ID</option>
+                                        <option value="Senior Citizen / PWD ID">Senior Citizen / PWD ID</option>
+                                        <option value="Student / School ID">Student ID (Valid / Enrolled)</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                                        ID Number <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={idNumber}
+                                        onChange={(e) => setIdNumber(e.target.value)}
+                                        placeholder="e.g. 1234-5678-9012 or N01-23-456789"
+                                        className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 focus:border-orange-500 focus:outline-hidden transition-all bg-gray-50/50 focus:bg-white"
+                                    >
+                                    </input>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                                    Upload Photo / Scan of ID <span className="text-red-500">*</span>
+                                </label>
+
+                                {idPhotoUrl ? (
+                                    <div className="relative border-2 border-emerald-300 bg-emerald-50/40 rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4">
+                                        <img
+                                            src={idPhotoUrl}
+                                            alt="Uploaded ID Preview"
+                                            className="w-32 h-20 object-cover rounded-xl border border-emerald-200 shadow-xs"
+                                        />
+                                        <div className="flex-1 text-center sm:text-left">
+                                            <div className="flex items-center justify-center sm:justify-start gap-1.5 text-emerald-800 font-bold text-xs">
+                                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                                Valid ID Photo Uploaded
+                                            </div>
+                                            <p className="text-[11px] text-gray-500 mt-0.5">
+                                                {idType} (#{idNumber || 'No number specified'})
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <label className="cursor-pointer px-3 py-1.5 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 text-xs font-bold rounded-xl shadow-xs transition-colors inline-block">
+                                                Change ID
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    className="hidden"
+                                                    onChange={handleIdFileChange}
+                                                    disabled={uploadingId}
+                                                />
+                                            </label>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <label className={`flex flex-col items-center justify-center border-2 border-dashed rounded-2xl p-6 cursor-pointer transition-all ${
+                                        uploadingId ? 'border-orange-400 bg-orange-50/30' : 'border-gray-300 hover:border-orange-400 hover:bg-orange-50/10 bg-gray-50/30'
+                                    }`}>
+                                        <div className="p-3 bg-white rounded-full shadow-xs border border-gray-100 mb-2">
+                                            <Upload className="w-5 h-5 text-orange-500" />
+                                        </div>
+                                        <span className="text-xs font-bold text-gray-800">
+                                            {uploadingId ? "Uploading ID Document..." : "Click or drag to upload valid ID photo"}
+                                        </span>
+                                        <span className="text-[11px] text-gray-400 mt-1">
+                                            PNG, JPG, JPEG or WEBP (Max 5MB) • Front of ID clearly visible
+                                        </span>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={handleIdFileChange}
+                                            disabled={uploadingId}
+                                        />
+                                    </label>
+                                )}
+                            </div>
+                        </div>
+
                         {/* Household Suitability */}
                         <div className="space-y-4 pt-2">
                             <h3 className="font-bold text-sm text-gray-900 border-b border-gray-100 pb-2">
-                                2. Pet Compatibility & Household Suitability
+                                3. Pet Compatibility & Household Suitability
                             </h3>
 
                             <div>
-                                <label className="block text-xs font-bold text-gray-700 mb-2">
-                                    Do you currently have other pets at home?
-                                </label>
+                                <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                                    <label className="block text-xs font-bold text-gray-700">
+                                        Do you currently have other pets at home?
+                                    </label>
+                                    {registeredPets.length > 0 && (
+                                        <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1.5 shadow-2xs">
+                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                            Auto-detected: {registeredPets.length} registered pet{registeredPets.length > 1 ? 's' : ''} in your account (Automatically set to Yes)
+                                        </span>
+                                    )}
+                                </div>
                                 <div className="flex items-center gap-6">
                                     <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                                         <input
@@ -273,6 +467,12 @@ const AdoptionApplyForm = () => {
                                         <span>No, this will be my only pet</span>
                                     </label>
                                 </div>
+                                {registeredPets.length > 0 && hasOtherPets && (
+                                    <p className="text-[11px] text-gray-600 mt-2 bg-emerald-50/50 p-2.5 rounded-xl border border-emerald-100 flex items-center gap-1.5">
+                                        <span className="font-bold text-emerald-800">Your Registered Pets:</span>
+                                        <span>{registeredPets.map(p => p.pet_name || 'Pet').join(', ')}</span>
+                                    </p>
+                                )}
                             </div>
 
                             <div>

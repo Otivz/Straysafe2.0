@@ -879,6 +879,31 @@ def ensure_holding_animals_columns():
             except Exception as e:
                 print(f"Error adding overdue_notified to holding_animals: {e}")
 
+def ensure_adoption_tables_and_columns():
+    with engine.begin() as conn:
+        cols = [
+            ("id_type", "VARCHAR(100) NULL"),
+            ("id_number", "VARCHAR(100) NULL"),
+            ("id_photo_url", "VARCHAR(255) NULL"),
+            ("is_handed_over", "BOOLEAN DEFAULT FALSE"),
+            ("handover_date", "DATETIME NULL"),
+            ("staff_handed_over", "BOOLEAN DEFAULT FALSE"),
+            ("staff_handover_date", "DATETIME NULL"),
+            ("staff_handover_by", "INT NULL"),
+            ("created_pet_id", "INT NULL"),
+        ]
+        for cname, ctype in cols:
+            try:
+                res = conn.execute(text(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'adoptions' "
+                    f"AND COLUMN_NAME = '{cname}'"
+                ))
+                if res.scalar() == 0:
+                    conn.execute(text(f"ALTER TABLE adoptions ADD COLUMN {cname} {ctype}"))
+            except Exception as e:
+                print(f"Error adding {cname} to adoptions: {e}")
+
 ensure_announcement_tables_columns()
 ensure_rescue_tables_columns()
 ensure_report_verifications_columns()
@@ -893,6 +918,7 @@ ensure_report_disputes_table()
 ensure_landmarks_table()
 ensure_report_location_columns()
 ensure_holding_animals_columns()
+ensure_adoption_tables_and_columns()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
