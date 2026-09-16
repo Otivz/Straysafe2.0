@@ -30,7 +30,7 @@ const GoogleIcon = () => (
 const ResidentsLogin = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const destinationPath = (location.state as any)?.from || '/adopt';
+    const destinationPath = (location.state as any)?.from || '/resident-home';
     const { setTheme } = useTheme();
 
     useEffect(() => {
