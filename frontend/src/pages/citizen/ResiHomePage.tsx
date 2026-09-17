@@ -25,8 +25,9 @@ import {
     Eye, Shield, MapPin, Siren, PawPrint, Palette, Tag, User, Gift, FileText,
     Megaphone, MessageCircle, AlertTriangle, Camera, Video, X, Bandage, Dog, Cat,
     Bot, Check, Map, Pin, Home, Rocket, Search, Users, Ban, Sparkles, Ruler, Phone,
-    ClipboardList, Star, Info, LifeBuoy, ArrowLeft, ArrowRight
+    ClipboardList, Star, Info, LifeBuoy, ArrowLeft, ArrowRight, Upload
 } from 'lucide-react';
+import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -317,6 +318,7 @@ const ResiHomePage = () => {
     const [returnUrl, setReturnUrl] = useState<string | null>(null);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState<number | null>(null);
     const [isCheckingAI, setIsCheckingAI] = useState(false);
     const [validationStatus, setValidationStatus] = useState('');
     const [showInconclusiveModal, setShowInconclusiveModal] = useState(false);
@@ -1447,52 +1449,74 @@ const ResiHomePage = () => {
 
                 let hasWarnings = false;
 
-                // Upload media if present
+                // Upload media directly to Cloudinary in parallel, then submit URLs to backend
                 if (formData.mediaFiles && formData.mediaFiles.length > 0) {
                     let failCount = 0;
-                    let firstSuggestions: any = null;
-                    // Link media to the initial 'Reported' history entry
                     const initialHistoryId = resultData.history?.find((h: any) => h.report_status_id === 1)?.history_id;
 
-                    for (const file of formData.mediaFiles) {
-                        const mediaData = new FormData();
-                        mediaData.append("file", file);
-                        if (initialHistoryId) {
-                            mediaData.append("history_id", initialHistoryId.toString());
-                        }
-                        mediaData.append("status_id", "1"); // Status 1 = Reported
-                        mediaData.append("is_evidence", "false"); // Initial photos are not evidence
+                    const totalFiles = formData.mediaFiles.length;
+                    const progressList = new Array(totalFiles).fill(0);
+                    const updateOverallProgress = () => {
+                        const total = progressList.reduce((acc, curr) => acc + curr, 0);
+                        setUploadProgress(Math.round(total / totalFiles));
+                    };
 
-                        try {
-                            const uploadResponse = await axios.post(`${API_URL}/${actualReportId}/media`, mediaData, {
-                                headers: { 'Content-Type': 'multipart/form-data' }
-                            });
+                    setUploadProgress(0);
 
-                            // Capture AI suggestion metadata from the first successfully processed image
-                            if (uploadResponse.data && uploadResponse.data.ai_animal_type && !firstSuggestions) {
-                                firstSuggestions = {
-                                    ai_animal_type: uploadResponse.data.ai_animal_type,
-                                    ai_dominant_color: uploadResponse.data.ai_dominant_color,
-                                    ai_estimated_size: uploadResponse.data.ai_estimated_size,
-                                    ai_possible_breed: uploadResponse.data.ai_possible_breed,
-                                    ai_suggested_priority: uploadResponse.data.ai_suggested_priority,
-                                    ai_suggested_risk_level: uploadResponse.data.ai_suggested_risk_level
-                                };
+                    // 1. Parallel Direct Upload to Cloudinary with progress tracking
+                    const uploadedMediaList = await Promise.all(
+                        formData.mediaFiles.map(async (file, idx) => {
+                            try {
+                                const result = await uploadDirectToCloudinary(file, 'reports', (percent) => {
+                                    progressList[idx] = percent;
+                                    updateOverallProgress();
+                                });
+                                return result;
+                            } catch (uploadErr) {
+                                console.error('Failed direct upload to Cloudinary:', uploadErr);
+                                failCount++;
+                                return null;
                             }
-                        } catch (err: any) {
-                            const errorMsg = err.response?.data?.detail || err.message;
-                            console.error('Failed to upload media:', errorMsg);
-                            failCount++;
-                        }
-                    }
+                        })
+                    );
 
-                    if (firstSuggestions) {
-                        hasWarnings = validateAISuggestions(actualReportId, firstSuggestions);
-                    }
+                    // 2. Parallel URL registration to backend
+                    const validUploads = uploadedMediaList.filter((item): item is NonNullable<typeof item> => item !== null);
+                    await Promise.all(
+                        validUploads.map(async (mediaItem) => {
+                            try {
+                                const mediaData = new FormData();
+                                mediaData.append("file_url", mediaItem.url);
+                                mediaData.append("media_type", mediaItem.kind === 'video' ? 'Video' : 'Image');
+                                if (initialHistoryId) {
+                                    mediaData.append("history_id", initialHistoryId.toString());
+                                }
+                                mediaData.append("status_id", "1"); // Status 1 = Reported
+                                mediaData.append("is_evidence", "false");
+
+                                await axios.post(`${API_URL}/${actualReportId}/media`, mediaData);
+                            } catch (err: any) {
+                                const errorMsg = err.response?.data?.detail || err.message;
+                                console.error('Failed to attach media URL:', errorMsg);
+                                failCount++;
+                            }
+                        })
+                    );
 
                     if (failCount > 0) {
                         toast.warning(`${failCount} media files failed to upload`, 'The report was saved otherwise.');
                     }
+                }
+
+                if (aiAnalysisResult && aiAnalysisResult.animalDetected) {
+                    hasWarnings = validateAISuggestions(actualReportId, {
+                        ai_animal_type: aiAnalysisResult.animalType,
+                        ai_dominant_color: [aiAnalysisResult.primaryColor, aiAnalysisResult.secondaryColor !== 'None' ? aiAnalysisResult.secondaryColor : null].filter(Boolean).join(', '),
+                        ai_estimated_size: aiAnalysisResult.estimatedSize,
+                        ai_possible_breed: aiAnalysisResult.possibleBreed,
+                        ai_suggested_priority: formData.priorityLevel,
+                        ai_suggested_risk_level: 'Low Risk'
+                    });
                 }
 
                 if (!hasWarnings) {
@@ -1509,6 +1533,7 @@ const ResiHomePage = () => {
             console.error('Error saving report:', error);
             toast.error('Failed to submit report', 'Please try again or check your network connection.');
         } finally {
+            setUploadProgress(null);
             setIsSubmitting(false);
         }
     };
@@ -2694,6 +2719,30 @@ const ResiHomePage = () => {
                                     Cancel
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Upload Progress Indicator Overlay */}
+                {uploadProgress !== null && (
+                    <div className="fixed inset-0 z-[450] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+                        <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full mx-4 shadow-2xl border border-gray-100 text-center space-y-4">
+                            <div className="w-14 h-14 rounded-2xl bg-orange-100 text-[#F97316] flex items-center justify-center mx-auto animate-pulse">
+                                <Upload className="w-7 h-7" />
+                            </div>
+                            <div>
+                                <h4 className="text-base font-black text-gray-900 tracking-tight">Uploading Media...</h4>
+                                <p className="text-xs font-medium text-gray-500 mt-1">
+                                    {uploadProgress < 100 ? `Sending high-resolution files (${uploadProgress}%)` : 'Processing & finalizing report...'}
+                                </p>
+                            </div>
+                            <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+                                <div 
+                                    className="bg-gradient-to-r from-orange-500 to-amber-500 h-full rounded-full transition-all duration-300 ease-out"
+                                    style={{ width: `${uploadProgress}%` }}
+                                />
+                            </div>
+                            <p className="text-[11px] font-black text-orange-600 uppercase tracking-widest">{uploadProgress}% Complete</p>
                         </div>
                     </div>
                 )}

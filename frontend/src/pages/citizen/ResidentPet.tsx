@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import api from '../../utils/api';
+import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
@@ -630,7 +631,7 @@ const ResidentPet = () => {
                 ? (formData.customTertiaryColor.trim() || 'Other')
                 : formData.tertiaryColor;
 
-            const petData = {
+            const petData: any = {
                 pet_name: formData.name,
                 pet_type: formData.species,
                 breed: formData.breed,
@@ -656,55 +657,44 @@ const ResidentPet = () => {
                 emergency_contact_phone: currentUser.phone
             };
 
-            let response;
-            if (editingPetId) {
-                response = await axios.put(`http://localhost:8000/pets/${editingPetId}`, petData);
-            } else {
-                response = await axios.post('http://localhost:8000/pets/', petData);
-            }
+            // Upload photos in parallel directly to Cloudinary
+            let photoUrl = editingPetId ? (pets.find(p => p.id === editingPetId)?.photo_url || null) : null;
+            let photoFrontUrl = null;
+            let photoLeftUrl = null;
+            let photoRightUrl = null;
+            let vaccineCardUrl = null;
 
-            // Handle photo upload if any
-            if (hasPhoto) {
-                const petId = editingPetId || response.data.pet_id;
-                const uploadData = new FormData();
-                uploadData.append('file', formData.mediaFiles[0]);
-                await axios.post(`http://localhost:8000/pets/${petId}/photo`, uploadData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
+            const uploadTasks: Promise<any>[] = [];
+            if (hasPhoto && formData.mediaFiles.length > 0) {
+                uploadTasks.push(uploadDirectToCloudinary(formData.mediaFiles[0], 'pets').then(res => { photoUrl = res.url; }));
             }
-
-            // Handle side-view photo uploads
-            const petId = editingPetId || response.data.pet_id;
             if (formData.photoFrontFiles.length > 0) {
-                const fd = new FormData();
-                fd.append('file', formData.photoFrontFiles[0]);
-                await axios.post(`http://localhost:8000/pets/${petId}/photo-front`, fd, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
+                uploadTasks.push(uploadDirectToCloudinary(formData.photoFrontFiles[0], 'pets/sides').then(res => { photoFrontUrl = res.url; }));
             }
             if (formData.photoLeftFiles.length > 0) {
-                const fd = new FormData();
-                fd.append('file', formData.photoLeftFiles[0]);
-                await axios.post(`http://localhost:8000/pets/${petId}/photo-left`, fd, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
+                uploadTasks.push(uploadDirectToCloudinary(formData.photoLeftFiles[0], 'pets/sides').then(res => { photoLeftUrl = res.url; }));
             }
             if (formData.photoRightFiles.length > 0) {
-                const fd = new FormData();
-                fd.append('file', formData.photoRightFiles[0]);
-                await axios.post(`http://localhost:8000/pets/${petId}/photo-right`, fd, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
+                uploadTasks.push(uploadDirectToCloudinary(formData.photoRightFiles[0], 'pets/sides').then(res => { photoRightUrl = res.url; }));
+            }
+            if (formData.vaccineCardFiles.length > 0) {
+                uploadTasks.push(uploadDirectToCloudinary(formData.vaccineCardFiles[0], 'vaccines').then(res => { vaccineCardUrl = res.url; }));
             }
 
-            // Handle vaccine card upload if any
-            if (formData.vaccineCardFiles.length > 0) {
-                const petId = editingPetId || response.data.pet_id;
-                const uploadData = new FormData();
-                uploadData.append('file', formData.vaccineCardFiles[0]);
-                await axios.post(`http://localhost:8000/pets/${petId}/vaccine-card`, uploadData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
+            if (uploadTasks.length > 0) {
+                await Promise.all(uploadTasks);
+            }
+
+            if (photoUrl) petData.photo_url = photoUrl;
+            if (photoFrontUrl) petData.photo_front_url = photoFrontUrl;
+            if (photoLeftUrl) petData.photo_left_url = photoLeftUrl;
+            if (photoRightUrl) petData.photo_right_url = photoRightUrl;
+            if (vaccineCardUrl) petData.vaccine_card_url = vaccineCardUrl;
+
+            if (editingPetId) {
+                await axios.put(`http://localhost:8000/pets/${editingPetId}`, petData);
+            } else {
+                await axios.post('http://localhost:8000/pets/', petData);
             }
 
             fetchPets();

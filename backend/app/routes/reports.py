@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form, BackgroundTasks
 import os
 import uuid
 from datetime import datetime, timedelta
@@ -34,6 +34,8 @@ from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.color_detection import extract_dominant_colors
 from app.utils.audit import log_activity
 from app.utils.ai_suggestions import call_gemini_with_fallback
+from app.utils.uploads import validate_cloudinary_url
+from app.utils.model_loader import get_yolo_model
 
 router = APIRouter(
     prefix="/reports",
@@ -649,7 +651,10 @@ def trigger_looks_matching(report: Report, db: Session):
 async def analyze_report_media(
     file: UploadFile = File(...)
 ):
-    """Analyze uploaded stray animal image and return AI predictions or indicate if no animal was detected."""
+    """Analyze uploaded stray animal image or video and return AI predictions or indicate if no animal was detected."""
+    is_video = False
+    media_label = "image"
+    media_noun = "photo"
     try:
         content = await file.read()
         from PIL import Image
@@ -657,33 +662,74 @@ async def analyze_report_media(
         import os
         import json
         import tempfile
+        from app.utils.video_processing import is_video_content, extract_sample_frames, analyze_video_frames
 
-        img = Image.open(io.BytesIO(content)).convert("RGB")
+        filename = file.filename or ""
+        content_type = file.content_type or ""
+        is_video = is_video_content(filename, content_type, content)
+        media_label = "video" if is_video else "image"
+        media_noun = "video footage" if is_video else "photo"
 
-        # Run YOLOv8 detection first to check for cats/dogs and bounding boxes
         yolo_count = 0
         detected_yolo_labels = []
         detected_yolo_boxes = []
-        try:
-            from ultralytics import YOLO
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-                tmp.write(content)
-                tmp_path = tmp.name
+
+        if is_video:
+            frames = extract_sample_frames(content, max_samples=8)
+            if not frames:
+                return {
+                    "animal_detected": False,
+                    "animal_type": "Unknown",
+                    "primary_color": "Unknown",
+                    "secondary_color": "None",
+                    "tertiary_color": "None",
+                    "coat_pattern": "Unknown",
+                    "estimated_size": "Unknown",
+                    "possible_breed": "Unknown",
+                    "collar_detected": False,
+                    "qr_tag_detected": False,
+                    "message": "Unable to extract video frames. Please ensure the video format is valid (MP4, WebM, MOV, etc.)."
+                }
+            yolo_model = get_yolo_model()
+            best_frame, detected_yolo_labels, detected_yolo_boxes, yolo_count = analyze_video_frames(frames, yolo_model)
+            img = best_frame if best_frame is not None else frames[0]
+        else:
             try:
-                yolo_model = YOLO('yolov8n.pt')
-                results = yolo_model(tmp_path)
-                for r in results:
-                    for c, box in zip(r.boxes.cls, r.boxes.xyxy):
-                        label = r.names[int(c)]
-                        if label.lower() in ['dog', 'cat']:
-                            yolo_count += 1
-                            detected_yolo_labels.append(label.capitalize())
-                            detected_yolo_boxes.append([float(v) for v in box])
-            finally:
-                if os.path.exists(tmp_path):
-                    os.unlink(tmp_path)
-        except Exception as yerr:
-            print("YOLO check in analyze-media error:", yerr)
+                img = Image.open(io.BytesIO(content)).convert("RGB")
+            except Exception:
+                # If PIL cannot identify the image, attempt fallback to video frame extraction
+                frames = extract_sample_frames(content, max_samples=8)
+                if frames:
+                    is_video = True
+                    media_label = "video"
+                    media_noun = "video footage"
+                    yolo_model = get_yolo_model()
+                    best_frame, detected_yolo_labels, detected_yolo_boxes, yolo_count = analyze_video_frames(frames, yolo_model)
+                    img = best_frame if best_frame is not None else frames[0]
+                else:
+                    raise
+
+            if not is_video:
+                # Run YOLOv8 detection on static image
+                try:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+                        tmp.write(content)
+                        tmp_path = tmp.name
+                    try:
+                        yolo_model = get_yolo_model()
+                        results = yolo_model(tmp_path)
+                        for r in results:
+                            for c, box in zip(r.boxes.cls, r.boxes.xyxy):
+                                label = r.names[int(c)]
+                                if label.lower() in ['dog', 'cat']:
+                                    yolo_count += 1
+                                    detected_yolo_labels.append(label.capitalize())
+                                    detected_yolo_boxes.append([float(v) for v in box])
+                    finally:
+                        if os.path.exists(tmp_path):
+                            os.unlink(tmp_path)
+                except Exception as yerr:
+                    print("YOLO check in analyze-media error:", yerr)
 
         # Crop image to primary animal subject bounding box to eliminate background distraction (cobblestones, street, buildings)
         cropped_img = img
@@ -703,16 +749,16 @@ async def analyze_report_media(
         api_key = os.getenv("GEMINI_API_KEY")
         if api_key:
             try:
-                prompt = """
+                prompt = f"""
                 You are an expert AI animal inspector for a stray pet safety system.
-                Inspect the attached image of the animal subject and determine whether a real, live stray dog or cat is clearly visible.
+                Inspect the attached {"representative frame from the uploaded video" if is_video else "image"} of the animal subject and determine whether a real, live stray dog or cat is clearly visible.
 
                 CRITICAL RULE FOR COLOR & PATTERN DETECTION:
                 Focus strictly and exclusively on the fur/coat of the animal subject in the foreground.
                 Do NOT include background colors (such as ground, pavement, street, cobblestones, grass, walls, or furniture).
 
                 Provide predictions in a valid JSON object with the following fields:
-                1. "animal_detected": true ONLY if a real dog or cat is clearly visible in the image. Set to false if the image shows inanimate objects, landscapes, food, people without a pet, documents, or non-dog/cat animals.
+                1. "animal_detected": true ONLY if a real dog or cat is clearly visible. Set to false if the media shows inanimate objects, landscapes, food, people without a pet, documents, or non-dog/cat animals.
                 2. "animal_type": "Dog", "Cat", or "Unknown" (if animal_detected is false, must be "Unknown").
                 3. "primary_color": Dominant primary fur color of the animal (e.g. "Black", "White", "Brown", "Orange", "Gray", "Calico", "Cream", "Golden", or "Unknown"). If the animal is solid black, primary_color MUST be "Black".
                 4. "secondary_color": Secondary fur color or "None".
@@ -722,7 +768,7 @@ async def analyze_report_media(
                 8. "possible_breed": Likely breed name (e.g., "Puspin" for domestic cats, "Shih Tzu", "Aspin" for local dogs, "Siamese", "Persian", "Golden Retriever", "Beagle", or "Unknown").
                 9. "collar_detected": true ONLY if a collar or harness is clearly visible around the neck, otherwise false.
                 10. "qr_tag_detected": true ONLY if a QR tag or ID tag is attached, otherwise false.
-                11. "message": If animal_detected is false, provide a short friendly message: "No animal detected in the uploaded image. Please ensure a cat or dog is clearly visible in your photo." If detected, provide "Animal detected successfully."
+                11. "message": If animal_detected is false, provide a short friendly message: "No animal detected in the uploaded {media_label}. Please ensure a cat or dog is clearly visible in your {media_noun}." If detected, provide "Animal detected successfully."
 
                 Be extremely accurate.
                 Respond ONLY with a valid JSON block.
@@ -770,7 +816,7 @@ async def analyze_report_media(
                         "possible_breed": "Unknown",
                         "collar_detected": False,
                         "qr_tag_detected": False,
-                        "message": "No animal detected in the uploaded image. Please ensure a cat or dog is clearly visible."
+                        "message": f"No animal detected in the uploaded {media_label}. Please ensure a cat or dog is clearly visible in your {media_noun}."
                     }
 
                 return {
@@ -802,7 +848,7 @@ async def analyze_report_media(
                 "possible_breed": "Unknown",
                 "collar_detected": False,
                 "qr_tag_detected": False,
-                "message": "No animal detected in the uploaded image. Please ensure a cat or dog is clearly visible."
+                "message": f"No animal detected in the uploaded {media_label}. Please ensure a cat or dog is clearly visible in your {media_noun}."
             }
 
         # YOLO found an animal; extract dominant colors strictly from the cropped animal region
@@ -842,7 +888,7 @@ async def analyze_report_media(
             "possible_breed": "Unknown",
             "collar_detected": False,
             "qr_tag_detected": False,
-            "message": "Unable to verify animal in image. Please ensure a clear photo of a dog or cat."
+            "message": f"Unable to verify animal in {media_label}. Please ensure a clear {media_noun} of a dog or cat."
         }
 
 
@@ -852,7 +898,6 @@ async def validate_report_images(
     db: Session = Depends(get_db)
 ):
     try:
-        from ultralytics import YOLO
         import tempfile
         from PIL import Image
         import io
@@ -899,7 +944,7 @@ async def validate_report_images(
 
             animal_count = 0
             try:
-                model = YOLO('yolov8n.pt')
+                model = get_yolo_model()
                 results = model(tmp_path)
                 
                 for r in results:
@@ -1467,201 +1512,276 @@ def update_report(report_id: int, report_update: ReportUpdate, db: Session = Dep
     return rep_data
 
 
+def process_report_media_ai(report_id: int, media_id: int, file_url: str, file_content: Optional[bytes] = None):
+    """
+    Background worker that executes YOLOv8 detection, color extraction,
+    Gemini suggestions, and triggers looks-matching without blocking the HTTP response.
+    """
+    from app.database.session import SessionLocal
+    from app.utils.model_loader import get_yolo_model
+    from app.utils.color_detection import extract_dominant_colors
+    from app.models.report import Report, ReportMedia, ReportCategory
+    import io
+    import os
+    import tempfile
+    from PIL import Image
+
+    db = SessionLocal()
+    try:
+        report = db.query(Report).filter(Report.report_id == report_id).first()
+        db_media = db.query(ReportMedia).filter(ReportMedia.media_id == media_id).first()
+        if not report or not db_media:
+            return
+
+        if not file_content:
+            try:
+                import urllib.request
+                req = urllib.request.Request(file_url, headers={'User-Agent': 'Straysafe/2.0'})
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    file_content = resp.read()
+            except Exception as dl_err:
+                print(f"Failed to fetch media for AI processing: {dl_err}")
+                return
+
+        if not file_content:
+            return
+
+        ext = os.path.splitext(file_url.split('?')[0])[1].lower() or ".jpg"
+        from app.utils.video_processing import is_video_content, extract_sample_frames, analyze_video_frames
+        is_video = is_video_content(file_url, file_bytes=file_content)
+
+        detected = set()
+        bboxes = []
+        model = get_yolo_model()
+
+        if is_video:
+            frames = extract_sample_frames(file_content, max_samples=8)
+            if frames:
+                best_frame, detected_labels, detected_boxes, _ = analyze_video_frames(frames, model)
+                img = best_frame if best_frame is not None else frames[0]
+                for l in detected_labels:
+                    detected.add(l.capitalize())
+                for b, l in zip(detected_boxes, detected_labels):
+                    bboxes.append((b, l.capitalize()))
+            else:
+                img = Image.new('RGB', (300, 300), color='gray')
+        else:
+            try:
+                img = Image.open(io.BytesIO(file_content)).convert("RGB")
+            except Exception:
+                frames = extract_sample_frames(file_content, max_samples=8)
+                if frames:
+                    is_video = True
+                    best_frame, detected_labels, detected_boxes, _ = analyze_video_frames(frames, model)
+                    img = best_frame if best_frame is not None else frames[0]
+                    for l in detected_labels:
+                        detected.add(l.capitalize())
+                    for b, l in zip(detected_boxes, detected_labels):
+                        bboxes.append((b, l.capitalize()))
+                else:
+                    return
+
+            if not is_video:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_img:
+                    tmp_img.write(file_content)
+                    tmp_img_path = tmp_img.name
+                try:
+                    results = model(tmp_img_path)
+                    for r in results:
+                        for c, box in zip(r.boxes.cls, r.boxes.xyxy):
+                            label = r.names[int(c)]
+                            bbox = box.tolist()  # [x1, y1, x2, y2]
+                            if label.lower() in ['dog', 'cat']:
+                                detected.add(label.capitalize())
+                                bboxes.append((bbox, label.capitalize()))
+                finally:
+                    if os.path.exists(tmp_img_path):
+                        os.unlink(tmp_img_path)
+
+        img_width, img_height = img.size
+        image_area = img_width * img_height
+
+        img_buffer = io.BytesIO()
+        img.save(img_buffer, format='JPEG')
+        active_image_bytes = img_buffer.getvalue()
+
+        try:
+            user_selected = (report.animal_type or "").capitalize()
+            if user_selected in ['Dog', 'Cat']:
+                animal_type = user_selected
+            elif 'Cat' in detected:
+                animal_type = 'Cat'
+            elif 'Dog' in detected:
+                animal_type = 'Dog'
+            else:
+                animal_type = 'Unknown'
+
+            dominant_color = 'Unknown'
+            visual_size = 'Unknown'
+
+            if animal_type != 'Unknown':
+                target_bbox = next((b for b, t in bboxes if t == animal_type), None)
+                if target_bbox:
+                    dominant_color = extract_dominant_colors(active_image_bytes, target_bbox)
+                    x1, y1, x2, y2 = target_bbox
+                    bbox_width = x2 - x1
+                    bbox_height = y2 - y1
+                    ratio = (bbox_width * bbox_height) / max(1, image_area)
+                    if animal_type == 'Cat':
+                        visual_size = 'Small'
+                    else:
+                        if ratio < 0.20:
+                            visual_size = 'Small'
+                        elif ratio <= 0.55:
+                            visual_size = 'Medium'
+                        else:
+                            visual_size = 'Large'
+                else:
+                    dominant_color = extract_dominant_colors(active_image_bytes)
+                    visual_size = 'Medium'
+
+                if animal_type == 'Dog' and dominant_color and dominant_color != 'Unknown':
+                    mapped = []
+                    for c in dominant_color.split(','):
+                        c_clean = c.strip()
+                        if c_clean.lower() in ['orange', 'ginger']:
+                            mapped.append('Brown')
+                        else:
+                            mapped.append(c_clean)
+                    seen = set()
+                    dominant_color = ", ".join([x for x in mapped if not (x in seen or seen.add(x))])
+
+            db_media.animal_type = animal_type
+            db_media.dominant_color = dominant_color
+
+            try:
+                from app.utils.ai_suggestions import generate_ai_suggestions
+                category_name = ""
+                if report.category and report.category.category_name:
+                    category_name = str(report.category.category_name)
+                elif report.category_id:
+                    category_obj = db.query(ReportCategory).filter(ReportCategory.category_id == report.category_id).first()
+                    if category_obj and category_obj.category_name:
+                        category_name = str(category_obj.category_name)
+
+                suggestions = generate_ai_suggestions(
+                    description=report.description or "",
+                    category_name=category_name,
+                    media_animal_type=animal_type,
+                    media_dominant_color=dominant_color,
+                    media_estimated_size=visual_size
+                )
+                report.ai_animal_type = suggestions.get("ai_animal_type")
+                report.ai_dominant_color = suggestions.get("ai_dominant_color")
+                report.ai_estimated_size = suggestions.get("ai_estimated_size")
+                report.ai_possible_breed = suggestions.get("ai_possible_breed")
+                report.ai_suggested_risk_level = suggestions.get("ai_suggested_risk_level")
+                report.ai_suggested_priority = suggestions.get("ai_suggested_priority")
+                report.ai_suggested_priority_reason = suggestions.get("ai_suggested_priority_reason")
+                report.ai_behavior_chasing = suggestions.get("ai_behavior_chasing", False)
+                report.ai_behavior_actual_bite = suggestions.get("ai_behavior_actual_bite", False)
+                report.ai_behavior_attempted_bite = suggestions.get("ai_behavior_attempted_bite", False)
+                report.ai_behavior_injury = suggestions.get("ai_behavior_injury", False)
+                report.ai_behavior_aggressive = suggestions.get("ai_behavior_aggressive", False)
+                report.ai_behavior_explanation = suggestions.get("ai_behavior_explanation")
+            except Exception as suggestions_err:
+                print(f"Error refining suggestions during background AI processing: {suggestions_err}")
+
+            db.commit()
+
+            try:
+                trigger_looks_matching(report, db)
+            except Exception as match_err:
+                print(f"Failed to match pets on media upload: {match_err}")
+
+        finally:
+            if os.path.exists(tmp_img_path):
+                os.unlink(tmp_img_path)
+
+    except Exception as bg_err:
+        db.rollback()
+        print(f"Error in process_report_media_ai: {bg_err}")
+    finally:
+        db.close()
+
+
 @router.post("/{report_id}/media", response_model=ReportMediaResponse)
 async def upload_report_media(
     report_id: int,
-    file: UploadFile = File(...),
+    file: Optional[UploadFile] = File(None),
+    file_url: Optional[str] = Form(None),
+    media_type: Optional[str] = Form(None),
     history_id: Optional[int] = Form(None),
     status_id: Optional[int] = Form(None),
     is_evidence: Optional[bool] = Form(False),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db)
 ):
     report = db.query(Report).filter(Report.report_id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    safe_filename = file.filename or ""
-    file_extension = os.path.splitext(safe_filename)[1]
-    unique_filename = f"{uuid.uuid4()}{file_extension}"
+    if not file and not file_url:
+        raise HTTPException(status_code=400, detail="Either file or file_url must be provided.")
 
-    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+    resolved_url = None
+    resolved_media_type = 'Image'
+    file_bytes = None
 
     try:
-        file_content = await file.read()
-        if len(file_content) > MAX_FILE_SIZE:
-             raise HTTPException(
-                status_code=413,
-                detail=f"File too large ({len(file_content) / (1024 * 1024):.1f}MB). Maximum allowed is 50MB."
-            )
-        
-        file_url = upload_to_cloudinary(file_content, filename=unique_filename)
-        
-        if not file_url:
-            raise Exception("Cloudinary returned an empty URL")
+        if file_url:
+            detected_type, _ = validate_cloudinary_url(file_url)
+            resolved_media_type = media_type or detected_type
+            resolved_url = file_url
+        elif file:
+            safe_filename = file.filename or ""
+            file_extension = os.path.splitext(safe_filename)[1].lower()
+            unique_filename = f"{uuid.uuid4()}{file_extension}"
+            MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+            file_bytes = await file.read()
+            if len(file_bytes) > MAX_FILE_SIZE:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File too large ({len(file_bytes) / (1024 * 1024):.1f}MB). Maximum allowed is 50MB."
+                )
+            resolved_url = upload_to_cloudinary(file_bytes, filename=unique_filename)
+            if not resolved_url:
+                raise HTTPException(status_code=500, detail="Cloudinary returned an empty URL")
 
-        ext = file_extension.lower()
-        if ext in ['.mp4', '.mov', '.avi', '.webm']:
-            media_type = 'Video'
-        elif ext in ['.pdf', '.docx', '.doc']:
-            media_type = 'Document'
-        else:
-            media_type = 'Image'
+            if file_extension in ['.mp4', '.mov', '.avi', '.webm']:
+                resolved_media_type = 'Video'
+            elif file_extension in ['.pdf', '.docx', '.doc']:
+                resolved_media_type = 'Document'
+            else:
+                resolved_media_type = 'Image'
 
-        animal_type = None
-        dominant_color = None
-        visual_size = None
-        # Only run AI analysis on original report images, NOT on evidence/endorsement files
-        if media_type == 'Image' and not is_evidence:
-            try:
-                from ultralytics import YOLO
-                import tempfile
-                from PIL import Image
-                import io
-                
-                # Get image dimensions using PIL
-                img = Image.open(io.BytesIO(file_content))
-                img_width, img_height = img.size
-                image_area = img_width * img_height
+        if not resolved_url:
+            raise HTTPException(status_code=400, detail="Could not resolve media URL.")
 
-                # Save image to a temp file for YOLOv8
-                with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as tmp_img:
-                    tmp_img.write(file_content)
-                    tmp_img_path = tmp_img.name
-                model = YOLO('yolov8n.pt')  # Use the nano model or your custom model
-                results = model(tmp_img_path)
-                
-                # Parse results for dog/cat and extract colors
-                detected = set()
-                bboxes = []
-                
-                for r in results:
-                    for c, box in zip(r.boxes.cls, r.boxes.xyxy):
-                        label = r.names[int(c)]
-                        bbox = box.tolist()  # [x1, y1, x2, y2]
-                        
-                # Determine animal type: prioritize user selection first, then visual detection
-                user_selected = (report.animal_type or "").capitalize()
-                if user_selected in ['Dog', 'Cat']:
-                    animal_type = user_selected
-                elif 'Cat' in detected:
-                    animal_type = 'Cat'
-                elif 'Dog' in detected:
-                    animal_type = 'Dog'
-                else:
-                    animal_type = 'Unknown'
-                
-                # Extract dominant color and visual size estimate if animal type is known
-                if animal_type != 'Unknown':
-                    target_bbox = next((b for b, t in bboxes if t == animal_type), None)
-                    if target_bbox:
-                        dominant_color = extract_dominant_colors(file_content, target_bbox)
-                        # Calculate visual size estimate from bounding box area ratio
-                        x1, y1, x2, y2 = target_bbox
-                        bbox_width = x2 - x1
-                        bbox_height = y2 - y1
-                        bbox_area = bbox_width * bbox_height
-                        ratio = bbox_area / image_area
-                        
-                        if animal_type == 'Cat':
-                            # Cats are physically small animals. For rescue purposes, practically all domestic cats are classified as "Small".
-                            visual_size = 'Small'
-                        else:  # Dog
-                            if ratio < 0.20:
-                                visual_size = 'Small'
-                            elif ratio <= 0.55:
-                                visual_size = 'Medium'
-                            else:
-                                visual_size = 'Large'
-                    else:
-                        dominant_color = extract_dominant_colors(file_content)
-                        visual_size = 'Medium'  # Default fallback
-
-                    # Map dog color "Orange" or "Ginger" to standard "Brown"
-                    if animal_type == 'Dog' and dominant_color and dominant_color != 'Unknown':
-                        mapped = []
-                        for c in dominant_color.split(','):
-                            c_clean = c.strip()
-                            if c_clean.lower() in ['orange', 'ginger']:
-                                mapped.append('Brown')
-                            else:
-                                mapped.append(c_clean)
-                        # De-duplicate
-                        seen = set()
-                        dominant_color = ", ".join([x for x in mapped if not (x in seen or seen.add(x))])
-                else:
-                    animal_type = 'Unknown'
-                    dominant_color = 'Unknown'
-                    visual_size = 'Unknown'
-                    
-                # Clean up temp file
-                os.unlink(tmp_img_path)
-            except Exception as e:
-                print(f"YOLOv8 error: {e}")
-                animal_type = 'Unknown'
-                dominant_color = 'Unknown'
-                visual_size = 'Unknown'
-        
         db_media = ReportMedia(
             report_id=report_id,
             history_id=history_id,
             status_id=status_id,
             is_evidence=is_evidence,
-            file_url=file_url,
-            media_type=media_type,
-            animal_type=animal_type,
-            dominant_color=dominant_color
+            file_url=resolved_url,
+            media_type=resolved_media_type,
+            animal_type='Unknown',
+            dominant_color='Unknown'
         )
         db.add(db_media)
-
-        # Only refine parent report AI suggestions from original media, NOT from evidence/endorsement files
-        if not is_evidence:
-            try:
-                from app.utils.ai_suggestions import generate_ai_suggestions
-                category_name = ""
-                if report.category:
-                    category_name = report.category.category_name
-                elif report.category_id:
-                    category_obj = db.query(ReportCategory).filter(ReportCategory.category_id == report.category_id).first()
-                    if category_obj:
-                        category_name = category_obj.category_name
-                
-                suggestions = generate_ai_suggestions(
-                    description=report.description,  # type: ignore
-                    category_name=category_name,  # type: ignore
-                    media_animal_type=animal_type,
-                    media_dominant_color=dominant_color,
-                    media_estimated_size=visual_size
-                )
-                report.ai_animal_type = suggestions["ai_animal_type"]  # type: ignore
-                report.ai_dominant_color = suggestions["ai_dominant_color"]  # type: ignore
-                report.ai_estimated_size = suggestions["ai_estimated_size"]  # type: ignore
-                report.ai_possible_breed = suggestions["ai_possible_breed"]  # type: ignore
-                report.ai_suggested_risk_level = suggestions["ai_suggested_risk_level"]  # type: ignore
-                report.ai_suggested_priority = suggestions["ai_suggested_priority"]  # type: ignore
-                report.ai_suggested_priority_reason = suggestions.get("ai_suggested_priority_reason")  # type: ignore
-                report.ai_behavior_chasing = suggestions.get("ai_behavior_chasing", False)  # type: ignore
-                report.ai_behavior_actual_bite = suggestions.get("ai_behavior_actual_bite", False)  # type: ignore
-                report.ai_behavior_attempted_bite = suggestions.get("ai_behavior_attempted_bite", False)  # type: ignore
-                report.ai_behavior_injury = suggestions.get("ai_behavior_injury", False)  # type: ignore
-                report.ai_behavior_aggressive = suggestions.get("ai_behavior_aggressive", False)  # type: ignore
-                report.ai_behavior_explanation = suggestions.get("ai_behavior_explanation")  # type: ignore
-
-                # Dynamically set suggestion fields on db_media to be serialized in ReportMediaResponse
-                db_media.ai_animal_type = suggestions.get("ai_animal_type")  # type: ignore
-                db_media.ai_dominant_color = suggestions.get("ai_dominant_color")  # type: ignore
-                db_media.ai_estimated_size = suggestions.get("ai_estimated_size")  # type: ignore
-                db_media.ai_possible_breed = suggestions.get("ai_possible_breed")  # type: ignore
-                db_media.ai_suggested_risk_level = suggestions.get("ai_suggested_risk_level")  # type: ignore
-                db_media.ai_suggested_priority = suggestions.get("ai_suggested_priority")  # type: ignore
-            except Exception as suggestions_err:
-                print(f"Error refining suggestions during media upload: {suggestions_err}")
-
         db.commit()
         db.refresh(db_media)
-        try:
-            trigger_looks_matching(report, db)
-        except Exception as match_err:
-            print(f"Failed to match pets on media upload: {match_err}")
+
+        # Offload AI inference and looks matching to background tasks
+        if resolved_media_type in ['Image', 'Video'] and not is_evidence:
+            background_tasks.add_task(
+                process_report_media_ai,
+                report_id,
+                db_media.media_id,
+                resolved_url,
+                file_bytes
+            )
+
         return db_media
     except HTTPException:
         raise
@@ -1903,7 +2023,7 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
             raw_t = (report.animal_type or '').strip().lower()
             a_type = 'Dog' if ('dog' in raw_t or 'canine' in raw_t or 'puppy' in raw_t) else ('Cat' if ('cat' in raw_t or 'feline' in raw_t or 'kitten' in raw_t) else 'Unknown')
             
-            cond_text = (str(report.condition or '') + ' ' + str(status_update.animal_condition or '') + ' ' + str(status_update.condition_notes or '') + ' ' + str(report.description or '')).lower()
+            cond_text = f"{report.condition or ''} {status_update.animal_condition or ''} {status_update.condition_notes or ''} {report.description or ''}".lower()
             is_deceased = 'deceased' in cond_text or 'dead' in cond_text
             is_injured = any(k in cond_text for k in ['injured', 'bleeding', 'limping', 'weak', 'sick', 'treatment', 'wound', 'trapped', 'fracture', 'broken', 'infection', 'rabid'])
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import api from '../../utils/api';
+import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 
 interface AddPetModalProps {
     isOpen: boolean;
@@ -444,6 +445,34 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                 try { currentRegistrant = JSON.parse(userStr); } catch (e) {}
             }
 
+            // Upload all photos in parallel directly to Cloudinary
+            let photoUrl = editPetData?.photo_url || inheritedReportPhoto || null;
+            let photoFrontUrl = editPetData?.photo_front_url || null;
+            let photoLeftUrl = editPetData?.photo_left_url || null;
+            let photoRightUrl = editPetData?.photo_right_url || null;
+            let vaccineCardUrl = editPetData?.vaccine_card_url || null;
+
+            const uploadTasks: Promise<any>[] = [];
+            if (photoFile) {
+                uploadTasks.push(uploadDirectToCloudinary(photoFile, 'pets').then(res => { photoUrl = res.url; }));
+            }
+            if (photoFrontFile) {
+                uploadTasks.push(uploadDirectToCloudinary(photoFrontFile, 'pets/sides').then(res => { photoFrontUrl = res.url; }));
+            }
+            if (photoLeftFile) {
+                uploadTasks.push(uploadDirectToCloudinary(photoLeftFile, 'pets/sides').then(res => { photoLeftUrl = res.url; }));
+            }
+            if (photoRightFile) {
+                uploadTasks.push(uploadDirectToCloudinary(photoRightFile, 'pets/sides').then(res => { photoRightUrl = res.url; }));
+            }
+            if (vaccineCardFile) {
+                uploadTasks.push(uploadDirectToCloudinary(vaccineCardFile, 'vaccines').then(res => { vaccineCardUrl = res.url; }));
+            }
+
+            if (uploadTasks.length > 0) {
+                await Promise.all(uploadTasks);
+            }
+
             const petPayload = {
                 owner_id: targetOwnerId,
                 registered_by_user_id: currentRegistrant?.user_id || currentRegistrant?.id || null,
@@ -460,7 +489,11 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                 secondary_color: finalSecondaryColor,
                 tertiary_color: finalTertiaryColor,
                 color_markings: colorMarkings.trim() || null,
-                photo_url: photoFile ? null : (inheritedReportPhoto || null),
+                photo_url: photoUrl,
+                photo_front_url: photoFrontUrl,
+                photo_left_url: photoLeftUrl,
+                photo_right_url: photoRightUrl,
+                vaccine_card_url: vaccineCardUrl,
                 is_vaccinated: isVaccinated,
                 vaccination_date: isVaccinated && vaccinationDate ? vaccinationDate : null,
                 is_neutered: isNeutered,
@@ -481,47 +514,6 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                 const petRes = await api.post('/pets/', petPayload);
                 createdPetId = petRes.data.pet_id;
                 resultData = petRes.data;
-            }
-
-            // Upload Pet Primary Photo if selected
-            if (photoFile && createdPetId) {
-                const formData = new FormData();
-                formData.append('file', photoFile);
-                await api.post(`/pets/${createdPetId}/photo`, formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
-            }
-
-            // Upload Multi-Angle Photos if provided
-            if (photoFrontFile && createdPetId) {
-                const formData = new FormData();
-                formData.append('file', photoFrontFile);
-                await api.post(`/pets/${createdPetId}/photo-front`, formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
-            }
-            if (photoLeftFile && createdPetId) {
-                const formData = new FormData();
-                formData.append('file', photoLeftFile);
-                await api.post(`/pets/${createdPetId}/photo-left`, formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
-            }
-            if (photoRightFile && createdPetId) {
-                const formData = new FormData();
-                formData.append('file', photoRightFile);
-                await api.post(`/pets/${createdPetId}/photo-right`, formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
-            }
-
-            // Upload Vaccine Card if selected
-            if (vaccineCardFile && createdPetId) {
-                const formData = new FormData();
-                formData.append('file', vaccineCardFile);
-                await api.post(`/pets/${createdPetId}/vaccine-card`, formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
             }
 
             // Link to report if initialReportData has report_id

@@ -32,6 +32,7 @@ import {
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import SuccessModal from '../../components/Modals/SuccessModal';
+import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMapEvents, Polygon, useMap } from 'react-leaflet';
 import { createLandmarkPinIcon, getLandmarkCategory } from '../../utils/landmarkIcons';
 import 'leaflet/dist/leaflet.css';
@@ -112,6 +113,7 @@ export default function ReportStrayPage() {
     const [currentStep, setCurrentStep] = useState(1);
     const [isAiProcessing, setIsAiProcessing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState<number | null>(null);
     const [isGeocoding, setIsGeocoding] = useState(false);
     const [resolvedAddress, setResolvedAddress] = useState('');
     const [declaration, setDeclaration] = useState(false);
@@ -514,17 +516,46 @@ export default function ReportStrayPage() {
             if (response.status === 200 || response.status === 201) {
                 const actualReportId = response.data.report_id;
                 if (actualReportId && formData.mediaFiles && formData.mediaFiles.length > 0) {
-                    for (const file of formData.mediaFiles) {
-                        const mediaData = new FormData();
-                        mediaData.append("file", file);
-                        mediaData.append("status_id", "1");
-                        mediaData.append("is_evidence", "false");
-                        try {
-                            await axios.post(`http://localhost:8000/reports/${actualReportId}/media`, mediaData);
-                        } catch (err: any) {
-                            console.error('Media upload error:', err?.response?.data || err);
-                        }
-                    }
+                    const totalFiles = formData.mediaFiles.length;
+                    const progressList = new Array(totalFiles).fill(0);
+                    const updateOverallProgress = () => {
+                        const total = progressList.reduce((acc, curr) => acc + curr, 0);
+                        setUploadProgress(Math.round(total / totalFiles));
+                    };
+
+                    setUploadProgress(0);
+
+                    // 1. Parallel Direct Upload to Cloudinary with progress tracking
+                    const uploadedMediaList = await Promise.all(
+                        formData.mediaFiles.map(async (file, idx) => {
+                            try {
+                                return await uploadDirectToCloudinary(file, 'reports', (percent) => {
+                                    progressList[idx] = percent;
+                                    updateOverallProgress();
+                                });
+                            } catch (uploadErr) {
+                                console.error('Failed direct upload to Cloudinary:', uploadErr);
+                                return null;
+                            }
+                        })
+                    );
+
+                    // 2. Parallel URL registration to backend
+                    const validUploads = uploadedMediaList.filter((item): item is NonNullable<typeof item> => item !== null);
+                    await Promise.all(
+                        validUploads.map(async (mediaItem) => {
+                            try {
+                                const mediaData = new FormData();
+                                mediaData.append("file_url", mediaItem.url);
+                                mediaData.append("media_type", mediaItem.kind === 'video' ? 'Video' : 'Image');
+                                mediaData.append("status_id", "1");
+                                mediaData.append("is_evidence", "false");
+                                await axios.post(`http://localhost:8000/reports/${actualReportId}/media`, mediaData);
+                            } catch (err: any) {
+                                console.error('Media URL registration error:', err?.response?.data || err);
+                            }
+                        })
+                    );
                 }
                 setShowSuccessModal(true);
             }
@@ -535,6 +566,7 @@ export default function ReportStrayPage() {
                 : (err.message || 'Failed to submit report. Please try again.');
             alert(`Failed to submit report: ${detailMsg}`);
         } finally {
+            setUploadProgress(null);
             setIsSubmitting(false);
         }
     };
@@ -776,59 +808,70 @@ export default function ReportStrayPage() {
                     )}
 
                     {/* STEP 3: AI Analysis */}
-                    {currentStep === 3 && (
-                        <div className="space-y-6">
-                            {isAiProcessing ? (
-                                <div className="py-16 flex flex-col items-center justify-center gap-4 text-center">
-                                    <Loader2 className="w-12 h-12 text-[#F97316] animate-spin" />
-                                    <div>
-                                        <h3 className="text-base font-black text-[#1a1208] uppercase tracking-wider flex items-center justify-center gap-2"><Bot className="w-5 h-5" /> AI is analyzing your uploaded media...</h3>
-                                        <p className="text-xs font-bold text-gray-400 mt-1">Extracting features, colors, breed likelihood, and collar metrics</p>
+                    {currentStep === 3 && (() => {
+                        const isPrimaryVideo = Boolean(
+                            formData.mediaFiles?.[0] && (
+                                formData.mediaFiles[0].type.startsWith('video/') ||
+                                ['.mp4', '.mov', '.avi', '.webm', '.mkv'].some(ext => formData.mediaFiles[0].name.toLowerCase().endsWith(ext))
+                            )
+                        );
+                        return (
+                            <div className="space-y-6">
+                                {isAiProcessing ? (
+                                    <div className="py-16 flex flex-col items-center justify-center gap-4 text-center">
+                                        <Loader2 className="w-12 h-12 text-[#F97316] animate-spin" />
+                                        <div>
+                                            <h3 className="text-base font-black text-[#1a1208] uppercase tracking-wider flex items-center justify-center gap-2">
+                                                <Bot className="w-5 h-5" /> {isPrimaryVideo ? "AI is analyzing your uploaded video footage..." : "AI is analyzing your uploaded media..."}
+                                            </h3>
+                                            <p className="text-xs font-bold text-gray-400 mt-1">
+                                                {isPrimaryVideo ? "Sampling key frames, detecting animal presence, colors, and likelihood..." : "Extracting features, colors, breed likelihood, and collar metrics"}
+                                            </p>
+                                        </div>
                                     </div>
-                                </div>
-                            ) : aiAnalysisResult && !aiAnalysisResult.animalDetected ? (
-                                <div className="p-8 bg-red-50/80 border-2 border-red-200 rounded-3xl space-y-5 text-center animate-in fade-in">
-                                    <div className="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto shadow-sm border border-red-200">
-                                        <AlertTriangle className="w-7 h-7" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-base font-black uppercase tracking-wider text-red-900">
-                                            No Animal Detected in Image
-                                        </h3>
-                                        <p className="text-xs font-bold text-red-700 mt-1.5 leading-relaxed max-w-lg mx-auto">
-                                            {aiAnalysisResult.message || "No dog or cat was detected in your uploaded media. Please upload a clear photo showing the animal."}
-                                        </p>
-                                    </div>
+                                ) : aiAnalysisResult && !aiAnalysisResult.animalDetected ? (
+                                    <div className="p-8 bg-red-50/80 border-2 border-red-200 rounded-3xl space-y-5 text-center animate-in fade-in">
+                                        <div className="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto shadow-sm border border-red-200">
+                                            <AlertTriangle className="w-7 h-7" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-base font-black uppercase tracking-wider text-red-900">
+                                                {isPrimaryVideo ? "No Animal Detected in Video" : "No Animal Detected in Image"}
+                                            </h3>
+                                            <p className="text-xs font-bold text-red-700 mt-1.5 leading-relaxed max-w-lg mx-auto">
+                                                {aiAnalysisResult.message || (isPrimaryVideo ? "No dog or cat was detected in your uploaded video footage. Please upload a clear video showing the animal." : "No dog or cat was detected in your uploaded media. Please upload a clear photo showing the animal.")}
+                                            </p>
+                                        </div>
 
-                                    <div className="p-4 bg-white rounded-2xl border border-red-100 text-left text-xs space-y-2 max-w-lg mx-auto shadow-xs">
-                                        <p className="font-black text-red-800 flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
-                                            <Camera className="w-3.5 h-3.5" /> Recommendations:
-                                        </p>
-                                        <ul className="list-disc list-inside space-y-1 text-gray-600 text-[11px] font-bold pl-1">
-                                            <li>Make sure the stray dog or cat is centered and clearly visible.</li>
-                                            <li>Check that the lighting is sufficient and the camera is in focus.</li>
-                                            <li>Avoid uploading images of non-animal objects or surroundings only.</li>
-                                        </ul>
-                                    </div>
+                                        <div className="p-4 bg-white rounded-2xl border border-red-100 text-left text-xs space-y-2 max-w-lg mx-auto shadow-xs">
+                                            <p className="font-black text-red-800 flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
+                                                <Camera className="w-3.5 h-3.5" /> Recommendations:
+                                            </p>
+                                            <ul className="list-disc list-inside space-y-1 text-gray-600 text-[11px] font-bold pl-1">
+                                                <li>Make sure the stray dog or cat is centered and clearly visible.</li>
+                                                <li>Check that the lighting is sufficient and the camera is in focus.</li>
+                                                <li>Avoid uploading {isPrimaryVideo ? "videos" : "images"} of non-animal objects or surroundings only.</li>
+                                            </ul>
+                                        </div>
 
-                                    <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
-                                        <button
-                                            type="button"
-                                            onClick={() => setCurrentStep(1)}
-                                            className="px-6 py-3.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5"
-                                        >
-                                            <ArrowLeft className="w-3.5 h-3.5" /> Replace Photo (Go to Step 1)
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setCurrentStep(4)}
-                                            className="px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-1.5"
-                                        >
-                                            Continue Manually <ArrowRight className="w-3.5 h-3.5" />
-                                        </button>
+                                        <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
+                                            <button
+                                                type="button"
+                                                onClick={() => setCurrentStep(1)}
+                                                className="px-6 py-3.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5"
+                                            >
+                                                <ArrowLeft className="w-3.5 h-3.5" /> {isPrimaryVideo ? "Replace Video (Go to Step 1)" : "Replace Photo (Go to Step 1)"}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setCurrentStep(4)}
+                                                className="px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-1.5"
+                                            >
+                                                Continue Manually <ArrowRight className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            ) : (
+                                ) : (
                                 <div className="space-y-6 animate-in fade-in duration-300">
                                     <div className="flex items-center justify-between">
                                         <div>
@@ -896,7 +939,8 @@ export default function ReportStrayPage() {
                                 </div>
                             )}
                         </div>
-                    )}
+                    );
+                })()}
 
                     {/* STEP 4: Animal Details */}
                     {currentStep === 4 && (
@@ -1730,6 +1774,30 @@ export default function ReportStrayPage() {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Upload Progress Indicator Overlay */}
+            {uploadProgress !== null && (
+                <div className="fixed inset-0 z-[450] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+                    <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full mx-4 shadow-2xl border border-gray-100 text-center space-y-4">
+                        <div className="w-14 h-14 rounded-2xl bg-orange-100 text-[#F97316] flex items-center justify-center mx-auto animate-pulse">
+                            <Upload className="w-7 h-7" />
+                        </div>
+                        <div>
+                            <h4 className="text-base font-black text-gray-900 tracking-tight">Uploading Media...</h4>
+                            <p className="text-xs font-medium text-gray-500 mt-1">
+                                {uploadProgress < 100 ? `Sending high-resolution files (${uploadProgress}%)` : 'Processing & finalizing report...'}
+                            </p>
+                        </div>
+                        <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+                            <div 
+                                className="bg-gradient-to-r from-orange-500 to-amber-500 h-full rounded-full transition-all duration-300 ease-out"
+                                style={{ width: `${uploadProgress}%` }}
+                            />
+                        </div>
+                        <p className="text-[11px] font-black text-orange-600 uppercase tracking-widest">{uploadProgress}% Complete</p>
                     </div>
                 </div>
             )}

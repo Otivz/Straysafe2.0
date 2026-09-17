@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from typing import List, cast, Any, Optional
 from app.database import get_db
@@ -7,6 +7,8 @@ from app.models.user import User
 from app.schemas.pet import PetCreate, PetUpdate, PetResponse
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.audit import log_activity
+from app.utils.uploads import validate_cloudinary_url
+from app.utils.model_loader import get_yolo_model
 
 router = APIRouter(
     prefix="/pets",
@@ -758,7 +760,6 @@ def auto_extract_pet_colors(file_content: bytes, filename: str, db_pet: Pet):
         return
 
     try:
-        from ultralytics import YOLO
         from app.utils.color_detection import extract_dominant_colors
         import tempfile
         import os
@@ -773,7 +774,7 @@ def auto_extract_pet_colors(file_content: bytes, filename: str, db_pet: Pet):
             tmp_img_path = tmp_img.name
             
         try:
-            model = YOLO('yolov8n.pt')
+            model = get_yolo_model()
             results = model(tmp_img_path)
             
             detected = set()
@@ -824,89 +825,173 @@ def auto_extract_pet_colors(file_content: bytes, filename: str, db_pet: Pet):
         print(f"Error auto extracting pet colors: {e}")
 
 @router.post("/{pet_id}/photo")
-async def upload_pet_photo(pet_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_pet_photo(
+    pet_id: int,
+    file: Optional[UploadFile] = File(None),
+    photo_url: Optional[str] = Form(None),
+    url: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
     
+    target_url = photo_url or url
     try:
-        # Read file content
-        file_content = await file.read()
-        image_url = upload_to_cloudinary(file_content, folder="pets", filename=file.filename)
-        if not image_url:
-            raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
-            
-        db_pet.photo_url = image_url
-        auto_extract_pet_colors(file_content, file.filename or "", db_pet)
-        db.commit()
-        return {"photo_url": image_url}
+        if target_url:
+            validate_cloudinary_url(target_url, allowed={'Image'})
+            db_pet.photo_url = target_url
+            db.commit()
+            return {"photo_url": target_url}
+        elif file:
+            file_content = await file.read()
+            image_url = upload_to_cloudinary(file_content, folder="pets", filename=file.filename)
+            if not image_url:
+                raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
+            db_pet.photo_url = image_url
+            auto_extract_pet_colors(file_content, file.filename or "", db_pet)
+            db.commit()
+            return {"photo_url": image_url}
+        else:
+            raise HTTPException(status_code=400, detail="Either file or photo_url must be provided.")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/{pet_id}/vaccine-card")
-async def upload_vaccine_card(pet_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_vaccine_card(
+    pet_id: int,
+    file: Optional[UploadFile] = File(None),
+    card_url: Optional[str] = Form(None),
+    url: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
     
+    target_url = card_url or url
     try:
-        # Read file content
-        file_content = await file.read()
-        card_url = upload_to_cloudinary(file_content, folder="vaccines", filename=file.filename)
-        if not card_url:
-            raise HTTPException(status_code=500, detail="Failed to upload vaccine card to Cloudinary")
-            
-        db_pet.vaccine_card_url = card_url
-        db.commit()
-        return {"vaccine_card_url": card_url}
+        if target_url:
+            validate_cloudinary_url(target_url, allowed={'Image', 'Document'})
+            db_pet.vaccine_card_url = target_url
+            db.commit()
+            return {"vaccine_card_url": target_url}
+        elif file:
+            file_content = await file.read()
+            card_url_res = upload_to_cloudinary(file_content, folder="vaccines", filename=file.filename)
+            if not card_url_res:
+                raise HTTPException(status_code=500, detail="Failed to upload vaccine card to Cloudinary")
+            db_pet.vaccine_card_url = card_url_res
+            db.commit()
+            return {"vaccine_card_url": card_url_res}
+        else:
+            raise HTTPException(status_code=400, detail="Either file or card_url must be provided.")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/{pet_id}/photo-front")
-async def upload_pet_photo_front(pet_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_pet_photo_front(
+    pet_id: int,
+    file: Optional[UploadFile] = File(None),
+    photo_front_url: Optional[str] = Form(None),
+    url: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
+    
+    target_url = photo_front_url or url
     try:
-        file_content = await file.read()
-        image_url = upload_to_cloudinary(file_content, folder="pets/sides", filename=file.filename)
-        if not image_url:
-            raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
-        db_pet.photo_front_url = image_url
-        db.commit()
-        return {"photo_front_url": image_url}
+        if target_url:
+            validate_cloudinary_url(target_url, allowed={'Image'})
+            db_pet.photo_front_url = target_url
+            db.commit()
+            return {"photo_front_url": target_url}
+        elif file:
+            file_content = await file.read()
+            image_url = upload_to_cloudinary(file_content, folder="pets/sides", filename=file.filename)
+            if not image_url:
+                raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
+            db_pet.photo_front_url = image_url
+            db.commit()
+            return {"photo_front_url": image_url}
+        else:
+            raise HTTPException(status_code=400, detail="Either file or photo_front_url must be provided.")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/{pet_id}/photo-left")
-async def upload_pet_photo_left(pet_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_pet_photo_left(
+    pet_id: int,
+    file: Optional[UploadFile] = File(None),
+    photo_left_url: Optional[str] = Form(None),
+    url: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
+    
+    target_url = photo_left_url or url
     try:
-        file_content = await file.read()
-        image_url = upload_to_cloudinary(file_content, folder="pets/sides", filename=file.filename)
-        if not image_url:
-            raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
-        db_pet.photo_left_url = image_url
-        db.commit()
-        return {"photo_left_url": image_url}
+        if target_url:
+            validate_cloudinary_url(target_url, allowed={'Image'})
+            db_pet.photo_left_url = target_url
+            db.commit()
+            return {"photo_left_url": target_url}
+        elif file:
+            file_content = await file.read()
+            image_url = upload_to_cloudinary(file_content, folder="pets/sides", filename=file.filename)
+            if not image_url:
+                raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
+            db_pet.photo_left_url = image_url
+            db.commit()
+            return {"photo_left_url": image_url}
+        else:
+            raise HTTPException(status_code=400, detail="Either file or photo_left_url must be provided.")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/{pet_id}/photo-right")
-async def upload_pet_photo_right(pet_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_pet_photo_right(
+    pet_id: int,
+    file: Optional[UploadFile] = File(None),
+    photo_right_url: Optional[str] = Form(None),
+    url: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
+    
+    target_url = photo_right_url or url
     try:
-        file_content = await file.read()
-        image_url = upload_to_cloudinary(file_content, folder="pets/sides", filename=file.filename)
-        if not image_url:
-            raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
-        db_pet.photo_right_url = image_url
-        db.commit()
-        return {"photo_right_url": image_url}
+        if target_url:
+            validate_cloudinary_url(target_url, allowed={'Image'})
+            db_pet.photo_right_url = target_url
+            db.commit()
+            return {"photo_right_url": target_url}
+        elif file:
+            file_content = await file.read()
+            image_url = upload_to_cloudinary(file_content, folder="pets/sides", filename=file.filename)
+            if not image_url:
+                raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
+            db_pet.photo_right_url = image_url
+            db.commit()
+            return {"photo_right_url": image_url}
+        else:
+            raise HTTPException(status_code=400, detail="Either file or photo_right_url must be provided.")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

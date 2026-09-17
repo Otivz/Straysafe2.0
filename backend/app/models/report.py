@@ -173,19 +173,20 @@ class EndorsementLetter(Base):
 
 class ReportMedia(Base):
     __tablename__ = "report_media"
+    __allow_unmapped__ = True
 
-    media_id = Column(Integer, primary_key=True, index=True)
-    report_id = Column(Integer, ForeignKey("reports.report_id", ondelete="CASCADE"), nullable=False)
-    history_id = Column(Integer, ForeignKey("status_history.history_id", ondelete="SET NULL"), nullable=True)
-    status_id = Column(Integer, ForeignKey("report_status.status_id", ondelete="SET NULL"), nullable=True)
-    file_url = Column(String(255), nullable=False)
+    media_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    report_id: Mapped[int] = mapped_column(Integer, ForeignKey("reports.report_id", ondelete="CASCADE"), nullable=False)
+    history_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("status_history.history_id", ondelete="SET NULL"), nullable=True)
+    status_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("report_status.status_id", ondelete="SET NULL"), nullable=True)
+    file_url: Mapped[str] = mapped_column(String(255), nullable=False)
     # DB ENUM: 'Image','Video','Document'
-    media_type = Column(Enum('Image', 'Video', 'Document'), nullable=False)
-    animal_type = Column(Enum('Dog', 'Cat', 'Unknown'), nullable=True, default='Unknown')
-    dominant_color = Column(String(100), nullable=True)  # e.g., 'Brown', 'Black and White', 'Golden'
-    is_evidence = Column(Boolean, default=False)
-    uploaded_at = Column(DateTime, server_default=func.now())
-    holding_log_id = Column(Integer, ForeignKey("holding_timeline.log_id", ondelete="SET NULL"), nullable=True)
+    media_type: Mapped[str] = mapped_column(Enum('Image', 'Video', 'Document'), nullable=False)
+    animal_type: Mapped[Optional[str]] = mapped_column(Enum('Dog', 'Cat', 'Unknown'), nullable=True, default='Unknown')
+    dominant_color: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # e.g., 'Brown', 'Black and White', 'Golden'
+    is_evidence: Mapped[bool] = mapped_column(Boolean, default=False)
+    uploaded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
+    holding_log_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("holding_timeline.log_id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     report = relationship("Report", back_populates="media")
