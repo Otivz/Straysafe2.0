@@ -1,8 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
-import os
-import uuid
 from datetime import datetime
 
 from app.database import get_db
@@ -18,7 +16,7 @@ from app.schemas.chat import (
     ChatStatsResponse
 )
 from app.utils.auth import get_current_user
-from app.utils.cloudinary_config import upload_to_cloudinary
+from app.utils.uploads import validate_cloudinary_url
 
 router = APIRouter(
     prefix="/chat",
@@ -389,11 +387,9 @@ def get_report_messages(
 
 
 @router.post("/reports/{report_id}/messages", response_model=ChatMessageResponse)
-async def send_report_message(
+def send_report_message(
     report_id: int,
-    message_text: str = Form(...),
-    file: Optional[UploadFile] = File(None),
-    is_system: Optional[bool] = Form(False),
+    payload: ChatMessageCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -411,21 +407,15 @@ async def send_report_message(
             detail="Only Barangay responders assigned to this report can send messages. Higher role officers have view-all oversight."
         )
 
+    message_text = payload.message_text
+    is_system = payload.is_system
+
     media_url = None
-    if file:
-        try:
-            media_url = upload_to_cloudinary(file, folder="chat_media")
-        except Exception as e:
-            # Fallback to local upload
-            upload_dir = "uploads/chat"
-            os.makedirs(upload_dir, exist_ok=True)
-            ext = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
-            filename = f"{uuid.uuid4().hex}{ext}"
-            file_path = os.path.join(upload_dir, filename)
-            content = await file.read()
-            with open(file_path, "wb") as f:
-                f.write(content)
-            media_url = f"http://localhost:8000/uploads/chat/{filename}"
+    if payload.media_url:
+        # File already lives in Cloudinary (browser uploaded directly via the
+        # unsigned preset); just verify the URL is genuinely ours before trusting it.
+        validate_cloudinary_url(payload.media_url, allowed={'Image', 'Video', 'Document'})
+        media_url = payload.media_url
 
     new_msg = ChatMessage(
         thread_id=thread.thread_id,
@@ -630,11 +620,9 @@ def get_match_messages(
 
 
 @router.post("/matches/{match_id}/messages", response_model=ChatMessageResponse)
-async def send_match_message(
+def send_match_message(
     match_id: int,
-    message_text: str = Form(...),
-    file: Optional[UploadFile] = File(None),
-    is_system: Optional[bool] = Form(False),
+    payload: ChatMessageCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -645,20 +633,13 @@ async def send_match_message(
     if not check_user_match_chat_access(match_id, current_user, thread, db):
         raise HTTPException(status_code=403, detail="Access denied to this match verification chat")
 
+    message_text = payload.message_text
+    is_system = payload.is_system
+
     media_url = None
-    if file:
-        try:
-            media_url = upload_to_cloudinary(file, folder="chat_media")
-        except Exception:
-            upload_dir = "uploads/chat"
-            os.makedirs(upload_dir, exist_ok=True)
-            ext = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
-            filename = f"{uuid.uuid4().hex}{ext}"
-            file_path = os.path.join(upload_dir, filename)
-            content = await file.read()
-            with open(file_path, "wb") as f:
-                f.write(content)
-            media_url = f"http://localhost:8000/uploads/chat/{filename}"
+    if payload.media_url:
+        validate_cloudinary_url(payload.media_url, allowed={'Image', 'Video', 'Document'})
+        media_url = payload.media_url
 
     new_msg = ChatMessage(
         thread_id=thread.thread_id,

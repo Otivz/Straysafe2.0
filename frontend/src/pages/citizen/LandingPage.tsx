@@ -1,4 +1,8 @@
 import { useState, useEffect } from 'react';
+import {
+    PawPrint, ClipboardList, Bot, Dog, Cat, MapPin, Plus,
+    User, Building2, Landmark, Settings, Search, Stethoscope, Zap, Compass
+} from 'lucide-react';
 import Button from '../../components/Button';
 import LandingPageNavbar from '../../components/Navbars/LandingPageNavbar';
 import { useTheme } from '../../context/ThemeContext';
@@ -73,8 +77,12 @@ const LandingPage = () => {
 
             {/* HERO SECTION */}
             <section className="relative min-h-screen pt-[120px] pb-20 px-6 md:px-24 lg:px-32 flex flex-col md:flex-row items-center gap-16 overflow-hidden">
-                <div className="absolute top-20 right-[-40px] opacity-[0.04] text-[320px] select-none pointer-events-none" style={{ animation: 'floatPaw 6s ease-in-out infinite' }}>🐾</div>
-                <div className="absolute bottom-20 left-[30%] opacity-[0.03] text-[180px] select-none pointer-events-none" style={{ animation: 'floatPaw2 8s ease-in-out infinite' }}>🐾</div>
+                <div className="absolute top-20 right-[-40px] opacity-[0.04] select-none pointer-events-none" style={{ animation: 'floatPaw 6s ease-in-out infinite' }}>
+                    <PawPrint className="w-[320px] h-[320px]" />
+                </div>
+                <div className="absolute bottom-20 left-[30%] opacity-[0.03] select-none pointer-events-none" style={{ animation: 'floatPaw2 8s ease-in-out infinite' }}>
+                    <PawPrint className="w-[180px] h-[180px]" />
+                </div>
 
                 <div className="flex-1 z-10 text-center md:text-left">
                     <div className="inline-flex items-center gap-2 bg-orange-50 border border-orange-100 px-3.5 py-1.5 rounded-full mb-6" style={{ animation: 'fadeIn 0.6s ease both' }}>
@@ -90,7 +98,7 @@ const LandingPage = () => {
                     </p>
                     <div className="flex flex-col sm:flex-row justify-center md:justify-start gap-4 reveal" style={{ animationDelay: '0.3s' }}>
                         <Button variant="primary" size="lg" className="px-8 shadow-xl shadow-orange-500/30 w-full sm:w-auto">
-                            📋 Report a Stray
+                            <span className="inline-flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Report a Stray</span>
                         </Button>
                         <Button variant="light" size="lg" className="px-8 border-gray-200 w-full sm:w-auto">
                             Learn How It Works →
@@ -102,7 +110,7 @@ const LandingPage = () => {
                     <div className="relative w-[260px] sm:w-[280px] md:w-[320px] mx-auto bg-[#1a1208] rounded-[42px] p-2 sm:p-2.5 shadow-2xl shadow-[#1a1208]/25 border border-white/10">
                         {/* Floating Tooltips */}
                         <div className="absolute top-8 -right-10 sm:-right-16 md:-right-20 bg-white border border-[#ede8e0] rounded-2xl p-2.5 sm:p-3 shadow-lg z-20 whitespace-nowrap" style={{ animation: 'floatPaw2 5s ease-in-out infinite' }}>
-                            <div className="text-[9px] sm:text-[10px] font-bold text-[#F97316] mb-0.5">🤖 AI Analysis</div>
+                            <div className="text-[9px] sm:text-[10px] font-bold text-[#F97316] mb-0.5 flex items-center gap-1"><Bot className="w-3 h-3" /> AI Analysis</div>
                             <div className="text-[10px] sm:text-xs font-bold text-[#1a1208]">Dog · Injured · High</div>
                         </div>
                         <div className="absolute bottom-16 -left-8 sm:-left-12 md:-left-16 bg-[#F97316] rounded-2xl p-2.5 sm:p-3.5 shadow-lg shadow-orange-500/30 z-20 whitespace-nowrap text-white" style={{ animation: 'floatPaw 7s ease-in-out infinite' }}>
@@ -113,7 +121,7 @@ const LandingPage = () => {
                         <div className="bg-[#FAFAF9] rounded-[34px] overflow-hidden h-[520px] flex flex-col">
                             <div className="bg-[#F97316] px-5 pt-3.5 pb-2.5 text-white flex justify-between items-center text-[10px] font-bold font-plus-jakarta">
                                 <span>STRAY SAFE</span>
-                                <span>🐾 4 Active</span>
+                                <span className="inline-flex items-center gap-1"><PawPrint className="w-3 h-3" /> 4 Active</span>
                             </div>
                             <div className="bg-white p-5 border-b border-[#ede8e0]">
                                 <h3 className="font-plus-jakarta font-extrabold text-sm text-[#1a1208]">My Reports</h3>
@@ -121,35 +129,35 @@ const LandingPage = () => {
                             </div>
                             <div className="flex-1 p-4 flex flex-col gap-3 overflow-hidden">
                                 <div className="bg-white rounded-xl p-3 border border-[#ede8e0] flex gap-2.5 items-start shadow-sm transition-shadow hover:shadow-md cursor-pointer group">
-                                    <div className="w-10 h-10 bg-[#FAFAF9] rounded-lg flex items-center justify-center text-xl shrink-0">🐕</div>
+                                    <div className="w-10 h-10 bg-[#FAFAF9] rounded-lg flex items-center justify-center shrink-0"><Dog className="w-5 h-5 text-[#4a3b28]" /></div>
                                     <div className="flex-1">
                                         <div className="text-[11px] font-bold text-[#1a1208]">Injured Dog — Purok 3</div>
-                                        <div className="text-[9px] text-[#9c8670] mt-0.5">📍 Mabini St., near market</div>
+                                        <div className="text-[9px] text-[#9c8670] mt-0.5 flex items-center gap-1"><MapPin className="w-2.5 h-2.5" /> Mabini St., near market</div>
                                         <span className="inline-block px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[8px] font-bold mt-1.5 uppercase tracking-wider">Picked Up</span>
                                     </div>
                                     <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-red-500 text-white">HIGH</span>
                                 </div>
                                 <div className="bg-white rounded-xl p-3 border border-[#ede8e0] flex gap-2.5 items-start shadow-sm opacity-80">
-                                    <div className="w-10 h-10 bg-[#FAFAF9] rounded-lg flex items-center justify-center text-xl shrink-0">🐈</div>
+                                    <div className="w-10 h-10 bg-[#FAFAF9] rounded-lg flex items-center justify-center shrink-0"><Cat className="w-5 h-5 text-[#4a3b28]" /></div>
                                     <div className="flex-1">
                                         <div className="text-[11px] font-bold text-[#1a1208]">Stray Cat — Purok 1</div>
-                                        <div className="text-[9px] text-[#9c8670] mt-0.5">📍 Rizal Ave.</div>
+                                        <div className="text-[9px] text-[#9c8670] mt-0.5 flex items-center gap-1"><MapPin className="w-2.5 h-2.5" /> Rizal Ave.</div>
                                         <span className="inline-block px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 text-[8px] font-bold mt-1.5 uppercase tracking-wider">In Progress</span>
                                     </div>
                                     <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-orange-200 text-orange-800">MED</span>
                                 </div>
                                 <div className="bg-white rounded-xl p-3 border border-[#ede8e0] flex gap-2.5 items-start shadow-sm opacity-60">
-                                    <div className="w-10 h-10 bg-[#FAFAF9] rounded-lg flex items-center justify-center text-xl shrink-0">🐕</div>
+                                    <div className="w-10 h-10 bg-[#FAFAF9] rounded-lg flex items-center justify-center shrink-0"><Dog className="w-5 h-5 text-[#4a3b28]" /></div>
                                     <div className="flex-1">
                                         <div className="text-[11px] font-bold text-[#1a1208]">Stray Dog — Purok 5</div>
-                                        <div className="text-[9px] text-[#9c8670] mt-0.5">📍 Bonifacio St.</div>
+                                        <div className="text-[9px] text-[#9c8670] mt-0.5 flex items-center gap-1"><MapPin className="w-2.5 h-2.5" /> Bonifacio St.</div>
                                         <span className="inline-block px-2 py-0.5 rounded-full bg-green-50 text-green-600 text-[8px] font-bold mt-1.5 uppercase tracking-wider">Resolved</span>
                                     </div>
                                     <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600">LOW</span>
                                 </div>
                             </div>
                         </div>
-                        <div className="absolute -bottom-4 right-5 w-12 h-12 bg-[#F97316] rounded-full flex items-center justify-center text-xl text-white shadow-xl shadow-orange-500/40 cursor-pointer transition-transform hover:scale-110">➕</div>
+                        <div className="absolute -bottom-4 right-5 w-12 h-12 bg-[#F97316] rounded-full flex items-center justify-center text-white shadow-xl shadow-orange-500/40 cursor-pointer transition-transform hover:scale-110"><Plus className="w-6 h-6" /></div>
                     </div>
                 </div>
             </section>
@@ -181,14 +189,16 @@ const LandingPage = () => {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     {[
-                        { icon: '👤', title: 'Citizen', desc: 'Anyone in the community can report strays directly from their phone — no paperwork, no hassle.', items: ['Report stray animals', 'Upload photo & location', 'Track status in real-time'], color: '#F97316', bg: 'bg-orange-50' },
-                        { icon: '🏘️', title: 'Subdivision Leader', desc: 'Leaders review incoming reports, filter duplicates, and create formal requests to the barangay.', items: ['Verify & filter reports', 'Remove fake entries', 'Formal requests'], color: '#FACC15', bg: 'bg-yellow-50' },
-                        { icon: '🏛️', title: 'Barangay Staff', desc: 'Staff receive formal requests, approve them, and update case status at every step of rescue.', items: ['Approve requests', 'Coordinate pickup', 'Update status live'], color: '#86EFAC', bg: 'bg-green-50' },
-                        { icon: '⚙️', title: 'Admin', desc: 'Admins oversee the entire system — managing accounts, viewing analytics, and configuring settings.', items: ['Manage accounts', 'System analytics', 'Configure settings'], color: '#EF4444', bg: 'bg-red-50' },
+                        { icon: User, title: 'Citizen', desc: 'Anyone in the community can report strays directly from their phone — no paperwork, no hassle.', items: ['Report stray animals', 'Upload photo & location', 'Track status in real-time'], color: '#F97316', bg: 'bg-orange-50' },
+                        { icon: Building2, title: 'Subdivision Leader', desc: 'Leaders review incoming reports, filter duplicates, and create formal requests to the barangay.', items: ['Verify & filter reports', 'Remove fake entries', 'Formal requests'], color: '#FACC15', bg: 'bg-yellow-50' },
+                        { icon: Landmark, title: 'Barangay Staff', desc: 'Staff receive formal requests, approve them, and update case status at every step of rescue.', items: ['Approve requests', 'Coordinate pickup', 'Update status live'], color: '#86EFAC', bg: 'bg-green-50' },
+                        { icon: Settings, title: 'Admin', desc: 'Admins oversee the entire system — managing accounts, viewing analytics, and configuring settings.', items: ['Manage accounts', 'System analytics', 'Configure settings'], color: '#EF4444', bg: 'bg-red-50' },
                     ].map((role, i) => (
                         <div key={i} className="group relative border-[1.5px] border-[#ede8e0] rounded-3xl p-7 bg-[#FAFAF9] transition-all duration-300 hover:-translate-y-2 hover:bg-white hover:shadow-2xl hover:shadow-black/5 hover:border-transparent reveal" style={{ transitionDelay: `${i * 0.1}s` }}>
                             <div className={`absolute top-0 left-0 right-0 h-1 rounded-full`} style={{ background: role.color }} />
-                            <div className={`w-14 h-14 rounded-2xl ${role.bg} flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform duration-300`}>{role.icon}</div>
+                            <div className={`w-14 h-14 rounded-2xl ${role.bg} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}>
+                                <role.icon className="w-7 h-7" style={{ color: role.color }} />
+                            </div>
                             <h3 className="font-plus-jakarta font-extrabold text-lg text-[#1a1208] mb-3">{role.title}</h3>
                             <p className="text-[13px] leading-relaxed text-[#9c8670] mb-6">{role.desc}</p>
                             <ul className="flex flex-col gap-2.5">
@@ -262,14 +272,16 @@ const LandingPage = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                     {[
-                        { num: '01', icon: '🔍', title: 'Animal Type Identification', desc: 'The AI analyzes uploaded photos and instantly classifies whether the animal is a dog or cat — no manual tagging needed.', output: [{ l: 'Detected', v: 'Dog', c: 'text-[#FACC15]' }, { l: 'Confidence', v: '97.3%', c: 'text-green-400' }] },
-                        { num: '02', icon: '🩺', title: 'Condition Detection', desc: 'Visual features are evaluated to determine if the animal appears Injured, Weak/Sick, or Normal — enabling triage at first report.', output: [{ l: 'Condition', v: 'Injured', c: 'text-red-500' }, { l: 'Severity', v: 'High', c: 'text-red-500' }], meter: 88 },
-                        { num: '03', icon: '⚡', title: 'Automatic Case Prioritization', desc: 'Reports are auto-ranked by the AI: Injured cases get High Priority, Normal cases get Medium Priority — so responders always know what\'s urgent.', output: [{ l: 'Priority', v: 'HIGH', c: 'text-red-500' }, { l: 'Queue Pos', v: '#1', c: 'text-[#FACC15]' }] },
-                        { num: '04', icon: '🧭', title: 'Decision Support for Authorities', desc: 'Subdivision leaders and barangay staff receive AI-backed insights — which report to handle first, which area needs the most attention.', output: [{ l: 'Top Area', v: 'Purok 3', c: 'text-[#FACC15]' }, { l: 'Pending', v: '7 urgent', c: 'text-red-500' }] },
+                        { num: '01', icon: Search, title: 'Animal Type Identification', desc: 'The AI analyzes uploaded photos and instantly classifies whether the animal is a dog or cat — no manual tagging needed.', output: [{ l: 'Detected', v: 'Dog', c: 'text-[#FACC15]' }, { l: 'Confidence', v: '97.3%', c: 'text-green-400' }] },
+                        { num: '02', icon: Stethoscope, title: 'Condition Detection', desc: 'Visual features are evaluated to determine if the animal appears Injured, Weak/Sick, or Normal — enabling triage at first report.', output: [{ l: 'Condition', v: 'Injured', c: 'text-red-500' }, { l: 'Severity', v: 'High', c: 'text-red-500' }], meter: 88 },
+                        { num: '03', icon: Zap, title: 'Automatic Case Prioritization', desc: 'Reports are auto-ranked by the AI: Injured cases get High Priority, Normal cases get Medium Priority — so responders always know what\'s urgent.', output: [{ l: 'Priority', v: 'HIGH', c: 'text-red-500' }, { l: 'Queue Pos', v: '#1', c: 'text-[#FACC15]' }] },
+                        { num: '04', icon: Compass, title: 'Decision Support for Authorities', desc: 'Subdivision leaders and barangay staff receive AI-backed insights — which report to handle first, which area needs the most attention.', output: [{ l: 'Top Area', v: 'Purok 3', c: 'text-[#FACC15]' }, { l: 'Pending', v: '7 urgent', c: 'text-red-500' }] },
                     ].map((card, i) => (
                         <div key={i} className="group border border-white/10 rounded-3xl p-8 bg-white/[0.03] transition-all hover:border-[#F97316]/30 hover:-translate-y-1 reveal" style={{ transitionDelay: `${(i % 2) * 0.1}s` }}>
                             <div className="text-[10px] font-extrabold font-plus-jakarta text-white/20 uppercase tracking-[0.2em] mb-6">— {card.num}</div>
-                            <div className="w-14 h-14 rounded-2xl bg-[#F97316]/10 border border-[#F97316]/20 flex items-center justify-center text-3xl mb-6 group-hover:scale-110 transition-transform duration-300">{card.icon}</div>
+                            <div className="w-14 h-14 rounded-2xl bg-[#F97316]/10 border border-[#F97316]/20 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
+                                <card.icon className="w-7 h-7 text-[#F97316]" />
+                            </div>
                             <h3 className="text-xl font-extrabold font-plus-jakarta text-white mb-3">{card.title}</h3>
                             <p className="text-sm leading-relaxed text-white/50 mb-8">{card.desc}</p>
                             <div className="bg-white/5 border border-white/5 rounded-2xl p-5 font-mono text-[11px]">
@@ -299,14 +311,16 @@ const LandingPage = () => {
             {/* CTA SECTION */}
             <section className="bg-[#F97316] py-24 px-6 md:px-24 lg:px-32 text-center relative overflow-hidden" id="contact">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent" />
-                <div className="absolute -bottom-16 -right-16 text-[280px] opacity-[0.08] select-none pointer-events-none" style={{ animation: 'floatPaw 7s ease-in-out infinite' }}>🐾</div>
+                <div className="absolute -bottom-16 -right-16 opacity-[0.08] select-none pointer-events-none" style={{ animation: 'floatPaw 7s ease-in-out infinite' }}>
+                    <PawPrint className="w-[280px] h-[280px]" />
+                </div>
 
                 <div className="relative z-10 max-w-2xl mx-auto">
                     <h2 className="text-4xl md:text-6xl font-extrabold font-plus-jakarta tracking-tight text-white mb-6 reveal">Every Stray<br />Deserves a Chance.</h2>
                     <p className="text-lg md:text-xl text-white/80 leading-relaxed mb-10 reveal" style={{ transitionDelay: '0.1s' }}>Join your barangay on STRAY SAFE. Report strays, track rescues, and help build a more humane community — one report at a time.</p>
                     <div className="flex flex-wrap justify-center gap-4 reveal" style={{ transitionDelay: '0.2s' }}>
                         <Button variant="light" size="lg" className="px-10 shadow-2xl shadow-black/10 text-[#F97316]">
-                            📋 Report a Stray Now
+                            <span className="inline-flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Report a Stray Now</span>
                         </Button>
                         <Button variant="ghost" size="lg" className="px-10 border-2 border-white/30 text-white hover:bg-white/10 hover:border-white">
                             Login to Your Account
@@ -319,7 +333,7 @@ const LandingPage = () => {
             <footer className="bg-[#1a1208] py-16 px-6 md:px-24 lg:px-32 flex flex-col md:flex-row justify-between items-center gap-10 border-t border-white/5">
                 <div>
                     <div className="flex items-center gap-2.5 font-plus-jakarta font-extrabold text-2xl text-white">
-                        <div className="w-10 h-10 bg-[#F97316] rounded-xl flex items-center justify-center text-xl">🐾</div>
+                        <div className="w-10 h-10 bg-[#F97316] rounded-xl flex items-center justify-center"><PawPrint className="w-5 h-5" /></div>
                         <span>STRAY SAFE</span>
                     </div>
                     <p className="text-[13px] text-white/30 mt-3 font-medium uppercase tracking-widest">Stray Animal Management System · Barangay Level</p>

@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { notifyChatUpdated, markReportChatAsSeen, generateMemorableTitle } from '../../utils/chatUtils';
 import { api } from '../../utils/api';
 import { DEFAULT_AVATAR } from '../../utils/avatar';
+import { getMediaKind, validateFile, UPLOAD_ACCEPT } from '../../utils/uploadValidation';
+import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
+import MediaPreview from '../Shared/MediaPreview';
 
 export interface ChatMessage {
     id: string;
@@ -322,11 +325,40 @@ export default function ReportChatDrawer({
     const handleSendMessage = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
         const trimmed = inputText.trim();
-        if (!trimmed && !selectedImagePreview) return;
+        if (!trimmed && !selectedImageFile) return;
         if (isResolved || !canInteract) return;
+
+        const currentInput = trimmed;
+        const currentFile = selectedImageFile;
+        const currentFileKind = currentFile ? getMediaKind(currentFile.name) : null;
+
+        setInputText('');
+        setSelectedImagePreview(null);
+        setSelectedImageFile(null);
+
+        // Attachments upload straight from the browser to Cloudinary (unsigned
+        // preset) before the message is created, so the backend never has to
+        // shuttle the file bytes - important for larger video attachments.
+        let mediaUrl: string | undefined;
+        if (currentFile) {
+            setIsUploadingMedia(true);
+            try {
+                const result = await uploadDirectToCloudinary(currentFile, 'chat_media');
+                mediaUrl = result.url;
+            } catch (err: any) {
+                setIsUploadingMedia(false);
+                alert(err?.message || 'Failed to upload attachment. Please try again.');
+                return;
+            }
+            setIsUploadingMedia(false);
+        }
 
         const now = new Date();
         const timeFormatted = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const attachmentLabel = currentFileKind
+            ? `(${currentFileKind === 'video' ? 'Video' : currentFileKind === 'document' ? 'Document' : 'Photo'} attached)`
+            : '';
+        const messageText = currentInput || attachmentLabel;
 
         // Optimistic UI update
         const tempMessage: ChatMessage = {
@@ -335,8 +367,8 @@ export default function ReportChatDrawer({
             senderName: currentUser?.name || 'Authorized Responder',
             senderRole: roleNameMap[currentUser?.role_id || 2] || 'Subdivision Leader',
             senderAvatar: currentUser?.profile_picture,
-            text: trimmed,
-            mediaUrl: selectedImagePreview || undefined,
+            text: messageText,
+            mediaUrl,
             timestamp: timeFormatted,
             isRead: false
         };
@@ -347,31 +379,28 @@ export default function ReportChatDrawer({
         if (!isMatchMode) {
             notifyChatUpdated(reportId);
         }
-        
-        const currentInput = trimmed;
-        const currentFile = selectedImageFile;
-        setInputText('');
-        setSelectedImagePreview(null);
-        setSelectedImageFile(null);
 
         // Send to backend
         try {
-            const formData = new FormData();
-            formData.append('message_text', currentInput || '(Photo attached)');
-            if (currentFile) {
-                formData.append('file', currentFile);
-            }
-            await api.post(messagesPostUrl, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+            await api.post(messagesPostUrl, {
+                message_text: messageText,
+                media_url: mediaUrl
             });
         } catch (err) {
             console.error('Error sending message to backend:', err);
         }
     };
 
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
+
+        const validation = validateFile(file);
+        if (!validation.valid) {
+            alert(validation.error);
+            e.target.value = '';
+            return;
+        }
 
         setSelectedImageFile(file);
         setIsUploadingMedia(true);
@@ -382,6 +411,8 @@ export default function ReportChatDrawer({
         };
         reader.readAsDataURL(file);
     };
+
+    const selectedFileKind = selectedImageFile ? getMediaKind(selectedImageFile.name) : 'image';
 
     if (!isOpen || !report || !currentUser) return null;
 
@@ -653,7 +684,7 @@ export default function ReportChatDrawer({
                                                 }`}>
                                                     {msg.mediaUrl && (
                                                         <div className="mb-2 rounded-xl overflow-hidden border border-black/10 max-h-44">
-                                                            <img src={msg.mediaUrl} alt="attachment" className="w-full h-full object-cover hover:scale-105 transition-transform" />
+                                                            <MediaPreview url={msg.mediaUrl} className="w-full h-full object-cover hover:scale-105 transition-transform" />
                                                         </div>
                                                     )}
                                                     <p className="whitespace-pre-wrap break-words font-medium">{msg.text}</p>
@@ -859,15 +890,26 @@ export default function ReportChatDrawer({
                     {selectedImagePreview && (
                         <div className="p-3 bg-orange-50 border-t border-orange-100 flex items-center justify-between shrink-0">
                             <div className="flex items-center gap-2">
-                                <img src={selectedImagePreview} alt="Preview" className="w-12 h-12 object-cover rounded-lg border border-orange-200 shadow-xs" />
+                                {selectedFileKind === 'image' ? (
+                                    <img src={selectedImagePreview} alt="Preview" className="w-12 h-12 object-cover rounded-lg border border-orange-200 shadow-xs" />
+                                ) : (
+                                    <div className="w-12 h-12 flex items-center justify-center rounded-lg border border-orange-200 bg-white text-xl shrink-0">
+                                        {selectedFileKind === 'video' ? '🎥' : '📄'}
+                                    </div>
+                                )}
                                 <div>
-                                    <p className="text-[11px] font-bold text-orange-950">Photo Attached</p>
-                                    <p className="text-[9px] text-orange-600">Ready to send with your message</p>
+                                    <p className="text-[11px] font-bold text-orange-950">
+                                        {selectedFileKind === 'image' ? 'Photo Attached' : selectedFileKind === 'video' ? 'Video Attached' : 'Document Attached'}
+                                    </p>
+                                    <p className="text-[9px] text-orange-600 truncate max-w-[160px]">{selectedImageFile?.name || 'Ready to send with your message'}</p>
                                 </div>
                             </div>
                             <button
                                 type="button"
-                                onClick={() => setSelectedImagePreview(null)}
+                                onClick={() => {
+                                    setSelectedImagePreview(null);
+                                    setSelectedImageFile(null);
+                                }}
                                 className="w-6 h-6 rounded-full bg-rose-100 text-rose-600 hover:bg-rose-200 flex items-center justify-center font-bold text-xs cursor-pointer"
                             >
                                 ✕
@@ -899,17 +941,17 @@ export default function ReportChatDrawer({
                                 <input
                                     type="file"
                                     ref={fileInputRef}
-                                    accept="image/*"
+                                    accept={UPLOAD_ACCEPT.imageVideoDocument}
                                     className="hidden"
-                                    onChange={handleImageUpload}
+                                    onChange={handleFileAttach}
                                 />
-                                
+
                                 <button
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
                                     disabled={isUploadingMedia}
                                     className="p-2.5 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-xl transition-all border border-gray-200 cursor-pointer shrink-0"
-                                    title="Attach image"
+                                    title="Attach photo, video, or document"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -926,9 +968,9 @@ export default function ReportChatDrawer({
 
                                 <button
                                     type="submit"
-                                    disabled={!inputText.trim() && !selectedImagePreview}
+                                    disabled={(!inputText.trim() && !selectedImageFile) || isUploadingMedia}
                                     className="p-2.5 bg-orange-600 hover:bg-orange-700 active:scale-95 text-white rounded-xl transition-all shadow-md shadow-orange-600/20 disabled:opacity-40 disabled:pointer-events-none cursor-pointer shrink-0 flex items-center justify-center"
-                                    title="Send Message"
+                                    title={isUploadingMedia ? 'Uploading attachment...' : 'Send Message'}
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                         <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />

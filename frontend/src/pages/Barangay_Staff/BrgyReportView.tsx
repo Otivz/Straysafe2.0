@@ -1,4 +1,10 @@
 import { useState, useEffect } from 'react';
+import {
+    AlertTriangle, Check, MessageCircle, FileText, Link2, Zap, Search, MapPin,
+    User, PawPrint, Home, Flag, Building2, Phone, Mail, Lock, Users, Landmark,
+    X, Rocket, Hospital, Settings, ScrollText, Pin, RefreshCw, Shield,
+    CheckCircle2, Ban, Ambulance, Heart, Info, Lightbulb, Download, Camera
+} from 'lucide-react';
 import axios from 'axios';
 import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
 import BrgySidebar from '../../components/BrgySidebar';
@@ -892,7 +898,7 @@ const BrgyReportView = () => {
                             </div>
                         ) : !report ? (
                             <div className="bg-white rounded-[2.5rem] border border-gray-100 p-20 text-center shadow-sm">
-                                <span className="text-5xl block mb-4">⚠️</span>
+                                <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                                 <h3 className="text-gray-900 font-black uppercase text-sm tracking-wider">Report Not Found</h3>
                                 <p className="text-gray-400 text-xs mt-1.5 leading-relaxed">
                                     The report ID #{id} you are trying to view does not exist or has been removed.
@@ -945,7 +951,7 @@ const BrgyReportView = () => {
                                         </span>
                                         {report.verification_status && (
                                             <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                                                <span>✓</span> Leader Verified
+<Check className="w-3 h-3" /> Leader Verified
                                             </span>
                                         )}
                                     </div>
@@ -957,7 +963,7 @@ const BrgyReportView = () => {
                                             className="px-4 py-2 bg-white hover:bg-orange-50 border border-orange-200 text-[#F97316] text-[10px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-2 shadow-2xs cursor-pointer"
                                             title="Open Case Coordination Chat"
                                         >
-                                            <span>💬</span>
+                                            <MessageCircle className="w-3.5 h-3.5" />
                                             <span>Case Chat {chatCount > 0 ? `(${chatCount})` : ''}</span>
                                         </button>
 
@@ -967,7 +973,7 @@ const BrgyReportView = () => {
                                                 onClick={() => setIsEndorsementModalOpen(true)}
                                                 className="px-4 py-2 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-[#F97316] text-[10px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-2 shadow-2xs cursor-pointer"
                                             >
-                                                <span>📄</span>
+                                                <FileText className="w-3.5 h-3.5" />
                                                 <span>Endorsement Letter</span>
                                             </button>
                                         )}
@@ -979,7 +985,7 @@ const BrgyReportView = () => {
                                                 className="px-4 py-2 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-800 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
                                                 title="Mark as duplicate of another active case"
                                             >
-                                                <span>🔗</span>
+                                                <Link2 className="w-3.5 h-3.5" />
                                                 <span>Mark Duplicate</span>
                                             </button>
                                         )}
@@ -990,7 +996,7 @@ const BrgyReportView = () => {
                                                 onClick={() => openStatusModal(report.status_id === 4 ? 13 : report.status_id === 13 ? 5 : report.status_id === 5 ? 6 : 11)}
                                                 className="px-5 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer"
                                             >
-                                                <span>⚡</span>
+                                                <Zap className="w-3.5 h-3.5" />
                                                 <span>Update Status</span>
                                             </button>
                                         )}
@@ -1001,8 +1007,8 @@ const BrgyReportView = () => {
                                 {!RESOLVED_STATUS_IDS.includes(report.status_id) && !report.duplicate_of_report_id && (duplicateMatches.length > 0 || report.has_duplicate_flag) && (
                                     <div className="p-5 rounded-3xl bg-amber-500/10 border-2 border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300 mb-4">
                                         <div className="flex items-start sm:items-center gap-3.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl font-black shadow-md shadow-amber-500/20 shrink-0">
-                                                ⚠️
+                                            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0">
+                                                <AlertTriangle className="w-5 h-5" />
                                             </div>
                                             <div>
                                                 <div className="flex items-center gap-2 flex-wrap">
@@ -1038,7 +1044,7 @@ const BrgyReportView = () => {
                                                     onClick={() => setActiveReviewMatch(duplicateMatches[0])}
                                                     className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md shadow-amber-600/20 flex items-center gap-1.5 cursor-pointer"
                                                 >
-                                                    <span>🔍 Compare Side-by-Side</span>
+                                                    <Search className="w-3.5 h-3.5" /> Compare Side-by-Side
                                                 </button>
                                             )}
                                             <button
@@ -1046,7 +1052,7 @@ const BrgyReportView = () => {
                                                 onClick={() => setIsMergeModalOpen(true)}
                                                 className="px-3.5 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer"
                                             >
-                                                <span>🔗 Merge Case</span>
+<Link2 className="w-3.5 h-3.5" /> Merge Case
                                             </button>
                                             {duplicateMatches[0] && (
                                                 <button
@@ -1066,8 +1072,8 @@ const BrgyReportView = () => {
                                 {(report.status_id === 18 || report.duplicate_of_report_id) && (
                                     <div className="p-5 rounded-3xl bg-stone-100 border-2 border-stone-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300">
                                         <div className="flex items-start sm:items-center gap-3.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-stone-800 text-white flex items-center justify-center text-xl font-black shadow-md shadow-stone-800/20 shrink-0">
-                                                🔗
+                                            <div className="w-11 h-11 rounded-2xl bg-stone-800 text-white flex items-center justify-center shadow-md shadow-stone-800/20 shrink-0">
+                                                <Link2 className="w-5 h-5" />
                                             </div>
                                             <div>
                                                 <div className="flex items-center gap-2">
@@ -1142,7 +1148,7 @@ const BrgyReportView = () => {
                                                         />
                                                         <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                                             <span className="px-4 py-2 bg-white/95 text-gray-900 text-xs font-black uppercase tracking-wider rounded-2xl shadow-lg flex items-center gap-2">
-                                                                <span>🔍</span> Click to Expand Fullscreen
+<Search className="w-3.5 h-3.5" /> Click to Expand Fullscreen
                                                             </span>
                                                         </div>
                                                         <div className="absolute top-4 left-4 flex flex-wrap gap-2">
@@ -1174,7 +1180,7 @@ const BrgyReportView = () => {
                                                 </div>
                                             ) : (
                                                 <div className="h-64 rounded-3xl bg-gray-50 border border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400">
-                                                    <span className="text-4xl mb-2">📷</span>
+                                                    <Camera className="w-10 h-10 mb-2" />
                                                     <p className="text-xs font-black uppercase tracking-widest">No photo provided</p>
                                                 </div>
                                             )}
@@ -1245,8 +1251,8 @@ const BrgyReportView = () => {
                                             <div className="bg-white rounded-3xl p-6 sm:p-8 border border-orange-200/80 shadow-xs space-y-4">
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] border border-orange-200 flex items-center justify-center text-lg font-black shrink-0">
-                                                            🔗
+                                                        <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] border border-orange-200 flex items-center justify-center shrink-0">
+                                                            <Link2 className="w-5 h-5" />
                                                         </div>
                                                         <div>
                                                             <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">
@@ -1280,12 +1286,12 @@ const BrgyReportView = () => {
                                                             </div>
 
                                                             <div className="flex items-center gap-2.5 text-xs text-gray-600">
-                                                                <span>👤</span>
+                                                                <User className="w-3 h-3" />
                                                                 <span className="font-bold text-gray-800">{mr.reporter_name}</span>
                                                                 {mr.landmark && (
                                                                     <>
                                                                         <span>•</span>
-                                                                        <span className="truncate">📍 {mr.landmark}</span>
+                                                                        <span className="truncate inline-flex items-center gap-1"><MapPin className="w-3 h-3" /> {mr.landmark}</span>
                                                                     </>
                                                                 )}
                                                             </div>
@@ -1355,8 +1361,8 @@ const BrgyReportView = () => {
                                                 <div className="p-6 rounded-3xl bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-amber-500/10 border-2 border-amber-300/80 shadow-sm space-y-4 animate-in fade-in duration-300">
                                                     <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-amber-200/60">
                                                         <div className="flex items-center gap-2.5">
-                                                            <span className="w-10 h-10 rounded-2xl bg-amber-600 text-white flex items-center justify-center text-xl font-black shadow-md shadow-amber-600/20">
-                                                                🐾
+                                                            <span className="w-10 h-10 rounded-2xl bg-amber-600 text-white flex items-center justify-center shadow-md shadow-amber-600/20">
+                                                                <PawPrint className="w-5 h-5" />
                                                             </span>
                                                             <div>
                                                                 <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black uppercase tracking-wider shadow-xs">
@@ -1368,12 +1374,12 @@ const BrgyReportView = () => {
                                                             </div>
                                                         </div>
                                                         {report.facility?.subdivision_name ? (
-                                                            <span className="px-3 py-1 bg-white border border-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider">
-                                                                📍 {report.facility.subdivision_name}
+                                                            <span className="px-3 py-1 bg-white border border-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
+                                                                <MapPin className="w-3 h-3" /> {report.facility.subdivision_name}
                                                             </span>
                                                         ) : (
-                                                            <span className="px-3 py-1 bg-white border border-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider">
-                                                                📍 Barangay San Vicente Facility
+                                                            <span className="px-3 py-1 bg-white border border-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
+                                                                <MapPin className="w-3 h-3" /> Barangay San Vicente Facility
                                                             </span>
                                                         )}
                                                     </div>
@@ -1382,8 +1388,8 @@ const BrgyReportView = () => {
                                                     <div className="space-y-3">
                                                         {/* 1. Spotted (Preserved Incident Origin) */}
                                                         <div className="flex items-start gap-3 bg-white/95 p-3.5 rounded-2xl border border-amber-200 shadow-2xs">
-                                                            <div className="w-8 h-8 rounded-xl bg-orange-100 text-[#F97316] flex items-center justify-center text-sm shrink-0 font-black">
-                                                                🚩
+                                                            <div className="w-8 h-8 rounded-xl bg-orange-100 text-[#F97316] flex items-center justify-center shrink-0">
+                                                                <Flag className="w-4 h-4" />
                                                             </div>
                                                             <div className="flex-1 min-w-0">
                                                                 <div className="flex items-center justify-between gap-2">
@@ -1408,8 +1414,8 @@ const BrgyReportView = () => {
                                                         {/* 2. Previous Facility Holding Location(s) */}
                                                         {custodyProgression.steps.filter(s => !s.isCurrent).map((prevStep, idx) => (
                                                             <div key={idx} className="flex items-start gap-3 bg-white/80 p-3.5 rounded-2xl border border-amber-200/80 shadow-2xs">
-                                                                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-sm shrink-0 font-black">
-                                                                    🏡
+                                                                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                                                                    <Home className="w-4 h-4" />
                                                                 </div>
                                                                 <div className="flex-1 min-w-0">
                                                                     <div className="flex items-center justify-between gap-2">
@@ -1434,8 +1440,8 @@ const BrgyReportView = () => {
 
                                                         {/* 3. Current Facility Holding Location / Transferred To */}
                                                         <div className="flex items-start gap-3 bg-gradient-to-r from-orange-50/90 to-amber-50/90 p-4 rounded-2xl border-2 border-[#F97316] shadow-xs">
-                                                            <div className="w-8 h-8 rounded-xl bg-[#F97316] text-white flex items-center justify-center text-sm shrink-0 font-black">
-                                                                🏢
+                                                            <div className="w-8 h-8 rounded-xl bg-[#F97316] text-white flex items-center justify-center shrink-0">
+                                                                <Building2 className="w-4 h-4" />
                                                             </div>
                                                             <div className="flex-1 min-w-0">
                                                                 <div className="flex items-center justify-between gap-2">
@@ -1467,7 +1473,7 @@ const BrgyReportView = () => {
                                             <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100 space-y-2">
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Sighting Location / Street</p>
                                                 <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                                                    <span className="text-[#F97316]">📍</span>
+                                                    <MapPin className="w-4 h-4 text-[#F97316]" />
                                                     <span>{isGeocoding ? 'Resolving address...' : (resolvedAddress || report.landmark || 'Selera Homes')}</span>
                                                 </p>
                                             </div>
@@ -1492,10 +1498,10 @@ const BrgyReportView = () => {
                                                     </p>
                                                     <div className="flex flex-wrap items-center gap-3 mt-1 text-[10px] font-bold text-gray-500">
                                                         {report.reporter_phone && (
-                                                            <span>📞 {report.reporter_phone}</span>
+                                                            <span className="inline-flex items-center gap-1"><Phone className="w-3 h-3" /> {report.reporter_phone}</span>
                                                         )}
                                                         {report.reporter_email && (
-                                                            <span>✉️ {report.reporter_email}</span>
+                                                            <span className="inline-flex items-center gap-1"><Mail className="w-3 h-3" /> {report.reporter_email}</span>
                                                         )}
                                                         <span className="text-gray-400">
                                                             Reported <RelativeTimestamp date={report.created_at} />
@@ -1513,7 +1519,7 @@ const BrgyReportView = () => {
                                             {!canUpdateStatus && (
                                                 <div className="p-4 bg-amber-50/90 border border-amber-200/80 rounded-2xl text-amber-900 space-y-2 mb-4 shadow-2xs">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center text-[10px] font-black">🔒</span>
+                                                        <span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center"><Lock className="w-2.5 h-2.5" /></span>
                                                         <span className="font-black text-[10px] uppercase tracking-wider text-amber-900">Status Update Restricted</span>
                                                     </div>
                                                     <p className="text-[10px] text-amber-800 font-medium leading-relaxed">
@@ -1543,7 +1549,7 @@ const BrgyReportView = () => {
                                                         className="px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
                                                         title="Open Case Coordination Chat"
                                                     >
-                                                        <span>💬</span>
+                                                        <MessageCircle className="w-3.5 h-3.5" />
                                                         <span>Team Chat {chatCount > 0 ? `(${chatCount})` : ''}</span>
                                                     </button>
                                                     {isHeadOfficer && (
@@ -1552,7 +1558,7 @@ const BrgyReportView = () => {
                                                             onClick={openAssignModal}
                                                             className="px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all border border-blue-200 cursor-pointer flex items-center gap-1.5 shadow-2xs"
                                                         >
-                                                            <span>👥</span>
+                                                            <Users className="w-3.5 h-3.5" />
                                                             <span>{activeAssignments.length > 0 ? 'Manage Responders' : '+ Assign Responders'}</span>
                                                         </button>
                                                     )}
@@ -1587,8 +1593,8 @@ const BrgyReportView = () => {
                                                                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                                                                         </div>
                                                                         {member.staff_phone && (
-                                                                            <p className="text-[10px] text-gray-500 font-bold truncate mt-1">
-                                                                                📞 {member.staff_phone}
+                                                                            <p className="text-[10px] text-gray-500 font-bold truncate mt-1 flex items-center gap-1">
+                                                                                <Phone className="w-2.5 h-2.5" /> {member.staff_phone}
                                                                             </p>
                                                                         )}
                                                                     </div>
@@ -1599,8 +1605,8 @@ const BrgyReportView = () => {
                                                 </div>
                                             ) : (
                                                 <div className="p-8 rounded-2xl bg-gray-50 border border-dashed border-gray-200 text-center space-y-2">
-                                                    <div className="w-12 h-12 rounded-2xl bg-orange-50 text-[#F97316] text-xl flex items-center justify-center mx-auto shadow-2xs">
-                                                        👥
+                                                    <div className="w-12 h-12 rounded-2xl bg-orange-50 text-[#F97316] flex items-center justify-center mx-auto shadow-2xs">
+                                                        <Users className="w-6 h-6" />
                                                     </div>
                                                     <p className="text-xs font-black text-gray-800 uppercase tracking-wide">No Personnel Currently Assigned</p>
                                                     <p className="text-[11px] font-medium text-gray-500 max-w-md mx-auto">
@@ -1622,8 +1628,8 @@ const BrgyReportView = () => {
                                         <div className="bg-gradient-to-br from-orange-50/70 via-amber-50/40 to-white rounded-[2.5rem] border border-orange-200/80 p-8 shadow-sm space-y-6">
                                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-orange-100">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-2xl bg-[#F97316] text-white flex items-center justify-center text-lg font-black shadow-md shadow-orange-500/20">
-                                                        🏛️
+                                                    <div className="w-10 h-10 rounded-2xl bg-[#F97316] text-white flex items-center justify-center shadow-md shadow-orange-500/20">
+                                                        <Landmark className="w-5 h-5" />
                                                     </div>
                                                     <div>
                                                         <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">Subdivision Escalation Endorsement</h4>
@@ -1632,8 +1638,8 @@ const BrgyReportView = () => {
                                                         </p>
                                                     </div>
                                                 </div>
-                                                <span className="self-start sm:self-auto px-3 py-1 rounded-full bg-orange-100 text-[#F97316] text-[9px] font-black uppercase tracking-wider">
-                                                    Official Endorsement ✓
+                                                <span className="self-start sm:self-auto px-3 py-1 rounded-full bg-orange-100 text-[#F97316] text-[9px] font-black uppercase tracking-wider inline-flex items-center gap-1">
+                                                    Official Endorsement <Check className="w-2.5 h-2.5" />
                                                 </span>
                                             </div>
 
@@ -1669,7 +1675,7 @@ const BrgyReportView = () => {
                                                         onClick={() => setIsEndorsementModalOpen(true)}
                                                         className="px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-md shadow-orange-500/20 flex items-center gap-2 cursor-pointer self-start sm:self-auto"
                                                     >
-                                                        <span>📄</span>
+                                                        <FileText className="w-3.5 h-3.5" />
                                                         <span>View Endorsement Document</span>
                                                     </button>
                                                 )}
@@ -1695,7 +1701,7 @@ const BrgyReportView = () => {
                                                                     disabled={isSubmittingStatus}
                                                                     className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                                                                 >
-                                                                    <span>✓</span>
+                                                                    <Check className="w-3.5 h-3.5" />
                                                                     <span>Approve Request</span>
                                                                 </button>
                                                                 <button
@@ -1704,7 +1710,7 @@ const BrgyReportView = () => {
                                                                     disabled={isSubmittingStatus}
                                                                     className="w-full py-3 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                                                                 >
-                                                                    <span>✕</span>
+                                                                    <X className="w-3.5 h-3.5" />
                                                                     <span>Reject</span>
                                                                 </button>
                                                             </div>
@@ -1716,7 +1722,7 @@ const BrgyReportView = () => {
                                                                 onClick={() => openStatusModal(5)}
                                                                 className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-blue-600/20 flex items-center justify-center gap-2 cursor-pointer"
                                                             >
-                                                                <span>🚀</span>
+                                                                <Rocket className="w-3.5 h-3.5" />
                                                                 <span>Dispatch Response Team</span>
                                                             </button>
                                                         )}
@@ -1727,7 +1733,7 @@ const BrgyReportView = () => {
                                                                 onClick={() => openStatusModal(6)}
                                                                 className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
                                                             >
-                                                                <span>🐾</span>
+                                                                <PawPrint className="w-3.5 h-3.5" />
                                                                 <span>Mark Animal Picked Up</span>
                                                             </button>
                                                         )}
@@ -1739,7 +1745,7 @@ const BrgyReportView = () => {
                                                                     onClick={() => openStatusModal(7)}
                                                                     className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-purple-600/20 flex items-center justify-center gap-2 cursor-pointer"
                                                                 >
-                                                                    <span>🏥</span>
+                                                                    <Hospital className="w-3.5 h-3.5" />
                                                                     <span>Move to Holding Facility</span>
                                                                 </button>
                                                                 <button
@@ -1747,7 +1753,7 @@ const BrgyReportView = () => {
                                                                     onClick={() => openStatusModal(11)}
                                                                     className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer"
                                                                 >
-                                                                    <span>✓</span>
+                                                                    <Check className="w-3.5 h-3.5" />
                                                                     <span>Mark Incident Resolved</span>
                                                                 </button>
                                                             </div>
@@ -1758,7 +1764,7 @@ const BrgyReportView = () => {
                                                             onClick={() => openStatusModal(report.status_id)}
                                                             className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-2 cursor-pointer"
                                                         >
-                                                            <span>⚙️</span>
+                                                            <Settings className="w-3.5 h-3.5" />
                                                             <span>Update Operation Status</span>
                                                         </button>
                                                     </>
@@ -1769,7 +1775,7 @@ const BrgyReportView = () => {
                                                     onClick={() => setIsChatOpen(true)}
                                                     className="w-full py-3 bg-orange-50 hover:bg-orange-100 text-[#F97316] border border-orange-200 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
                                                 >
-                                                    <span>💬</span>
+                                                    <MessageCircle className="w-3.5 h-3.5" />
                                                     <span>Open Mission Chat Drawer</span>
                                                 </button>
                                             </div>
@@ -1900,20 +1906,20 @@ const BrgyReportView = () => {
                                                     {report.status_id === 6 ? (
                                                         <div className="p-2.5 rounded-xl bg-blue-50/80 border border-blue-200/60 text-blue-900 space-y-1">
                                                             <div className="flex items-center gap-1.5 font-black text-xs text-blue-900 uppercase tracking-wide">
-                                                                <span>🐾</span>
+                                                                <PawPrint className="w-3.5 h-3.5" />
                                                                 <span>Animal Picked Up (In Transit)</span>
                                                             </div>
                                                             <p className="text-[11px] text-blue-800 leading-relaxed font-semibold">
                                                                 Animal has been secured by the Barangay Response Team. Click <span className="font-extrabold text-blue-950">"Move to Holding Facility"</span> below once delivered to a holding pen or facility.
                                                             </p>
-                                                            <p className="text-[10px] text-blue-700/80 font-medium">
-                                                                📍 Pickup Origin: <span className="font-bold text-blue-900">{resolvedAddress || report.landmark || 'Incident Location'}</span>
+                                                            <p className="text-[10px] text-blue-700/80 font-medium flex items-center gap-1">
+                                                                <MapPin className="w-2.5 h-2.5" /> Pickup Origin: <span className="font-bold text-blue-900">{resolvedAddress || report.landmark || 'Incident Location'}</span>
                                                             </p>
                                                         </div>
                                                     ) : (report.status_id !== 6 && (report.facility_id || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || report.facility || custodyProgression.hasMoved)) ? (
                                                         <>
-                                                            <p className="text-amber-900">
-                                                                🏢 Current Holding Facility: <span className="font-extrabold">{report.facility?.name || custodyProgression.currentFacility || report.landmark}</span>
+                                                            <p className="text-amber-900 flex items-center gap-1">
+                                                                <Building2 className="w-3 h-3 shrink-0" /> Current Holding Facility: <span className="font-extrabold">{report.facility?.name || custodyProgression.currentFacility || report.landmark}</span>
                                                                 {(report.facility?.contact_person || report.facility?.caretaker_name) && (
                                                                     <span className="block text-[10px] text-amber-800 font-semibold mt-0.5">
                                                                         Caretaker: {report.facility?.contact_person || report.facility?.caretaker_name} {(report.facility?.contact_number || report.facility?.caretaker_phone) ? `(${report.facility.contact_number || report.facility.caretaker_phone})` : ''}
@@ -1921,12 +1927,12 @@ const BrgyReportView = () => {
                                                                 )}
                                                             </p>
                                                             {custodyProgression.steps.filter(s => !s.isCurrent).map((prev, pIdx) => (
-                                                                <p key={pIdx} className="text-amber-800/90 text-[10px]">
-                                                                    🏡 Previous Facility: <span className="font-extrabold">{prev.name}</span>
+                                                                <p key={pIdx} className="text-amber-800/90 text-[10px] flex items-center gap-1">
+                                                                    <Home className="w-2.5 h-2.5 shrink-0" /> Previous Facility: <span className="font-extrabold">{prev.name}</span>
                                                                 </p>
                                                             ))}
-                                                            <p className="text-gray-500 text-[10px]">
-                                                                🚩 Spotted (Preserved Incident Origin): <span className="font-extrabold text-gray-700">{custodyProgression.origin}</span>
+                                                            <p className="text-gray-500 text-[10px] flex items-center gap-1">
+                                                                <Flag className="w-2.5 h-2.5 shrink-0" /> Spotted (Preserved Incident Origin): <span className="font-extrabold text-gray-700">{custodyProgression.origin}</span>
                                                             </p>
                                                         </>
                                                     ) : (
@@ -1942,8 +1948,8 @@ const BrgyReportView = () => {
                                         <div className="bg-white border border-gray-100 rounded-[2.5rem] p-6 sm:p-8 shadow-sm space-y-6">
                                             <div className="flex items-center justify-between pb-4 border-b border-gray-100">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] flex items-center justify-center text-lg font-black shadow-xs">
-                                                        📜
+                                                    <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] flex items-center justify-center shadow-xs">
+                                                        <ScrollText className="w-5 h-5" />
                                                     </div>
                                                     <div>
                                                         <h4 className="text-sm font-black text-gray-900 uppercase tracking-wide">
@@ -1968,8 +1974,8 @@ const BrgyReportView = () => {
                                             <div className="relative pl-6 space-y-5 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-gray-100 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
                                                 {/* Initial Report Submission */}
                                                 <div className="relative flex items-start gap-4 group">
-                                                    <div className="absolute -left-6 mt-1 w-5 h-5 rounded-full bg-blue-500 border-4 border-white shadow-xs flex items-center justify-center text-white text-[8px]">
-                                                        📝
+                                                    <div className="absolute -left-6 mt-1 w-5 h-5 rounded-full bg-blue-500 border-4 border-white shadow-xs flex items-center justify-center text-white">
+                                                        <FileText className="w-2.5 h-2.5" />
                                                     </div>
                                                     <div className="flex-1 bg-gray-50/70 hover:bg-gray-50 rounded-2xl p-4 border border-gray-100 transition-all">
                                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
@@ -2005,73 +2011,73 @@ const BrgyReportView = () => {
                                                     const isAdopted = remarksLower.includes('adopt') || hist.report_status_id === 10;
                                                     const isRejected = remarksLower.includes('reject') || hist.report_status_id === 3;
 
-                                                    let icon = '📌';
+                                                    let Icon: typeof Pin = Pin;
                                                     let dotColor = 'bg-orange-500';
                                                     let cardBg = 'bg-gray-50/70';
                                                     let borderColor = 'border-gray-100';
 
                                                     if (isFacilityRelocation) {
-                                                        icon = '🐾';
+                                                        Icon = PawPrint;
                                                         dotColor = 'bg-amber-600';
                                                         cardBg = 'bg-gradient-to-br from-amber-50/90 to-orange-50/60';
                                                         borderColor = 'border-amber-300';
                                                     } else if (isTransfer) {
-                                                        icon = '🔄';
+                                                        Icon = RefreshCw;
                                                         dotColor = 'bg-purple-500';
                                                         cardBg = 'bg-purple-50/40';
                                                         borderColor = 'border-purple-100';
                                                     } else if (isClaim) {
-                                                        icon = '🛡️';
+                                                        Icon = Shield;
                                                         dotColor = 'bg-emerald-500';
                                                         cardBg = 'bg-emerald-50/40';
                                                         borderColor = 'border-emerald-100';
                                                     } else if (isWarning) {
-                                                        icon = '⚠️';
+                                                        Icon = AlertTriangle;
                                                         dotColor = 'bg-amber-500';
                                                         cardBg = 'bg-amber-50/40';
                                                         borderColor = 'border-amber-100';
                                                     } else if (isResolved) {
-                                                        icon = '✅';
+                                                        Icon = CheckCircle2;
                                                         dotColor = 'bg-green-600';
                                                         cardBg = 'bg-green-50/40';
                                                         borderColor = 'border-green-100';
                                                     } else if (isVerified) {
-                                                        icon = '🔍';
+                                                        Icon = Search;
                                                         dotColor = 'bg-blue-500';
                                                         cardBg = 'bg-blue-50/40';
                                                         borderColor = 'border-blue-100';
                                                     } else if (isFalseAlarm || isRejected) {
-                                                        icon = '🚫';
+                                                        Icon = Ban;
                                                         dotColor = 'bg-rose-500';
                                                         cardBg = 'bg-rose-50/40';
                                                         borderColor = 'border-rose-100';
                                                     } else if (isEscalated) {
-                                                        icon = '🚀';
+                                                        Icon = Rocket;
                                                         dotColor = 'bg-orange-600';
                                                         cardBg = 'bg-orange-50/40';
                                                         borderColor = 'border-orange-100';
                                                     } else if (isApproved) {
-                                                        icon = '📌';
+                                                        Icon = Pin;
                                                         dotColor = 'bg-orange-600';
                                                         cardBg = 'bg-orange-50/40';
                                                         borderColor = 'border-orange-100';
                                                     } else if (isDispatched) {
-                                                        icon = '🚑';
+                                                        Icon = Ambulance;
                                                         dotColor = 'bg-blue-600';
                                                         cardBg = 'bg-blue-50/40';
                                                         borderColor = 'border-blue-100';
                                                     } else if (isPickedUp) {
-                                                        icon = '🐾';
+                                                        Icon = PawPrint;
                                                         dotColor = 'bg-amber-600';
                                                         cardBg = 'bg-amber-50/40';
                                                         borderColor = 'border-amber-100';
                                                     } else if (isHolding || isImpounded) {
-                                                        icon = '🏥';
+                                                        Icon = Hospital;
                                                         dotColor = 'bg-indigo-600';
                                                         cardBg = 'bg-indigo-50/40';
                                                         borderColor = 'border-indigo-100';
                                                     } else if (isAdopted) {
-                                                        icon = '💖';
+                                                        Icon = Heart;
                                                         dotColor = 'bg-pink-500';
                                                         cardBg = 'bg-pink-50/40';
                                                         borderColor = 'border-pink-100';
@@ -2079,13 +2085,13 @@ const BrgyReportView = () => {
 
                                                     return (
                                                         <div key={hist.history_id || index} className="relative flex items-start gap-4 group animate-in fade-in duration-300">
-                                                            <div className={`absolute -left-6 mt-1 w-5 h-5 rounded-full ${dotColor} border-4 border-white shadow-xs flex items-center justify-center text-white text-[8px]`}>
-                                                                {icon}
+                                                            <div className={`absolute -left-6 mt-1 w-5 h-5 rounded-full ${dotColor} border-4 border-white shadow-xs flex items-center justify-center text-white`}>
+                                                                <Icon className="w-2.5 h-2.5" />
                                                             </div>
                                                             <div className={`flex-1 ${cardBg} hover:bg-gray-50 rounded-2xl p-4 border ${borderColor} transition-all`}>
                                                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                                                                     <span className="text-xs font-black text-gray-900 flex items-center gap-1.5">
-                                                                        <span>{icon}</span>
+                                                                        <Icon className="w-3.5 h-3.5 shrink-0" />
                                                                         <span>{hist.updater_name || hist.user_name || hist.staff_name || 'Barangay Officer'}</span>
                                                                     </span>
                                                                     <span className="text-[10px] font-bold text-gray-400">
@@ -2179,8 +2185,8 @@ const BrgyReportView = () => {
                                 <div className="space-y-3 bg-amber-50/60 p-4 sm:p-5 rounded-3xl border border-amber-200/90 shadow-2xs">
                                     <div className="flex items-center justify-between gap-2">
                                         <div className="flex items-center gap-2">
-                                            <span className="w-6 h-6 rounded-full bg-amber-600 text-white flex items-center justify-center text-xs font-black shadow-2xs">
-                                                🐾
+                                            <span className="w-6 h-6 rounded-full bg-amber-600 text-white flex items-center justify-center shadow-2xs">
+                                                <PawPrint className="w-3.5 h-3.5" />
                                             </span>
                                             <label className="text-[10px] font-black text-amber-950 uppercase tracking-widest">
                                                 Select Facility Location <span className="text-red-500">*</span>
@@ -2196,7 +2202,7 @@ const BrgyReportView = () => {
                                     </div>
 
                                     <div className="p-2.5 rounded-2xl bg-white/90 border border-amber-200 flex items-center gap-2 text-[10px] text-amber-900 leading-tight">
-                                        <span className="text-sm shrink-0">📍</span>
+                                        <MapPin className="w-3.5 h-3.5 shrink-0" />
                                         <span>
                                             Facilities are managed by the Barangay / Admin. Moving this animal updates its live GPS pin to the selected facility while preserving the original sighting spot.
                                         </span>
@@ -2208,8 +2214,8 @@ const BrgyReportView = () => {
                                         </div>
                                     ) : facilities.length === 0 ? (
                                         <div className="p-5 rounded-2xl bg-white border-2 border-dashed border-red-300 text-center space-y-2 animate-in fade-in">
-                                            <div className="w-10 h-10 mx-auto rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center text-xl shadow-2xs">
-                                                ⚠️
+                                            <div className="w-10 h-10 mx-auto rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center shadow-2xs">
+                                                <AlertTriangle className="w-5 h-5 text-red-600" />
                                             </div>
                                             <p className="text-xs font-black text-red-700 uppercase tracking-wider">No Facility Registered</p>
                                             <p className="text-[11px] text-gray-600 leading-relaxed max-w-sm mx-auto">
@@ -2234,9 +2240,7 @@ const BrgyReportView = () => {
                                                     >
                                                         <div className="flex items-center justify-between gap-2">
                                                             <div className="flex items-center gap-2 min-w-0">
-                                                                <span className="text-base">
-                                                                    {isBarangayCentral ? '🏛️' : '🏘️'}
-                                                                </span>
+                                                                {isBarangayCentral ? <Landmark className="w-4 h-4" /> : <Building2 className="w-4 h-4" />}
                                                                 <div className="min-w-0">
                                                                     <p className="text-xs font-black text-gray-900 truncate">
                                                                         {fac.name}
@@ -2254,7 +2258,7 @@ const BrgyReportView = () => {
                                                             <div className="shrink-0">
                                                                 {isSelected ? (
                                                                     <span className="text-[9px] font-black uppercase px-2 py-1 rounded-lg bg-[#F97316] text-white shadow-2xs flex items-center gap-1">
-                                                                        <span>✓</span> Selected
+                                                                        <Check className="w-2.5 h-2.5" /> Selected
                                                                     </span>
                                                                 ) : (
                                                                     <span className="text-[9px] font-bold text-gray-400 px-2 py-1 rounded-lg border border-gray-200 hover:border-orange-300">
@@ -2305,8 +2309,8 @@ const BrgyReportView = () => {
                                 <div className="space-y-3 bg-orange-50/50 p-4 sm:p-5 rounded-3xl border border-orange-200/80 shadow-2xs">
                                     <div className="flex items-center justify-between gap-2">
                                         <div className="flex items-center gap-2">
-                                            <span className="w-6 h-6 rounded-full bg-orange-500 text-white flex items-center justify-center text-xs font-black shadow-2xs">
-                                                👥
+                                            <span className="w-6 h-6 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-2xs">
+                                                <Users className="w-3.5 h-3.5" />
                                             </span>
                                             <label className="text-[10px] font-black text-gray-800 uppercase tracking-widest">
                                                 Assign Responders (1 or more) <span className="text-red-500">*</span>
@@ -2337,7 +2341,7 @@ const BrgyReportView = () => {
 
                                     {/* Recommendation guidance */}
                                     <div className="p-2.5 rounded-2xl bg-white border border-orange-100 flex items-center gap-2 text-[10px] text-gray-600">
-                                        <span className="text-sm shrink-0">💡</span>
+                                        <Lightbulb className="w-3.5 h-3.5 shrink-0" />
                                         <span>Assign <strong>1 or more responders</strong> (up to 5) to handle physical animal containment and safe transport.</span>
                                     </div>
 
@@ -2350,7 +2354,7 @@ const BrgyReportView = () => {
                                             onChange={(e) => setStatusPersonnelSearch(e.target.value)}
                                             className="w-full pl-8 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-[#F97316] transition-all"
                                         />
-                                        <span className="absolute left-2.5 top-2.5 text-gray-400 text-xs">🔍</span>
+                                        <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-400" />
                                     </div>
 
                                     {/* Personnel Selectable Cards List */}
@@ -2396,7 +2400,7 @@ const BrgyReportView = () => {
                                                         <div className="flex items-center gap-1 shrink-0">
                                                             {isSelected ? (
                                                                 <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-md bg-[#F97316] text-white shadow-2xs flex items-center gap-0.5">
-                                                                    <span>✓</span> Selected
+                                                                    <Check className="w-2 h-2" /> Selected
                                                                 </span>
                                                             ) : (
                                                                 <span className="w-5 h-5 rounded-lg border border-gray-300 flex items-center justify-center text-gray-400 text-xs hover:border-[#F97316] hover:text-[#F97316]">
@@ -2450,7 +2454,7 @@ const BrgyReportView = () => {
                                                             : 'bg-white text-gray-700 border-gray-200 hover:border-orange-300 hover:bg-orange-50/50'
                                                     }`}
                                                 >
-                                                    {isSelected && <span className="mr-1">✓</span>}
+                                                    {isSelected && <Check className="w-2.5 h-2.5 inline mr-1" />}
                                                     {cond}
                                                 </button>
                                             );
@@ -2526,8 +2530,8 @@ const BrgyReportView = () => {
                     <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]">
                         <div className="p-6 sm:p-7 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-lg font-black shadow-xs">
-                                    👥
+                                <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-xs">
+                                    <Users className="w-5 h-5" />
                                 </div>
                                 <div>
                                     <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">
@@ -2542,7 +2546,7 @@ const BrgyReportView = () => {
                                 onClick={() => setIsAssignModalOpen(false)}
                                 className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all cursor-pointer"
                             >
-                                ✕
+                                <X className="w-4 h-4" />
                             </button>
                         </div>
 
@@ -2554,7 +2558,7 @@ const BrgyReportView = () => {
                                 </label>
                                 <div className="relative">
                                     <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
-                                        🔍
+                                        <Search className="w-3.5 h-3.5" />
                                     </span>
                                     <input
                                         type="text"
@@ -2615,7 +2619,7 @@ const BrgyReportView = () => {
                                                     </div>
 
                                                     <div className={`w-5 h-5 rounded-lg border flex items-center justify-center text-xs transition-all ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300 bg-white'}`}>
-                                                        {isSelected && '✓'}
+                                                        {isSelected && <Check className="w-3 h-3" />}
                                                     </div>
                                                 </div>
                                             );
@@ -2660,7 +2664,7 @@ const BrgyReportView = () => {
                                     disabled={isSubmittingAssign || selectedStaffIds.length === 0}
                                     className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md disabled:opacity-50 cursor-pointer flex items-center gap-2"
                                 >
-                                    <span>👥</span>
+                                    <Users className="w-3.5 h-3.5" />
                                     <span>{isSubmittingAssign ? 'Assigning...' : `Confirm Team (${selectedStaffIds.length} Selected)`}</span>
                                 </button>
                             </div>
@@ -2686,7 +2690,7 @@ const BrgyReportView = () => {
                                 onClick={() => setIsEndorsementModalOpen(false)}
                                 className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all cursor-pointer"
                             >
-                                ✕
+                                <X className="w-4 h-4" />
                             </button>
                         </div>
 
@@ -2695,8 +2699,8 @@ const BrgyReportView = () => {
                                 <iframe src={endorsementFileUrl} className="w-full h-[65vh] rounded-2xl border border-gray-200" title="Endorsement PDF" />
                             ) : endorsementFileUrl.toLowerCase().endsWith('.docx') || endorsementFileUrl.toLowerCase().endsWith('.doc') ? (
                                 <div className="flex flex-col items-center justify-center p-12 bg-white rounded-3xl border border-gray-200 shadow-sm max-w-md text-center">
-                                    <div className="w-20 h-20 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-4xl mb-4 font-black">
-                                        📄
+                                    <div className="w-20 h-20 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4">
+                                        <FileText className="w-10 h-10" />
                                     </div>
                                     <h4 className="text-base font-black text-gray-900 mb-1 uppercase">Microsoft Word Document</h4>
                                     <p className="text-xs text-gray-500 font-medium mb-6">
@@ -2708,7 +2712,7 @@ const BrgyReportView = () => {
                                         rel="noopener noreferrer"
                                         className="px-6 py-3 bg-[#F97316] hover:bg-[#EA580C] text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center gap-2"
                                     >
-                                        <span>⬇️</span>
+                                        <Download className="w-3.5 h-3.5" />
                                         <span>Download Endorsement File</span>
                                     </a>
                                 </div>
@@ -2727,7 +2731,7 @@ const BrgyReportView = () => {
                                 rel="noopener noreferrer"
                                 className="px-6 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center gap-2"
                             >
-                                <span>⬇️</span>
+                                <Download className="w-3.5 h-3.5" />
                                 <span>Open in New Tab / Download</span>
                             </a>
                         </div>
@@ -2751,7 +2755,7 @@ const BrgyReportView = () => {
                             onClick={() => setIsLightboxOpen(false)}
                             className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/20 hover:bg-white/40 text-white font-black flex items-center justify-center transition-all cursor-pointer"
                         >
-                            ✕
+                            <X className="w-5 h-5" />
                         </button>
                     </div>
                 </div>
@@ -2883,23 +2887,23 @@ const BrgyReportView = () => {
                                     {sightingLat.toFixed(6)}, {sightingLng.toFixed(6)}
                                 </span>
                                 {report.status_id === 6 ? (
-                                    <span className="bg-blue-600 text-white font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                                        🐾 Picked Up (In Transit)
+                                    <span className="bg-blue-600 text-white font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider inline-flex items-center gap-1">
+                                        <PawPrint className="w-2.5 h-2.5" /> Picked Up (In Transit)
                                     </span>
                                 ) : (report.status_id !== 6 && (report.facility_id || report.facility)) ? (
-                                    <span className="bg-orange-500 text-white font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                                        🏢 {report.facility?.name || report.landmark}
+                                    <span className="bg-orange-500 text-white font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider inline-flex items-center gap-1">
+                                        <Building2 className="w-2.5 h-2.5" /> {report.facility?.name || report.landmark}
                                     </span>
                                 ) : report.landmark ? (
-                                    <span className="bg-orange-500 text-white font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                                        📍 {report.landmark}
+                                    <span className="bg-orange-500 text-white font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider inline-flex items-center gap-1">
+                                        <MapPin className="w-2.5 h-2.5" /> {report.landmark}
                                     </span>
                                 ) : null}
                             </div>
-                            <div className="text-[11px] font-bold text-gray-600 truncate max-w-xs sm:max-w-md">
-                                {report.status_id === 6 
-                                    ? `🐾 Animal Picked Up • Origin: ${resolvedAddress || report.landmark || 'Incident Location'}`
-                                    : `🏠 ${resolvedAddress || report.landmark || 'Sighting Location'}`}
+                            <div className="text-[11px] font-bold text-gray-600 truncate max-w-xs sm:max-w-md flex items-center gap-1">
+                                {report.status_id === 6
+                                    ? <><PawPrint className="w-3 h-3 shrink-0" /> Animal Picked Up • Origin: {resolvedAddress || report.landmark || 'Incident Location'}</>
+                                    : <><Home className="w-3 h-3 shrink-0" /> {resolvedAddress || report.landmark || 'Sighting Location'}</>}
                             </div>
                         </div>
 
@@ -2962,8 +2966,8 @@ const BrgyReportView = () => {
 
                         {/* Footer Controls */}
                         <div className="flex items-center justify-between pt-3 sm:pt-4 border-t border-gray-100 shrink-0 gap-3">
-                            <span className="text-xs text-gray-400 font-medium hidden sm:inline">
-                                💡 Tip: Zoom in or pan to inspect surroundings, routes, and registered holding facility landmarks.
+                            <span className="text-xs text-gray-400 font-medium hidden sm:inline-flex items-center gap-1">
+                                <Lightbulb className="w-3.5 h-3.5" /> Tip: Zoom in or pan to inspect surroundings, routes, and registered holding facility landmarks.
                             </span>
                             <button
                                 type="button"

@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
+import {
+    PawPrint, Truck, MapPin, RefreshCw, Pill, Stethoscope, ClipboardList,
+    CheckCircle2, Cat, Dog, AlertTriangle, Clock, Flag, Building2, Globe,
+    Landmark, Home, Settings, BarChart3, User, Phone, Rocket, Scale, Info,
+    X, Calendar, Timer, Camera, FileText, Pencil, Sparkles, Paperclip, PlayCircle
+} from 'lucide-react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { getStoredToken } from '../../utils/api';
@@ -114,14 +120,14 @@ const FACILITY_STATUSES = [
 const RESOLVED_IDS = new Set([3, 4, 5, 7, 8]);
 
 const EVENT_TYPE_META: Record<string, { icon: ReactNode; color: string }> = {
-    intake: { icon: <span>🐾</span>, color: 'bg-emerald-100 text-emerald-700' },
-    transfer: { icon: <span>🚚</span>, color: 'bg-indigo-100 text-indigo-700' },
-    relocation: { icon: <span>📍</span>, color: 'bg-indigo-100 text-indigo-700' },
-    status_change: { icon: <span>🔄</span>, color: 'bg-amber-100 text-amber-700' },
-    medical: { icon: <span>💊</span>, color: 'bg-purple-100 text-purple-600' },
-    treatment: { icon: <span>🩺</span>, color: 'bg-pink-100 text-pink-600' },
-    observation: { icon: <span>📋</span>, color: 'bg-gray-100 text-gray-600' },
-    outcome: { icon: <span>✅</span>, color: 'bg-green-100 text-green-700' },
+    intake: { icon: <PawPrint className="w-3.5 h-3.5" />, color: 'bg-emerald-100 text-emerald-700' },
+    transfer: { icon: <Truck className="w-3.5 h-3.5" />, color: 'bg-indigo-100 text-indigo-700' },
+    relocation: { icon: <MapPin className="w-3.5 h-3.5" />, color: 'bg-indigo-100 text-indigo-700' },
+    status_change: { icon: <RefreshCw className="w-3.5 h-3.5" />, color: 'bg-amber-100 text-amber-700' },
+    medical: { icon: <Pill className="w-3.5 h-3.5" />, color: 'bg-purple-100 text-purple-600' },
+    treatment: { icon: <Stethoscope className="w-3.5 h-3.5" />, color: 'bg-pink-100 text-pink-600' },
+    observation: { icon: <ClipboardList className="w-3.5 h-3.5" />, color: 'bg-gray-100 text-gray-600' },
+    outcome: { icon: <CheckCircle2 className="w-3.5 h-3.5" />, color: 'bg-green-100 text-green-700' },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -158,10 +164,10 @@ function getStatusMeta(statusId: number) {
     };
 }
 
-function animalIcon(type: string | null): string {
-    if (type === 'Cat') return '🐱';
-    if (type === 'Dog') return '🐶';
-    return '🐾';
+function animalIcon(type: string | null, className = 'w-6 h-6'): ReactNode {
+    if (type === 'Cat') return <Cat className={className} />;
+    if (type === 'Dog') return <Dog className={className} />;
+    return <PawPrint className={className} />;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -555,35 +561,35 @@ const BrgyHoldingFacility = () => {
         {
             label: 'Total Animals',
             value: metrics.total,
-            icon: '🐾',
+            icon: PawPrint,
             color: 'bg-indigo-50 text-indigo-600',
             border: 'border-indigo-100',
         },
         {
             label: 'Need Treatment',
             value: metrics.need_treatment,
-            icon: '🩺',
+            icon: Stethoscope,
             color: 'bg-red-50 text-red-600',
             border: 'border-red-100',
         },
         {
             label: 'Healthy',
             value: metrics.healthy,
-            icon: '✅',
+            icon: CheckCircle2,
             color: 'bg-green-50 text-green-600',
             border: 'border-green-100',
         },
         {
             label: (metrics.needs_impoundment || overdueAnimals.length > 0) ? 'Needs Impound' : 'Nearing Expiry',
             value: (metrics.needs_impoundment || overdueAnimals.length > 0) ? (metrics.needs_impoundment ?? overdueAnimals.length) : (metrics.nearing_expiry || nearingAnimals.length),
-            icon: (metrics.needs_impoundment || overdueAnimals.length > 0) ? '🚨' : '⏰',
+            icon: (metrics.needs_impoundment || overdueAnimals.length > 0) ? AlertTriangle : Clock,
             color: (metrics.needs_impoundment || overdueAnimals.length > 0) ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600',
             border: (metrics.needs_impoundment || overdueAnimals.length > 0) ? 'border-red-200 ring-1 ring-red-200' : 'border-amber-100',
         },
         {
             label: 'Discharged Today',
             value: metrics.resolved_today,
-            icon: '🏁',
+            icon: Flag,
             color: 'bg-purple-50 text-purple-600',
             border: 'border-purple-100',
         },
@@ -624,8 +630,8 @@ const BrgyHoldingFacility = () => {
                         {/* ── Facility Selector & Management Header ─────────── */}
                         <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-2xl shadow-md shadow-indigo-600/20">
-                                    🏢
+                                <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20">
+                                    <Building2 className="w-6 h-6" />
                                 </div>
                                 <div>
                                     <div className="flex items-center gap-2">
@@ -664,21 +670,21 @@ const BrgyHoldingFacility = () => {
                                                 }}
                                                 className="w-full appearance-none bg-indigo-50/70 hover:bg-indigo-50 border-2 border-indigo-200 focus:border-indigo-500 text-indigo-950 text-xs font-black rounded-xl px-4 py-2.5 pr-8 transition-all cursor-pointer outline-none shadow-xs"
                                             >
-                                                <option value="all">🌐 All Subdivisions & Barangays</option>
+                                                <option value="all">All Subdivisions & Barangays</option>
                                                 {jurisdictions.barangays.length > 0 && (
-                                                    <optgroup label="🏛️ Barangay Central Jurisdictions">
+                                                    <optgroup label="Barangay Central Jurisdictions">
                                                         {jurisdictions.barangays.map(b => (
                                                             <option key={`brgy_${b.barangay_id}`} value={`brgy_${b.barangay_id}`}>
-                                                                🏛️ Barangay {b.barangay_name} ({b.city})
+                                                                Barangay {b.barangay_name} ({b.city})
                                                             </option>
                                                         ))}
                                                     </optgroup>
                                                 )}
                                                 {jurisdictions.subdivisions.length > 0 && (
-                                                    <optgroup label="🏡 Subdivisions">
+                                                    <optgroup label="Subdivisions">
                                                         {jurisdictions.subdivisions.map(s => (
                                                             <option key={`subd_${s.subdivision_id}`} value={`subd_${s.subdivision_id}`}>
-                                                                🏡 {s.subdivision_name} {s.barangay_name ? `(${s.barangay_name})` : ''}
+                                                                {s.subdivision_name} {s.barangay_name ? `(${s.barangay_name})` : ''}
                                                             </option>
                                                         ))}
                                                     </optgroup>
@@ -705,11 +711,11 @@ const BrgyHoldingFacility = () => {
                                             className="w-full appearance-none bg-gray-50 hover:bg-gray-100 border-2 border-indigo-200 focus:border-indigo-500 text-gray-900 text-xs font-black rounded-xl px-4 py-2.5 pr-8 transition-all cursor-pointer outline-none shadow-xs"
                                         >
                                             <option value="all">
-                                                🏢 All Facilities in Scope ({filteredFacilities.length})
+                                                All Facilities in Scope ({filteredFacilities.length})
                                             </option>
                                             {filteredFacilities.map((fac) => (
                                                 <option key={fac.landmark_id} value={fac.landmark_id}>
-                                                    📍 {fac.name} {fac.capacity ? `(Cap: ${fac.capacity})` : ''} {isAdmin && (fac.subdivision_name ? `• ${fac.subdivision_name}` : (fac.barangay_name ? `• Brgy ${fac.barangay_name}` : ''))}
+                                                    {fac.name} {fac.capacity ? `(Cap: ${fac.capacity})` : ''} {isAdmin && (fac.subdivision_name ? `• ${fac.subdivision_name}` : (fac.barangay_name ? `• Brgy ${fac.barangay_name}` : ''))}
                                                 </option>
                                             ))}
                                         </select>
@@ -726,7 +732,7 @@ const BrgyHoldingFacility = () => {
                                         className="px-4 py-2.5 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-700 text-xs font-black rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer self-end md:self-auto"
                                         title="Add, edit, or remove Barangay landmarks and holding facilities"
                                     >
-                                        <span>⚙️</span>
+                                        <Settings className="w-3.5 h-3.5" />
                                         <span>Manage Facilities</span>
                                     </button>
                                 )}
@@ -741,12 +747,12 @@ const BrgyHoldingFacility = () => {
                                         {activeFacility.name} — Status & Occupancy
                                     </p>
                                     <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600 font-semibold">
-                                        <span>📊 Type: <strong className="text-gray-900">{activeFacility.facility_type || 'Holding Facility'}</strong></span>
+                                        <span className="inline-flex items-center gap-1"><BarChart3 className="w-3 h-3" /> Type: <strong className="text-gray-900">{activeFacility.facility_type || 'Holding Facility'}</strong></span>
                                         {activeFacility.contact_person && (
-                                            <span>👤 Caretaker: <strong className="text-gray-900">{activeFacility.contact_person}</strong></span>
+                                            <span className="inline-flex items-center gap-1"><User className="w-3 h-3" /> Caretaker: <strong className="text-gray-900">{activeFacility.contact_person}</strong></span>
                                         )}
                                         {activeFacility.contact_number && (
-                                            <span>📞 Phone: <strong className="text-gray-900">{activeFacility.contact_number}</strong></span>
+                                            <span className="inline-flex items-center gap-1"><Phone className="w-3 h-3" /> Phone: <strong className="text-gray-900">{activeFacility.contact_number}</strong></span>
                                         )}
                                     </div>
                                 </div>
@@ -772,8 +778,8 @@ const BrgyHoldingFacility = () => {
                                     key={i}
                                     className={`bg-white rounded-2xl border ${m.border} shadow-sm p-5 flex items-center gap-3 hover:shadow-md transition-all`}
                                 >
-                                    <div className={`w-11 h-11 rounded-xl ${m.color} flex items-center justify-center text-lg shrink-0`}>
-                                        {m.icon}
+                                    <div className={`w-11 h-11 rounded-xl ${m.color} flex items-center justify-center shrink-0`}>
+                                        <m.icon className="w-5 h-5" />
                                     </div>
                                     <div>
                                         <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none">{m.label}</p>
@@ -788,8 +794,8 @@ const BrgyHoldingFacility = () => {
                             <div className="bg-gradient-to-r from-red-500/10 via-amber-500/10 to-orange-500/5 rounded-3xl border-2 border-red-300 p-5 md:p-6 shadow-md animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-red-200/60">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-2xl bg-red-600 text-white flex items-center justify-center text-xl shadow-md shadow-red-500/30 animate-pulse shrink-0">
-                                            🚨
+                                        <div className="w-10 h-10 rounded-2xl bg-red-600 text-white flex items-center justify-center shadow-md shadow-red-500/30 animate-pulse shrink-0">
+                                            <AlertTriangle className="w-5 h-5" />
                                         </div>
                                         <div>
                                             <div className="flex items-center gap-2 flex-wrap">
@@ -829,7 +835,7 @@ const BrgyHoldingFacility = () => {
                                                         {thumbImg ? (
                                                             <img src={thumbImg.file_url} alt={animal.animal_name || 'Animal'} className="w-full h-full object-cover" />
                                                         ) : (
-                                                            <div className="w-full h-full flex items-center justify-center text-2xl">
+                                                            <div className="w-full h-full flex items-center justify-center">
                                                                 {animalIcon(animal.animal_type)}
                                                             </div>
                                                         )}
@@ -849,8 +855,8 @@ const BrgyHoldingFacility = () => {
                                                         <h4 className="text-xs font-black text-gray-900 truncate mt-0.5">
                                                             {animal.animal_name || `${animal.animal_type || 'Animal'} #${animal.holding_id}`}
                                                         </h4>
-                                                        <p className="text-[10px] text-gray-500 font-medium truncate">
-                                                            {animal.breed || 'Unknown Breed'} • 📍 {animal.facility_name || animal.report_landmark || 'Facility'}
+                                                        <p className="text-[10px] text-gray-500 font-medium truncate flex items-center gap-1">
+                                                            {animal.breed || 'Unknown Breed'} • <MapPin className="w-2.5 h-2.5" /> {animal.facility_name || animal.report_landmark || 'Facility'}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -863,7 +869,7 @@ const BrgyHoldingFacility = () => {
                                                         className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-black rounded-lg border border-emerald-200 transition-all flex items-center justify-center gap-1 cursor-pointer shadow-2xs hover:scale-102"
                                                         title="Make animal available for public adoption"
                                                     >
-                                                        <span>🚀</span>
+                                                        <Rocket className="w-3 h-3" />
                                                         <span>Adopt Out</span>
                                                     </button>
                                                     <button
@@ -872,7 +878,7 @@ const BrgyHoldingFacility = () => {
                                                         className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-black rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer shadow-2xs hover:scale-102"
                                                         title="Officially impound animal and close case"
                                                     >
-                                                        <span>⚖️</span>
+                                                        <Scale className="w-3 h-3" />
                                                         <span>Impound</span>
                                                     </button>
                                                 </div>
@@ -981,7 +987,7 @@ const BrgyHoldingFacility = () => {
                             </div>
                         ) : filtered.length === 0 ? (
                             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center py-20 gap-3">
-                                <span className="text-5xl">🐾</span>
+                                <PawPrint className="w-12 h-12 text-gray-300" />
                                 <p className="text-gray-400 font-semibold text-sm">No animals in holding facility.</p>
                                 <p className="text-gray-300 text-xs">Animals are automatically admitted when a rescue is marked as "Picked Up".</p>
                             </div>
@@ -1023,8 +1029,8 @@ const BrgyHoldingFacility = () => {
                                                     </>
                                                 ) : (
                                                     <div className="w-full h-full bg-gradient-to-br from-indigo-50 via-slate-50 to-purple-50 flex flex-col items-center justify-center relative p-4 text-center">
-                                                        <span className="text-6xl drop-shadow-sm transform group-hover:scale-110 transition-transform duration-300">
-                                                            {animalIcon(animal.animal_type)}
+                                                        <span className="drop-shadow-sm transform group-hover:scale-110 transition-transform duration-300">
+                                                            {animalIcon(animal.animal_type, 'w-16 h-16')}
                                                         </span>
                                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2">
                                                             No Photo Uploaded
@@ -1038,11 +1044,11 @@ const BrgyHoldingFacility = () => {
                                                     {/* Kennel Slot Pill */}
                                                     {animal.kennel_slot ? (
                                                         <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/90 backdrop-blur-md text-indigo-700 text-[11px] font-black rounded-full shadow-sm border border-white/50">
-                                                            📍 {animal.kennel_slot}
+                                                            <MapPin className="w-3 h-3" /> {animal.kennel_slot}
                                                         </span>
                                                     ) : (
                                                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-black/40 backdrop-blur-md text-white/90 text-[10px] font-semibold rounded-full border border-white/20">
-                                                            📍 Not Assigned
+                                                            <MapPin className="w-3 h-3" /> Not Assigned
                                                         </span>
                                                     )}
 
@@ -1101,12 +1107,12 @@ const BrgyHoldingFacility = () => {
 
                                                 {/* Facility Stay Breakdown Pills */}
                                                 <div className="flex items-center justify-between gap-1.5 p-2 bg-indigo-50/40 rounded-xl border border-indigo-100/60 text-[10px]">
-                                                    <span className="font-bold text-indigo-900 truncate">
-                                                        🏡 Subd: <strong className="text-indigo-700">{animal.subd_duration_display || '0 days'}</strong>
+                                                    <span className="font-bold text-indigo-900 truncate inline-flex items-center gap-1">
+                                                        <Home className="w-2.5 h-2.5" /> Subd: <strong className="text-indigo-700">{animal.subd_duration_display || '0 days'}</strong>
                                                     </span>
                                                     <span className="text-gray-300">|</span>
-                                                    <span className="font-bold text-indigo-900 truncate">
-                                                        🏢 Brgy: <strong className="text-indigo-700">{animal.brgy_duration_display || '0 days'}</strong>
+                                                    <span className="font-bold text-indigo-900 truncate inline-flex items-center gap-1">
+                                                        <Building2 className="w-2.5 h-2.5" /> Brgy: <strong className="text-indigo-700">{animal.brgy_duration_display || '0 days'}</strong>
                                                     </span>
                                                 </div>
 
@@ -1118,11 +1124,11 @@ const BrgyHoldingFacility = () => {
                                                             <span className="text-xs text-gray-400 font-bold">Completed</span>
                                                         ) : isOverdue ? (
                                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-700 text-[11px] font-black rounded-lg border border-red-200 animate-pulse shadow-xs">
-                                                                🚨 Needs Impound / Adopt ({days}/{impoundStayDuration}d)
+                                                                <AlertTriangle className="w-2.5 h-2.5" /> Needs Impound / Adopt ({days}/{impoundStayDuration}d)
                                                             </span>
                                                         ) : isNearExpiry ? (
                                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-600 text-[11px] font-black rounded-lg border border-amber-200 shadow-xs">
-                                                                ⚠️ {remaining}d left
+                                                                <AlertTriangle className="w-2.5 h-2.5" /> {remaining}d left
                                                             </span>
                                                         ) : (
                                                             <span className="text-xs font-bold text-gray-700">
@@ -1135,7 +1141,7 @@ const BrgyHoldingFacility = () => {
                                                 {/* Location Landmark */}
                                                 {(animal.facility_name || animal.report_landmark) && (
                                                     <div className="text-[11px] text-gray-500 font-medium truncate flex items-center gap-1.5 px-1">
-                                                        <span className="text-gray-400">📍</span>
+                                                        <MapPin className="w-3 h-3 text-gray-400" />
                                                         <span className="truncate">{animal.facility_name || animal.report_landmark}</span>
                                                     </div>
                                                 )}
@@ -1154,7 +1160,7 @@ const BrgyHoldingFacility = () => {
                                                             className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black rounded-xl transition-all shadow-xs flex items-center gap-1 cursor-pointer"
                                                             title="Promote to Public Adoption Catalog"
                                                         >
-                                                            <span>🚀</span>
+                                                            <Rocket className="w-3 h-3" />
                                                             <span>Adopt</span>
                                                         </button>
                                                         <button
@@ -1166,7 +1172,7 @@ const BrgyHoldingFacility = () => {
                                                             className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-black rounded-xl transition-all shadow-xs flex items-center gap-1 cursor-pointer"
                                                             title="Officially Impound Animal"
                                                         >
-                                                            <span>⚖️</span>
+                                                            <Scale className="w-3 h-3" />
                                                             <span>Impound</span>
                                                         </button>
                                                     </div>
@@ -1197,7 +1203,7 @@ const BrgyHoldingFacility = () => {
 
                         {/* ── Info Banner ───────────────────────────────────── */}
                         <div className="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-4 flex items-start gap-4">
-                            <div className="w-9 h-9 rounded-xl bg-indigo-500 text-white flex items-center justify-center shrink-0 text-base">ℹ️</div>
+                            <div className="w-9 h-9 rounded-xl bg-indigo-500 text-white flex items-center justify-center shrink-0"><Info className="w-4 h-4" /></div>
                             <div>
                                 <h4 className="text-sm font-bold text-indigo-900">Automatic Intake</h4>
                                 <p className="text-xs text-indigo-700 mt-1 leading-relaxed">
@@ -1220,7 +1226,7 @@ const BrgyHoldingFacility = () => {
                         {/* Modal Header */}
                         <div className="flex items-center justify-between p-6 border-b border-gray-100">
                             <div className="flex items-center gap-3">
-                                <div className="w-11 h-11 bg-indigo-50 rounded-xl flex items-center justify-center text-2xl">
+                                <div className="w-11 h-11 bg-indigo-50 rounded-xl flex items-center justify-center">
                                     {animalIcon(selected.animal_type)}
                                 </div>
                                 <div>
@@ -1234,7 +1240,7 @@ const BrgyHoldingFacility = () => {
                                 onClick={() => setSelected(null)}
                                 className="w-9 h-9 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors"
                             >
-                                ✕
+                                <X className="w-4 h-4" />
                             </button>
                         </div>
 
@@ -1249,7 +1255,9 @@ const BrgyHoldingFacility = () => {
                                             : 'border-transparent text-gray-400 hover:text-gray-600'
                                         }`}
                                 >
-                                    {tab === 'info' ? '📋 Animal Info & Update' : `📅 Timeline (${selected.timeline.length})`}
+                                    {tab === 'info'
+                                        ? <span className="inline-flex items-center gap-1"><ClipboardList className="w-3.5 h-3.5" /> Animal Info & Update</span>
+                                        : <span className="inline-flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> Timeline ({selected.timeline.length})</span>}
                                 </button>
                             ))}
                         </div>
@@ -1284,15 +1292,15 @@ const BrgyHoldingFacility = () => {
                                     {/* Stay Duration Breakdown Highlight Card */}
                                     <div className="bg-gradient-to-br from-indigo-50/80 via-white to-purple-50/80 p-4 rounded-2xl border border-indigo-100 shadow-sm">
                                         <p className="text-[10px] font-black text-indigo-900 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
-                                            <span>⏱️</span> Facility Stay & Custody Duration
+                                            <Timer className="w-3.5 h-3.5" /> Facility Stay & Custody Duration
                                         </p>
                                         <div className="grid grid-cols-3 gap-3">
                                             <div className="bg-white/80 backdrop-blur-xs p-3 rounded-xl border border-indigo-100/60 shadow-2xs">
-                                                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">🏡 Subdivision Stay</p>
+                                                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1"><Home className="w-2.5 h-2.5" /> Subdivision Stay</p>
                                                 <p className="text-sm font-black text-indigo-700 mt-1">{selected.subd_duration_display || '0 days'}</p>
                                             </div>
                                             <div className="bg-white/80 backdrop-blur-xs p-3 rounded-xl border border-indigo-100/60 shadow-2xs">
-                                                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">🏢 Barangay Stay</p>
+                                                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1"><Building2 className="w-2.5 h-2.5" /> Barangay Stay</p>
                                                 <p className="text-sm font-black text-indigo-700 mt-1">{selected.brgy_duration_display || '0 days'}</p>
                                             </div>
                                             <div className="bg-indigo-600 text-white p-3 rounded-xl shadow-xs">
@@ -1324,7 +1332,7 @@ const BrgyHoldingFacility = () => {
                                     {selected.report_media && selected.report_media.length > 0 && (
                                         <div className="border border-gray-100 rounded-2xl p-5 bg-white space-y-3">
                                             <h3 className="text-xs font-black text-gray-800 uppercase tracking-widest flex items-center gap-1.5">
-                                                <span>📸</span> Uploaded Media & Evidence
+                                                <Camera className="w-3.5 h-3.5" /> Uploaded Media & Evidence
                                             </h3>
                                             <div className="grid grid-cols-3 gap-3">
                                                 {selected.report_media.map((media, idx) => {
@@ -1339,14 +1347,14 @@ const BrgyHoldingFacility = () => {
                                                         >
                                                             {isDoc ? (
                                                                 <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center">
-                                                                    <span className="text-3xl">📄</span>
+                                                                    <FileText className="w-8 h-8 text-gray-400" />
                                                                     <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-1 truncate w-full">Document</span>
                                                                 </div>
                                                             ) : isVideo ? (
                                                                 <div className="w-full h-full relative">
                                                                     <video src={media.file_url} className="w-full h-full object-cover pointer-events-none" />
                                                                     <div className="absolute inset-0 bg-black/20 flex items-center justify-center group-hover:bg-black/35 transition-colors">
-                                                                        <span className="text-white text-2xl drop-shadow-md">▶️</span>
+                                                                        <PlayCircle className="w-6 h-6 text-white drop-shadow-md" />
                                                                     </div>
                                                                 </div>
                                                             ) : (
@@ -1366,7 +1374,7 @@ const BrgyHoldingFacility = () => {
                                     {/* Discharge info */}
                                     {selected.discharge_date && (
                                         <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                                            <p className="text-xs font-bold text-green-800">✅ Discharged on {formatDateTime(selected.discharge_date)}</p>
+                                            <p className="text-xs font-bold text-green-800 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Discharged on {formatDateTime(selected.discharge_date)}</p>
                                         </div>
                                     )}
 
@@ -1375,8 +1383,8 @@ const BrgyHoldingFacility = () => {
                                         <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl p-5 space-y-3 shadow-xs">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-lg shadow-sm">
-                                                        🐾
+                                                    <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm">
+                                                        <PawPrint className="w-5 h-5" />
                                                     </div>
                                                     <div>
                                                         <div className="flex items-center gap-2">
@@ -1413,9 +1421,9 @@ const BrgyHoldingFacility = () => {
                                                         setPromoteSuccess(null);
                                                         setPromoteModalOpen(true);
                                                     }}
-                                                    className="text-xs text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer inline-block"
+                                                    className="text-xs text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer inline-flex items-center gap-1"
                                                 >
-                                                    ✏️ Edit Catalog Highlights
+                                                    <Pencil className="w-3 h-3" /> Edit Catalog Highlights
                                                 </button>
                                             )}
                                         </div>
@@ -1424,8 +1432,8 @@ const BrgyHoldingFacility = () => {
                                     {!RESOLVED_IDS.has(selected.facility_status) && selected.facility_status !== 6 && !isSubdLeader && (
                                         <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-200 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                             <div className="flex items-start gap-3">
-                                                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-lg shadow-sm shrink-0 mt-0.5">
-                                                    ✨
+                                                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm shrink-0 mt-0.5">
+                                                    <Sparkles className="w-5 h-5" />
                                                 </div>
                                                 <div>
                                                     <div className="flex items-center gap-2">
@@ -1458,7 +1466,7 @@ const BrgyHoldingFacility = () => {
                                                     }}
                                                     className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-all shadow-md shadow-emerald-200 uppercase tracking-wider shrink-0 flex items-center justify-center gap-1.5 cursor-pointer"
                                                 >
-                                                    🚀 Promote Now
+                                                    <Rocket className="w-3.5 h-3.5" /> Promote Now
                                                 </button>
                                             ) : (
                                                 <span className="text-[11px] font-bold text-gray-500 bg-white/80 px-3 py-1.5 rounded-xl border border-gray-200 shrink-0 text-center">
@@ -1472,8 +1480,8 @@ const BrgyHoldingFacility = () => {
                                     {!RESOLVED_IDS.has(selected.facility_status) && daysSince(selected.intake_date) >= impoundStayDuration && (
                                         <div className="bg-red-50/90 border-2 border-red-300 rounded-2xl p-4 shadow-xs space-y-3 animate-in fade-in duration-200">
                                             <div className="flex items-start gap-3">
-                                                <div className="w-9 h-9 rounded-xl bg-red-600 text-white flex items-center justify-center text-lg shrink-0 shadow-sm animate-pulse">
-                                                    🚨
+                                                <div className="w-9 h-9 rounded-xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
+                                                    <AlertTriangle className="w-4 h-4" />
                                                 </div>
                                                 <div>
                                                     <div className="flex items-center gap-2">
@@ -1495,7 +1503,7 @@ const BrgyHoldingFacility = () => {
                                                         onClick={() => openPromoteModalForAnimal(selected)}
                                                         className="py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
                                                     >
-                                                        <span>🚀</span>
+                                                        <Rocket className="w-3.5 h-3.5" />
                                                         <span>Promote for Adoption</span>
                                                     </button>
                                                     <button
@@ -1503,7 +1511,7 @@ const BrgyHoldingFacility = () => {
                                                         onClick={() => setQuickImpoundAnimal(selected)}
                                                         className="py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
                                                     >
-                                                        <span>⚖️</span>
+                                                        <Scale className="w-3.5 h-3.5" />
                                                         <span>Mark as Impounded</span>
                                                     </button>
                                                 </div>
@@ -1528,8 +1536,8 @@ const BrgyHoldingFacility = () => {
                                                     ))}
                                                 </select>
                                                 {RESOLVED_IDS.has(updateForm.facility_status) && (
-                                                    <p className="text-[10px] text-amber-600 font-semibold mt-1.5">
-                                                        ⚠️ This will discharge the animal and automatically close the linked report (Resolved).
+                                                    <p className="text-[10px] text-amber-600 font-semibold mt-1.5 flex items-start gap-1">
+                                                        <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /> This will discharge the animal and automatically close the linked report (Resolved).
                                                     </p>
                                                 )}
                                             </div>
@@ -1566,8 +1574,8 @@ const BrgyHoldingFacility = () => {
                                                         </p>
                                                     </div>
                                                     {daysSince(selected.intake_date) >= impoundStayDuration ? (
-                                                        <span className="px-2 py-1 bg-red-100 text-red-700 text-[10px] font-black rounded-lg border border-red-200 uppercase tracking-wider animate-pulse">
-                                                            🚨 Overdue
+                                                        <span className="px-2 py-1 bg-red-100 text-red-700 text-[10px] font-black rounded-lg border border-red-200 uppercase tracking-wider animate-pulse inline-flex items-center gap-1">
+                                                            <AlertTriangle className="w-2.5 h-2.5" /> Overdue
                                                         </span>
                                                     ) : (
                                                         <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-lg border border-emerald-200 uppercase tracking-wider">
@@ -1628,13 +1636,13 @@ const BrgyHoldingFacility = () => {
                                                             <div className="grid grid-cols-2 gap-1.5 max-h-24 overflow-y-auto custom-scrollbar">
                                                                 {uploadFiles.map((file, idx) => (
                                                                     <div key={idx} className="flex items-center justify-between bg-gray-50 px-2 py-1 rounded border border-gray-100 text-[10px] text-gray-600">
-                                                                        <span className="truncate flex-1 pr-1">📎 {file.name}</span>
-                                                                        <button 
-                                                                            type="button" 
+                                                                        <span className="truncate flex-1 pr-1 inline-flex items-center gap-1"><Paperclip className="w-2.5 h-2.5 shrink-0" /> {file.name}</span>
+                                                                        <button
+                                                                            type="button"
                                                                             onClick={() => setUploadFiles(prev => prev.filter((_, i) => i !== idx))}
                                                                             className="text-red-500 hover:text-red-750 font-extrabold shrink-0 ml-1"
                                                                         >
-                                                                            ✕
+                                                                            <X className="w-3 h-3" />
                                                                         </button>
                                                                     </div>
                                                                 ))}
@@ -1699,7 +1707,7 @@ const BrgyHoldingFacility = () => {
 
                                             {/* Upload Media for timeline */}
                                             <div>
-                                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1.5">📎 Attach Media (optional)</label>
+                                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1 mb-1.5"><Paperclip className="w-3 h-3" /> Attach Media (optional)</label>
                                                 <div className="flex flex-col gap-2 bg-white border border-gray-200 rounded-xl p-3">
                                                     <input
                                                         type="file"
@@ -1726,12 +1734,12 @@ const BrgyHoldingFacility = () => {
                                                             <div className="flex flex-col gap-1 max-h-20 overflow-y-auto custom-scrollbar">
                                                                 {timelineFiles.map((file, idx) => (
                                                                     <div key={idx} className="flex items-center justify-between bg-gray-50 px-2 py-1 rounded border border-gray-100 text-[10px] text-gray-600">
-                                                                        <span className="truncate flex-1 pr-1">📎 {file.name}</span>
+                                                                        <span className="truncate flex-1 pr-1 inline-flex items-center gap-1"><Paperclip className="w-2.5 h-2.5 shrink-0" /> {file.name}</span>
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => setTimelineFiles(prev => prev.filter((_, i) => i !== idx))}
                                                                             className="text-red-500 font-extrabold shrink-0 ml-1"
-                                                                        >✕</button>
+                                                                        ><X className="w-3 h-3" /></button>
                                                                     </div>
                                                                 ))}
                                                             </div>
@@ -1774,7 +1782,7 @@ const BrgyHoldingFacility = () => {
                                                                 {log.notes && <p className="text-xs text-gray-500 mt-1 leading-relaxed">{log.notes}</p>}
                                                                 {log.staff_name && (
                                                                     <p className="text-[10px] text-gray-400 mt-2 flex items-center gap-1">
-                                                                        <span>👤</span> {log.staff_name}
+                                                                        <User className="w-2.5 h-2.5" /> {log.staff_name}
                                                                     </p>
                                                                 )}
                                                             </div>
@@ -1797,8 +1805,8 @@ const BrgyHoldingFacility = () => {
                     <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scale-up">
                         <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                             <div className="flex items-center gap-2.5">
-                                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg font-bold">
-                                    🐾
+                                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                                    <PawPrint className="w-4 h-4" />
                                 </div>
                                 <div>
                                     <h3 className="font-black text-gray-900 text-sm">Promote to Adoption</h3>
@@ -1811,7 +1819,7 @@ const BrgyHoldingFacility = () => {
                                 }}
                                 className="w-8 h-8 rounded-lg bg-gray-100 text-gray-400 hover:text-gray-600 flex items-center justify-center text-xs"
                             >
-                                ✕
+                                <X className="w-3.5 h-3.5" />
                             </button>
                         </div>
 
@@ -1820,13 +1828,13 @@ const BrgyHoldingFacility = () => {
                         </p>
 
                         {promoteError && (
-                            <div className="p-3 bg-red-50 text-red-700 text-xs font-bold rounded-xl border border-red-200">
-                                ⚠️ {promoteError}
+                            <div className="p-3 bg-red-50 text-red-700 text-xs font-bold rounded-xl border border-red-200 flex items-center gap-1.5">
+                                <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {promoteError}
                             </div>
                         )}
                         {promoteSuccess && (
-                            <div className="p-3 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-xl border border-emerald-200">
-                                ✅ {promoteSuccess}
+                            <div className="p-3 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-xl border border-emerald-200 flex items-center gap-1.5">
+                                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> {promoteSuccess}
                             </div>
                         )}
 
@@ -1881,9 +1889,9 @@ const BrgyHoldingFacility = () => {
                     {/* Close Button */}
                     <button 
                         onClick={() => setLightboxMedia(null)}
-                        className="absolute top-4 right-4 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-xl transition-colors z-[110]"
+                        className="absolute top-4 right-4 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-[110]"
                     >
-                        ✕
+                        <X className="w-5 h-5" />
                     </button>
 
                     {/* Media Container */}
@@ -1900,7 +1908,7 @@ const BrgyHoldingFacility = () => {
                             if (isDoc) {
                                 return (
                                     <div className="bg-white rounded-3xl p-8 max-w-md w-full flex flex-col items-center text-center shadow-2xl animate-scale-up" onClick={e => e.stopPropagation()}>
-                                        <span className="text-6xl mb-4">📄</span>
+                                        <FileText className="w-16 h-16 mb-4 text-gray-300" />
                                         <h3 className="text-lg font-black text-gray-900">Document Evidence</h3>
                                         <p className="text-xs text-gray-400 mt-1 mb-6">This attachment is a document or verification letter.</p>
                                         <div className="flex gap-3 w-full">
@@ -1990,8 +1998,8 @@ const BrgyHoldingFacility = () => {
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
                     <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4 border border-gray-150">
                         <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center text-2xl shrink-0 shadow-2xs">
-                                ⚖️
+                            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 shadow-2xs">
+                                <Scale className="w-6 h-6" />
                             </div>
                             <div>
                                 <h3 className="text-base font-black text-gray-900">
@@ -2034,7 +2042,7 @@ const BrgyHoldingFacility = () => {
                                     </>
                                 ) : (
                                     <>
-                                        <span>⚖️</span>
+                                        <Scale className="w-3.5 h-3.5" />
                                         <span>Confirm Impoundment</span>
                                     </>
                                 )}

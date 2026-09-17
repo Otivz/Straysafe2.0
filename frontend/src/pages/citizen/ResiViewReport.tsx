@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams, useLocation, Link } from 'react-router-dom';
 import axios from 'axios';
+import {
+    Siren, MapPin, PawPrint, Palette, Tag, User, Gift, FileText, Megaphone,
+    Crosshair, Search, MessageCircle, Scale, Link2, Shield, AlertTriangle, Phone,
+    Hourglass, Compass, Home, Landmark, Ruler, Timer, Flag, X, Lightbulb, Check,
+    Syringe, Camera, Info, Map as MapIcon
+} from 'lucide-react';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import MapComponent from '../../components/MapComponent';
 
@@ -38,7 +44,7 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
         return (
             <div className="space-y-3.5 my-2">
                 <div className="flex items-center gap-2.5 p-3 px-4 bg-gradient-to-r from-red-50 to-orange-50 rounded-2xl border border-red-200/80 text-red-950 shadow-xs">
-                    <span className="text-lg animate-pulse shrink-0">🚨</span>
+                    <Siren className="w-5 h-5 animate-pulse shrink-0" />
                     <p className="text-xs sm:text-sm font-black uppercase tracking-tight">
                         {headerLine.replace('[LOST PET REPORT]', '').trim() || 'Missing Registered Pet Alert'}
                     </p>
@@ -62,13 +68,13 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
                                         className={`p-3 rounded-2xl bg-white border border-stone-100 shadow-2xs ${isWide ? 'sm:col-span-2' : ''}`}
                                     >
                                         <p className="text-[9px] font-black text-amber-800 uppercase tracking-widest mb-1 flex items-center gap-1">
-                                            {key.toLowerCase().includes('last seen') && <span>📍</span>}
-                                            {key.toLowerCase().includes('breed') && <span>🐾</span>}
-                                            {key.toLowerCase().includes('color') && <span>🎨</span>}
-                                            {key.toLowerCase().includes('collar') && <span>🏷️</span>}
-                                            {key.toLowerCase().includes('owner') && <span>👤</span>}
-                                            {key.toLowerCase().includes('reward') && <span>🎁</span>}
-                                            {key.toLowerCase().includes('circumstances') && <span>📝</span>}
+                                            {key.toLowerCase().includes('last seen') && <MapPin className="w-3 h-3" />}
+                                            {key.toLowerCase().includes('breed') && <PawPrint className="w-3 h-3" />}
+                                            {key.toLowerCase().includes('color') && <Palette className="w-3 h-3" />}
+                                            {key.toLowerCase().includes('collar') && <Tag className="w-3 h-3" />}
+                                            {key.toLowerCase().includes('owner') && <User className="w-3 h-3" />}
+                                            {key.toLowerCase().includes('reward') && <Gift className="w-3 h-3" />}
+                                            {key.toLowerCase().includes('circumstances') && <FileText className="w-3 h-3" />}
                                             <span>{key}</span>
                                         </p>
                                         <p className="text-xs sm:text-[13px] font-bold text-gray-900 leading-snug">
@@ -88,7 +94,7 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
 
                 {closingLines.length > 0 && (
                     <div className="p-3.5 bg-amber-500/10 rounded-2xl border border-amber-300/60 text-xs font-bold text-amber-950 flex items-start gap-2.5 shadow-2xs">
-                        <span className="text-amber-600 text-base shrink-0">📢</span>
+                        <Megaphone className="w-4 h-4 text-amber-600 shrink-0" />
                         <p className="leading-relaxed">
                             {closingLines.join(' ')}
                         </p>
@@ -198,7 +204,7 @@ const ResiViewReport = () => {
     const handleSetStartingPointMode = () => {
         setLocationAmbiguous(false);
         setIsSettingStartingPoint(true);
-        setLocationNotice('🎯 Click anywhere on the map or drag the blue pin to set your starting point.');
+        setLocationNotice('Click anywhere on the map or drag the blue pin to set your starting point.');
         setTimeout(() => {
             const mapEl = document.getElementById('report-map-container');
             if (mapEl) {
@@ -608,8 +614,8 @@ const ResiViewReport = () => {
                 {userMatch && (
                     <div className="mb-8 p-6 rounded-3xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-50 border-2 border-amber-300 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl font-bold shadow-md shadow-amber-500/30 shrink-0">
-                                🔍
+                            <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/30 shrink-0">
+                                <Search className="w-6 h-6" />
                             </div>
                             <div>
                                 <div className="flex items-center gap-2 flex-wrap">
@@ -629,7 +635,7 @@ const ResiViewReport = () => {
                             onClick={() => navigate(`/resident/reports/${id}/match-review?openChat=true`)}
                             className="px-6 py-3 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 shrink-0 cursor-pointer"
                         >
-                            <span>💬 Review Match & Chat</span>
+                            <MessageCircle className="w-3.5 h-3.5" /> <span>Review Match & Chat</span>
                             <span>→</span>
                         </button>
                     </div>
@@ -677,7 +683,7 @@ const ResiViewReport = () => {
                                 className="px-5 py-3.5 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-amber-500/20 hover:scale-105 active:scale-95 flex items-center gap-2"
                                 title="Submit vaccination proof & counter-claim that your pet is innocent or at home"
                             >
-                                <span>⚖️</span> Dispute / Submit Proof
+                                <Scale className="w-3.5 h-3.5" /> Dispute / Submit Proof
                             </button>
                         )}
 
@@ -822,8 +828,8 @@ const ResiViewReport = () => {
                                         {(report.status_id === 18 || report.duplicate_of_report_id) && (
                                             <div className="p-5 rounded-3xl bg-stone-50 border-2 border-stone-200 text-stone-900 space-y-3 shadow-2xs">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-2xl bg-stone-200 text-stone-800 flex items-center justify-center text-xl font-black shrink-0">
-                                                        🔗
+                                                    <div className="w-10 h-10 rounded-2xl bg-stone-200 text-stone-800 flex items-center justify-center shrink-0">
+                                                        <Link2 className="w-5 h-5" />
                                                     </div>
                                                     <div>
                                                         <div className="flex items-center gap-2">
@@ -863,8 +869,8 @@ const ResiViewReport = () => {
                                             <div className="bg-white rounded-3xl p-6 sm:p-8 border border-orange-200/80 shadow-xs space-y-4">
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] border border-orange-200 flex items-center justify-center text-lg font-black shrink-0">
-                                                            🔗
+                                                        <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] border border-orange-200 flex items-center justify-center shrink-0">
+                                                            <Link2 className="w-5 h-5" />
                                                         </div>
                                                         <div>
                                                             <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">
@@ -900,12 +906,12 @@ const ResiViewReport = () => {
                                                                 </div>
 
                                                                 <div className="flex items-center gap-2.5 text-xs text-gray-600">
-                                                                    <span>👤</span>
+                                                                    <User className="w-3 h-3" />
                                                                     <span className="font-bold text-gray-800">{mr.reporter_name}</span>
                                                                     {mr.landmark && (
                                                                         <>
                                                                             <span>•</span>
-                                                                            <span className="truncate">📍 {mr.landmark}</span>
+                                                                            <span className="truncate inline-flex items-center gap-1"><MapPin className="w-3 h-3" /> {mr.landmark}</span>
                                                                         </>
                                                                     )}
                                                                 </div>
@@ -944,7 +950,7 @@ const ResiViewReport = () => {
                                                     ? 'bg-emerald-50/90 border-emerald-200 text-emerald-950'
                                                     : 'bg-rose-50/90 border-rose-200 text-rose-950'
                                             }`}>
-                                                <span className="text-2xl shrink-0">{(!report.verified_actual_bite && !report.verified_aggressive) ? '🛡️' : '⚠️'}</span>
+                                                {(!report.verified_actual_bite && !report.verified_aggressive) ? <Shield className="w-6 h-6 shrink-0" /> : <AlertTriangle className="w-6 h-6 shrink-0" />}
                                                 <div className="space-y-1">
                                                     <div className="flex flex-wrap items-center gap-2">
                                                         <span className="text-[10px] font-black uppercase tracking-wider">
@@ -971,7 +977,7 @@ const ResiViewReport = () => {
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-2.5">
                                                         <span className="px-2.5 py-1 bg-amber-500 text-white rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
-                                                            <span>🐾</span>
+                                                            <PawPrint className="w-3 h-3" />
                                                             <span>Registered Lost Pet</span>
                                                         </span>
                                                         {report.pet_name && (
@@ -1006,7 +1012,7 @@ const ResiViewReport = () => {
                                                                 href={`tel:${report.owner_phone}`}
                                                                 className="mt-2 inline-flex items-center justify-center gap-1.5 w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
                                                             >
-                                                                📞 Call Owner
+                                                                <Phone className="w-3 h-3" /> Call Owner
                                                             </a>
                                                         )}
                                                     </div>
@@ -1100,8 +1106,8 @@ const ResiViewReport = () => {
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Observed Health & Behavior Conditions</p>
                                                 <div className="flex flex-wrap gap-2">
                                                     {extractedConditions.split(',').map((cond, i) => (
-                                                        <span key={i} className="px-3 py-1 bg-red-50 text-red-600 border border-red-100 rounded-full text-[10px] font-black uppercase tracking-wider">
-                                                            🚨 {cond.trim()}
+                                                        <span key={i} className="px-3 py-1 bg-red-50 text-red-600 border border-red-100 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
+                                                            <Siren className="w-3 h-3" /> {cond.trim()}
                                                         </span>
                                                     ))}
                                                 </div>
@@ -1262,7 +1268,7 @@ const ResiViewReport = () => {
                             <div className="flex items-center gap-2">
                                 {([6, 7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status?.toLowerCase().includes('facility') || report.custody_status?.toLowerCase().includes('secured')) && (
                                     <span className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-400/30 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
-                                        <span>🐾</span>
+                                        <PawPrint className="w-3 h-3" />
                                         <span>Animal Secured at Holding Facility</span>
                                     </span>
                                 )}
@@ -1282,8 +1288,8 @@ const ResiViewReport = () => {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                             <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
-                                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-400 text-lg shrink-0">
-                                    {([6, 7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status?.toLowerCase().includes('facility') || report.custody_status?.toLowerCase().includes('secured')) ? '🐾' : '📍'}
+                                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                                    {([6, 7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status?.toLowerCase().includes('facility') || report.custody_status?.toLowerCase().includes('secured')) ? <PawPrint className="w-5 h-5" /> : <MapPin className="w-5 h-5" />}
                                 </div>
                                 <div className="overflow-hidden">
                                     <p className="text-[9px] font-black text-white/50 uppercase tracking-widest">
@@ -1312,7 +1318,7 @@ const ResiViewReport = () => {
                                             }`}
                                             title="Use device GPS sensor"
                                         >
-                                            <span>{isLocatingRoute ? '⏳' : routingState?.isRealtime ? '🟢' : '🧭'}</span>
+                                            {isLocatingRoute ? <Hourglass className="w-3.5 h-3.5" /> : routingState?.isRealtime ? <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> : <Compass className="w-3.5 h-3.5" />}
                                             <span>
                                                 {isLocatingRoute 
                                                     ? 'Checking Location...' 
@@ -1326,7 +1332,7 @@ const ResiViewReport = () => {
                                             className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold rounded-xl transition-all border border-white/10 flex items-center gap-1.5 cursor-pointer"
                                             title="Route from your registered home coordinates"
                                         >
-                                            <span>🏠</span>
+                                            <Home className="w-3.5 h-3.5" />
                                             <span>From My Home</span>
                                         </button>
                                         <button
@@ -1334,7 +1340,7 @@ const ResiViewReport = () => {
                                             className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold rounded-xl transition-all border border-white/10 flex items-center gap-1.5 cursor-pointer"
                                             title="Route from Barangay San Vicente HQ"
                                         >
-                                            <span>🏛️</span>
+                                            <Landmark className="w-3.5 h-3.5" />
                                             <span>From Brgy HQ</span>
                                         </button>
                                         <button
@@ -1346,12 +1352,12 @@ const ResiViewReport = () => {
                                             }`}
                                             title="Click anywhere on the map or drag the pin to set your starting location"
                                         >
-                                            <span>🎯</span>
+                                            <Crosshair className="w-3.5 h-3.5" />
                                             <span>Set Starting Point</span>
                                         </button>
                                         {routingState?.distance && (
-                                            <span className="px-2.5 py-1 bg-white/10 border border-white/15 rounded-xl text-[11px] font-black text-amber-300">
-                                                📏 {routingState.distance} {routingState.time ? `• ⏱️ ${routingState.time}` : ''}
+                                            <span className="px-2.5 py-1 bg-white/10 border border-white/15 rounded-xl text-[11px] font-black text-amber-300 inline-flex items-center gap-1">
+                                                <Ruler className="w-3 h-3" /> {routingState.distance} {routingState.time ? <><span className="mx-0.5">•</span> <Timer className="w-3 h-3" /> {routingState.time}</> : ''}
                                             </span>
                                         )}
                                     </div>
@@ -1360,8 +1366,8 @@ const ResiViewReport = () => {
 
                             {([6, 7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status?.toLowerCase().includes('facility') || report.custody_status?.toLowerCase().includes('secured') || (report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude))) && (
                                 <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
-                                    <div className="w-10 h-10 rounded-2xl bg-slate-700 flex items-center justify-center text-slate-300 text-lg shrink-0">
-                                        🚩
+                                    <div className="w-10 h-10 rounded-2xl bg-slate-700 flex items-center justify-center text-slate-300 shrink-0">
+                                        <Flag className="w-5 h-5" />
                                     </div>
                                     <div className="overflow-hidden">
                                         <p className="text-[9px] font-black text-white/50 uppercase tracking-widest">Initial Found / Sighting Spot</p>
@@ -1381,8 +1387,8 @@ const ResiViewReport = () => {
                             <div className="mb-3.5 p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-slate-900/95 border-2 border-amber-500/40 text-white shadow-xl animate-in fade-in space-y-3.5">
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg shrink-0 border border-amber-500/30">
-                                            📍
+                                        <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+                                            <MapPin className="w-4 h-4" />
                                         </div>
                                         <div>
                                             <h4 className="text-xs font-black uppercase tracking-tight text-white">Location Unreliable</h4>
@@ -1396,7 +1402,7 @@ const ResiViewReport = () => {
                                         onClick={() => setLocationAmbiguous(false)}
                                         className="text-slate-400 hover:text-white text-xs font-bold px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
                                     >
-                                        ✕
+                                        <X className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
                                 
@@ -1410,7 +1416,7 @@ const ResiViewReport = () => {
                                         onClick={() => handleGetDirections('home')}
                                         className="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-[11px] uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
                                     >
-                                        <span>🏠</span>
+                                        <Home className="w-3.5 h-3.5" />
                                         <span>From My Home</span>
                                     </button>
 
@@ -1419,7 +1425,7 @@ const ResiViewReport = () => {
                                         onClick={() => handleGetDirections('hq')}
                                         className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white font-black text-[11px] uppercase tracking-wider rounded-xl transition-all border border-white/15 flex items-center gap-1.5 cursor-pointer"
                                     >
-                                        <span>🏛️</span>
+                                        <Landmark className="w-3.5 h-3.5" />
                                         <span>From Brgy HQ</span>
                                     </button>
 
@@ -1428,7 +1434,7 @@ const ResiViewReport = () => {
                                         onClick={handleSetStartingPointMode}
                                         className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-black text-[11px] uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
                                     >
-                                        <span>🎯</span>
+                                        <Crosshair className="w-3.5 h-3.5" />
                                         <span>Set Starting Point</span>
                                     </button>
                                 </div>
@@ -1439,7 +1445,7 @@ const ResiViewReport = () => {
                         {isSettingStartingPoint && (
                             <div className="mb-3 p-3.5 rounded-2xl bg-blue-500/20 border border-blue-400/40 text-blue-200 text-xs flex items-center justify-between gap-3 animate-in fade-in">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-base animate-pulse">🎯</span>
+                                    <Crosshair className="w-4 h-4 animate-pulse" />
                                     <span className="font-semibold">Click anywhere on the map or drag the blue pin to set your starting location.</span>
                                 </div>
                                 <button 
@@ -1456,7 +1462,7 @@ const ResiViewReport = () => {
                         {locationNotice && !locationAmbiguous && !isSettingStartingPoint && (
                             <div className="mb-3 p-3 rounded-2xl bg-white/10 border border-white/15 text-slate-200 text-xs flex items-center justify-between gap-3 animate-in fade-in">
                                 <div className="flex items-center gap-2">
-                                    <span>ℹ️</span>
+                                    <Info className="w-3.5 h-3.5" />
                                     <span>{locationNotice}</span>
                                 </div>
                                 <button 
@@ -1464,7 +1470,7 @@ const ResiViewReport = () => {
                                     onClick={() => setLocationNotice(null)}
                                     className="text-slate-400 hover:text-white text-xs px-2 py-0.5 rounded-lg bg-white/5 transition-colors cursor-pointer"
                                 >
-                                    ✕
+                                    <X className="w-3 h-3" />
                                 </button>
                             </div>
                         )}
@@ -1473,7 +1479,7 @@ const ResiViewReport = () => {
                         {routingState && !locationAmbiguous && !isSettingStartingPoint && (
                             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 p-2 px-3.5 bg-white/10 rounded-2xl border border-white/15">
                                 <div className="flex items-center gap-2 text-[11px] font-bold text-amber-300">
-                                    <span>💡</span>
+                                    <Lightbulb className="w-3.5 h-3.5" />
                                     <span>You can <strong>drag the blue pin</strong> or <strong>click anywhere on the map</strong> to change your starting point.</span>
                                 </div>
                                 <div className="flex items-center gap-1.5 text-[10px] font-extrabold text-slate-300">
@@ -1593,8 +1599,8 @@ const ResiViewReport = () => {
                             <div className="flex justify-between items-center mb-3 shrink-0 pb-3 border-b border-white/10 gap-3">
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2">
-                                        <span className="w-8 h-8 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center text-sm font-bold border border-orange-500/30">
-                                            🗺️
+                                        <span className="w-8 h-8 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center border border-orange-500/30">
+                                            <MapIcon className="w-4 h-4" />
                                         </span>
                                         <div>
                                             <h3 className="text-sm sm:text-base font-black text-white uppercase tracking-tight truncate">
@@ -1609,8 +1615,8 @@ const ResiViewReport = () => {
 
                                 <div className="flex items-center gap-2 shrink-0">
                                     {routingState?.distance && (
-                                        <span className="hidden sm:inline-flex px-3 py-1.5 bg-white/10 border border-white/15 rounded-xl text-xs font-black text-amber-300">
-                                            📏 {routingState.distance} {routingState.time ? `• ⏱️ ${routingState.time}` : ''}
+                                        <span className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 bg-white/10 border border-white/15 rounded-xl text-xs font-black text-amber-300">
+                                            <Ruler className="w-3 h-3" /> {routingState.distance} {routingState.time ? <><span className="mx-0.5">•</span> <Timer className="w-3 h-3" /> {routingState.time}</> : ''}
                                         </span>
                                     )}
                                     <button
@@ -1638,12 +1644,12 @@ const ResiViewReport = () => {
                                             : 'bg-[#F97316] hover:bg-[#EA580C]'
                                     }`}
                                 >
-                                    <span>{isLocatingRoute ? '⏳' : routingState?.isRealtime ? '🟢' : '🧭'}</span>
+                                    {isLocatingRoute ? <Hourglass className="w-3.5 h-3.5" /> : routingState?.isRealtime ? <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> : <Compass className="w-3.5 h-3.5" />}
                                     <span>
-                                        {isLocatingRoute 
-                                            ? 'Checking Location...' 
-                                            : routingState?.isRealtime 
-                                                ? 'Live GPS Active' 
+                                        {isLocatingRoute
+                                            ? 'Checking Location...'
+                                            : routingState?.isRealtime
+                                                ? 'Live GPS Active'
                                                 : 'Directions (Live GPS)'}
                                     </span>
                                 </button>
@@ -1652,7 +1658,7 @@ const ResiViewReport = () => {
                                     onClick={() => handleGetDirections('home')}
                                     className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold rounded-xl transition-all border border-white/10 flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>🏠</span>
+                                    <Home className="w-3.5 h-3.5" />
                                     <span>From My Home</span>
                                 </button>
                                 <button
@@ -1660,7 +1666,7 @@ const ResiViewReport = () => {
                                     onClick={() => handleGetDirections('hq')}
                                     className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold rounded-xl transition-all border border-white/10 flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>🏛️</span>
+                                    <Landmark className="w-3.5 h-3.5" />
                                     <span>From Brgy HQ</span>
                                 </button>
                                 <button
@@ -1672,13 +1678,13 @@ const ResiViewReport = () => {
                                             : 'bg-white/10 hover:bg-white/20 border-white/10'
                                     }`}
                                 >
-                                    <span>🎯</span>
+                                    <Crosshair className="w-3.5 h-3.5" />
                                     <span>Set Starting Point</span>
                                 </button>
 
                                 {routingState && (
-                                    <span className="text-[10px] font-bold text-amber-300 ml-auto hidden md:inline-block">
-                                        💡 Click anywhere on the map or drag the blue pin to adjust your route
+                                    <span className="text-[10px] font-bold text-amber-300 ml-auto hidden md:inline-flex items-center gap-1">
+                                        <Lightbulb className="w-3 h-3" /> Click anywhere on the map or drag the blue pin to adjust your route
                                     </span>
                                 )}
                             </div>
@@ -1869,11 +1875,11 @@ const ResiViewReport = () => {
                             onClick={() => setSelectedQrPreview(null)}
                             className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-colors"
                         >
-                            ✕
+                            <X className="w-4 h-4" />
                         </button>
-                        
-                        <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl font-black mx-auto mb-3">
-                            🐾
+
+                        <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-3">
+                            <PawPrint className="w-6 h-6" />
                         </div>
                         <h3 className="text-base font-black text-gray-900 uppercase tracking-tight mb-0.5">
                             {selectedQrPreview.petName || 'Registered Pet'}
@@ -1944,7 +1950,7 @@ const ResiViewReport = () => {
             {/* Dispute Submission Success Alert */}
             {disputeSuccessAlert && (
                 <div className="fixed top-24 right-6 z-[9999] max-w-md bg-emerald-600 text-white p-5 rounded-3xl shadow-2xl animate-in slide-in-from-top-4 flex items-center gap-3">
-                    <span className="text-2xl">✓</span>
+                    <Check className="w-6 h-6" />
                     <div>
                         <p className="text-xs font-black uppercase tracking-wider">Dispute Submitted</p>
                         <p className="text-[11px] text-emerald-100 font-medium">Your counter-claim & vaccination proof were sent to subdivision officers for immediate review.</p>
@@ -1958,7 +1964,7 @@ const ResiViewReport = () => {
                     <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-300 border border-amber-100">
                         <div className="px-8 py-6 border-b border-gray-150 flex justify-between items-center bg-amber-50/60">
                             <div className="flex items-center gap-3">
-                                <span className="text-3xl">⚖️</span>
+                                <Scale className="w-8 h-8 text-amber-700" />
                                 <div>
                                     <h3 className="text-xl font-black text-amber-950 uppercase tracking-tight">Dispute Report / Counter-Claim</h3>
                                     <p className="text-xs text-amber-800/80 mt-0.5 font-medium">Submit vaccination card and home confinement proof to clear false accusations.</p>
@@ -2001,7 +2007,7 @@ const ResiViewReport = () => {
 
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1 flex items-center gap-1.5">
-                                    <span>💉</span> Anti-Rabies Vaccination Card (Photo or PDF)
+                                    <Syringe className="w-3.5 h-3.5" /> Anti-Rabies Vaccination Card (Photo or PDF)
                                 </label>
                                 <input
                                     type="file"
@@ -2014,7 +2020,7 @@ const ResiViewReport = () => {
 
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1 flex items-center gap-1.5">
-                                    <span>📸</span> Supporting Photo (Pet Safe at Home / In Enclosure)
+                                    <Camera className="w-3.5 h-3.5" /> Supporting Photo (Pet Safe at Home / In Enclosure)
                                 </label>
                                 <input
                                     type="file"
@@ -2025,8 +2031,8 @@ const ResiViewReport = () => {
                                 {supportingPhotoFile && <p className="text-[10px] text-emerald-700 font-bold ml-1">Attached: {supportingPhotoFile.name}</p>}
                             </div>
 
-                            <div className="p-3.5 bg-blue-50 rounded-2xl border border-blue-200 text-[11px] text-blue-950 font-medium leading-relaxed">
-                                <strong>ℹ️ Resident Protection:</strong> Submitting this counter-claim will place the report into <em>Disputed</em> status and alert subdivision officers to evaluate your evidence before taking any capture action.
+                            <div className="p-3.5 bg-blue-50 rounded-2xl border border-blue-200 text-[11px] text-blue-950 font-medium leading-relaxed flex items-start gap-1.5">
+                                <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" /> <span><strong>Resident Protection:</strong> Submitting this counter-claim will place the report into <em>Disputed</em> status and alert subdivision officers to evaluate your evidence before taking any capture action.</span>
                             </div>
 
                             <div className="flex gap-4 pt-2">

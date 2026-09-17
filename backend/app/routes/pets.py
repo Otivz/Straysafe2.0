@@ -77,14 +77,14 @@ def get_actor_user(req: Request, db: Session) -> Optional[User]:
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]
         try:
-            from app.utils.auth import SECRET_KEY, ALGORITHM
-            import jwt
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            user_id = payload.get("sub") or payload.get("user_id")
-            if user_id:
-                user = db.query(User).filter(User.user_id == int(user_id)).first()
-                if user:
-                    return user
+            from app.utils.auth import decode_access_token
+            payload = decode_access_token(token)
+            if payload:
+                user_id = payload.get("sub") or payload.get("user_id")
+                if user_id:
+                    user = db.query(User).filter(User.user_id == int(user_id)).first()
+                    if user:
+                        return user
         except Exception:
             pass
     return None

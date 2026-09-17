@@ -16,7 +16,18 @@ import {
     Loader2,
     Maximize2,
     Minimize2,
-    Check
+    Check,
+    ClipboardList,
+    Bandage,
+    AlertTriangle,
+    Siren,
+    Dog,
+    Bot,
+    Pin,
+    Home,
+    Scale,
+    Lightbulb,
+    LifeBuoy
 } from 'lucide-react';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
@@ -543,7 +554,7 @@ export default function ReportStrayPage() {
                             <ArrowLeft className="w-4 h-4" /> Back to Feed
                         </button>
                         <h1 className="text-2xl sm:text-3xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-3">
-                            <span>📝 STRAY-SAFE Report a Stray Animal</span>
+                            <ClipboardList className="w-6 h-6 shrink-0" /> <span>STRAY-SAFE Report a Stray Animal</span>
                         </h1>
                     </div>
                     <span className="px-4 py-1.5 rounded-full bg-orange-100 text-[#F97316] text-xs font-black uppercase tracking-widest">
@@ -572,7 +583,7 @@ export default function ReportStrayPage() {
                                             }`}
                                     >
                                         <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-[10px]">
-                                            {isCompleted ? '✓' : step.id}
+                                            {isCompleted ? <Check className="w-3 h-3" /> : step.id}
                                         </span>
                                         <span className="uppercase tracking-wider text-[11px] whitespace-nowrap">{step.title}</span>
                                     </button>
@@ -622,17 +633,10 @@ export default function ReportStrayPage() {
                             <div className="flex gap-4">
                                 <button
                                     type="button"
-                                    onClick={() => document.getElementById('media-file-input')?.click()}
-                                    className="flex-1 py-3.5 px-4 bg-gray-100 hover:bg-gray-200 text-[#1a1208] rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
-                                >
-                                    <Upload className="w-4 h-4" /> Upload Button
-                                </button>
-                                <button
-                                    type="button"
                                     onClick={startCamera}
                                     className="flex-1 py-3.5 px-4 bg-orange-50 hover:bg-orange-100 text-[#F97316] rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-sm active:scale-98"
                                 >
-                                    <Camera className="w-4 h-4" /> Camera Button
+                                    <Camera className="w-4 h-4" /> Use Camera
                                 </button>
                             </div>
 
@@ -737,11 +741,11 @@ export default function ReportStrayPage() {
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 {[
-                                    { id: 1, name: 'Injured Animal', icon: '🩹', desc: 'Wounded, bleeding, or physically hurt' },
-                                    { id: 2, name: 'Aggressive Stray', icon: '⚠️', desc: 'Biting, barking aggressively, or chasing people' },
-                                    { id: 3, name: 'Possible Rabies Risk', icon: '🚨', desc: 'Foaming at mouth, disorientation, erratic behavior' },
-                                    { id: 4, name: 'Roaming', icon: '🐕', desc: 'Stray Roaming in the Neighborhood' },
-                                    { id: 5, name: 'Animal Rescue Needed', icon: '🆘', desc: 'Trapped, sick/weak, or in general distress' },
+                                    { id: 1, name: 'Injured Animal', icon: Bandage, desc: 'Wounded, bleeding, or physically hurt' },
+                                    { id: 2, name: 'Aggressive Stray', icon: AlertTriangle, desc: 'Biting, barking aggressively, or chasing people' },
+                                    { id: 3, name: 'Possible Rabies Risk', icon: Siren, desc: 'Foaming at mouth, disorientation, erratic behavior' },
+                                    { id: 4, name: 'Roaming', icon: Dog, desc: 'Stray Roaming in the Neighborhood' },
+                                    { id: 5, name: 'Animal Rescue Needed', icon: LifeBuoy, desc: 'Trapped, sick/weak, or in general distress' },
                                 ].map((cat) => (
                                     <label
                                         key={cat.id}
@@ -760,7 +764,7 @@ export default function ReportStrayPage() {
                                         />
                                         <div>
                                             <div className="flex items-center gap-1.5">
-                                                <span className="text-sm">{cat.icon}</span>
+                                                <cat.icon className="w-4 h-4 text-[#F97316]" />
                                                 <span className="text-xs font-black text-[#1a1208]">{cat.name}</span>
                                             </div>
                                             <p className="text-[10px] font-bold text-gray-400 mt-0.5">{cat.desc}</p>
@@ -778,14 +782,14 @@ export default function ReportStrayPage() {
                                 <div className="py-16 flex flex-col items-center justify-center gap-4 text-center">
                                     <Loader2 className="w-12 h-12 text-[#F97316] animate-spin" />
                                     <div>
-                                        <h3 className="text-base font-black text-[#1a1208] uppercase tracking-wider">🤖 AI is analyzing your uploaded media...</h3>
+                                        <h3 className="text-base font-black text-[#1a1208] uppercase tracking-wider flex items-center justify-center gap-2"><Bot className="w-5 h-5" /> AI is analyzing your uploaded media...</h3>
                                         <p className="text-xs font-bold text-gray-400 mt-1">Extracting features, colors, breed likelihood, and collar metrics</p>
                                     </div>
                                 </div>
                             ) : aiAnalysisResult && !aiAnalysisResult.animalDetected ? (
                                 <div className="p-8 bg-red-50/80 border-2 border-red-200 rounded-3xl space-y-5 text-center animate-in fade-in">
-                                    <div className="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto text-2xl shadow-sm border border-red-200">
-                                        ⚠️
+                                    <div className="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto shadow-sm border border-red-200">
+                                        <AlertTriangle className="w-7 h-7" />
                                     </div>
                                     <div>
                                         <h3 className="text-base font-black uppercase tracking-wider text-red-900">
@@ -798,7 +802,7 @@ export default function ReportStrayPage() {
 
                                     <div className="p-4 bg-white rounded-2xl border border-red-100 text-left text-xs space-y-2 max-w-lg mx-auto shadow-xs">
                                         <p className="font-black text-red-800 flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
-                                            <span>📷</span> Recommendations:
+                                            <Camera className="w-3.5 h-3.5" /> Recommendations:
                                         </p>
                                         <ul className="list-disc list-inside space-y-1 text-gray-600 text-[11px] font-bold pl-1">
                                             <li>Make sure the stray dog or cat is centered and clearly visible.</li>
@@ -811,16 +815,16 @@ export default function ReportStrayPage() {
                                         <button
                                             type="button"
                                             onClick={() => setCurrentStep(1)}
-                                            className="px-6 py-3.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md active:scale-95"
+                                            className="px-6 py-3.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5"
                                         >
-                                            ← Replace Photo (Go to Step 1)
+                                            <ArrowLeft className="w-3.5 h-3.5" /> Replace Photo (Go to Step 1)
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setCurrentStep(4)}
-                                            className="px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-black text-xs uppercase tracking-wider rounded-2xl transition-all"
+                                            className="px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-1.5"
                                         >
-                                            Continue Manually →
+                                            Continue Manually <ArrowRight className="w-3.5 h-3.5" />
                                         </button>
                                     </div>
                                 </div>
@@ -829,13 +833,13 @@ export default function ReportStrayPage() {
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
-                                                <span>🤖 AI Suggestions</span>
+                                                <Bot className="w-5 h-5" /> <span>AI Suggestions</span>
                                             </h2>
                                             <p className="text-xs font-bold text-gray-400 mt-1">Review the AI animal analysis predictions generated from your media.</p>
                                         </div>
                                         {formData.animalType && (
                                             <span className="px-3.5 py-1.5 bg-emerald-100 text-emerald-700 font-black text-[10px] uppercase tracking-wider rounded-full flex items-center gap-1 border border-emerald-200">
-                                                ✓ {formData.animalType} Detected
+                                                <Check className="w-3 h-3" /> {formData.animalType} Detected
                                             </span>
                                         )}
                                     </div>
@@ -1192,10 +1196,10 @@ export default function ReportStrayPage() {
                                         </button>
                                     </div>
                                     <div className="flex items-center justify-between pt-2 border-t border-emerald-100/60 text-xs">
-                                        <span className="text-[11px] font-bold text-gray-500">
+                                        <span className="text-[11px] font-bold text-gray-500 inline-flex items-center gap-1">
                                             {formData.securedLocationMode === 'with_animal'
-                                                ? '📍 Using current physical location with animal'
-                                                : '📌 Click the map below to pinpoint where the animal is held'}
+                                                ? <><MapPin className="w-3 h-3 shrink-0" /> Using current physical location with animal</>
+                                                : <><Pin className="w-3 h-3 shrink-0" /> Click the map below to pinpoint where the animal is held</>}
                                         </span>
                                         <span className="font-mono text-[11px] font-black text-emerald-700">
                                             {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
@@ -1362,8 +1366,8 @@ export default function ReportStrayPage() {
 
                                 {landmarks.length > 0 && (
                                     <div className="pt-2">
-                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">
-                                            📍 Pick From Registered Landmarks:
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1 mb-1.5">
+                                            <MapPin className="w-3 h-3" /> Pick From Registered Landmarks:
                                         </span>
                                         <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
                                             {landmarks.map((lm) => (
@@ -1484,8 +1488,10 @@ export default function ReportStrayPage() {
                                 </div>
                                 <div className="flex justify-between py-2 border-b border-gray-200">
                                     <span className="text-gray-400">Animal Custody:</span>
-                                    <span className={`font-black ${formData.custodyStatus === 'Secured' ? 'text-emerald-600' : 'text-[#F97316]'}`}>
-                                        {formData.custodyStatus === 'Secured' ? '🏠 Secured in Safe Place' : '👁️ Sighting Only (Not Touched)'}
+                                    <span className={`font-black inline-flex items-center gap-1 ${formData.custodyStatus === 'Secured' ? 'text-emerald-600' : 'text-[#F97316]'}`}>
+                                        {formData.custodyStatus === 'Secured'
+                                            ? <><Home className="w-3.5 h-3.5" /> Secured in Safe Place</>
+                                            : <><Eye className="w-3.5 h-3.5" /> Sighting Only (Not Touched)</>}
                                     </span>
                                 </div>
                                 <div className="flex justify-between py-2 border-b border-gray-200">
@@ -1500,7 +1506,7 @@ export default function ReportStrayPage() {
 
                             {/* Community Accountability & Anti-Harassment Notice */}
                             <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
-                                <span className="text-xl flex-shrink-0">⚖️</span>
+                                <Scale className="w-5 h-5 flex-shrink-0 text-amber-700" />
                                 <div>
                                     <h4 className="text-xs font-black text-amber-950 uppercase tracking-tight">Community Accountability Notice</h4>
                                     <p className="text-[11px] text-amber-800 font-semibold mt-0.5 leading-relaxed">
@@ -1597,7 +1603,7 @@ export default function ReportStrayPage() {
                                 </span>
                                 {formData.landmark && (
                                     <span className="bg-orange-500 text-white font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
-                                        <span>📍 {formData.landmark}</span>
+                                        <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" /> {formData.landmark}</span>
                                         <button
                                             type="button"
                                             onClick={() => setFormData(prev => ({ ...prev, landmark: '' }))}
@@ -1609,8 +1615,8 @@ export default function ReportStrayPage() {
                                     </span>
                                 )}
                             </div>
-                            <div className="text-[11px] font-bold text-gray-600 truncate max-w-xs sm:max-w-md">
-                                🏠 {resolvedAddress || (isGeocoding ? 'Resolving street address...' : 'Selera Homes')}
+                            <div className="text-[11px] font-bold text-gray-600 truncate max-w-xs sm:max-w-md flex items-center gap-1">
+                                <Home className="w-3 h-3 shrink-0" /> {resolvedAddress || (isGeocoding ? 'Resolving street address...' : 'Selera Homes')}
                             </div>
                         </div>
 
@@ -1702,8 +1708,8 @@ export default function ReportStrayPage() {
 
                         {/* Modal Footer Controls */}
                         <div className="flex items-center justify-between pt-3 sm:pt-4 border-t border-gray-100 shrink-0 gap-3">
-                            <span className="text-xs text-gray-400 font-medium hidden sm:inline">
-                                💡 Tip: You can drag, zoom, and click anywhere to reposition the pin accurately.
+                            <span className="text-xs text-gray-400 font-medium hidden sm:inline items-center gap-1 sm:inline-flex">
+                                <Lightbulb className="w-3.5 h-3.5" /> Tip: You can drag, zoom, and click anywhere to reposition the pin accurately.
                             </span>
                             <div className="flex items-center gap-2 ml-auto">
                                 <button
