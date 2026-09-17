@@ -243,6 +243,13 @@ Define standard Tailwind semantic variables in `index.css`:
   - Create `<IntakeDischargeModal />`
   - Create `<HoldingMetricsHeader />`
 
+
+
+
+
+
+
+
 ### Phase 3: Design System & Dark Mode Audit (Sprint 3) [COMPLETED]
 - [x] Defined semantic theme utilities (`bg-app`, `bg-surface`, `text-main`, `text-muted`, `border-subtle`) in `index.css` for consistent light/dark mode theming.
 - [x] Standardized Primary Brand Accent to `orange-500` / `#FF6B00` across `Button.tsx` and core components.

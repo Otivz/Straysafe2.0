@@ -1,9 +1,4 @@
-// Uploads a file directly from the browser to Cloudinary using the unsigned
-// preset, bypassing the FastAPI backend entirely for the file bytes. Used for
-// attachments (chat, claim evidence) so large files - especially video - don't
-// have to round-trip through our server's bandwidth. The backend only ever
-// sees the resulting URL, which it re-validates before storing (see
-// backend/app/utils/uploads.py::validate_cloudinary_url).
+import axios from 'axios';
 import { getMediaKind, validateFile, type MediaKind } from './uploadValidation';
 
 const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
@@ -14,7 +9,13 @@ export interface CloudinaryUploadResult {
     kind: MediaKind;
 }
 
-export async function uploadDirectToCloudinary(file: File, folder: string): Promise<CloudinaryUploadResult> {
+export type UploadProgressCallback = (percent: number) => void;
+
+export async function uploadDirectToCloudinary(
+    file: File,
+    folder: string,
+    onProgress?: UploadProgressCallback
+): Promise<CloudinaryUploadResult> {
     if (!CLOUD_NAME || !UPLOAD_PRESET) {
         throw new Error('Cloudinary is not configured (missing VITE_CLOUDINARY_CLOUD_NAME / VITE_CLOUDINARY_UPLOAD_PRESET).');
     }
@@ -29,22 +30,33 @@ export async function uploadDirectToCloudinary(file: File, folder: string): Prom
     formData.append('upload_preset', UPLOAD_PRESET);
     formData.append('folder', folder);
 
-    const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, {
-        method: 'POST',
-        body: formData,
-    });
+    try {
+        const response = await axios.post(
+            `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`,
+            formData,
+            {
+                headers: { 'Content-Type': 'multipart/form-data' },
+                onUploadProgress: (progressEvent) => {
+                    if (progressEvent.total && onProgress) {
+                        const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                        onProgress(percent);
+                    }
+                },
+            }
+        );
 
-    if (!response.ok) {
+        return {
+            url: response.data.secure_url as string,
+            kind: getMediaKind(file.name),
+        };
+    } catch (err: any) {
         let message = 'Upload to Cloudinary failed.';
-        try {
-            const errBody = await response.json();
-            message = errBody?.error?.message || message;
-        } catch {
-            // ignore parse failure, use default message
+        if (axios.isAxiosError(err)) {
+            message = err.response?.data?.error?.message || err.message || message;
+        } else if (err instanceof Error) {
+            message = err.message;
         }
         throw new Error(message);
     }
-
-    const data = await response.json();
-    return { url: data.secure_url as string, kind: getMediaKind(file.name) };
 }
+
