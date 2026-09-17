@@ -426,7 +426,7 @@ export default function ReportChatDrawer({
 
             {/* Slide-over / Full Screen Mobile Container */}
             <div className="fixed inset-0 sm:inset-y-0 sm:right-0 sm:left-auto max-w-full flex pointer-events-none z-[99999]">
-                <div className="w-full sm:w-screen sm:max-w-md h-full pointer-events-auto bg-white shadow-2xl flex flex-col sm:border-l border-gray-200 animate-in slide-in-from-right duration-300">
+                <div className="w-full sm:w-screen sm:max-w-md h-full pointer-events-auto bg-white dark:bg-[#151C2C] shadow-2xl flex flex-col sm:border-l border-gray-200 dark:border-gray-800 animate-in slide-in-from-right duration-300">
                     
                     {/* Header */}
                     <div className="p-3.5 sm:p-4 bg-gradient-to-r from-orange-500 via-orange-600 to-amber-500 text-white flex items-center justify-between shadow-md shrink-0">
@@ -470,7 +470,7 @@ export default function ReportChatDrawer({
                     </div>
 
                     {/* Report Summary Quick Strip */}
-                    <div className="px-4 py-2 bg-orange-50/80 border-b border-orange-100 flex items-center justify-between text-xs text-orange-950 shrink-0">
+                    <div className="px-4 py-2 bg-orange-50/80 dark:bg-orange-950/40 border-b border-orange-100 dark:border-orange-900/60 flex items-center justify-between text-xs text-orange-950 dark:text-orange-200 shrink-0">
                         {(() => {
                             const memorableSummary = generateMemorableTitle({
                                 isMatch: isMatchMode,
@@ -489,14 +489,14 @@ export default function ReportChatDrawer({
 
                             return (
                                 <div className="flex items-center gap-1.5 truncate max-w-[75%]">
-                                    <span className="font-bold text-orange-700">{isMatchMode ? 'Pet Match:' : 'Case:'}</span>
-                                    <span className="truncate font-semibold text-gray-800" title={memorableSummary}>
+                                    <span className="font-bold text-orange-700 dark:text-orange-400">{isMatchMode ? 'Pet Match:' : 'Case:'}</span>
+                                    <span className="truncate font-semibold text-gray-800 dark:text-gray-200" title={memorableSummary}>
                                         {memorableSummary}
                                     </span>
                                 </div>
                             );
                         })()}
-                        <span className="text-[10px] font-black uppercase tracking-wider bg-white px-2 py-0.5 rounded-md border border-orange-200 text-orange-800 shrink-0">
+                        <span className="text-[10px] font-black uppercase tracking-wider bg-white dark:bg-[#1E2738] px-2 py-0.5 rounded-md border border-orange-200 dark:border-orange-800 text-orange-800 dark:text-orange-300 shrink-0">
                             {isMatchMode ? 'Direct Match Chat' : 'Case Chat'}
                         </span>
                     </div>
@@ -513,16 +513,16 @@ export default function ReportChatDrawer({
                     )}
 
                     {/* Messages Body */}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-slate-50/60 custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-slate-50/60 dark:bg-[#0B0F19] custom-scrollbar">
                         {/* Prominent AI Potential Match Card in Chat */}
                         {localMatchedPet && report?.report_id && (
-                            <div className={`mb-3 bg-gradient-to-b from-orange-50/95 via-amber-50/40 to-white text-gray-900 border rounded-2xl p-3.5 space-y-3 shadow-xs transition-all ${
-                                shouldHighlightMatch ? 'border-[#F97316] ring-2 ring-orange-300 shadow-md' : 'border-orange-200'
+                            <div className={`mb-3 bg-gradient-to-b from-orange-50/95 via-amber-50/40 to-white dark:from-[#1E2738] dark:via-[#151C2C] dark:to-[#151C2C] text-gray-900 dark:text-white border rounded-2xl p-3.5 space-y-3 shadow-xs transition-all ${
+                                shouldHighlightMatch ? 'border-[#F97316] ring-2 ring-orange-300 dark:ring-orange-800 shadow-md' : 'border-orange-200 dark:border-orange-900/50'
                             }`}>
-                                <div className="flex items-center justify-between gap-2 border-b border-orange-100 pb-2">
+                                <div className="flex items-center justify-between gap-2 border-b border-orange-100 dark:border-orange-900/40 pb-2">
                                     <div className="flex items-center gap-1.5">
                                         <span className="w-2.5 h-2.5 rounded-full bg-[#F97316] animate-pulse"></span>
-                                        <span className="text-[11px] font-black uppercase tracking-wider text-orange-950">
+                                        <span className="text-[11px] font-black uppercase tracking-wider text-orange-950 dark:text-orange-200">
                                             AI Potential Match Sighting
                                         </span>
                                     </div>
@@ -639,7 +639,7 @@ export default function ReportChatDrawer({
                             if (msg.isSystemMessage) {
                                 return (
                                     <div key={msg.id} className="flex justify-center my-3">
-                                        <div className="px-3.5 py-1.5 rounded-xl bg-orange-100/70 border border-orange-200/80 text-[10px] font-bold text-orange-900 text-center max-w-[90%] shadow-2xs leading-relaxed">
+                                        <div className="px-3.5 py-1.5 rounded-xl bg-orange-100/70 dark:bg-orange-950/60 border border-orange-200/80 dark:border-orange-900/60 text-[10px] font-bold text-orange-900 dark:text-orange-200 text-center max-w-[90%] shadow-2xs leading-relaxed">
                                             {msg.text}
                                         </div>
                                     </div>
@@ -669,10 +669,10 @@ export default function ReportChatDrawer({
                                         return (
                                             <div className={`${isLookAlikeMsg ? 'max-w-[95%]' : 'max-w-[80%]'} flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                                                 <div className="flex items-center gap-1.5 mb-1 px-1">
-                                                    <span className="text-[10px] font-bold text-gray-600 truncate max-w-[120px]">
+                                                    <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300 truncate max-w-[120px]">
                                                         {isMe ? 'You' : msg.senderName}
                                                     </span>
-                                                    <span className="text-[8px] font-bold uppercase tracking-wider px-1 py-0.2 bg-gray-100 rounded text-gray-500">
+                                                    <span className="text-[8px] font-bold uppercase tracking-wider px-1 py-0.2 bg-gray-100 dark:bg-gray-800 rounded text-gray-500 dark:text-gray-400">
                                                         {msg.senderRole}
                                                     </span>
                                                 </div>
@@ -680,7 +680,7 @@ export default function ReportChatDrawer({
                                                 <div className={`p-3.5 rounded-2xl text-xs leading-relaxed shadow-xs ${
                                                     isMe 
                                                         ? 'bg-gradient-to-tr from-orange-600 to-amber-500 text-white rounded-br-xs' 
-                                                        : 'bg-white text-gray-800 border border-gray-200/80 rounded-bl-xs'
+                                                        : 'bg-white dark:bg-[#1E2738] text-gray-800 dark:text-gray-100 border border-gray-200/80 dark:border-gray-700/80 rounded-bl-xs'
                                                 }`}>
                                                     {msg.mediaUrl && (
                                                         <div className="mb-2 rounded-xl overflow-hidden border border-black/10 max-h-44">
@@ -918,21 +918,21 @@ export default function ReportChatDrawer({
                     )}
 
                     {/* Input Footer */}
-                    <div className="p-3 sm:p-3.5 bg-white border-t border-gray-200 shrink-0 pb-6 sm:pb-3.5">
+                    <div className="p-3 sm:p-3.5 bg-white dark:bg-[#151C2C] border-t border-gray-200 dark:border-gray-800 shrink-0 pb-6 sm:pb-3.5">
                         {isResolved ? (
-                            <div className="p-3 bg-gray-50 rounded-2xl border border-gray-200 text-center space-y-1">
-                                <p className="text-xs font-bold text-gray-700">🔒 Case Resolved & Archived</p>
-                                <p className="text-[10px] text-gray-500 leading-relaxed">
+                            <div className="p-3 bg-gray-50 dark:bg-[#0E131F] rounded-2xl border border-gray-200 dark:border-gray-800 text-center space-y-1">
+                                <p className="text-xs font-bold text-gray-700 dark:text-gray-200">🔒 Case Resolved & Archived</p>
+                                <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed">
                                     This report has been resolved and direct messaging is in read-only mode. If you need any further assistance, please contact the office directly.
                                 </p>
                             </div>
                         ) : !canInteract ? (
-                            <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-center space-y-1">
-                                <div className="flex items-center justify-center gap-1.5 text-amber-900 font-black text-xs">
+                            <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 rounded-2xl border border-amber-200 dark:border-amber-900/60 text-center space-y-1">
+                                <div className="flex items-center justify-center gap-1.5 text-amber-900 dark:text-amber-300 font-black text-xs">
                                     <span>🔒</span>
                                     <span>Read-Only Case Access</span>
                                 </div>
-                                <p className="text-[10.5px] text-amber-800 leading-relaxed">
+                                <p className="text-[10.5px] text-amber-800 dark:text-amber-400 leading-relaxed">
                                     Only responders assigned to this incident report can interact and send messages. Higher role officers can view and monitor all messages.
                                 </p>
                             </div>
@@ -950,7 +950,7 @@ export default function ReportChatDrawer({
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
                                     disabled={isUploadingMedia}
-                                    className="p-2.5 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-xl transition-all border border-gray-200 cursor-pointer shrink-0"
+                                    className="p-2.5 text-gray-400 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/40 rounded-xl transition-all border border-gray-200 dark:border-gray-700 cursor-pointer shrink-0"
                                     title="Attach photo, video, or document"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -963,7 +963,7 @@ export default function ReportChatDrawer({
                                     value={inputText}
                                     onChange={(e) => setInputText(e.target.value)}
                                     placeholder="Type message to responder/reporter..."
-                                    className="flex-1 min-w-0 bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-800 font-medium focus:outline-none focus:border-orange-500 focus:bg-white transition-all placeholder:text-gray-400"
+                                    className="flex-1 min-w-0 bg-gray-50 dark:bg-[#0E131F] border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-xs text-gray-800 dark:text-white font-medium focus:outline-none focus:border-orange-500 focus:bg-white dark:focus:bg-[#151C2C] transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
                                 />
 
                                 <button

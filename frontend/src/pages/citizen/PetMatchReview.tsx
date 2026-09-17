@@ -957,38 +957,6 @@ const PetMatchReview = () => {
                                             The STRAY-SAFE AI matching system has detected a potential match with one of your registered pets. Is this your lost pet?
                                         </p>
 
-                                        <div className="space-y-4">
-                                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Matched Registered Pet</label>
-                                             {matchedPet ? (
-                                                 <div className="flex items-center gap-4 p-4 bg-orange-50/30 border border-orange-100 rounded-2xl">
-                                                     <div 
-                                                         onClick={() => {
-                                                             if (matchedPet && matchedPet.photo_url) {
-                                                                 setViewingImage({
-                                                                     url: getPetPicture(matchedPet.photo_url),
-                                                                     title: matchedPet.pet_name || "Your Registered Pet",
-                                                                     subtitle: `${matchedPet.pet_type || 'Pet'} • ${matchedPet.breed || 'Registered Breed'}`,
-                                                                     type: 'pet'
-                                                                 });
-                                                             }
-                                                         }}
-                                                         className="w-12 h-12 rounded-full overflow-hidden bg-gray-100 border border-gray-250 flex-shrink-0 cursor-pointer hover:scale-105 transition-transform"
-                                                         title="Click to inspect photo"
-                                                     >
-                                                         <img src={getPetPicture(matchedPet.photo_url)} alt={matchedPet.pet_name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }} />
-                                                     </div>
-                                                     <div>
-                                                         <p className="text-sm font-black text-[#1a1208] uppercase leading-tight">{matchedPet.pet_name}</p>
-                                                         <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">{matchedPet.breed || "Aspin"}</p>
-                                                     </div>
-                                                 </div>
-                                             ) : (
-                                                 <div className="p-4 bg-red-50 border border-red-100 rounded-2xl text-center">
-                                                     <p className="text-xs font-bold text-red-600 uppercase tracking-wider">No matching registered pet found.</p>
-                                                 </div>
-                                             )}
-                                        </div>
-
                                         <div className="pt-2 space-y-3">
                                             <Button
                                                 disabled={!matchedPet}
@@ -1024,43 +992,43 @@ const PetMatchReview = () => {
 
                                         {/* Vaccination Card */}
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Vaccination Card</label>
+                                            <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest block">Vaccination Card</label>
                                             <input
                                                 type="file"
                                                 accept={UPLOAD_ACCEPT.imageVideoDocument}
                                                 onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setVaccineCardFile, setVaccineCardName)}
-                                                className="w-full text-xs font-bold text-gray-455 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
+                                                className="w-full text-xs font-bold text-gray-500 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 dark:file:bg-orange-950/40 file:text-[#F97316] dark:file:text-orange-400 hover:file:bg-orange-100 dark:hover:file:bg-orange-900/60 cursor-pointer"
                                             />
-                                            {vaccineCardName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {vaccineCardName}</p>}
+                                            {vaccineCardName && <p className="text-[9px] font-bold text-green-600 dark:text-green-400 uppercase">Selected: {vaccineCardName}</p>}
                                         </div>
 
                                         {/* Vet Records */}
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Veterinary Medical Records</label>
+                                            <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest block">Veterinary Medical Records</label>
                                             <input
                                                 type="file"
                                                 accept={UPLOAD_ACCEPT.imageVideoDocument}
                                                 onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setVetRecordFile, setVetRecordName)}
-                                                className="w-full text-xs font-bold text-gray-455 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
+                                                className="w-full text-xs font-bold text-gray-500 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 dark:file:bg-orange-950/40 file:text-[#F97316] dark:file:text-orange-400 hover:file:bg-orange-100 dark:hover:file:bg-orange-900/60 cursor-pointer"
                                             />
-                                            {vetRecordName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {vetRecordName}</p>}
+                                            {vetRecordName && <p className="text-[9px] font-bold text-green-600 dark:text-green-400 uppercase">Selected: {vetRecordName}</p>}
                                         </div>
 
                                         {/* Pet Registration Certificate */}
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Pet Registration Record (Optional)</label>
+                                            <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest block">Pet Registration Record (Optional)</label>
                                             <input
                                                 type="file"
                                                 accept={UPLOAD_ACCEPT.imageVideoDocument}
                                                 onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setPetRegRecordFile, setPetRegRecordName)}
-                                                className="w-full text-xs font-bold text-gray-460 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
+                                                className="w-full text-xs font-bold text-gray-500 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 dark:file:bg-orange-950/40 file:text-[#F97316] dark:file:text-orange-400 hover:file:bg-orange-100 dark:hover:file:bg-orange-900/60 cursor-pointer"
                                             />
-                                            {petRegRecordName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {petRegRecordName}</p>}
+                                            {petRegRecordName && <p className="text-[9px] font-bold text-green-600 dark:text-green-400 uppercase">Selected: {petRegRecordName}</p>}
                                         </div>
 
                                         {/* Additional Photos bago mawala */}
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Additional Pet Photos or Video (Before going missing)</label>
+                                            <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest block">Additional Pet Photos or Video (Before going missing)</label>
                                             <input
                                                 type="file"
                                                 multiple
@@ -1081,16 +1049,16 @@ const PetMatchReview = () => {
                                                     setAdditionalPhotosFile(file);
                                                     setPrevPhotoName(`${file.name}${files && files.length > 1 ? ` (+${files.length - 1} files)` : ''}`);
                                                 }}
-                                                className="w-full text-xs font-bold text-gray-465 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
+                                                className="w-full text-xs font-bold text-gray-500 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 dark:file:bg-orange-950/40 file:text-[#F97316] dark:file:text-orange-400 hover:file:bg-orange-100 dark:hover:file:bg-orange-900/60 cursor-pointer"
                                             />
-                                            {prevPhotoName && <p className="text-[9px] font-bold text-green-600 uppercase">Attached: {prevPhotoName}</p>}
+                                            {prevPhotoName && <p className="text-[9px] font-bold text-green-600 dark:text-green-400 uppercase">Attached: {prevPhotoName}</p>}
                                         </div>
 
                                         {/* Distinctive markings */}
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Distinctive Markings (Not visible in photos)</label>
+                                            <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest block">Distinctive Markings (Not visible in photos)</label>
                                             <textarea
-                                                className="w-full bg-[#FAFAF9] border border-gray-100 rounded-2xl p-4 text-xs font-semibold focus:outline-none min-h-[70px] resize-none"
+                                                className="w-full bg-[#FAFAF9] dark:bg-[#0E131F] border border-gray-100 dark:border-gray-800 rounded-2xl p-4 text-xs font-semibold text-[#1a1208] dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:border-orange-500 min-h-[70px] resize-none"
                                                 placeholder="Describe hidden markings (e.g. 'Left ear notch', 'White spot on belly')"
                                                 value={distinctiveMarkings}
                                                 onChange={(e) => setDistinctiveMarkings(e.target.value)}
@@ -1099,9 +1067,9 @@ const PetMatchReview = () => {
 
                                         {/* Notes */}
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Additional notes / Remarks</label>
+                                            <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest block">Additional notes / Remarks</label>
                                             <textarea
-                                                className="w-full bg-[#FAFAF9] border border-gray-100 rounded-2xl p-4 text-xs font-semibold focus:outline-none min-h-[70px] resize-none"
+                                                className="w-full bg-[#FAFAF9] dark:bg-[#0E131F] border border-gray-100 dark:border-gray-800 rounded-2xl p-4 text-xs font-semibold text-[#1a1208] dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:border-orange-500 min-h-[70px] resize-none"
                                                 placeholder="Add comments for Subdivision Leaders..."
                                                 value={remarks}
                                                 onChange={(e) => setRemarks(e.target.value)}
@@ -1111,7 +1079,7 @@ const PetMatchReview = () => {
                                         <div className="pt-2">
                                             <Button
                                                 disabled={isSubmitting || !(vaccineCardName || vetRecordName || petRegRecordName || prevPhotoName)}
-                                                className="w-full py-4 bg-[#F97316] text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-100 hover:scale-[1.02] transition-all cursor-pointer disabled:bg-gray-200 disabled:shadow-none"
+                                                className="w-full py-4 bg-[#F97316] text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-100 hover:scale-[1.02] transition-all cursor-pointer disabled:bg-gray-200 dark:disabled:bg-gray-800 dark:disabled:text-gray-500 disabled:shadow-none"
                                                 onClick={handleSubmitClaim}
                                             >
                                                 {isSubmitting ? 'Uploading Proofs...' : 'Submit Claim File'}

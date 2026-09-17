@@ -611,7 +611,7 @@ export default function ReportStrayPage() {
                             </div>
 
                             {/* Alert Notice */}
-                            <div className="flex items-center gap-3 p-4 bg-orange-50/60 border border-orange-100 rounded-2xl text-xs font-bold text-[#F97316]">
+                            <div className="flex items-center gap-3 p-4 bg-orange-50/60 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-900/60 rounded-2xl text-xs font-bold text-[#F97316] dark:text-orange-400">
                                 <Sparkles className="w-5 h-5 shrink-0" />
                                 <span>AI analysis will begin automatically after media upload.</span>
                             </div>
@@ -619,14 +619,14 @@ export default function ReportStrayPage() {
                             {/* Drag & Drop Area */}
                             <div
                                 onClick={() => document.getElementById('media-file-input')?.click()}
-                                className="border-2 border-dashed border-gray-200 hover:border-orange-400 bg-[#FAFAF9] hover:bg-orange-50/20 rounded-[2rem] p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3"
+                                className="border-2 border-dashed border-gray-200 dark:border-gray-700 hover:border-orange-400 dark:hover:border-orange-500 bg-[#FAFAF9] dark:bg-[#0E131F] hover:bg-orange-50/20 dark:hover:bg-orange-950/20 rounded-[2rem] p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3"
                             >
-                                <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center text-[#F97316]">
+                                <div className="w-14 h-14 rounded-2xl bg-white dark:bg-[#151C2C] shadow-sm flex items-center justify-center text-[#F97316] dark:text-orange-400 border border-gray-100 dark:border-gray-800">
                                     <Upload className="w-7 h-7" />
                                 </div>
                                 <div>
-                                    <p className="text-xs font-black text-[#1a1208] uppercase tracking-wider">Drag & drop files here or click to browse</p>
-                                    <p className="text-[10px] font-bold text-gray-400 mt-1">Supports PNG, JPG, JPEG, MP4 (Max 10MB per file)</p>
+                                    <p className="text-xs font-black text-[#1a1208] dark:text-white uppercase tracking-wider">Drag & drop files here or click to browse</p>
+                                    <p className="text-[10px] font-bold text-gray-400 dark:text-gray-400 mt-1">Supports PNG, JPG, JPEG, MP4 (Max 10MB per file)</p>
                                 </div>
                             </div>
 
@@ -634,7 +634,7 @@ export default function ReportStrayPage() {
                                 <button
                                     type="button"
                                     onClick={startCamera}
-                                    className="flex-1 py-3.5 px-4 bg-orange-50 hover:bg-orange-100 text-[#F97316] rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-sm active:scale-98"
+                                    className="flex-1 py-3.5 px-4 bg-orange-50 dark:bg-orange-950/40 hover:bg-orange-100 dark:hover:bg-orange-900/50 text-[#F97316] dark:text-orange-400 border border-transparent dark:border-orange-900/50 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-sm active:scale-98"
                                 >
                                     <Camera className="w-4 h-4" /> Use Camera
                                 </button>

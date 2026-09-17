@@ -91,10 +91,13 @@
   /* Main background containers */
   html.dark div.min-h-screen,
   html.dark main,
+  html.dark .bg-\[\#FBFBF9\],
   html.dark .bg-\[\#F7F7F7\],
   html.dark .bg-\[\#FAFAF9\],
   html.dark .bg-\[\#FAF9F6\],
-  html.dark .bg-gray-50 {
+  html.dark .bg-gray-50,
+  html.dark .bg-slate-50,
+  html.dark .bg-slate-50\/60 {
     background-color: #0B0F19 !important;
   }
 
@@ -166,14 +169,21 @@
     color: #F1F5F9 !important;
   }
 
-  html.dark .bg-orange-50 {
-    background-color: rgba(249, 115, 22, 0.15) !important;
+  html.dark .bg-orange-50,
+  html.dark .bg-orange-50\/40,
+  html.dark .bg-orange-50\/50,
+  html.dark .bg-orange-50\/60,
+  html.dark .bg-orange-100 {
+    background-color: rgba(249, 115, 22, 0.16) !important;
     border-color: rgba(249, 115, 22, 0.35) !important;
   }
 
   html.dark .bg-amber-50,
+  html.dark .bg-amber-50\/40,
+  html.dark .bg-amber-50\/50,
+  html.dark .bg-amber-50\/80,
   html.dark .bg-amber-100 {
-    background-color: rgba(245, 158, 11, 0.15) !important;
+    background-color: rgba(245, 158, 11, 0.16) !important;
     border-color: rgba(245, 158, 11, 0.35) !important;
   }
 
@@ -183,24 +193,42 @@
     color: #FCD34D !important;
   }
 
-  html.dark .bg-emerald-50 {
-    background-color: rgba(16, 185, 129, 0.15) !important;
+  html.dark .bg-emerald-50,
+  html.dark .bg-emerald-50\/40,
+  html.dark .bg-emerald-50\/50,
+  html.dark .bg-emerald-100 {
+    background-color: rgba(16, 185, 129, 0.16) !important;
     border-color: rgba(16, 185, 129, 0.35) !important;
   }
 
-  html.dark .bg-blue-50 {
-    background-color: rgba(59, 130, 246, 0.15) !important;
+  html.dark .bg-blue-50,
+  html.dark .bg-blue-50\/80,
+  html.dark .bg-blue-100 {
+    background-color: rgba(59, 130, 246, 0.16) !important;
     border-color: rgba(59, 130, 246, 0.35) !important;
   }
 
+  html.dark .text-blue-700 {
+    color: #93C5FD !important;
+  }
+
   html.dark .bg-purple-50 {
-    background-color: rgba(168, 85, 247, 0.15) !important;
+    background-color: rgba(168, 85, 247, 0.16) !important;
     border-color: rgba(168, 85, 247, 0.35) !important;
   }
 
-  html.dark .bg-rose-50 {
-    background-color: rgba(244, 63, 94, 0.15) !important;
-    border-color: rgba(244, 63, 94, 0.35) !important;
+  html.dark .bg-rose-50,
+  html.dark .bg-red-50,
+  html.dark .bg-red-50\/80,
+  html.dark .bg-red-100 {
+    background-color: rgba(239, 68, 68, 0.16) !important;
+    border-color: rgba(239, 68, 68, 0.35) !important;
+  }
+
+  html.dark .text-red-700,
+  html.dark .text-red-800,
+  html.dark .text-red-900 {
+    color: #FCA5A5 !important;
   }
 
   /* Hover Overrides in Dark Mode */
@@ -219,7 +247,6 @@
 
 
 
-  /* Form Elements */
   html.dark input[type="text"],
   html.dark input[type="email"],
   html.dark input[type="password"],
@@ -231,6 +258,16 @@
     background-color: #151C2C !important;
     color: #FFFFFF !important;
     border-color: #1E293B !important;
+  }
+
+  html.dark input[type="file"]::file-selector-button {
+    background-color: rgba(249, 115, 22, 0.2) !important;
+    color: #FB923C !important;
+    border: 1px solid rgba(249, 115, 22, 0.4) !important;
+  }
+
+  html.dark input[type="file"]::file-selector-button:hover {
+    background-color: rgba(249, 115, 22, 0.35) !important;
   }
 
   html.dark input::placeholder,
@@ -254,11 +291,138 @@
     background-color: rgba(9, 12, 21, 0.8) !important;
   }
 
+  /* Chat Drawer & Messages Dark Mode Enhancements */
+  html.dark .bg-orange-100\/70 {
+    background-color: rgba(249, 115, 22, 0.2) !important;
+    border-color: rgba(249, 115, 22, 0.4) !important;
+    color: #FDBA74 !important;
+  }
+
+  html.dark .border-orange-200\/80 {
+    border-color: rgba(249, 115, 22, 0.35) !important;
+  }
+
+  html.dark .text-orange-950,
+  html.dark .text-orange-900 {
+    color: #FFEDD5 !important;
+  }
+
+  html.dark .text-orange-800 {
+    color: #FDBA74 !important;
+  }
+
+  html.dark .text-orange-700 {
+    color: #FB923C !important;
+  }
+
+  /* Chat messages received from counterpart */
+  html.dark .bg-white.text-gray-800 {
+    background-color: #1E2738 !important;
+    color: #F8FAFC !important;
+    border-color: #334155 !important;
+  }
+
+  /* Gradients inside chat (e.g. Look-alike comparison container) */
+  html.dark .bg-gradient-to-b.from-orange-50\/95,
+  html.dark .bg-gradient-to-b.from-orange-50\/50 {
+    background-image: linear-gradient(to bottom, #1E2738, #151C2C) !important;
+    color: #F8FAFC !important;
+    border-color: #334155 !important;
+  }
+
+  /* Settings Page Dark Mode Fixes */
+  html.dark .bg-gray-50\/70,
+  html.dark .bg-gray-50\/80,
+  html.dark .bg-gray-50\/50,
+  html.dark .bg-orange-50\/30 {
+    background-color: #1A2338 !important;
+    border-color: #334155 !important;
+  }
+
+  html.dark .bg-emerald-50\/60 {
+    background-color: rgba(16, 185, 129, 0.16) !important;
+    border-color: rgba(16, 185, 129, 0.35) !important;
+  }
+
+  html.dark .text-emerald-950 {
+    color: #A7F3D0 !important;
+  }
+
+  html.dark .bg-rose-50\/60 {
+    background-color: rgba(244, 63, 94, 0.16) !important;
+    border-color: rgba(244, 63, 94, 0.35) !important;
+  }
+
+  html.dark .text-rose-950 {
+    color: #FECDD3 !important;
+  }
+
   /* Smooth Switcher Transitions */
   *, *::before, *::after {
     transition-property: background-color, border-color, color, fill, stroke;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     transition-duration: 250ms;
+  }
+
+  /* -------------------------------------------------------------------------- */
+  /* Sleek Custom Scrollbars (Global & .custom-scrollbar)                       */
+  /* -------------------------------------------------------------------------- */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.4);
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(156, 163, 175, 0.7);
+  }
+
+  html.dark ::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.25);
+  }
+
+  html.dark ::-webkit-scrollbar-thumb:hover {
+    background: rgba(249, 115, 22, 0.6);
+  }
+
+  /* Explicit .custom-scrollbar class used on horizontal steppers and lists */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
+  }
+
+  html.dark .custom-scrollbar {
+    scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    height: 5px;
+    width: 5px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(203, 213, 225, 0.6);
+    border-radius: 9999px;
+  }
+
+  html.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(51, 65, 85, 0.8);
+  }
+
+  html.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #F97316;
   }
 
 /* -------------------------------------------------------------------------- */

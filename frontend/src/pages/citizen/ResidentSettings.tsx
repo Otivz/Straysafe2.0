@@ -522,15 +522,15 @@ const ResidentSettings = () => {
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-32">
                 {/* Header Title with Global Save Button */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 bg-white dark:bg-[#151C2C] p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
                     <div>
-                        <h1 className="text-2xl font-black text-[#1a1208] flex items-center gap-3">
-                            <span className="p-2.5 bg-orange-50 text-[#F97316] rounded-xl">
+                        <h1 className="text-2xl font-black text-[#1a1208] dark:text-white flex items-center gap-3">
+                            <span className="p-2.5 bg-orange-50 dark:bg-orange-950/50 text-[#F97316] rounded-xl">
                                 ⚙️
                             </span>
                             Settings
                         </h1>
-                        <p className="text-xs text-gray-500 font-semibold mt-1">Manage your account preferences, privacy, pet options, and notifications</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold mt-1">Manage your account preferences, privacy, pet options, and notifications</p>
                     </div>
 
                     <Button
@@ -547,15 +547,15 @@ const ResidentSettings = () => {
 
                 {/* Success / Error Alerts */}
                 {saveSuccessMsg && (
-                    <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-2 animate-in fade-in">
-                        <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <div className="mb-6 p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-xl text-emerald-800 dark:text-emerald-200 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                        <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         {saveSuccessMsg}
                     </div>
                 )}
 
                 {saveErrorMsg && (
-                    <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 text-xs font-bold flex items-center gap-2 animate-in fade-in">
-                        <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50 rounded-xl text-red-800 dark:text-red-200 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                        <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         {saveErrorMsg}
                     </div>
                 )}
@@ -564,16 +564,16 @@ const ResidentSettings = () => {
                 <div className="flex flex-col lg:flex-row gap-8">
                     {/* Sidebar Nav Tabs */}
                     <div className="lg:w-64 shrink-0">
-                        <div className="bg-white border border-gray-200 rounded-2xl p-3 shadow-sm space-y-1">
+                        <div className="bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-800 rounded-2xl p-3 shadow-sm space-y-1">
                             {navItems.map((item) => {
                                 const isActive = activeTab === item.id;
                                 return (
                                     <button
                                         key={item.id}
                                         onClick={() => setActiveTab(item.id)}
-                                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all text-left ${isActive
-                                                ? 'bg-[#F97316] text-white shadow-md shadow-orange-100 font-black'
-                                                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${isActive
+                                                ? 'bg-[#F97316] text-white shadow-md shadow-orange-100 dark:shadow-orange-950/50 font-black'
+                                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#1E2738] hover:text-gray-900 dark:hover:text-white'
                                             }`}
                                     >
                                         <span className={isActive ? 'text-white' : 'text-gray-400'}>{item.icon}</span>
@@ -585,7 +585,7 @@ const ResidentSettings = () => {
                     </div>
 
                     {/* Right Panel Content */}
-                    <div className="flex-1 bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 shadow-sm">
+                    <div className="flex-1 bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-800 rounded-2xl p-6 sm:p-8 shadow-sm">
 
                         {/* 1. ACCOUNT CATEGORY */}
                         {activeTab === 'account' && (
@@ -598,9 +598,9 @@ const ResidentSettings = () => {
                                 </div>
 
                                 {/* Profile Picture Section */}
-                                <div className="flex items-center gap-6 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                                <div className="flex items-center gap-6 p-4 bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-100 dark:border-gray-800">
                                     <div className="relative group">
-                                        <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-white shadow-md">
+                                        <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-white dark:border-gray-700 shadow-md">
                                             <img
                                                 src={getProfilePicture(userData.profile_picture)}
                                                 alt={userData.name}
@@ -615,12 +615,12 @@ const ResidentSettings = () => {
                                         )}
                                     </div>
                                     <div>
-                                        <span className="text-xs font-black text-[#1a1208] block">Profile Picture</span>
+                                        <span className="text-xs font-black text-[#1a1208] dark:text-white block">Profile Picture</span>
                                         <p className="text-[11px] text-gray-400 font-medium mb-3">PNG, JPG or WEBP (Max 5MB)</p>
                                         <button
                                             onClick={() => fileInputRef.current?.click()}
                                             disabled={isUploadingPhoto}
-                                            className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:border-orange-300 hover:text-[#F97316] transition-all shadow-sm"
+                                            className="px-4 py-2 bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-bold text-gray-700 dark:text-gray-200 hover:border-orange-300 dark:hover:border-orange-500 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all shadow-sm cursor-pointer"
                                         >
                                             Change Photo
                                         </button>
@@ -636,7 +636,7 @@ const ResidentSettings = () => {
                                             type="text"
                                             value={editData.name || ''}
                                             onChange={(e) => setEditData({ ...editData, name: e.target.value })}
-                                            className="w-full h-11 bg-gray-50 border border-gray-150 rounded-xl px-4 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316] focus:bg-white transition-all"
+                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
                                         />
                                     </div>
 
@@ -646,7 +646,7 @@ const ResidentSettings = () => {
                                             type="email"
                                             value={editData.email || ''}
                                             onChange={(e) => setEditData({ ...editData, email: e.target.value })}
-                                            className="w-full h-11 bg-gray-50 border border-gray-150 rounded-xl px-4 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316] focus:bg-white transition-all"
+                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
                                         />
                                     </div>
 
@@ -657,7 +657,7 @@ const ResidentSettings = () => {
                                             value={editData.phone || ''}
                                             onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
                                             placeholder="0917-XXX-XXXX"
-                                            className="w-full h-11 bg-gray-50 border border-gray-150 rounded-xl px-4 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316] focus:bg-white transition-all"
+                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
                                         />
                                     </div>
 
@@ -667,13 +667,13 @@ const ResidentSettings = () => {
                                             type="text"
                                             value={editData.address || ''}
                                             onChange={(e) => setEditData({ ...editData, address: e.target.value })}
-                                            className="w-full h-11 bg-gray-50 border border-gray-150 rounded-xl px-4 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316] focus:bg-white transition-all"
+                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
                                         />
                                     </div>
                                 </div>
 
-                                <div className="pt-6 border-t border-gray-100">
-                                    <h3 className="text-sm font-black text-[#1a1208] mb-4 flex items-center gap-2">
+                                <div className="pt-6 border-t border-gray-100 dark:border-gray-800">
+                                    <h3 className="text-sm font-black text-[#1a1208] dark:text-white mb-4 flex items-center gap-2">
                                         🔒 Change Password
                                     </h3>
                                     <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
@@ -683,7 +683,7 @@ const ResidentSettings = () => {
                                                 type="password"
                                                 value={passwords.currentPassword}
                                                 onChange={(e) => setPasswords({ ...passwords, currentPassword: e.target.value })}
-                                                className="w-full h-10 bg-gray-50 border border-gray-150 rounded-xl px-3.5 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316] focus:bg-white transition-all"
+                                                className="w-full h-10 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-3.5 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
                                             />
                                         </div>
                                         <div>
@@ -692,7 +692,7 @@ const ResidentSettings = () => {
                                                 type="password"
                                                 value={passwords.newPassword}
                                                 onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })}
-                                                className="w-full h-10 bg-gray-50 border border-gray-150 rounded-xl px-3.5 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316] focus:bg-white transition-all"
+                                                className="w-full h-10 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-3.5 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
                                             />
                                         </div>
                                         <div>
@@ -701,12 +701,12 @@ const ResidentSettings = () => {
                                                 type="password"
                                                 value={passwords.confirmPassword}
                                                 onChange={(e) => setPasswords({ ...passwords, confirmPassword: e.target.value })}
-                                                className="w-full h-10 bg-gray-50 border border-gray-150 rounded-xl px-3.5 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316] focus:bg-white transition-all"
+                                                className="w-full h-10 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-3.5 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
                                             />
                                         </div>
                                         <button
                                             type="submit"
-                                            className="px-5 py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-all shadow-sm"
+                                            className="px-5 py-2.5 bg-gray-900 dark:bg-orange-500 hover:dark:bg-orange-600 text-white rounded-xl text-xs font-bold hover:bg-black transition-all shadow-sm cursor-pointer"
                                         >
                                             Update Password
                                         </button>
@@ -719,17 +719,17 @@ const ResidentSettings = () => {
                         {activeTab === 'my-pets' && (
                             <div className="space-y-8 animate-in fade-in duration-200">
                                 <div>
-                                    <h2 className="text-lg font-black text-[#1a1208] flex items-center gap-2">
+                                    <h2 className="text-lg font-black text-[#1a1208] dark:text-white flex items-center gap-2">
                                         🐾 Pet Preferences & Records History
                                     </h2>
-                                    <p className="text-xs text-gray-500 font-semibold mt-1">Manage pet preferences, QR settings, and view all created & removed pet records</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold mt-1">Manage pet preferences, QR settings, and view all created & removed pet records</p>
                                 </div>
 
                                 {/* Pet Management Shortcut Card */}
-                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-5 bg-orange-50/60 border border-orange-100 rounded-2xl">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-5 bg-orange-50/60 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900/40 rounded-2xl">
                                     <div>
-                                        <span className="text-xs font-black text-[#1a1208] block">Registered Pets Workspace</span>
-                                        <p className="text-xs text-gray-500 font-semibold mt-0.5">Manage live records, update photos, and generate QR tag cards</p>
+                                        <span className="text-xs font-black text-[#1a1208] dark:text-white block">Registered Pets Workspace</span>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold mt-0.5">Manage live records, update photos, and generate QR tag cards</p>
                                     </div>
                                     <Button
                                         variant="primary"
@@ -743,35 +743,35 @@ const ResidentSettings = () => {
 
                                 {/* Quick Stats Counters */}
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-black text-lg">
+                                    <div className="p-4 bg-gray-50 dark:bg-[#1E2738] border border-gray-100 dark:border-gray-800 rounded-2xl flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 flex items-center justify-center font-black text-lg">
                                             🐾
                                         </div>
                                         <div>
                                             <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Created</div>
-                                            <div className="text-base font-black text-gray-900">
+                                            <div className="text-base font-black text-gray-900 dark:text-white">
                                                 {petHistoryData.created_pets_history.length || petHistoryData.current_pets.length} Pets
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="p-4 bg-emerald-50/60 border border-emerald-100 rounded-2xl flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-black text-lg">
+                                    <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/25 border border-emerald-100 dark:border-emerald-800/40 rounded-2xl flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-black text-lg">
                                             ✅
                                         </div>
                                         <div>
-                                            <div className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Currently Active</div>
-                                            <div className="text-base font-black text-emerald-950">
+                                            <div className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Currently Active</div>
+                                            <div className="text-base font-black text-emerald-950 dark:text-emerald-200">
                                                 {petHistoryData.current_pets.length} Registered
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="p-4 bg-rose-50/60 border border-rose-100 rounded-2xl flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center font-black text-lg">
+                                    <div className="p-4 bg-rose-50/60 dark:bg-rose-950/25 border border-rose-100 dark:border-rose-800/40 rounded-2xl flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center font-black text-lg">
                                             🗑️
                                         </div>
                                         <div>
-                                            <div className="text-[10px] font-black text-rose-600 uppercase tracking-widest">Removed Pets</div>
-                                            <div className="text-base font-black text-rose-950">
+                                            <div className="text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest">Removed Pets</div>
+                                            <div className="text-base font-black text-rose-950 dark:text-rose-200">
                                                 {petHistoryData.removed_pets.length} Archived
                                             </div>
                                         </div>
@@ -779,13 +779,13 @@ const ResidentSettings = () => {
                                 </div>
 
                                 {/* Pet History & Removed Pets Section */}
-                                <div className="pt-2 border-t border-gray-100 space-y-4">
+                                <div className="pt-2 border-t border-gray-100 dark:border-gray-800 space-y-4">
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                         <div>
-                                            <h3 className="text-sm font-black text-gray-900 flex items-center gap-2">
+                                            <h3 className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-2">
                                                 📜 Pet Records History & Archives
                                             </h3>
-                                            <p className="text-xs text-gray-500 font-medium mt-0.5">
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">
                                                 All pets ever registered or removed under your account
                                             </p>
                                         </div>
@@ -794,7 +794,7 @@ const ResidentSettings = () => {
                                         <button
                                             onClick={fetchPetHistory}
                                             disabled={isPetHistoryLoading}
-                                            className="self-start sm:self-auto px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
+                                            className="self-start sm:self-auto px-3 py-1.5 bg-gray-100 dark:bg-[#1E2738] hover:bg-gray-200 dark:hover:bg-[#2A374F] text-gray-700 dark:text-gray-300 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
                                         >
                                             <svg className={`w-3.5 h-3.5 ${isPetHistoryLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -804,47 +804,47 @@ const ResidentSettings = () => {
                                     </div>
 
                                     {/* Sub-tabs & Search */}
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50 p-2 rounded-2xl border border-gray-150">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50 dark:bg-[#1E2738] p-2 rounded-2xl border border-gray-150 dark:border-gray-800">
                                         <div className="flex items-center gap-1 overflow-x-auto">
                                             <button
                                                 type="button"
                                                 onClick={() => setPetHistorySubTab('all-created')}
-                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                                                     petHistorySubTab === 'all-created'
-                                                        ? 'bg-white text-gray-900 shadow-sm'
-                                                        : 'text-gray-500 hover:text-gray-900'
+                                                        ? 'bg-white dark:bg-[#151C2C] text-gray-900 dark:text-white shadow-sm'
+                                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                                 }`}
                                             >
                                                 🐾 All Created Pets
-                                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${petHistorySubTab === 'all-created' ? 'bg-orange-100 text-orange-700' : 'bg-gray-200 text-gray-600'}`}>
+                                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${petHistorySubTab === 'all-created' ? 'bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-400' : 'bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}>
                                                     {petHistoryData.created_pets_history.length || petHistoryData.current_pets.length}
                                                 </span>
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => setPetHistorySubTab('removed')}
-                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                                                     petHistorySubTab === 'removed'
-                                                        ? 'bg-white text-rose-700 shadow-sm'
-                                                        : 'text-gray-500 hover:text-gray-900'
+                                                        ? 'bg-white dark:bg-[#151C2C] text-rose-700 dark:text-rose-400 shadow-sm'
+                                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                                 }`}
                                             >
                                                 🗑️ Removed Pets
-                                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${petHistorySubTab === 'removed' ? 'bg-rose-100 text-rose-700' : 'bg-gray-200 text-gray-600'}`}>
+                                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${petHistorySubTab === 'removed' ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400' : 'bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}>
                                                     {petHistoryData.removed_pets.length}
                                                 </span>
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => setPetHistorySubTab('activity')}
-                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                                                     petHistorySubTab === 'activity'
-                                                        ? 'bg-white text-gray-900 shadow-sm'
-                                                        : 'text-gray-500 hover:text-gray-900'
+                                                        ? 'bg-white dark:bg-[#151C2C] text-gray-900 dark:text-white shadow-sm'
+                                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                                 }`}
                                             >
                                                 ⏱️ Activity Timeline
-                                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${petHistorySubTab === 'activity' ? 'bg-orange-100 text-orange-700' : 'bg-gray-200 text-gray-600'}`}>
+                                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${petHistorySubTab === 'activity' ? 'bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-400' : 'bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}>
                                                     {petHistoryData.all_logs.length}
                                                 </span>
                                             </button>
@@ -857,7 +857,7 @@ const ResidentSettings = () => {
                                                 value={petHistorySearch}
                                                 onChange={(e) => setPetHistorySearch(e.target.value)}
                                                 placeholder="Filter records..."
-                                                className="w-full h-8 pl-8 pr-3 text-xs font-semibold bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#F97316]"
+                                                className="w-full h-8 pl-8 pr-3 text-xs font-semibold bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl focus:outline-none focus:border-[#F97316]"
                                             />
                                             <svg className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -867,9 +867,9 @@ const ResidentSettings = () => {
 
                                     {/* History Content Display */}
                                     {isPetHistoryLoading ? (
-                                        <div className="p-8 text-center bg-gray-50 rounded-2xl border border-gray-100 animate-pulse">
+                                        <div className="p-8 text-center bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-100 dark:border-gray-800 animate-pulse">
                                             <div className="text-2xl mb-2">🐾</div>
-                                            <p className="text-xs font-bold text-gray-500">Loading pet history records...</p>
+                                            <p className="text-xs font-bold text-gray-500 dark:text-gray-400">Loading pet history records...</p>
                                         </div>
                                     ) : (
                                         <div className="space-y-3">
@@ -877,9 +877,9 @@ const ResidentSettings = () => {
                                             {petHistorySubTab === 'all-created' && (
                                                 <>
                                                     {petHistoryData.created_pets_history.length === 0 && petHistoryData.current_pets.length === 0 ? (
-                                                        <div className="p-8 text-center bg-gray-50 rounded-2xl border border-gray-100">
+                                                        <div className="p-8 text-center bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-100 dark:border-gray-800">
                                                             <span className="text-2xl block mb-2">🐾</span>
-                                                            <p className="text-xs font-bold text-gray-700">No pet registration records found</p>
+                                                            <p className="text-xs font-bold text-gray-700 dark:text-gray-300">No pet registration records found</p>
                                                             <p className="text-[11px] text-gray-400 mt-1">When you register pets, their creation log will appear here.</p>
                                                         </div>
                                                     ) : (
@@ -896,22 +896,22 @@ const ResidentSettings = () => {
                                                                         <div
                                                                             key={p.log_id || p.pet_id || idx}
                                                                             onClick={() => setSelectedHistoryPet(p)}
-                                                                            className="p-4 bg-white border border-gray-150 hover:border-orange-300 rounded-2xl hover:shadow-md transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm cursor-pointer hover:scale-[1.005]"
+                                                                            className="p-4 bg-white dark:bg-[#1E2738] border border-gray-150 dark:border-gray-800 hover:border-orange-300 dark:hover:border-orange-500 rounded-2xl hover:shadow-md transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm cursor-pointer hover:scale-[1.005]"
                                                                         >
                                                                             <div className="flex items-center gap-3">
-                                                                                <div className="w-11 h-11 rounded-2xl bg-orange-100 flex items-center justify-center text-xl shrink-0">
+                                                                                <div className="w-11 h-11 rounded-2xl bg-orange-100 dark:bg-orange-950/50 flex items-center justify-center text-xl shrink-0">
                                                                                     {p.pet_type === 'Cat' ? '🐱' : '🐶'}
                                                                                 </div>
                                                                                 <div>
                                                                                     <div className="flex items-center gap-2">
-                                                                                        <h4 className="text-sm font-black text-gray-900">{p.pet_name || 'Unnamed Pet'}</h4>
-                                                                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-orange-50 text-orange-700 border border-orange-200">
+                                                                                        <h4 className="text-sm font-black text-gray-900 dark:text-white">{p.pet_name || 'Unnamed Pet'}</h4>
+                                                                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-orange-50 dark:bg-orange-950/50 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-900/50">
                                                                                             {p.pet_type || 'Dog'}
                                                                                         </span>
                                                                                         <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
                                                                                             isCurrentlyActive
-                                                                                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                                                                                : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                                                                                ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40'
+                                                                                                : 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40'
                                                                                         }`}>
                                                                                             {isCurrentlyActive ? 'Active' : 'Removed'}
                                                                                         </span>
@@ -921,7 +921,7 @@ const ResidentSettings = () => {
                                                                                             </span>
                                                                                         )}
                                                                                     </div>
-                                                                                    <p className="text-xs text-gray-500 mt-0.5 font-medium">
+                                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-medium">
                                                                                         {p.description || `Registered new ${p.pet_type || 'pet'}: ${p.pet_name}`}
                                                                                     </p>
                                                                                 </div>
@@ -929,7 +929,7 @@ const ResidentSettings = () => {
                                                                             <div className="flex items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
                                                                                 <div className="text-right">
                                                                                     <span className="text-[10px] font-bold text-gray-400 block uppercase tracking-wider">Registered On</span>
-                                                                                    <span className="text-xs font-black text-gray-800">
+                                                                                    <span className="text-xs font-black text-gray-800 dark:text-gray-200">
                                                                                         {p.created_at || 'Recorded in system'}
                                                                                     </span>
                                                                                 </div>
@@ -956,9 +956,9 @@ const ResidentSettings = () => {
                                             {petHistorySubTab === 'removed' && (
                                                 <>
                                                     {petHistoryData.removed_pets.length === 0 ? (
-                                                        <div className="p-8 text-center bg-gray-50 rounded-2xl border border-gray-100">
+                                                        <div className="p-8 text-center bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-100 dark:border-gray-800">
                                                             <span className="text-2xl block mb-2">✨</span>
-                                                            <p className="text-xs font-bold text-gray-700">No removed pets</p>
+                                                            <p className="text-xs font-bold text-gray-700 dark:text-gray-300">No removed pets</p>
                                                             <p className="text-[11px] text-gray-400 mt-1">You haven't removed any pets from your account.</p>
                                                         </div>
                                                     ) : (
@@ -972,10 +972,10 @@ const ResidentSettings = () => {
                                                                     <div
                                                                         key={p.log_id || idx}
                                                                         onClick={() => setSelectedHistoryPet(p)}
-                                                                        className="p-4 bg-rose-50/40 hover:bg-rose-50/70 border border-rose-150 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm cursor-pointer transition-all hover:scale-[1.005]"
+                                                                        className="p-4 bg-rose-50/40 dark:bg-rose-950/20 hover:bg-rose-50/70 dark:hover:bg-rose-950/30 border border-rose-150 dark:border-rose-900/40 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm cursor-pointer transition-all hover:scale-[1.005]"
                                                                     >
                                                                         <div className="flex items-center gap-3">
-                                                                            <div className="w-11 h-11 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center text-xl shrink-0">
+                                                                            <div className="w-11 h-11 rounded-2xl bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 flex items-center justify-center text-xl shrink-0">
                                                                                 {p.photo_url ? (
                                                                                     <img src={getPetPicture(p.photo_url)} alt={p.pet_name} className="w-full h-full object-cover rounded-2xl" />
                                                                                 ) : (
@@ -984,23 +984,23 @@ const ResidentSettings = () => {
                                                                             </div>
                                                                             <div>
                                                                                 <div className="flex items-center gap-2">
-                                                                                    <h4 className="text-sm font-black text-gray-900 line-through decoration-rose-400">{p.pet_name}</h4>
-                                                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-700 border border-rose-200">
+                                                                                    <h4 className="text-sm font-black text-gray-900 dark:text-white line-through decoration-rose-400">{p.pet_name}</h4>
+                                                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40">
                                                                                         Removed
                                                                                     </span>
-                                                                                    <span className="text-[10px] font-bold text-gray-500">
+                                                                                    <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400">
                                                                                         {p.pet_type} {p.breed && p.breed !== 'Unknown Breed' && `• ${p.breed}`}
                                                                                     </span>
                                                                                 </div>
-                                                                                <p className="text-xs text-gray-500 mt-0.5 font-medium">
+                                                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-medium">
                                                                                     {p.description || `Deleted pet record: ${p.pet_name}`}
                                                                                 </p>
                                                                             </div>
                                                                         </div>
                                                                         <div className="flex items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
                                                                             <div className="text-right">
-                                                                                <span className="text-[10px] font-bold text-rose-500 block uppercase tracking-wider">Removal Date</span>
-                                                                                <span className="text-xs font-black text-gray-800">
+                                                                                <span className="text-[10px] font-bold text-rose-500 dark:text-rose-400 block uppercase tracking-wider">Removal Date</span>
+                                                                                <span className="text-xs font-black text-gray-800 dark:text-gray-200">
                                                                                     {p.removed_at || 'Past deletion'}
                                                                                 </span>
                                                                             </div>
@@ -1038,9 +1038,9 @@ const ResidentSettings = () => {
                                             {petHistorySubTab === 'activity' && (
                                                 <>
                                                     {petHistoryData.all_logs.length === 0 ? (
-                                                        <div className="p-8 text-center bg-gray-50 rounded-2xl border border-gray-100">
+                                                        <div className="p-8 text-center bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-100 dark:border-gray-800">
                                                             <span className="text-2xl block mb-2">📋</span>
-                                                            <p className="text-xs font-bold text-gray-700">No activity logs recorded yet</p>
+                                                            <p className="text-xs font-bold text-gray-700 dark:text-gray-300">No activity logs recorded yet</p>
                                                         </div>
                                                     ) : (
                                                         <div className="space-y-2">
@@ -1050,18 +1050,18 @@ const ResidentSettings = () => {
                                                                     return !q || (l.description || '').toLowerCase().includes(q) || (l.action || '').toLowerCase().includes(q);
                                                                 })
                                                                 .map((log, idx) => (
-                                                                    <div key={log.log_id || idx} className="p-3.5 bg-white border border-gray-100 rounded-xl flex items-center justify-between gap-3 text-xs shadow-2xs">
+                                                                    <div key={log.log_id || idx} className="p-3.5 bg-white dark:bg-[#1E2738] border border-gray-100 dark:border-gray-800 rounded-xl flex items-center justify-between gap-3 text-xs shadow-2xs">
                                                                         <div className="flex items-center gap-3">
                                                                             <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider shrink-0 ${
                                                                                 log.action === 'CREATE_PET'
-                                                                                    ? 'bg-emerald-100 text-emerald-700'
+                                                                                    ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400'
                                                                                     : log.action === 'DELETE_PET'
-                                                                                    ? 'bg-rose-100 text-rose-700'
-                                                                                    : 'bg-blue-100 text-blue-700'
+                                                                                    ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400'
+                                                                                    : 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400'
                                                                             }`}>
                                                                                 {log.action?.replace('_PET', '') || 'ACTION'}
                                                                             </span>
-                                                                            <span className="font-bold text-gray-800">{log.description}</span>
+                                                                            <span className="font-bold text-gray-800 dark:text-gray-200">{log.description}</span>
                                                                         </div>
                                                                         <span className="text-[11px] font-semibold text-gray-400 shrink-0 whitespace-nowrap">
                                                                             {log.timestamp}
@@ -1077,7 +1077,7 @@ const ResidentSettings = () => {
                                 </div>
 
                                 {/* QR Preferences */}
-                                <div className="pt-6 border-t border-gray-100">
+                                <div className="pt-6 border-t border-gray-100 dark:border-gray-800">
                                     <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Default QR Card Download Options</h3>
                                     <div className="space-y-3">
                                         <label className="flex items-center gap-3 cursor-pointer">
@@ -1085,24 +1085,24 @@ const ResidentSettings = () => {
                                                 type="checkbox"
                                                 checked={qrIncludeContact}
                                                 onChange={(e) => setQrIncludeContact(e.target.checked)}
-                                                className="w-4.5 h-4.5 accent-[#F97316] rounded border-gray-300"
+                                                className="w-4.5 h-4.5 accent-[#F97316] rounded border-gray-300 dark:border-gray-700"
                                             />
-                                            <span className="text-xs font-bold text-gray-800">Include Owner Contact Information on QR Card</span>
+                                            <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Include Owner Contact Information on QR Card</span>
                                         </label>
                                         <label className="flex items-center gap-3 cursor-pointer">
                                             <input
                                                 type="checkbox"
                                                 checked={qrNotifyScan}
                                                 onChange={(e) => setQrNotifyScan(e.target.checked)}
-                                                className="w-4.5 h-4.5 accent-[#F97316] rounded border-gray-300"
+                                                className="w-4.5 h-4.5 accent-[#F97316] rounded border-gray-300 dark:border-gray-700"
                                             />
-                                            <span className="text-xs font-bold text-gray-800">Notify me immediately when pet's QR code is scanned</span>
+                                            <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Notify me immediately when pet's QR code is scanned</span>
                                         </label>
                                     </div>
                                 </div>
 
                                 {/* Reminders */}
-                                <div className="pt-6 border-t border-gray-100">
+                                <div className="pt-6 border-t border-gray-100 dark:border-gray-800">
                                     <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Auto Reminders</h3>
                                     <div className="space-y-3">
                                         <label className="flex items-center gap-3 cursor-pointer">
@@ -1110,18 +1110,18 @@ const ResidentSettings = () => {
                                                 type="checkbox"
                                                 checked={vacReminder}
                                                 onChange={(e) => setVacReminder(e.target.checked)}
-                                                className="w-4.5 h-4.5 accent-[#F97316] rounded border-gray-300"
+                                                className="w-4.5 h-4.5 accent-[#F97316] rounded border-gray-300 dark:border-gray-700"
                                             />
-                                            <span className="text-xs font-bold text-gray-800">Vaccination Reminder</span>
+                                            <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Vaccination Reminder</span>
                                         </label>
                                         <label className="flex items-center gap-3 cursor-pointer">
                                             <input
                                                 type="checkbox"
                                                 checked={dewormReminder}
                                                 onChange={(e) => setDewormReminder(e.target.checked)}
-                                                className="w-4.5 h-4.5 accent-[#F97316] rounded border-gray-300"
+                                                className="w-4.5 h-4.5 accent-[#F97316] rounded border-gray-300 dark:border-gray-700"
                                             />
-                                            <span className="text-xs font-bold text-gray-800">Deworming Reminder</span>
+                                            <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Deworming Reminder</span>
                                         </label>
                                     </div>
                                 </div>
@@ -1132,67 +1132,67 @@ const ResidentSettings = () => {
                         {activeTab === 'notifications' && (
                             <div className="space-y-8 animate-in fade-in duration-200">
                                 <div>
-                                    <h2 className="text-lg font-black text-[#1a1208] flex items-center gap-2">
+                                    <h2 className="text-lg font-black text-[#1a1208] dark:text-white flex items-center gap-2">
                                         🔔 Notification Preferences
                                     </h2>
-                                    <p className="text-xs text-gray-500 font-semibold mt-1">Choose what updates you want to receive</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold mt-1">Choose what updates you want to receive</p>
                                 </div>
 
                                 <div className="space-y-4">
-                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer">
-                                        <span className="text-xs font-bold text-gray-800">New comments on my reports</span>
+                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer">
+                                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200">New comments on my reports</span>
                                         <input type="checkbox" checked={notifComments} onChange={(e) => setNotifComments(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
                                     </label>
 
-                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer">
-                                        <span className="text-xs font-bold text-gray-800">Report status updates</span>
+                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer">
+                                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Report status updates</span>
                                         <input type="checkbox" checked={notifStatusUpdates} onChange={(e) => setNotifStatusUpdates(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
                                     </label>
 
-                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer">
-                                        <span className="text-xs font-bold text-gray-800">Rescue completed alerts</span>
+                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer">
+                                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Rescue completed alerts</span>
                                         <input type="checkbox" checked={notifRescueCompleted} onChange={(e) => setNotifRescueCompleted(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
                                     </label>
 
-                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer">
-                                        <span className="text-xs font-bold text-gray-800">Hazard announcements in my area</span>
+                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer">
+                                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Hazard announcements in my area</span>
                                         <input type="checkbox" checked={notifHazardAlerts} onChange={(e) => setNotifHazardAlerts(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
                                     </label>
 
-                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer">
-                                        <span className="text-xs font-bold text-gray-800">Lost pet alerts nearby</span>
+                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer">
+                                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Lost pet alerts nearby</span>
                                         <input type="checkbox" checked={notifLostPet} onChange={(e) => setNotifLostPet(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
                                     </label>
 
-                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer">
-                                        <span className="text-xs font-bold text-gray-800">QR code scan alerts</span>
+                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer">
+                                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200">QR code scan alerts</span>
                                         <input type="checkbox" checked={notifQrScan} onChange={(e) => setNotifQrScan(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
                                     </label>
                                 </div>
 
-                                <div className="pt-6 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div className="p-4 bg-gray-50 rounded-2xl border border-gray-150 flex items-center justify-between">
+                                <div className="pt-6 border-t border-gray-100 dark:border-gray-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="p-4 bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-150 dark:border-gray-800 flex items-center justify-between">
                                         <div>
-                                            <span className="text-xs font-black text-gray-800 block">Email Notifications</span>
+                                            <span className="text-xs font-black text-gray-800 dark:text-gray-200 block">Email Notifications</span>
                                             <span className="text-[10px] text-gray-400 font-semibold">Receive digests & critical alerts via email</span>
                                         </div>
                                         <button
                                             onClick={() => setEmailNotif(!emailNotif)}
-                                            className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all ${emailNotif ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'
+                                            className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${emailNotif ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                                                 }`}
                                         >
                                             {emailNotif ? 'ON' : 'OFF'}
                                         </button>
                                     </div>
 
-                                    <div className="p-4 bg-gray-50 rounded-2xl border border-gray-150 flex items-center justify-between">
+                                    <div className="p-4 bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-150 dark:border-gray-800 flex items-center justify-between">
                                         <div>
-                                            <span className="text-xs font-black text-gray-800 block">Push Notifications</span>
+                                            <span className="text-xs font-black text-gray-800 dark:text-gray-200 block">Push Notifications</span>
                                             <span className="text-[10px] text-gray-400 font-semibold">Browser push notifications</span>
                                         </div>
                                         <button
                                             onClick={() => setPushNotif(!pushNotif)}
-                                            className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all ${pushNotif ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'
+                                            className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${pushNotif ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                                                 }`}
                                         >
                                             {pushNotif ? 'ON' : 'OFF'}
@@ -1238,14 +1238,14 @@ const ResidentSettings = () => {
                                     </div>
 
                                     {/* Filter Pills & Search bar */}
-                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-gray-50/70 p-3 rounded-2xl border border-gray-100">
+                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-gray-50/70 dark:bg-[#1E2738] p-3 rounded-2xl border border-gray-100 dark:border-gray-800">
                                         <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar pb-1 sm:pb-0">
                                             <button
                                                 type="button"
                                                 onClick={() => setNotifFilterTab('archived')}
-                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all whitespace-nowrap ${notifFilterTab === 'archived'
+                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all whitespace-nowrap cursor-pointer ${notifFilterTab === 'archived'
                                                         ? 'bg-[#F97316] text-white shadow-sm'
-                                                        : 'bg-white text-gray-600 hover:bg-gray-100'
+                                                        : 'bg-white dark:bg-[#151C2C] text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#253248]'
                                                     }`}
                                             >
                                                 Archived / Closed ({notificationsList.filter(n => n.is_archived).length})
@@ -1253,9 +1253,9 @@ const ResidentSettings = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => setNotifFilterTab('active')}
-                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all whitespace-nowrap ${notifFilterTab === 'active'
+                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all whitespace-nowrap cursor-pointer ${notifFilterTab === 'active'
                                                         ? 'bg-[#F97316] text-white shadow-sm'
-                                                        : 'bg-white text-gray-600 hover:bg-gray-100'
+                                                        : 'bg-white dark:bg-[#151C2C] text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#253248]'
                                                     }`}
                                             >
                                                 Active Inbox ({notificationsList.filter(n => !n.is_archived).length})
@@ -1263,9 +1263,9 @@ const ResidentSettings = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => setNotifFilterTab('all')}
-                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all whitespace-nowrap ${notifFilterTab === 'all'
+                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all whitespace-nowrap cursor-pointer ${notifFilterTab === 'all'
                                                         ? 'bg-[#F97316] text-white shadow-sm'
-                                                        : 'bg-white text-gray-600 hover:bg-gray-100'
+                                                        : 'bg-white dark:bg-[#151C2C] text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#253248]'
                                                     }`}
                                             >
                                                 All History ({notificationsList.length})
@@ -1278,7 +1278,7 @@ const ResidentSettings = () => {
                                                 placeholder="Search notifications..."
                                                 value={notifSearch}
                                                 onChange={(e) => setNotifSearch(e.target.value)}
-                                                className="w-full pl-9 pr-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-[#F97316]"
+                                                className="w-full pl-9 pr-3 py-1.5 bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl text-xs font-semibold focus:outline-none focus:border-[#F97316]"
                                             />
                                             <svg className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -1298,11 +1298,11 @@ const ResidentSettings = () => {
                                         }
                                         return true;
                                     }).length === 0 ? (
-                                        <div className="text-center py-12 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200 p-6">
-                                            <div className="w-12 h-12 rounded-full bg-orange-50 text-[#F97316] mx-auto flex items-center justify-center text-xl mb-3">
+                                        <div className="text-center py-12 bg-gray-50/50 dark:bg-[#1E2738]/50 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-6">
+                                            <div className="w-12 h-12 rounded-full bg-orange-50 dark:bg-orange-950/50 text-[#F97316] mx-auto flex items-center justify-center text-xl mb-3">
                                                 📭
                                             </div>
-                                            <h4 className="text-sm font-black text-[#1a1208]">No notifications found</h4>
+                                            <h4 className="text-sm font-black text-[#1a1208] dark:text-white">No notifications found</h4>
                                             <p className="text-xs text-gray-400 font-semibold mt-1">
                                                 {notifFilterTab === 'archived'
                                                     ? 'Closed or archived notifications will appear here for viewing later.'
@@ -1325,42 +1325,42 @@ const ResidentSettings = () => {
                                                 <div
                                                     key={notif.notification_id}
                                                     onClick={() => handleNotificationClick(notif)}
-                                                    className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:border-orange-300 hover:shadow-sm ${notif.is_archived
-                                                            ? 'bg-gray-50/80 border-gray-200/80 text-gray-600'
+                                                    className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:border-orange-300 dark:hover:border-orange-500 hover:shadow-sm ${notif.is_archived
+                                                            ? 'bg-gray-50/80 dark:bg-[#1E2738] border-gray-200/80 dark:border-gray-800 text-gray-600 dark:text-gray-300'
                                                             : notif.is_read
-                                                                ? 'bg-white border-gray-200'
-                                                                : 'bg-orange-50/30 border-orange-200'
+                                                                ? 'bg-white dark:bg-[#151C2C] border-gray-200 dark:border-gray-800'
+                                                                : 'bg-orange-50/30 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900/50'
                                                         }`}
                                                 >
                                                     <div className="flex items-start gap-3 flex-1">
-                                                        <div className={`p-2.5 rounded-xl text-lg shrink-0 ${notif.type === 'alert' ? 'bg-red-50 text-red-500' :
-                                                                notif.type === 'potential_match' ? 'bg-amber-50 text-amber-600' :
-                                                                    'bg-orange-50 text-[#F97316]'
+                                                        <div className={`p-2.5 rounded-xl text-lg shrink-0 ${notif.type === 'alert' ? 'bg-red-50 dark:bg-red-950/50 text-red-500' :
+                                                                notif.type === 'potential_match' ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400' :
+                                                                    'bg-orange-50 dark:bg-orange-950/50 text-[#F97316]'
                                                             }`}>
                                                             {notif.type === 'alert' ? '🚨' : notif.type === 'potential_match' ? '🔍' : '🔔'}
                                                         </div>
                                                         <div className="space-y-1 flex-1">
                                                             <div className="flex items-center gap-2 flex-wrap">
-                                                                <h4 className="text-xs font-black text-[#1a1208]">{notif.title}</h4>
-                                                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${notif.is_archived ? 'bg-gray-200 text-gray-700' :
-                                                                        notif.is_read ? 'bg-gray-100 text-gray-500' : 'bg-orange-100 text-[#F97316]'
+                                                                <h4 className="text-xs font-black text-[#1a1208] dark:text-white">{notif.title}</h4>
+                                                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${notif.is_archived ? 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300' :
+                                                                        notif.is_read ? 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400' : 'bg-orange-100 dark:bg-orange-950/60 text-[#F97316]'
                                                                     }`}>
                                                                     {notif.is_archived ? 'Archived' : notif.is_read ? 'Read' : 'New'}
                                                                 </span>
                                                             </div>
-                                                            <p className="text-xs text-gray-600 font-medium leading-relaxed">{notif.message}</p>
+                                                            <p className="text-xs text-gray-600 dark:text-gray-300 font-medium leading-relaxed">{notif.message}</p>
                                                             <span className="text-[10px] text-gray-400 font-bold block pt-1">
                                                                 {formatTimestamp(notif.created_at)}
                                                             </span>
                                                         </div>
                                                     </div>
 
-                                                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center border-t sm:border-t-0 pt-2 sm:pt-0 border-gray-100" onClick={(e) => e.stopPropagation()}>
+                                                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center border-t sm:border-t-0 pt-2 sm:pt-0 border-gray-100 dark:border-gray-800" onClick={(e) => e.stopPropagation()}>
                                                         {notif.is_archived ? (
                                                             <button
                                                                 type="button"
                                                                 onClick={(e) => { e.stopPropagation(); handleUnarchiveNotification(notif.notification_id); }}
-                                                                className="px-3 py-1.5 bg-white hover:bg-orange-50 border border-gray-200 hover:border-orange-200 text-[#F97316] text-xs font-bold rounded-xl transition-all flex items-center gap-1 shadow-sm"
+                                                                className="px-3 py-1.5 bg-white dark:bg-[#151C2C] hover:bg-orange-50 dark:hover:bg-orange-950/40 border border-gray-200 dark:border-gray-700 hover:border-orange-200 dark:hover:border-orange-800 text-[#F97316] text-xs font-bold rounded-xl transition-all flex items-center gap-1 shadow-sm cursor-pointer"
                                                                 title="Restore to Inbox"
                                                             >
                                                                 📤 Restore
@@ -1369,7 +1369,7 @@ const ResidentSettings = () => {
                                                             <button
                                                                 type="button"
                                                                 onClick={(e) => { e.stopPropagation(); handleArchiveNotification(notif.notification_id); }}
-                                                                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1"
+                                                                className="px-3 py-1.5 bg-gray-100 dark:bg-[#1E2738] hover:bg-gray-200 dark:hover:bg-[#253248] text-gray-700 dark:text-gray-300 text-xs font-bold rounded-xl transition-all flex items-center gap-1 cursor-pointer"
                                                                 title="Archive Notification"
                                                             >
                                                                 📁 Archive
@@ -1381,7 +1381,7 @@ const ResidentSettings = () => {
                                                         <button
                                                             type="button"
                                                             onClick={(e) => { e.stopPropagation(); handleDeleteNotification(notif.notification_id); }}
-                                                            className="p-2 hover:bg-red-50 rounded-xl text-red-500 text-xs transition-colors"
+                                                            className="p-2 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl text-red-500 text-xs transition-colors cursor-pointer"
                                                             title="Delete Permanently"
                                                         >
                                                             🗑️
@@ -1410,9 +1410,9 @@ const ResidentSettings = () => {
                                     <div className="grid grid-cols-2 gap-4 max-w-md">
                                         <button
                                             onClick={() => setReportVisibility('Public')}
-                                            className={`p-4 rounded-2xl border text-left transition-all ${reportVisibility === 'Public'
-                                                    ? 'border-[#F97316] bg-orange-50/50 text-[#F97316] font-black shadow-sm'
-                                                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                                            className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${reportVisibility === 'Public'
+                                                    ? 'border-[#F97316] bg-orange-50/50 dark:bg-orange-950/30 text-[#F97316] font-black shadow-sm'
+                                                    : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1E2738] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#253248]'
                                                 }`}
                                         >
                                             <span className="text-xs block">🌐 Public</span>
@@ -1421,9 +1421,9 @@ const ResidentSettings = () => {
 
                                         <button
                                             onClick={() => setReportVisibility('Private')}
-                                            className={`p-4 rounded-2xl border text-left transition-all ${reportVisibility === 'Private'
-                                                    ? 'border-[#F97316] bg-orange-50/50 text-[#F97316] font-black shadow-sm'
-                                                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                                            className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${reportVisibility === 'Private'
+                                                    ? 'border-[#F97316] bg-orange-50/50 dark:bg-orange-950/30 text-[#F97316] font-black shadow-sm'
+                                                    : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1E2738] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#253248]'
                                                 }`}
                                         >
                                             <span className="text-xs block">🔒 Private</span>
@@ -1432,26 +1432,26 @@ const ResidentSettings = () => {
                                     </div>
                                 </div>
 
-                                <div className="space-y-4 pt-4 border-t border-gray-100">
-                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer">
+                                <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer">
                                         <div>
-                                            <span className="text-xs font-bold text-gray-800 block">Hide my identity on reports</span>
+                                            <span className="text-xs font-bold text-gray-800 dark:text-gray-200 block">Hide my identity on reports</span>
                                             <span className="text-[10px] text-gray-400 font-semibold">Post reports anonymously to other residents</span>
                                         </div>
                                         <input type="checkbox" checked={hideIdentity} onChange={(e) => setHideIdentity(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
                                     </label>
 
-                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer">
+                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer">
                                         <div>
-                                            <span className="text-xs font-bold text-gray-800 block">Allow other users to contact me</span>
+                                            <span className="text-xs font-bold text-gray-800 dark:text-gray-200 block">Allow other users to contact me</span>
                                             <span className="text-[10px] text-gray-400 font-semibold">Allow direct inquiries for lost pet sightings</span>
                                         </div>
                                         <input type="checkbox" checked={allowContact} onChange={(e) => setAllowContact(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
                                     </label>
 
-                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer">
+                                    <label className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer">
                                         <div>
-                                            <span className="text-xs font-bold text-gray-800 block">Show phone number to rescuers only</span>
+                                            <span className="text-xs font-bold text-gray-800 dark:text-gray-200 block">Show phone number to rescuers only</span>
                                             <span className="text-[10px] text-gray-400 font-semibold">Keep phone hidden from general public</span>
                                         </div>
                                         <input type="checkbox" checked={showPhoneRescuersOnly} onChange={(e) => setShowPhoneRescuersOnly(e.target.checked)} className="w-4.5 h-4.5 accent-[#F97316]" />
@@ -1464,10 +1464,10 @@ const ResidentSettings = () => {
                         {activeTab === 'location' && (
                             <div className="space-y-8 animate-in fade-in duration-200">
                                 <div>
-                                    <h2 className="text-lg font-black text-[#1a1208] flex items-center gap-2">
+                                    <h2 className="text-lg font-black text-[#1a1208] dark:text-white flex items-center gap-2">
                                         📍 Location & Mapping Settings
                                     </h2>
-                                    <p className="text-xs text-gray-500 font-semibold mt-1">Set default address and location permissions</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold mt-1">Set default address and location permissions</p>
                                 </div>
 
                                 <div>
@@ -1476,14 +1476,14 @@ const ResidentSettings = () => {
                                         type="text"
                                         value={editData.address || ''}
                                         onChange={(e) => setEditData({ ...editData, address: e.target.value })}
-                                        className="w-full h-11 bg-gray-50 border border-gray-150 rounded-xl px-4 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316]"
+                                        className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316]"
                                     />
                                 </div>
 
                                 {/* Leaflet Map Pinpoint */}
                                 <div>
                                     <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Pinpoint Coordinates</label>
-                                    <div className="w-full h-52 rounded-2xl overflow-hidden border border-gray-200 relative z-10">
+                                    <div className="w-full h-52 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 relative z-10">
                                         <MapContainer
                                             center={[
                                                 editData.latitude ? parseFloat(editData.latitude) : 15.4802,
@@ -1513,17 +1513,17 @@ const ResidentSettings = () => {
                                     </div>
                                 </div>
 
-                                <div className="space-y-4 pt-4 border-t border-gray-100">
-                                    <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100">
-                                        <span className="text-xs font-bold text-gray-800">Allow GPS Permission</span>
-                                        <button onClick={() => setAllowGPS(!allowGPS)} className={`px-3 py-1.5 rounded-full text-xs font-black uppercase ${allowGPS ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                                <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+                                    <div className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800">
+                                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Allow GPS Permission</span>
+                                        <button onClick={() => setAllowGPS(!allowGPS)} className={`px-3 py-1.5 rounded-full text-xs font-black uppercase cursor-pointer ${allowGPS ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
                                             {allowGPS ? 'ON' : 'OFF'}
                                         </button>
                                     </div>
 
-                                    <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100">
-                                        <span className="text-xs font-bold text-gray-800">Use Current Location Automatically when Reporting</span>
-                                        <button onClick={() => setAutoLocation(!autoLocation)} className={`px-3 py-1.5 rounded-full text-xs font-black uppercase ${autoLocation ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                                    <div className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800">
+                                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Use Current Location Automatically when Reporting</span>
+                                        <button onClick={() => setAutoLocation(!autoLocation)} className={`px-3 py-1.5 rounded-full text-xs font-black uppercase cursor-pointer ${autoLocation ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
                                             {autoLocation ? 'ON' : 'OFF'}
                                         </button>
                                     </div>
@@ -1533,7 +1533,7 @@ const ResidentSettings = () => {
                                         <select
                                             value={locationAccuracy}
                                             onChange={(e) => setLocationAccuracy(e.target.value)}
-                                            className="w-full h-11 bg-gray-50 border border-gray-150 rounded-xl px-4 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316]"
+                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316]"
                                         >
                                             <option value="High">High (GPS + Network)</option>
                                             <option value="Medium">Balanced Power</option>
@@ -1548,10 +1548,10 @@ const ResidentSettings = () => {
                         {activeTab === 'appearance' && (
                             <div className="space-y-8 animate-in fade-in duration-200">
                                 <div>
-                                    <h2 className="text-lg font-black text-[#1a1208] flex items-center gap-2">
+                                    <h2 className="text-lg font-black text-[#1a1208] dark:text-white flex items-center gap-2">
                                         🎨 Appearance & Display
                                     </h2>
-                                    <p className="text-xs text-gray-500 font-semibold mt-1">Customize app themes, map styles, and language</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold mt-1">Customize app themes, map styles, and language</p>
                                 </div>
 
                                 <div>
@@ -1559,7 +1559,7 @@ const ResidentSettings = () => {
                                     <div className="grid grid-cols-2 gap-4 max-w-md">
                                         <button
                                             onClick={() => setGlobalTheme('light')}
-                                            className={`p-4 rounded-2xl border text-left transition-all ${globalTheme === 'light'
+                                            className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${globalTheme === 'light'
                                                     ? 'border-[#F97316] bg-orange-50/50 dark:bg-orange-950/30 text-[#F97316] font-black shadow-sm'
                                                     : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
                                                 }`}
@@ -1570,8 +1570,8 @@ const ResidentSettings = () => {
 
                                         <button
                                             onClick={() => setGlobalTheme('dark')}
-                                            className={`p-4 rounded-2xl border text-left transition-all ${globalTheme === 'dark'
-                                                    ? 'border-[#F97316] bg-gray-900 dark:bg-gray-800 text-white font-black shadow-sm'
+                                            className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${globalTheme === 'dark'
+                                                    ? 'border-[#F97316] bg-gray-900 dark:bg-[#1E2738] text-white font-black shadow-sm'
                                                     : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
                                                 }`}
                                         >
@@ -1581,13 +1581,13 @@ const ResidentSettings = () => {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-gray-100">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-gray-100 dark:border-gray-800">
                                     <div>
                                         <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Map Style</label>
                                         <select
                                             value={mapStyle}
                                             onChange={(e) => setMapStyle(e.target.value)}
-                                            className="w-full h-11 bg-gray-50 border border-gray-150 rounded-xl px-4 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316]"
+                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316]"
                                         >
                                             <option value="Default">Default OpenStreetMap</option>
                                             <option value="Satellite">Satellite View</option>
@@ -1600,7 +1600,7 @@ const ResidentSettings = () => {
                                         <select
                                             value={language}
                                             onChange={(e) => setLanguage(e.target.value)}
-                                            className="w-full h-11 bg-gray-50 border border-gray-150 rounded-xl px-4 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#F97316]"
+                                            className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316]"
                                         >
                                             <option value="English">English</option>
                                             <option value="Filipino">Filipino (Tagalog)</option>
@@ -1614,74 +1614,74 @@ const ResidentSettings = () => {
                         {activeTab === 'help' && (
                             <div className="space-y-8 animate-in fade-in duration-200">
                                 <div>
-                                    <h2 className="text-lg font-black text-[#1a1208] flex items-center gap-2">
+                                    <h2 className="text-lg font-black text-[#1a1208] dark:text-white flex items-center gap-2">
                                         ❓ Help & Support
                                     </h2>
-                                    <p className="text-xs text-gray-500 font-semibold mt-1">Frequently asked questions and direct contact support</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold mt-1">Frequently asked questions and direct contact support</p>
                                 </div>
 
                                 {/* FAQ Section */}
                                 <div className="space-y-4">
                                     <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Frequently Asked Questions</h3>
 
-                                    <details className="bg-gray-50 border border-gray-150 rounded-2xl p-4 group">
-                                        <summary className="font-bold text-xs text-gray-800 cursor-pointer flex justify-between items-center">
+                                    <details className="bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-800 rounded-2xl p-4 group">
+                                        <summary className="font-bold text-xs text-gray-800 dark:text-gray-200 cursor-pointer flex justify-between items-center">
                                             How to report a stray animal?
                                             <span className="text-gray-400 group-open:rotate-180 transition-transform">▼</span>
                                         </summary>
-                                        <p className="text-xs text-gray-600 mt-3 leading-relaxed">
+                                        <p className="text-xs text-gray-600 dark:text-gray-300 mt-3 leading-relaxed">
                                             Go to your Home feed and click "Report Stray". Fill out the animal details, photo/video, landmark, priority, and visibility. Your subdivision leader will verify it promptly.
                                         </p>
                                     </details>
 
-                                    <details className="bg-gray-50 border border-gray-150 rounded-2xl p-4 group">
-                                        <summary className="font-bold text-xs text-gray-800 cursor-pointer flex justify-between items-center">
+                                    <details className="bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-800 rounded-2xl p-4 group">
+                                        <summary className="font-bold text-xs text-gray-800 dark:text-gray-200 cursor-pointer flex justify-between items-center">
                                             How does pet QR Code scanning work?
                                             <span className="text-gray-400 group-open:rotate-180 transition-transform">▼</span>
                                         </summary>
-                                        <p className="text-xs text-gray-600 mt-3 leading-relaxed">
+                                        <p className="text-xs text-gray-600 dark:text-gray-300 mt-3 leading-relaxed">
                                             Register your pet under "My Pets". Download and print the generated QR card for your pet's collar. If your pet is found lost, anyone scanning the tag can view contact info or notify you with their location.
                                         </p>
                                     </details>
 
-                                    <details className="bg-gray-50 border border-gray-150 rounded-2xl p-4 group">
-                                        <summary className="font-bold text-xs text-gray-800 cursor-pointer flex justify-between items-center">
+                                    <details className="bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-800 rounded-2xl p-4 group">
+                                        <summary className="font-bold text-xs text-gray-800 dark:text-gray-200 cursor-pointer flex justify-between items-center">
                                             What is the difference between Public and Private reports?
                                             <span className="text-gray-400 group-open:rotate-180 transition-transform">▼</span>
                                         </summary>
-                                        <p className="text-xs text-gray-600 mt-3 leading-relaxed">
+                                        <p className="text-xs text-gray-600 dark:text-gray-300 mt-3 leading-relaxed">
                                             Public reports are visible to all registered residents in your community feed. Private reports are strictly routed to your Subdivision Leader and Barangay Staff for discreet rescue actions.
                                         </p>
                                     </details>
                                 </div>
 
                                 {/* Support Actions */}
-                                <div className="pt-6 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div className="pt-6 border-t border-gray-100 dark:border-gray-800 grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     <button
                                         onClick={() => alert('Barangay Emergency Hotline: (045) 982-1234')}
-                                        className="p-4 bg-orange-50 border border-orange-150 rounded-2xl text-center group hover:bg-orange-100 transition-all"
+                                        className="p-4 bg-orange-50 dark:bg-orange-950/30 border border-orange-150 dark:border-orange-900/40 rounded-2xl text-center group hover:bg-orange-100 dark:hover:bg-orange-950/50 transition-all cursor-pointer"
                                     >
                                         <span className="text-xl block mb-1">📞</span>
                                         <span className="text-xs font-black text-[#F97316] uppercase block">Contact Barangay</span>
-                                        <span className="text-[10px] text-gray-500 font-semibold">Direct hotline info</span>
+                                        <span className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold">Direct hotline info</span>
                                     </button>
 
                                     <button
                                         onClick={() => alert('Bug report feature submitted to system administrators.')}
-                                        className="p-4 bg-gray-50 border border-gray-150 rounded-2xl text-center group hover:bg-gray-100 transition-all"
+                                        className="p-4 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-800 rounded-2xl text-center group hover:bg-gray-100 dark:hover:bg-[#253248] transition-all cursor-pointer"
                                     >
                                         <span className="text-xl block mb-1">🐛</span>
-                                        <span className="text-xs font-black text-gray-800 uppercase block">Report a Bug</span>
-                                        <span className="text-[10px] text-gray-500 font-semibold">Submit technical issue</span>
+                                        <span className="text-xs font-black text-gray-800 dark:text-gray-200 uppercase block">Report a Bug</span>
+                                        <span className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold">Submit technical issue</span>
                                     </button>
 
                                     <button
                                         onClick={() => alert('Thank you! Your feedback will help improve StraySafe.')}
-                                        className="p-4 bg-gray-50 border border-gray-150 rounded-2xl text-center group hover:bg-gray-100 transition-all"
+                                        className="p-4 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-800 rounded-2xl text-center group hover:bg-gray-100 dark:hover:bg-[#253248] transition-all cursor-pointer"
                                     >
                                         <span className="text-xl block mb-1">💬</span>
-                                        <span className="text-xs font-black text-gray-800 uppercase block">Send Feedback</span>
-                                        <span className="text-[10px] text-gray-500 font-semibold">Share your suggestions</span>
+                                        <span className="text-xs font-black text-gray-800 dark:text-gray-200 uppercase block">Send Feedback</span>
+                                        <span className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold">Share your suggestions</span>
                                     </button>
                                 </div>
                             </div>
@@ -1691,27 +1691,27 @@ const ResidentSettings = () => {
                         {activeTab === 'about' && (
                             <div className="space-y-8 animate-in fade-in duration-200">
                                 <div>
-                                    <h2 className="text-lg font-black text-[#1a1208] flex items-center gap-2">
+                                    <h2 className="text-lg font-black text-[#1a1208] dark:text-white flex items-center gap-2">
                                         ℹ️ About STRAY-SAFE
                                     </h2>
-                                    <p className="text-xs text-gray-500 font-semibold mt-1">System version and legal documentation</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold mt-1">System version and legal documentation</p>
                                 </div>
 
-                                <div className="text-center p-8 bg-gradient-to-b from-orange-50/50 to-white rounded-3xl border border-orange-100">
-                                    <img src="/SSLOGO.png" alt="StraySafe Logo" className="h-16 w-auto mx-auto mb-3" />
-                                    <h3 className="text-xl font-black text-[#1a1208] uppercase tracking-wider">STRAY-SAFE</h3>
-                                    <span className="px-3 py-1 bg-orange-100 text-[#F97316] text-[10px] font-black rounded-full uppercase tracking-widest inline-block mt-2">
+                                <div className="text-center p-8 bg-gradient-to-b from-orange-50/50 to-white dark:from-[#1E2738] dark:to-[#151C2C] rounded-3xl border border-orange-100 dark:border-gray-800">
+                                    <img src="/SSLOGO.png" alt="StraySafe Logo" className="h-16 w-auto mx-auto mb-3 drop-shadow-sm" />
+                                    <h3 className="text-xl font-black text-[#1a1208] dark:text-white uppercase tracking-wider">STRAY-SAFE</h3>
+                                    <span className="px-3 py-1 bg-orange-100 dark:bg-orange-950/60 text-[#F97316] text-[10px] font-black rounded-full uppercase tracking-widest inline-block mt-2">
                                         Version 2.0.0
                                     </span>
-                                    <p className="text-xs text-gray-500 max-w-md mx-auto mt-4 leading-relaxed">
+                                    <p className="text-xs text-gray-500 dark:text-gray-300 max-w-md mx-auto mt-4 leading-relaxed">
                                         A smart community-driven stray management and animal welfare platform empowering residents, subdivision leaders, and barangay staff.
                                     </p>
                                 </div>
 
-                                <div className="space-y-3 pt-4 border-t border-gray-100">
+                                <div className="space-y-3 pt-4 border-t border-gray-100 dark:border-gray-800">
                                     <button
                                         onClick={() => alert('Privacy Policy: StraySafe protects your location and personal identity in accordance with Philippine Data Privacy Act of 2012.')}
-                                        className="w-full flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-150 text-xs font-bold text-gray-800 hover:bg-gray-100 transition-all"
+                                        className="w-full flex justify-between items-center p-4 bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-150 dark:border-gray-800 text-xs font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#253248] transition-all cursor-pointer"
                                     >
                                         <span>🔒 Privacy Policy</span>
                                         <span className="text-gray-400">→</span>
@@ -1719,7 +1719,7 @@ const ResidentSettings = () => {
 
                                     <button
                                         onClick={() => alert('Terms & Conditions: Users agree to submit truthful reports regarding stray animals and pet registrations.')}
-                                        className="w-full flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-150 text-xs font-bold text-gray-800 hover:bg-gray-100 transition-all"
+                                        className="w-full flex justify-between items-center p-4 bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-150 dark:border-gray-800 text-xs font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#253248] transition-all cursor-pointer"
                                     >
                                         <span>📄 Terms & Conditions</span>
                                         <span className="text-gray-400">→</span>
@@ -1727,7 +1727,7 @@ const ResidentSettings = () => {
 
                                     <button
                                         onClick={() => alert('Open Source Licenses: React, Vite, Leaflet, FastAPI, Tailwind CSS, Lucide icons.')}
-                                        className="w-full flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-150 text-xs font-bold text-gray-800 hover:bg-gray-100 transition-all"
+                                        className="w-full flex justify-between items-center p-4 bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-150 dark:border-gray-800 text-xs font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#253248] transition-all cursor-pointer"
                                     >
                                         <span>📜 Open Source Licenses</span>
                                         <span className="text-gray-400">→</span>
@@ -1746,20 +1746,20 @@ const ResidentSettings = () => {
                     onClick={() => setSelectedHistoryPet(null)}
                 >
                     <div 
-                        className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-hidden shadow-2xl border border-gray-100 flex flex-col animate-in zoom-in-95 duration-200"
+                        className="bg-white dark:bg-[#151C2C] rounded-3xl max-w-lg w-full max-h-[90vh] overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-800 flex flex-col animate-in zoom-in-95 duration-200"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Modal Header */}
-                        <div className="p-6 bg-gradient-to-br from-orange-50/80 via-white to-gray-50 border-b border-gray-150 relative">
+                        <div className="p-6 bg-gradient-to-br from-orange-50/80 via-white to-gray-50 dark:from-[#1E2738] dark:via-[#151C2C] dark:to-[#151C2C] border-b border-gray-150 dark:border-gray-800 relative">
                             <button
                                 type="button"
                                 onClick={() => setSelectedHistoryPet(null)}
-                                className="absolute right-5 top-5 w-8 h-8 rounded-full bg-white/80 hover:bg-white text-gray-400 hover:text-gray-700 flex items-center justify-center shadow-xs transition-all cursor-pointer font-bold"
+                                className="absolute right-5 top-5 w-8 h-8 rounded-full bg-white/80 dark:bg-[#1E2738] hover:bg-white dark:hover:bg-[#253248] text-gray-400 hover:text-gray-700 dark:hover:text-white flex items-center justify-center shadow-xs transition-all cursor-pointer font-bold"
                             >
                                 ✕
                             </button>
                             <div className="flex items-center gap-4">
-                                <div className="w-16 h-16 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center text-3xl shrink-0 shadow-inner overflow-hidden border-2 border-white">
+                                <div className="w-16 h-16 rounded-2xl bg-orange-100 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 flex items-center justify-center text-3xl shrink-0 shadow-inner overflow-hidden border-2 border-white dark:border-gray-700">
                                     {selectedHistoryPet.photo_url ? (
                                         <img src={getPetPicture(selectedHistoryPet.photo_url)} alt={selectedHistoryPet.pet_name} className="w-full h-full object-cover" />
                                     ) : (
@@ -1768,16 +1768,16 @@ const ResidentSettings = () => {
                                 </div>
                                 <div>
                                     <div className="flex items-center gap-2">
-                                        <h3 className="text-xl font-black text-gray-900">{selectedHistoryPet.pet_name}</h3>
+                                        <h3 className="text-xl font-black text-gray-900 dark:text-white">{selectedHistoryPet.pet_name}</h3>
                                         <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
                                             selectedHistoryPet.status === 'Removed'
-                                                ? 'bg-rose-100 text-rose-700 border border-rose-200'
-                                                : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                                ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40'
+                                                : 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40'
                                         }`}>
                                             {selectedHistoryPet.status || 'Archived'}
                                         </span>
                                     </div>
-                                    <p className="text-xs text-gray-500 font-bold mt-1">
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 font-bold mt-1">
                                         {selectedHistoryPet.pet_type || 'Dog'} • {selectedHistoryPet.breed || 'Unknown Breed'} {selectedHistoryPet.pet_id ? `(ID #${selectedHistoryPet.pet_id})` : ''}
                                     </p>
                                 </div>
@@ -1790,33 +1790,33 @@ const ResidentSettings = () => {
                             <div>
                                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Pet Profile Overview</h4>
                                 <div className="grid grid-cols-2 gap-2.5">
-                                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                    <div className="p-3 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800">
                                         <span className="text-[10px] font-bold text-gray-400 block uppercase">Species</span>
-                                        <span className="font-bold text-gray-800 text-xs">{selectedHistoryPet.pet_type || 'Dog'}</span>
+                                        <span className="font-bold text-gray-800 dark:text-gray-200 text-xs">{selectedHistoryPet.pet_type || 'Dog'}</span>
                                     </div>
-                                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                    <div className="p-3 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800">
                                         <span className="text-[10px] font-bold text-gray-400 block uppercase">Breed</span>
-                                        <span className="font-bold text-gray-800 text-xs">{selectedHistoryPet.breed || 'Unknown'}</span>
+                                        <span className="font-bold text-gray-800 dark:text-gray-200 text-xs">{selectedHistoryPet.breed || 'Unknown'}</span>
                                     </div>
-                                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                    <div className="p-3 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800">
                                         <span className="text-[10px] font-bold text-gray-400 block uppercase">Gender</span>
-                                        <span className="font-bold text-gray-800 text-xs">{selectedHistoryPet.gender || 'Unknown'}</span>
+                                        <span className="font-bold text-gray-800 dark:text-gray-200 text-xs">{selectedHistoryPet.gender || 'Unknown'}</span>
                                     </div>
-                                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                    <div className="p-3 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800">
                                         <span className="text-[10px] font-bold text-gray-400 block uppercase">Colors</span>
-                                        <span className="font-bold text-gray-800 text-xs">
+                                        <span className="font-bold text-gray-800 dark:text-gray-200 text-xs">
                                             {selectedHistoryPet.primary_color || 'Standard'}
                                             {selectedHistoryPet.secondary_color && selectedHistoryPet.secondary_color !== 'None' ? ` & ${selectedHistoryPet.secondary_color}` : ''}
                                             {selectedHistoryPet.tertiary_color && selectedHistoryPet.tertiary_color !== 'None' ? ` & ${selectedHistoryPet.tertiary_color}` : ''}
                                         </span>
                                     </div>
-                                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                    <div className="p-3 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800">
                                         <span className="text-[10px] font-bold text-gray-400 block uppercase">Size Category</span>
-                                        <span className="font-bold text-gray-800 text-xs">{selectedHistoryPet.size_category || 'Medium'} {selectedHistoryPet.weight ? `(${selectedHistoryPet.weight} kg)` : ''}</span>
+                                        <span className="font-bold text-gray-800 dark:text-gray-200 text-xs">{selectedHistoryPet.size_category || 'Medium'} {selectedHistoryPet.weight ? `(${selectedHistoryPet.weight} kg)` : ''}</span>
                                     </div>
-                                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                    <div className="p-3 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-100 dark:border-gray-800">
                                         <span className="text-[10px] font-bold text-gray-400 block uppercase">Vaccination</span>
-                                        <span className="font-bold text-gray-800 text-xs">{selectedHistoryPet.is_vaccinated ? '✅ Vaccinated' : '⚠️ Not Vaccinated'}</span>
+                                        <span className="font-bold text-gray-800 dark:text-gray-200 text-xs">{selectedHistoryPet.is_vaccinated ? '✅ Vaccinated' : '⚠️ Not Vaccinated'}</span>
                                     </div>
                                 </div>
                             </div>
@@ -1824,22 +1824,22 @@ const ResidentSettings = () => {
                             {/* Audit & Removal Info */}
                             <div>
                                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Record Information</h4>
-                                <div className="p-3.5 bg-orange-50/50 rounded-2xl border border-orange-100 space-y-2">
+                                <div className="p-3.5 bg-orange-50/50 dark:bg-orange-950/20 rounded-2xl border border-orange-100 dark:border-orange-900/40 space-y-2">
                                     {selectedHistoryPet.removed_at && (
                                         <div className="flex justify-between items-center text-xs">
-                                            <span className="text-gray-500 font-semibold">Removal Date:</span>
-                                            <span className="font-bold text-rose-600">{selectedHistoryPet.removed_at}</span>
+                                            <span className="text-gray-500 dark:text-gray-400 font-semibold">Removal Date:</span>
+                                            <span className="font-bold text-rose-600 dark:text-rose-400">{selectedHistoryPet.removed_at}</span>
                                         </div>
                                     )}
                                     {selectedHistoryPet.created_at && (
                                         <div className="flex justify-between items-center text-xs">
-                                            <span className="text-gray-500 font-semibold">Creation Date:</span>
-                                            <span className="font-bold text-gray-800">{selectedHistoryPet.created_at}</span>
+                                            <span className="text-gray-500 dark:text-gray-400 font-semibold">Creation Date:</span>
+                                            <span className="font-bold text-gray-800 dark:text-gray-200">{selectedHistoryPet.created_at}</span>
                                         </div>
                                     )}
                                     <div className="flex justify-between items-center text-xs">
-                                        <span className="text-gray-500 font-semibold">Log Description:</span>
-                                        <span className="font-bold text-gray-800">{selectedHistoryPet.description || 'Pet record'}</span>
+                                        <span className="text-gray-500 dark:text-gray-400 font-semibold">Log Description:</span>
+                                        <span className="font-bold text-gray-800 dark:text-gray-200">{selectedHistoryPet.description || 'Pet record'}</span>
                                     </div>
                                 </div>
                             </div>
@@ -1850,15 +1850,15 @@ const ResidentSettings = () => {
                                     <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Activity Timeline</h4>
                                     <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                                         {selectedHistoryPet.timeline.map((log: any, idx: number) => (
-                                            <div key={idx} className="p-2.5 bg-gray-50 rounded-xl border border-gray-150 flex items-center justify-between text-[11px]">
+                                            <div key={idx} className="p-2.5 bg-gray-50 dark:bg-[#1E2738] rounded-xl border border-gray-150 dark:border-gray-800 flex items-center justify-between text-[11px]">
                                                 <div className="flex items-center gap-2">
                                                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
-                                                        log.action === 'CREATE_PET' ? 'bg-emerald-100 text-emerald-700' :
-                                                        log.action === 'DELETE_PET' ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'
+                                                        log.action === 'CREATE_PET' ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400' :
+                                                        log.action === 'DELETE_PET' ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400' : 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400'
                                                     }`}>
                                                         {log.action?.replace('_PET', '')}
                                                     </span>
-                                                    <span className="font-bold text-gray-700">{log.description}</span>
+                                                    <span className="font-bold text-gray-700 dark:text-gray-300">{log.description}</span>
                                                 </div>
                                                 <span className="text-gray-400 font-semibold shrink-0 ml-2">{log.timestamp}</span>
                                             </div>
@@ -1869,11 +1869,11 @@ const ResidentSettings = () => {
                         </div>
 
                         {/* Modal Footer */}
-                        <div className="p-4 bg-gray-50 border-t border-gray-150 flex items-center justify-between gap-3">
+                        <div className="p-4 bg-gray-50 dark:bg-[#1E2738] border-t border-gray-150 dark:border-gray-800 flex items-center justify-between gap-3">
                             <button
                                 type="button"
                                 onClick={() => setSelectedHistoryPet(null)}
-                                className="px-4 py-2.5 bg-white hover:bg-gray-100 border border-gray-200 text-gray-700 font-bold rounded-xl text-xs transition-all cursor-pointer"
+                                className="px-4 py-2.5 bg-white dark:bg-[#151C2C] hover:bg-gray-100 dark:hover:bg-[#253248] border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-bold rounded-xl text-xs transition-all cursor-pointer"
                             >
                                 Close
                             </button>
