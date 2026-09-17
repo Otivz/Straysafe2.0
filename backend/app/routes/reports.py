@@ -1605,98 +1605,93 @@ def process_report_media_ai(report_id: int, media_id: int, file_url: str, file_c
         img.save(img_buffer, format='JPEG')
         active_image_bytes = img_buffer.getvalue()
 
-        try:
-            user_selected = (report.animal_type or "").capitalize()
-            if user_selected in ['Dog', 'Cat']:
-                animal_type = user_selected
-            elif 'Cat' in detected:
-                animal_type = 'Cat'
-            elif 'Dog' in detected:
-                animal_type = 'Dog'
-            else:
-                animal_type = 'Unknown'
+        user_selected = (report.animal_type or "").capitalize()
+        if user_selected in ['Dog', 'Cat']:
+            animal_type = user_selected
+        elif 'Cat' in detected:
+            animal_type = 'Cat'
+        elif 'Dog' in detected:
+            animal_type = 'Dog'
+        else:
+            animal_type = 'Unknown'
 
-            dominant_color = 'Unknown'
-            visual_size = 'Unknown'
+        dominant_color = 'Unknown'
+        visual_size = 'Unknown'
 
-            if animal_type != 'Unknown':
-                target_bbox = next((b for b, t in bboxes if t == animal_type), None)
-                if target_bbox:
-                    dominant_color = extract_dominant_colors(active_image_bytes, target_bbox)
-                    x1, y1, x2, y2 = target_bbox
-                    bbox_width = x2 - x1
-                    bbox_height = y2 - y1
-                    ratio = (bbox_width * bbox_height) / max(1, image_area)
-                    if animal_type == 'Cat':
-                        visual_size = 'Small'
-                    else:
-                        if ratio < 0.20:
-                            visual_size = 'Small'
-                        elif ratio <= 0.55:
-                            visual_size = 'Medium'
-                        else:
-                            visual_size = 'Large'
+        if animal_type != 'Unknown':
+            target_bbox = next((b for b, t in bboxes if t == animal_type), None)
+            if target_bbox:
+                dominant_color = extract_dominant_colors(active_image_bytes, target_bbox)
+                x1, y1, x2, y2 = target_bbox
+                bbox_width = x2 - x1
+                bbox_height = y2 - y1
+                ratio = (bbox_width * bbox_height) / max(1, image_area)
+                if animal_type == 'Cat':
+                    visual_size = 'Small'
                 else:
-                    dominant_color = extract_dominant_colors(active_image_bytes)
-                    visual_size = 'Medium'
+                    if ratio < 0.20:
+                        visual_size = 'Small'
+                    elif ratio <= 0.55:
+                        visual_size = 'Medium'
+                    else:
+                        visual_size = 'Large'
+            else:
+                dominant_color = extract_dominant_colors(active_image_bytes)
+                visual_size = 'Medium'
 
-                if animal_type == 'Dog' and dominant_color and dominant_color != 'Unknown':
-                    mapped = []
-                    for c in dominant_color.split(','):
-                        c_clean = c.strip()
-                        if c_clean.lower() in ['orange', 'ginger']:
-                            mapped.append('Brown')
-                        else:
-                            mapped.append(c_clean)
-                    seen = set()
-                    dominant_color = ", ".join([x for x in mapped if not (x in seen or seen.add(x))])
+            if animal_type == 'Dog' and dominant_color and dominant_color != 'Unknown':
+                mapped = []
+                for c in dominant_color.split(','):
+                    c_clean = c.strip()
+                    if c_clean.lower() in ['orange', 'ginger']:
+                        mapped.append('Brown')
+                    else:
+                        mapped.append(c_clean)
+                seen = set()
+                dominant_color = ", ".join([x for x in mapped if not (x in seen or seen.add(x))])
 
-            db_media.animal_type = animal_type
-            db_media.dominant_color = dominant_color
+        db_media.animal_type = animal_type
+        db_media.dominant_color = dominant_color
 
-            try:
-                from app.utils.ai_suggestions import generate_ai_suggestions
-                category_name = ""
-                if report.category and report.category.category_name:
-                    category_name = str(report.category.category_name)
-                elif report.category_id:
-                    category_obj = db.query(ReportCategory).filter(ReportCategory.category_id == report.category_id).first()
-                    if category_obj and category_obj.category_name:
-                        category_name = str(category_obj.category_name)
+        try:
+            from app.utils.ai_suggestions import generate_ai_suggestions
+            category_name = ""
+            if report.category and report.category.category_name:
+                category_name = str(report.category.category_name)
+            elif report.category_id:
+                category_obj = db.query(ReportCategory).filter(ReportCategory.category_id == report.category_id).first()
+                if category_obj and category_obj.category_name:
+                    category_name = str(category_obj.category_name)
 
-                suggestions = generate_ai_suggestions(
-                    description=report.description or "",
-                    category_name=category_name,
-                    media_animal_type=animal_type,
-                    media_dominant_color=dominant_color,
-                    media_estimated_size=visual_size
-                )
-                report.ai_animal_type = suggestions.get("ai_animal_type")
-                report.ai_dominant_color = suggestions.get("ai_dominant_color")
-                report.ai_estimated_size = suggestions.get("ai_estimated_size")
-                report.ai_possible_breed = suggestions.get("ai_possible_breed")
-                report.ai_suggested_risk_level = suggestions.get("ai_suggested_risk_level")
-                report.ai_suggested_priority = suggestions.get("ai_suggested_priority")
-                report.ai_suggested_priority_reason = suggestions.get("ai_suggested_priority_reason")
-                report.ai_behavior_chasing = suggestions.get("ai_behavior_chasing", False)
-                report.ai_behavior_actual_bite = suggestions.get("ai_behavior_actual_bite", False)
-                report.ai_behavior_attempted_bite = suggestions.get("ai_behavior_attempted_bite", False)
-                report.ai_behavior_injury = suggestions.get("ai_behavior_injury", False)
-                report.ai_behavior_aggressive = suggestions.get("ai_behavior_aggressive", False)
-                report.ai_behavior_explanation = suggestions.get("ai_behavior_explanation")
-            except Exception as suggestions_err:
-                print(f"Error refining suggestions during background AI processing: {suggestions_err}")
+            suggestions = generate_ai_suggestions(
+                description=report.description or "",
+                category_name=category_name,
+                media_animal_type=animal_type,
+                media_dominant_color=dominant_color,
+                media_estimated_size=visual_size
+            )
+            report.ai_animal_type = suggestions.get("ai_animal_type")
+            report.ai_dominant_color = suggestions.get("ai_dominant_color")
+            report.ai_estimated_size = suggestions.get("ai_estimated_size")
+            report.ai_possible_breed = suggestions.get("ai_possible_breed")
+            report.ai_suggested_risk_level = suggestions.get("ai_suggested_risk_level")
+            report.ai_suggested_priority = suggestions.get("ai_suggested_priority")
+            report.ai_suggested_priority_reason = suggestions.get("ai_suggested_priority_reason")
+            report.ai_behavior_chasing = suggestions.get("ai_behavior_chasing", False)
+            report.ai_behavior_actual_bite = suggestions.get("ai_behavior_actual_bite", False)
+            report.ai_behavior_attempted_bite = suggestions.get("ai_behavior_attempted_bite", False)
+            report.ai_behavior_injury = suggestions.get("ai_behavior_injury", False)
+            report.ai_behavior_aggressive = suggestions.get("ai_behavior_aggressive", False)
+            report.ai_behavior_explanation = suggestions.get("ai_behavior_explanation")
+        except Exception as suggestions_err:
+            print(f"Error refining suggestions during background AI processing: {suggestions_err}")
 
-            db.commit()
+        db.commit()
 
-            try:
-                trigger_looks_matching(report, db)
-            except Exception as match_err:
-                print(f"Failed to match pets on media upload: {match_err}")
-
-        finally:
-            if os.path.exists(tmp_img_path):
-                os.unlink(tmp_img_path)
+        try:
+            trigger_looks_matching(report, db)
+        except Exception as match_err:
+            print(f"Failed to match pets on media upload: {match_err}")
 
     except Exception as bg_err:
         db.rollback()
