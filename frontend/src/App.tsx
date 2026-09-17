@@ -1,13 +1,18 @@
 import AppRoutes from './routes/AppRoutes';
 import './index.css';
 import { ThemeProvider } from './context/ThemeContext';
+import { ToastProvider } from './context/ToastContext';
+import ToastContainer from './components/Notifications/ToastContainer';
 
 function App() {
   return (
     <ThemeProvider>
-      <div className="min-h-screen w-full bg-[#F7F7F7] dark:bg-[#121212] text-[#1a1208] dark:text-gray-100 transition-colors duration-300">
-        <AppRoutes />
-      </div>
+      <ToastProvider>
+        <div className="min-h-screen w-full bg-app text-main transition-colors duration-300">
+          <AppRoutes />
+          <ToastContainer />
+        </div>
+      </ToastProvider>
     </ThemeProvider>
   );
 }

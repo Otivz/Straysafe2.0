@@ -3,7 +3,7 @@ import {
     AlertTriangle, Mail, MessageCircle, Check, X, Shield, User, Lock, RefreshCw,
     Search, Link2, Ban, Scale, Home, MapPin, Flag, Building2, PawPrint, Phone,
     Syringe, Camera, Rocket, ScrollText, FileText, Pin, CheckCircle2, ClipboardList,
-    Sparkles, Zap, Siren, Bandage, Hourglass
+    Sparkles, Zap, Bandage, Hourglass
 } from 'lucide-react';
 import axios from 'axios';
 import api from '../../utils/api';

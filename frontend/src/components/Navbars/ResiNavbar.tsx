@@ -865,7 +865,7 @@ const ResiNavbar = ({
                 />
             )}
             <div 
-                className={`md:hidden fixed top-0 right-0 h-full w-full z-[260] bg-gradient-to-b from-white via-[#FCFCFB] to-[#FAF9F6] shadow-[-15px_0_45px_rgba(0,0,0,0.12)] border-l border-white/60 flex flex-col`}
+                className={`md:hidden fixed top-0 right-0 h-full w-full z-[260] bg-gradient-to-b from-white via-[#FCFCFB] to-[#FAF9F6] dark:from-[#0B0F19] dark:via-[#151C2C] dark:to-[#0B0F19] shadow-[-15px_0_45px_rgba(0,0,0,0.12)] border-l border-white/60 dark:border-gray-800 flex flex-col`}
                 style={{
                     transition: 'transform 450ms cubic-bezier(0.16, 1, 0.3, 1)',
                     transform: isMobileNotificationsOpen ? 'translateX(0)' : 'translateX(100%)'
@@ -873,10 +873,10 @@ const ResiNavbar = ({
             >
                 <div className="flex flex-col h-full">
                     {/* Header */}
-                    <div className="px-6 pt-8 pb-6 flex justify-between items-center border-b border-gray-100/60">
+                    <div className="px-6 pt-8 pb-6 flex justify-between items-center border-b border-gray-100/60 dark:border-gray-800">
                         <div>
-                            <h3 className="text-[17px] font-black text-[#1a1208] uppercase tracking-tight">Notifications</h3>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">{unreadCount} unread</p>
+                            <h3 className="text-[17px] font-black text-[#1a1208] dark:text-white uppercase tracking-tight">Notifications</h3>
+                            <p className="text-[10px] text-gray-400 dark:text-gray-400 font-bold uppercase tracking-wider mt-1">{unreadCount} unread</p>
                         </div>
                         <div className="flex items-center gap-3">
                             <button
@@ -925,26 +925,26 @@ const ResiNavbar = ({
                                     <div
                                         key={notif.notification_id}
                                         onClick={() => handleNotificationClick(notif)}
-                                        className={`relative p-5 rounded-3xl border transition-all duration-300 cursor-pointer hover:border-orange-300 active:scale-[0.98] ${
+                                        className={`relative p-5 rounded-3xl border transition-all duration-300 cursor-pointer hover:border-orange-300 dark:hover:border-orange-500/50 active:scale-[0.98] ${
                                             notif.is_read
-                                                ? 'bg-[#FAFAF9]/50 border-gray-50'
-                                                : 'bg-orange-50/25 border-orange-100/50 shadow-sm'
+                                                ? 'bg-[#FAFAF9]/80 dark:bg-[#1A2338]/80 border-gray-100 dark:border-gray-800/80 hover:dark:bg-[#202C45]'
+                                                : 'bg-orange-50/40 dark:bg-orange-950/30 border-orange-200/60 dark:border-orange-900/50 shadow-sm hover:dark:bg-orange-950/40'
                                         }`}
                                     >
                                         {!notif.is_read && (
-                                            <span className="absolute top-5 left-5 w-2 h-2 bg-[#F97316] rounded-full" />
+                                            <span className="absolute top-5 left-5 w-2 h-2 bg-[#F97316] rounded-full ring-2 ring-white dark:ring-[#1A2338]" />
                                         )}
                                         <div className={!notif.is_read ? 'pl-4' : ''}>
                                             <div className="flex items-start justify-between gap-4">
                                                 <div className="flex-1">
-                                                    <h4 className="text-[13px] font-black text-[#1a1208]">
+                                                    <h4 className="text-[13px] font-black text-gray-900 dark:text-white leading-snug">
                                                         {notif.title}
                                                     </h4>
-                                                    <p className="text-xs font-semibold text-[#4a3b28]/85 mt-1 leading-relaxed">
+                                                    <p className="text-xs font-medium text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">
                                                         {notif.message}
                                                     </p>
                                                     <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-                                                        <span className="text-[9px] font-bold text-gray-450 block uppercase tracking-widest">
+                                                        <span className="text-[9px] font-bold text-gray-400 dark:text-gray-400 block uppercase tracking-widest">
                                                             {new Date(notif.created_at).toLocaleDateString()}
                                                         </span>
                                                         {(isMatch || isMatchInquiry || typeStr.includes('message') || titleStr.includes('message') || titleStr.includes('💬') || titleStr.includes('inquiry') || msgStr.includes('look-alike')) && notif.related_id && (
@@ -967,7 +967,7 @@ const ResiNavbar = ({
                                                     <div className="flex items-center gap-2 shrink-0">
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); onDeleteNotification(notif.notification_id); }}
-                                                            className="p-1.5 bg-gray-100 rounded-xl text-gray-500 active:scale-90 transition-transform hover:bg-gray-200"
+                                                            className="p-1.5 bg-gray-100 dark:bg-gray-700/80 rounded-xl text-gray-500 dark:text-gray-300 active:scale-90 transition-transform hover:bg-gray-200 dark:hover:bg-gray-600"
                                                             title="Dismiss"
                                                         >
                                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
@@ -985,10 +985,10 @@ const ResiNavbar = ({
                     </div>
 
                     {/* Drawer Footer: Mark All Read & View All Notifications */}
-                    <div className="px-6 py-4 border-t border-gray-100 bg-white flex items-center justify-between shrink-0">
+                    <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-[#151C2C] flex items-center justify-between shrink-0">
                         <button
                             onClick={handleMarkAllRead}
-                            className="text-xs font-semibold text-gray-500 hover:text-gray-900 underline underline-offset-2 transition-colors cursor-pointer"
+                            className="text-xs font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white underline underline-offset-2 transition-colors cursor-pointer"
                         >
                             Mark All Read
                         </button>
@@ -998,7 +998,7 @@ const ResiNavbar = ({
                                     setDrawerNotifLimit(prev => prev + 10);
                                     setHasClickedViewAllDrawer(true);
                                 }}
-                                className="text-xs font-bold text-[#F97316] hover:text-orange-600 transition-colors flex items-center gap-1 ml-auto cursor-pointer"
+                                className="text-xs font-bold text-[#F97316] dark:text-orange-400 hover:text-orange-600 dark:hover:text-orange-300 transition-colors flex items-center gap-1 ml-auto cursor-pointer"
                             >
                                 {hasClickedViewAllDrawer ? 'View More Notifications →' : 'View All Notifications →'}
                             </button>

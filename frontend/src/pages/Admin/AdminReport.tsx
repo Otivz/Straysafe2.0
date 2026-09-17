@@ -577,7 +577,7 @@ const AdminReport = () => {
                                             {rep.has_duplicate_flag && !RESOLVED_STATUS_IDS.includes(rep.status_id) && !rep.duplicate_of_report_id && (
                                                 <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1" title="AI detected suspected duplicate sighting">
                                                     <span>⚠️</span>
-                                                    <span>Dup?</span>
+                                                    <span>Duplicate Report</span>
                                                 </span>
                                             )}
                                             {(rep.status_id === 18 || rep.duplicate_of_report_id) && (

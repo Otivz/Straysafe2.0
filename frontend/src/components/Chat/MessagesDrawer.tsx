@@ -94,17 +94,17 @@ export default function MessagesDrawer({
             />
 
             <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-                <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col border-l border-gray-100 animate-in slide-in-from-right duration-300">
+                <div className="w-screen max-w-md bg-white dark:bg-[#151C2C] shadow-2xl flex flex-col border-l border-gray-100 dark:border-gray-800 animate-in slide-in-from-right duration-300">
                     
                     {/* Header */}
-                    <div className="p-6 bg-gradient-to-br from-white via-orange-50/30 to-amber-50/20 border-b border-gray-100 space-y-4">
+                    <div className="p-6 bg-gradient-to-br from-white via-orange-50/30 to-amber-50/20 dark:from-[#1A2338] dark:via-[#151C2C] dark:to-[#151C2C] border-b border-gray-100 dark:border-gray-800 space-y-4">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-2xl bg-[#F97316]/10 text-[#F97316] flex items-center justify-center text-xl font-bold shadow-xs">
                                     💬
                                 </div>
                                 <div>
-                                    <h2 className="text-base font-black text-gray-900 tracking-tight flex items-center gap-2">
+                                    <h2 className="text-base font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
                                         Case Messages
                                         {totalUnread > 0 && (
                                             <span className="px-2 py-0.5 bg-[#F97316] text-white text-[10px] font-black rounded-full shadow-xs">
@@ -112,7 +112,7 @@ export default function MessagesDrawer({
                                             </span>
                                         )}
                                     </h2>
-                                    <p className="text-[11px] font-bold text-gray-400">
+                                    <p className="text-[11px] font-bold text-gray-400 dark:text-gray-400">
                                         Incident coordination & Look-alike verification
                                     </p>
                                 </div>
@@ -121,7 +121,7 @@ export default function MessagesDrawer({
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-700 flex items-center justify-center text-sm font-bold transition-all cursor-pointer"
+                                className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-white flex items-center justify-center text-sm font-bold transition-all cursor-pointer"
                                 title="Close Drawer"
                             >
                                 ✕
@@ -135,7 +135,7 @@ export default function MessagesDrawer({
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 placeholder="Search messages, reports, or pets..."
-                                className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 focus:border-[#F97316] rounded-xl text-xs font-semibold focus:outline-hidden transition-all shadow-2xs"
+                                className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-[#0E131F] border border-gray-200 dark:border-gray-700 focus:border-[#F97316] dark:focus:border-[#F97316] text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 rounded-xl text-xs font-semibold focus:outline-hidden transition-all shadow-2xs"
                             />
                             <svg className="w-4 h-4 text-gray-400 absolute left-3 top-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -144,7 +144,7 @@ export default function MessagesDrawer({
                                 <button
                                     type="button"
                                     onClick={() => setSearchTerm('')}
-                                    className="absolute right-3 top-2.5 text-xs text-gray-400 hover:text-gray-600 font-bold"
+                                    className="absolute right-3 top-2.5 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 font-bold"
                                 >
                                     ✕
                                 </button>
@@ -152,12 +152,14 @@ export default function MessagesDrawer({
                         </div>
 
                         {/* Filter Tabs */}
-                        <div className="flex items-center gap-1.5 p-1 bg-gray-100 rounded-xl">
+                        <div className="flex items-center gap-1.5 p-1 bg-gray-100 dark:bg-[#0E131F] rounded-xl border border-transparent dark:border-gray-800">
                             <button
                                 type="button"
                                 onClick={() => setFilterTab('all')}
                                 className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                                    filterTab === 'all' ? 'bg-white text-gray-900 shadow-2xs' : 'text-gray-500 hover:text-gray-900'
+                                    filterTab === 'all' 
+                                        ? 'bg-white dark:bg-[#1E2738] text-gray-900 dark:text-white shadow-2xs' 
+                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                 }`}
                             >
                                 All ({threads.length})
@@ -166,7 +168,9 @@ export default function MessagesDrawer({
                                 type="button"
                                 onClick={() => setFilterTab('matches')}
                                 className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                                    filterTab === 'matches' ? 'bg-white text-[#F97316] shadow-2xs' : 'text-gray-500 hover:text-gray-900'
+                                    filterTab === 'matches' 
+                                        ? 'bg-white dark:bg-[#1E2738] text-[#F97316] dark:text-orange-400 shadow-2xs' 
+                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                 }`}
                             >
                                 Matches ({threads.filter(t => t.thread_mode === 'match').length})
@@ -175,7 +179,9 @@ export default function MessagesDrawer({
                                 type="button"
                                 onClick={() => setFilterTab('reports')}
                                 className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                                    filterTab === 'reports' ? 'bg-white text-blue-600 shadow-2xs' : 'text-gray-500 hover:text-gray-900'
+                                    filterTab === 'reports' 
+                                        ? 'bg-white dark:bg-[#1E2738] text-blue-600 dark:text-blue-400 shadow-2xs' 
+                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                 }`}
                             >
                                 Reports ({threads.filter(t => t.thread_mode === 'report').length})
@@ -188,16 +194,16 @@ export default function MessagesDrawer({
                         {loading && threads.length === 0 ? (
                             <div className="py-16 text-center space-y-3">
                                 <div className="w-8 h-8 border-3 border-[#F97316] border-t-transparent rounded-full animate-spin mx-auto" />
-                                <p className="text-xs font-bold text-gray-400">Loading active conversations...</p>
+                                <p className="text-xs font-bold text-gray-400 dark:text-gray-500">Loading active conversations...</p>
                             </div>
                         ) : filteredThreads.length === 0 ? (
                             <div className="py-16 text-center px-4 space-y-3">
-                                <div className="w-14 h-14 rounded-2xl bg-gray-50 text-gray-300 flex items-center justify-center text-2xl mx-auto border border-gray-100">
+                                <div className="w-14 h-14 rounded-2xl bg-gray-50 dark:bg-gray-800 text-gray-300 dark:text-gray-600 flex items-center justify-center text-2xl mx-auto border border-gray-100 dark:border-gray-700">
                                     📭
                                 </div>
                                 <div>
-                                    <p className="text-sm font-bold text-gray-700">No conversations found</p>
-                                    <p className="text-xs text-gray-400 mt-1">
+                                    <p className="text-sm font-bold text-gray-700 dark:text-gray-200">No conversations found</p>
+                                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                                         {searchTerm ? 'Try a different search query.' : 'Case chats and match inquiries will appear here.'}
                                     </p>
                                 </div>
@@ -218,13 +224,13 @@ export default function MessagesDrawer({
                                         onClick={() => handleThreadClick(thread)}
                                         className={`p-3.5 rounded-2xl border transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99] flex items-start gap-3.5 ${
                                             thread.unread_count > 0 
-                                                ? 'bg-orange-50/40 border-orange-200/80 shadow-xs' 
-                                                : 'bg-white hover:bg-gray-50/80 border-gray-100 shadow-2xs'
+                                                ? 'bg-orange-50/40 dark:bg-orange-950/20 border-orange-200/80 dark:border-orange-900/50 shadow-xs' 
+                                                : 'bg-white dark:bg-[#151C2C] hover:bg-gray-50/80 dark:hover:bg-[#1A2338] border-gray-100 dark:border-gray-800 shadow-2xs'
                                         }`}
                                     >
                                         {/* Avatar / Thumbnail */}
                                         <div className="relative shrink-0">
-                                            <div className="w-12 h-12 rounded-xl bg-gray-100 border border-gray-200 overflow-hidden flex items-center justify-center">
+                                            <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden flex items-center justify-center">
                                                 {thumbnail ? (
                                                     <img 
                                                         src={thumbnail.startsWith('http') || thumbnail.startsWith('data:') ? thumbnail : getProfilePicture(thumbnail)} 
@@ -249,29 +255,29 @@ export default function MessagesDrawer({
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center justify-between gap-1 mb-0.5">
                                                 <div className="flex items-center gap-1.5 min-w-0">
-                                                    <p className="text-xs font-black text-gray-900 truncate">
+                                                    <p className="text-xs font-black text-gray-900 dark:text-white truncate">
                                                         {isMatch 
                                                             ? `Match: ${thread.matched_pet?.pet_name || 'Candidate'} ⟷ #${thread.report_id}`
                                                             : `Report #${thread.report_id || 'Case'}`
                                                         }
                                                     </p>
                                                 </div>
-                                                <span className="text-[10px] font-semibold text-gray-400 shrink-0">
+                                                <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-400 shrink-0">
                                                     {formatTime(thread.last_message?.sent_at || thread.updated_at)}
                                                 </span>
                                             </div>
 
                                             <div className="flex items-center gap-1.5 mb-1">
-                                                <span className="text-[10px] font-bold text-gray-600 truncate">
+                                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300 truncate">
                                                     {counterpartName}
                                                 </span>
-                                                <span className="text-[8px] font-black px-1.5 py-0.2 rounded bg-gray-100 text-gray-500 uppercase tracking-wider">
+                                                <span className="text-[8px] font-black px-1.5 py-0.2 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 uppercase tracking-wider border border-transparent dark:border-gray-700">
                                                     {roleBadge}
                                                 </span>
                                             </div>
 
                                             <div className="flex items-center justify-between gap-2">
-                                                <p className={`text-xs truncate ${thread.unread_count > 0 ? 'font-bold text-gray-900' : 'font-medium text-gray-500'}`}>
+                                                <p className={`text-xs truncate ${thread.unread_count > 0 ? 'font-bold text-gray-900 dark:text-gray-100' : 'font-medium text-gray-500 dark:text-gray-400'}`}>
                                                     {thread.last_message?.text ? thread.last_message.text : 'Direct channel ready for coordination.'}
                                                 </p>
                                                 {thread.unread_count > 0 && (
@@ -289,8 +295,8 @@ export default function MessagesDrawer({
 
                     {/* Footer */}
                     {currentRole === 'subd' && (
-                        <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                            <p className="text-[11px] font-bold text-gray-500">
+                        <div className="p-4 bg-gray-50 dark:bg-[#0E131F] border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                            <p className="text-[11px] font-bold text-gray-500 dark:text-gray-400">
                                 Designated Officer Inbox
                             </p>
                             <button
@@ -299,7 +305,7 @@ export default function MessagesDrawer({
                                     onClose();
                                     navigate('/subd/messages');
                                 }}
-                                className="px-4 py-2 bg-white hover:bg-gray-100 border border-gray-200 text-[#F97316] rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
+                                className="px-4 py-2 bg-white dark:bg-[#1E2738] hover:bg-gray-100 dark:hover:bg-[#253046] border border-gray-200 dark:border-gray-700 text-[#F97316] dark:text-orange-400 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
                             >
                                 <span>Full Messages Hub</span>
                                 <span>↗</span>

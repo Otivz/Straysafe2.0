@@ -43,31 +43,31 @@ const Button: React.FC<ButtonProps> = ({
   // Set Variant
   switch (variant) {
     case 'primary':
-      variantStyle = "bg-[#F97316] text-[#FAFAF9] hover:bg-[#EA580C] shadow-sm border border-orange-500/20";
+      variantStyle = "bg-[#F97316] text-white hover:bg-[#EA580C] shadow-sm border border-orange-600/30 active:scale-[0.98]";
       break;
     case 'secondary':
-      variantStyle = "bg-[#B45309] text-white hover:bg-[#92400E] shadow-sm";
+      variantStyle = "bg-[#EA580C] text-white hover:bg-[#C2410C] shadow-sm active:scale-[0.98]";
       break;
     case 'danger':
-      variantStyle = "bg-[#B91C1C] text-white hover:bg-red-800 shadow-sm";
+      variantStyle = "bg-red-600 text-white hover:bg-red-700 shadow-sm active:scale-[0.98]";
       break;
     case 'warning':
-      variantStyle = "bg-[#856616] text-white hover:bg-yellow-900 shadow-sm";
+      variantStyle = "bg-amber-600 text-white hover:bg-amber-700 shadow-sm active:scale-[0.98]";
       break;
     case 'soft-warning':
-      variantStyle = "bg-white/90 hover:bg-white text-[#856616] shadow-sm";
+      variantStyle = "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 border border-amber-200 dark:border-amber-800/60";
       break;
     case 'gray':
-      variantStyle = "bg-gray-100 text-gray-600 hover:bg-gray-200";
+      variantStyle = "bg-gray-100 dark:bg-[#1A2338] text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-[#222E48] border border-gray-200/60 dark:border-gray-700/60";
       break;
     case 'light':
-      variantStyle = "bg-white text-gray-700 shadow border border-gray-50/50 hover:bg-gray-50";
+      variantStyle = "bg-white dark:bg-[#151C2C] text-gray-700 dark:text-gray-200 shadow-sm border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-[#1E2738]";
       break;
     case 'ghost':
-      variantStyle = "bg-transparent text-gray-400 hover:text-gray-600";
+      variantStyle = "bg-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/60 dark:hover:bg-gray-800/60";
       break;
     case 'soft-primary':
-      variantStyle = "bg-orange-50 text-[#F97316] hover:bg-orange-100";
+      variantStyle = "bg-orange-50 dark:bg-orange-950/40 text-[#F97316] dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/40 border border-orange-200/60 dark:border-orange-800/40";
       break;
   }
 

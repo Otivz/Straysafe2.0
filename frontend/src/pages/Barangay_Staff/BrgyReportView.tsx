@@ -3,7 +3,7 @@ import {
     AlertTriangle, Check, MessageCircle, FileText, Link2, Zap, Search, MapPin,
     User, PawPrint, Home, Flag, Building2, Phone, Mail, Lock, Users, Landmark,
     X, Rocket, Hospital, Settings, ScrollText, Pin, RefreshCw, Shield,
-    CheckCircle2, Ban, Ambulance, Heart, Info, Lightbulb, Download, Camera
+    CheckCircle2, Ban, Ambulance, Heart, Lightbulb, Download, Camera
 } from 'lucide-react';
 import axios from 'axios';
 import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';

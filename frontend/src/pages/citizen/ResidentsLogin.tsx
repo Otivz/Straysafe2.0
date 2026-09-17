@@ -30,12 +30,37 @@ const GoogleIcon = () => (
 const ResidentsLogin = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const destinationPath = (location.state as any)?.from || '/adopt';
+    
+    // Resolve previous attempted path, defaulting to ResiHomePage (/resident-home) instead of the adoption portal
+    const locationState = location.state as any;
+    const rawFrom = typeof locationState?.from === 'string'
+        ? locationState.from
+        : locationState?.from?.pathname;
+    const destinationPath = (rawFrom && rawFrom !== '/adopt') ? rawFrom : '/resident-home';
+
     const { setTheme } = useTheme();
 
     useEffect(() => {
         setTheme('light');
     }, [setTheme]);
+
+    // Auto-redirect if already logged in as a resident
+    useEffect(() => {
+        const rawUser = 
+            localStorage.getItem('resident_user') || 
+            sessionStorage.getItem('resident_user');
+        
+        if (rawUser) {
+            try {
+                const user = JSON.parse(rawUser);
+                if (user && user.role_id === 1) {
+                    navigate('/resident-home', { replace: true });
+                }
+            } catch {
+                // Ignore parse errors
+            }
+        }
+    }, [navigate]);
 
     const [isRegistering, setIsRegistering] = useState(false);
 

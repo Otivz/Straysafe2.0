@@ -992,7 +992,7 @@ const SubdReports = () => {
                                                                 {rep.has_duplicate_flag && rep.status_id !== 18 && !rep.duplicate_of_report_id && (
                                                                     <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1 shadow-xs" title="AI detected suspected duplicate sighting">
                                                                         <span>⚠️</span>
-                                                                        <span>Dup?</span>
+                                                                        <span>Duplicate Report</span>
                                                                     </span>
                                                                 )}
                                                                 {(rep.status_id === 18 || rep.duplicate_of_report_id) && (
@@ -1382,8 +1382,9 @@ const SubdReports = () => {
                                                                 {statusMap[rep.status_id] || 'Pending'}
                                                             </span>
                                                             {rep.has_duplicate_flag && rep.status_id !== 18 && !rep.duplicate_of_report_id && (
-                                                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300" title="AI detected suspected duplicate sighting">
-                                                                    ⚠️ Dup?
+                                                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 inline-flex items-center gap-1" title="AI detected suspected duplicate sighting">
+                                                                    <span>⚠️</span>
+                                                                    <span>Duplicate Report</span>
                                                                 </span>
                                                             )}
                                                             {(rep.status_id === 18 || rep.duplicate_of_report_id) && (

@@ -6,11 +6,15 @@
   :root {
     --bg-main: #FAFAF9;
     --bg-surface: #FFFFFF;
+    --bg-surface-elevated: #F3F4F6;
     --bg-sidebar: #FFFFFF;
     --text-primary: #1F2937;
     --text-secondary: #6B7280;
+    --text-muted: #9CA3AF;
     --border-color: #E5E7EB;
     
+    --brand-primary: #F97316;
+    --brand-primary-hover: #EA580C;
     --brand-orange: #F97316;
     --brand-amber: #FACC15;
     --brand-green: #86EFAC;
@@ -21,11 +25,15 @@
   html.dark {
     --bg-main: #0B0F19;
     --bg-surface: #151C2C;
+    --bg-surface-elevated: #1A2338;
     --bg-sidebar: #090C15;
     --text-primary: #F8FAFC;
     --text-secondary: #94A3B8;
+    --text-muted: #64748B;
     --border-color: #1E293B;
 
+    --brand-primary: #F97316;
+    --brand-primary-hover: #FB923C;
     --brand-orange: #F97316;
     --brand-amber: #FDE047;
     --brand-green: #4ADE80;
@@ -38,6 +46,38 @@
     color: var(--text-primary) !important;
     transition: background-color 300ms cubic-bezier(0.4, 0, 0.2, 1), color 300ms cubic-bezier(0.4, 0, 0.2, 1), border-color 300ms cubic-bezier(0.4, 0, 0.2, 1);
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Semantic Utility Classes (Light / Dark Mode Agnostic)                      */
+/* -------------------------------------------------------------------------- */
+@utility bg-app {
+  background-color: var(--bg-main);
+}
+@utility bg-surface {
+  background-color: var(--bg-surface);
+}
+@utility bg-surface-elevated {
+  background-color: var(--bg-surface-elevated);
+}
+@utility bg-sidebar {
+  background-color: var(--bg-sidebar);
+}
+@utility text-main {
+  color: var(--text-primary);
+}
+@utility text-muted {
+  color: var(--text-secondary);
+}
+@utility border-subtle {
+  border-color: var(--border-color);
+}
+@utility brand-gradient {
+  background-image: linear-gradient(135deg, #F97316 0%, #EA580C 100%);
+}
+@utility brand-gradient-amber {
+  background-image: linear-gradient(135deg, #F97316 0%, #F59E0B 100%);
+}
 
   /* -------------------------------------------------------------------------- */
   /* Theme Overrides - Rich Dark Mode (#0B0F19 background, #151C2C surface) */
@@ -95,13 +135,19 @@
 
   /* Text Colors - Bright High-Contrast White for Headings & Branding */
   html.dark .text-\[\#1a1208\],
+  html.dark .text-\[\#2d2417\],
   html.dark .text-\[\#4a3b28\],
   html.dark .text-gray-900,
   html.dark .text-gray-800,
   html.dark .text-gray-700,
-  html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5, html.dark h6,
-  html.dark span.font-black {
+  html.dark .text-stone-900,
+  html.dark .text-stone-800,
+  html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5, html.dark h6 {
     color: #FFFFFF !important;
+  }
+
+  html.dark .text-stone-700 {
+    color: #E2E8F0 !important;
   }
 
   html.dark .text-gray-600,
@@ -109,6 +155,52 @@
   html.dark .text-gray-400,
   html.dark .text-\[\#4a3b28\]\/85 {
     color: #94A3B8 !important;
+  }
+
+  /* Badge & Chip Backgrounds in Dark Mode (prevents blinding white pills) */
+  html.dark .bg-stone-50,
+  html.dark .bg-stone-100,
+  html.dark .bg-stone-100\/90 {
+    background-color: #1E2738 !important;
+    border-color: #334155 !important;
+    color: #F1F5F9 !important;
+  }
+
+  html.dark .bg-orange-50 {
+    background-color: rgba(249, 115, 22, 0.15) !important;
+    border-color: rgba(249, 115, 22, 0.35) !important;
+  }
+
+  html.dark .bg-amber-50,
+  html.dark .bg-amber-100 {
+    background-color: rgba(245, 158, 11, 0.15) !important;
+    border-color: rgba(245, 158, 11, 0.35) !important;
+  }
+
+  html.dark .text-amber-800,
+  html.dark .text-amber-900,
+  html.dark .text-amber-950 {
+    color: #FCD34D !important;
+  }
+
+  html.dark .bg-emerald-50 {
+    background-color: rgba(16, 185, 129, 0.15) !important;
+    border-color: rgba(16, 185, 129, 0.35) !important;
+  }
+
+  html.dark .bg-blue-50 {
+    background-color: rgba(59, 130, 246, 0.15) !important;
+    border-color: rgba(59, 130, 246, 0.35) !important;
+  }
+
+  html.dark .bg-purple-50 {
+    background-color: rgba(168, 85, 247, 0.15) !important;
+    border-color: rgba(168, 85, 247, 0.35) !important;
+  }
+
+  html.dark .bg-rose-50 {
+    background-color: rgba(244, 63, 94, 0.15) !important;
+    border-color: rgba(244, 63, 94, 0.35) !important;
   }
 
   /* Hover Overrides in Dark Mode */
@@ -125,11 +217,7 @@
     color: #F97316 !important;
   }
 
-  /* Specific fix for STRAYSAFE logo text in navbar */
-  html.dark nav a span,
-  html.dark nav span {
-    color: #FFFFFF !important;
-  }
+
 
   /* Form Elements */
   html.dark input[type="text"],
@@ -172,7 +260,6 @@
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     transition-duration: 250ms;
   }
-}
 
 /* -------------------------------------------------------------------------- */
 /* Global Map Marker Hover Protection - Dot MUST NEVER MOVE OR DISAPPEAR */

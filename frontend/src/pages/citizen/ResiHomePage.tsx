@@ -20,11 +20,12 @@ import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import SuccessModal from '../../components/Modals/SuccessModal';
 import { getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
 import { createLandmarkPinIcon, getLandmarkCategory } from '../../utils/landmarkIcons';
+import { useToast } from '../../context/ToastContext';
 import {
     Eye, Shield, MapPin, Siren, PawPrint, Palette, Tag, User, Gift, FileText,
     Megaphone, MessageCircle, AlertTriangle, Camera, Video, X, Bandage, Dog, Cat,
     Bot, Check, Map, Pin, Home, Rocket, Search, Users, Ban, Sparkles, Ruler, Phone,
-    ClipboardList, Star, Info, LifeBuoy
+    ClipboardList, Star, Info, LifeBuoy, ArrowLeft, ArrowRight
 } from 'lucide-react';
 
 const DefaultIcon = L.icon({
@@ -273,7 +274,7 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
 
     // Default / Standard Report Description: clean typography with preserved linebreaks
     return (
-        <div className="text-[13px] sm:text-[14px] font-medium text-[#2d2417] leading-relaxed whitespace-pre-line">
+        <div className="text-[13px] sm:text-[14px] font-medium text-[#2d2417] dark:text-slate-100 leading-relaxed whitespace-pre-line">
             {cleanNotes}
         </div>
     );
@@ -310,6 +311,7 @@ const INITIAL_FORM_DATA: ReportFormData = {
 const ResiHomePage = () => {
     const location = useLocation();
     const navigate = useNavigate();
+    const toast = useToast();
     const [isAddReportModalOpen, setIsAddReportModalOpen] = useState(false);
     const [isNavbarMenuOpen, setIsNavbarMenuOpen] = useState(false);
     const [returnUrl, setReturnUrl] = useState<string | null>(null);
@@ -396,7 +398,7 @@ const ResiHomePage = () => {
             fetchMyWarnings();
         } catch (err: any) {
             console.error('Failed to acknowledge warning:', err);
-alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
+            toast.error(err.response?.data?.detail || 'Failed to acknowledge warning.');
         }
     };
 
@@ -666,11 +668,11 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                     }));
                 },
                 (err) => {
-                    alert('Could not retrieve GPS location: ' + err.message);
+                    toast.error('Could not retrieve GPS location', err.message);
                 }
             );
         } else {
-            alert('Geolocation is not supported by your browser.');
+            toast.warning('Geolocation is not supported by your browser.');
         }
     };
 
@@ -795,14 +797,14 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                 method: 'DELETE'
             });
             if (response.ok) {
-                alert('Report deleted successfully');
+                toast.success('Report deleted successfully');
                 fetchReports();
             } else {
-                alert('Failed to delete report');
+                toast.error('Failed to delete report');
             }
         } catch (error) {
             console.error('Error deleting report:', error);
-            alert('An error occurred while connecting to the server.');
+            toast.error('An error occurred while connecting to the server.');
         }
     };
 
@@ -926,7 +928,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
             await fetchAnnouncements();
         } catch (error) {
             console.error('Failed to add announcement comment:', error);
-            alert('Failed to post comment.');
+            toast.error('Failed to post comment.');
         }
     };
 
@@ -1146,7 +1148,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                 setReplyingTo(prev => ({ ...prev, [reportId]: null }));
                 fetchReports(); // Refresh comments
             } else {
-                alert('Failed to post comment.');
+                toast.error('Failed to post comment.');
             }
         } catch (error) {
             console.error('Error adding comment:', error);
@@ -1223,10 +1225,10 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
 
             await axios.patch(`http://localhost:8000/reports/${animalTypeValidation.reportId}`, patchPayload);
 
-            alert('Report updated with suggestions successfully!');
+            toast.success('Report updated with suggestions successfully!');
         } catch (error) {
             console.error('Failed to apply suggestions:', error);
-            alert('Failed to apply suggestions automatically, but your original report is saved.');
+            toast.warning('Failed to apply suggestions automatically, but your original report is saved.');
         } finally {
             // Standard cleanup
             setRevertAnimalType(false);
@@ -1275,7 +1277,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
     const handlePreSubmitValidation = async () => {
         // Geofence validation
         if (!isInsideSeleraHomes(formData.latitude, formData.longitude)) {
-            alert('Location outside Selera Homes. Reports are only accepted within the subdivision boundary (e.g., inside the residential streets).');
+            toast.warning('Location outside Selera Homes', 'Reports are only accepted within the subdivision boundary.');
             return;
         }
 
@@ -1331,7 +1333,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                             isMultiple: true
                         });
                     } else {
-                        alert(msg);
+                        toast.error(msg);
                     }
                     return;
                 }
@@ -1354,7 +1356,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
 
         // Geofence validation
         if (!isInsideSeleraHomes(formData.latitude, formData.longitude)) {
-            alert('Location outside Selera Homes. Reports are only accepted within the subdivision boundary (e.g., inside the residential streets).');
+            toast.warning('Location outside Selera Homes', 'Reports are only accepted within the subdivision boundary.');
             return;
         }
 
@@ -1489,7 +1491,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                     }
 
                     if (failCount > 0) {
-                        alert(`${failCount} media files failed to upload. The report was saved otherwise.`);
+                        toast.warning(`${failCount} media files failed to upload`, 'The report was saved otherwise.');
                     }
                 }
 
@@ -1505,7 +1507,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
             }
         } catch (error) {
             console.error('Error saving report:', error);
-            alert('Failed to submit report. Please try again.');
+            toast.error('Failed to submit report', 'Please try again or check your network connection.');
         } finally {
             setIsSubmitting(false);
         }
@@ -2438,18 +2440,18 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                         type="button"
                                         onClick={() => {
                                             if (reportStep === 1 && allMediaCount === 0) {
-                                                alert('Please upload at least one clear photo of the animal.');
+                                                toast.warning('Please upload at least one clear photo of the animal.');
                                                 return;
                                             }
                                             if (reportStep === 2 && !formData.category) {
-                                                alert('Please select a report category.');
+                                                toast.warning('Please select a report category.');
                                                 return;
                                             }
                                             if (reportStep === 2) {
                                                 triggerMediaAnalysis();
                                             }
                                             if (reportStep === 5 && formData.observedConditions.length === 0) {
-                                                alert('Please select at least one observed condition.');
+                                                toast.warning('Please select at least one observed condition.');
                                                 return;
                                             }
                                             setReportStep(prev => prev + 1);
@@ -3135,8 +3137,8 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                             <p className="text-[13px] font-black text-[#1a1208] uppercase tracking-tight leading-none mb-1.5">{report.reporter_name}</p>
                                                             <div className="flex items-center gap-2">
                                                                 <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none">{date}</span>
-                                                                <span className="text-gray-300 font-bold text-[9px] leading-none">•</span>
-                                                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[#FAFAF9] border border-gray-100 rounded-md w-fit">
+                                                                <span className="text-gray-300 dark:text-gray-600 font-bold text-[9px] leading-none">•</span>
+                                                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[#FAFAF9] dark:bg-[#1A2338] border border-gray-100 dark:border-gray-800 rounded-md w-fit">
                                                                     {report.visibility === 'Private' ? (
                                                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -3155,7 +3157,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
 
                                                     {/* Category & Status Badges */}
                                                     <div className="flex items-center gap-2 flex-wrap">
-                                                        <span className="px-3 py-1 bg-orange-50 border border-orange-200 text-[#F97316] rounded-full text-[10px] font-black uppercase tracking-wider shadow-2xs">
+                                                        <span className="px-3 py-1 bg-orange-50 dark:bg-orange-950/60 border border-orange-200 dark:border-orange-800/60 text-[#F97316] dark:text-orange-400 rounded-full text-[10px] font-black uppercase tracking-wider shadow-2xs">
                                                             {categoryMap[report.category_id] || 'Incident Report'}
                                                         </span>
                                                         {(() => {
@@ -3632,27 +3634,27 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                             <div
                                                 key={notif.notification_id}
                                                 onClick={() => handleNotificationClick(notif)}
-                                                className={`relative p-4 rounded-2xl border transition-all duration-300 cursor-pointer hover:border-orange-300 active:scale-[0.99] ${notif.is_read
-                                                    ? 'bg-[#FAFAF9]/50 border-gray-50'
-                                                    : 'bg-orange-50/20 border-orange-100/50 shadow-sm'
+                                                className={`relative p-4 rounded-2xl border transition-all duration-300 cursor-pointer hover:border-orange-300 dark:hover:border-orange-500/50 active:scale-[0.99] ${notif.is_read
+                                                    ? 'bg-[#FAFAF9]/80 dark:bg-[#1A2338]/80 border-gray-100 dark:border-gray-800/80 hover:dark:bg-[#202C45]'
+                                                    : 'bg-orange-50/40 dark:bg-orange-950/30 border-orange-200/60 dark:border-orange-900/50 shadow-sm hover:dark:bg-orange-950/40'
                                                     }`}
                                             >
                                                 {/* Unread indicator */}
                                                 {!notif.is_read && (
-                                                    <span className="absolute top-4 left-4 w-2 h-2 bg-[#F97316] rounded-full" />
+                                                    <span className="absolute top-4 left-4 w-2 h-2 bg-[#F97316] rounded-full ring-2 ring-white dark:ring-[#1A2338]" />
                                                 )}
 
                                                 <div className={!notif.is_read ? 'pl-4' : ''}>
                                                     <div className="flex items-start justify-between gap-2">
                                                         <div className="flex-1">
-                                                            <h4 className="text-xs font-black text-[#1a1208]">
+                                                            <h4 className="text-xs font-black text-gray-900 dark:text-white leading-snug">
                                                                 {(notif.title || '').replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]+\s*/u, '')}
                                                             </h4>
-                                                            <p className="text-[11px] font-semibold text-gray-650 mt-1 leading-relaxed">
+                                                            <p className="text-[11px] font-medium text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">
                                                                 {notif.message}
                                                             </p>
                                                             <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                                                <span className="text-[9px] font-bold text-gray-400 block uppercase tracking-widest">
+                                                                <span className="text-[9px] font-bold text-gray-400 dark:text-gray-400 block uppercase tracking-widest">
                                                                     {formatTimestamp(notif.created_at)}
                                                                 </span>
                                                                 {(isMatch || isMatchInquiry || typeStr.includes('message') || titleStr.includes('message') || titleStr.includes('💬') || titleStr.includes('inquiry') || msgStr.includes('look-alike')) && notif.related_id && (
@@ -3673,7 +3675,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                         <div className="flex items-center gap-1 shrink-0">
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleDismissNotification(notif.notification_id); }}
-                                                                className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                                                                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700/80 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
                                                                 title="Dismiss"
                                                             >
                                                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
@@ -3690,10 +3692,10 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                             </div>
 
                             {/* Bottom Footer: Mark All Read & View All / View More Notifications */}
-                            <div className="pt-3.5 mt-2 border-t border-gray-100/80 flex items-center justify-between shrink-0">
+                            <div className="pt-3.5 mt-2 border-t border-gray-100/80 dark:border-gray-800 flex items-center justify-between shrink-0">
                                 <button
                                     onClick={handleMarkAllNotificationsRead}
-                                    className="text-xs font-semibold text-gray-500 hover:text-gray-900 underline underline-offset-2 transition-colors cursor-pointer"
+                                    className="text-xs font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white underline underline-offset-2 transition-colors cursor-pointer"
                                 >
                                     Mark All Read
                                 </button>
@@ -3703,7 +3705,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                             setVisibleNotifLimit(prev => prev + 10);
                                             setHasClickedViewAll(true);
                                         }}
-                                        className="text-xs font-bold text-[#F97316] hover:text-orange-600 transition-colors flex items-center gap-1 font-sans cursor-pointer"
+                                        className="text-xs font-bold text-[#F97316] dark:text-orange-400 hover:text-orange-600 dark:hover:text-orange-300 transition-colors flex items-center gap-1 font-sans cursor-pointer"
                                     >
                                         {hasClickedViewAll ? 'View More Notifications →' : 'View All Notifications →'}
                                     </button>
@@ -3759,20 +3761,20 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                     }
                                                 }, 100);
                                             }}
-                                            className="p-4 bg-[#FAFAF9]/40 hover:bg-orange-50/10 border border-gray-50 hover:border-orange-100 rounded-2xl cursor-pointer transition-all duration-300 shadow-sm hover:shadow-md"
+                                            className="p-4 bg-[#FAFAF9]/80 dark:bg-[#1A2338]/80 hover:bg-orange-50/30 dark:hover:bg-[#202C45] border border-gray-100 dark:border-gray-800/80 hover:border-orange-200 dark:hover:border-orange-900/50 rounded-2xl cursor-pointer transition-all duration-300 shadow-xs"
                                         >
                                             <div className="flex items-center justify-between mb-1.5">
-                                                <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                                                <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 dark:bg-[#151C2C] text-gray-700 dark:text-gray-300 border border-gray-200/50 dark:border-gray-700/50">
                                                     {ann.category}
                                                 </span>
-                                                <span className="text-[8px] font-bold text-gray-450 uppercase tracking-widest">
+                                                <span className="text-[8px] font-bold text-gray-400 dark:text-gray-400 uppercase tracking-widest">
                                                     {formatAnnouncementDate(ann.posted_on).split(' at ')[0]}
                                                 </span>
                                             </div>
-                                            <h4 className="text-xs font-black text-[#1a1208] mb-1 hover:text-[#F97316] transition-colors">
+                                            <h4 className="text-xs font-black text-[#1a1208] dark:text-white mb-1 hover:text-[#F97316] dark:hover:text-orange-400 transition-colors">
                                                 {ann.title}
                                             </h4>
-                                            <p className="text-[10px] font-semibold text-gray-500 line-clamp-2 leading-relaxed">
+                                            <p className="text-[10px] font-medium text-gray-600 dark:text-gray-300 line-clamp-2 leading-relaxed">
                                                 {ann.content}
                                             </p>
                                         </div>
