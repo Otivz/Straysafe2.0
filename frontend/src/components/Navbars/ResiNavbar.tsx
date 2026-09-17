@@ -662,6 +662,28 @@ const ResiNavbar = ({
                             </div>
                             <span className="font-black text-xs uppercase tracking-[0.15em] transition-colors">My Reports</span>
                         </Link>
+
+                        <Link
+                            to="/adopt"
+                            onClick={() => setIsMobileHamburgerOpen(false)}
+                            className="flex items-center gap-4 px-4 py-3.5 rounded-2xl hover:bg-orange-50/50 hover:pl-6 text-[#4a3b28] hover:text-[#F97316] transition-all duration-300 ease-out group active:scale-[0.98]"
+                        >
+                            <div className="w-10 h-10 bg-orange-50 group-hover:bg-orange-100 rounded-xl flex items-center justify-center text-[#F97316] shadow-sm shadow-orange-100/50 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shrink-0 text-base">
+                                🐾
+                            </div>
+                            <span className="font-black text-xs uppercase tracking-[0.15em] transition-colors">Adopt a Pet</span>
+                        </Link>
+
+                        <Link
+                            to="/adopt/applications"
+                            onClick={() => setIsMobileHamburgerOpen(false)}
+                            className="flex items-center gap-4 px-4 py-3.5 rounded-2xl hover:bg-orange-50/50 hover:pl-6 text-[#4a3b28] hover:text-[#F97316] transition-all duration-300 ease-out group active:scale-[0.98]"
+                        >
+                            <div className="w-10 h-10 bg-orange-50 group-hover:bg-orange-100 rounded-xl flex items-center justify-center text-[#F97316] shadow-sm shadow-orange-100/50 group-hover:scale-110 group-hover:-rotate-6 transition-all duration-300 shrink-0 text-base">
+                                📋
+                            </div>
+                            <span className="font-black text-xs uppercase tracking-[0.15em] transition-colors">My Adoption Requests</span>
+                        </Link>
                     </div>
 
                     {/* Logout */}

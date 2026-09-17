@@ -4,6 +4,8 @@ import axios from 'axios';
 import { api } from '../../utils/api';
 import { getPetPicture } from '../../utils/avatar';
 import { ArrowLeft, Heart, Shield, Phone, MapPin, AlertCircle, CheckCircle2, Upload, CreditCard } from 'lucide-react';
+import ResiNavbar from '../../components/Navbars/ResiNavbar';
+import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 
 interface AnimalDetail {
     holding_id: number;
@@ -20,6 +22,17 @@ interface AnimalDetail {
 const AdoptionApplyForm = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+
+    const [isNavbarMenuOpen, setIsNavbarMenuOpen] = useState(false);
+    const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+
+    const handleBack = () => {
+        if (window.history.length > 2) {
+            navigate(-1);
+        } else {
+            navigate('/adopt');
+        }
+    };
 
     const [animal, setAnimal] = useState<AnimalDetail | null>(null);
     const [loadingAnimal, setLoadingAnimal] = useState(true);
@@ -167,24 +180,27 @@ const AdoptionApplyForm = () => {
 
     return (
         <div className="min-h-screen bg-[#FBFBF9] dark:bg-[#0B0F19] text-[#1E293B] dark:text-[#F8FAFC] font-sans pb-16">
-            {/* Header */}
-            <header className="sticky top-0 z-40 bg-white/90 dark:bg-[#090C15]/90 backdrop-blur-md border-b border-[#E2E8F0] dark:border-gray-800 px-4 sm:px-8 py-3.5 flex items-center justify-between shadow-xs">
-                <button
-                    onClick={() => navigate(-1)}
-                    className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 transition-colors flex items-center gap-1.5 text-xs font-bold cursor-pointer"
-                >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Back to Catalog</span>
-                </button>
-                <div className="flex items-center gap-2">
-                    <img src="/SSLOGO.png" alt="StraySafe" className="w-7 h-7 object-contain" />
-                    <span className="font-extrabold text-sm text-gray-900 dark:text-white hidden sm:inline">
-                        Adoption Application
-                    </span>
-                </div>
-            </header>
+            {/* Main Website Navbar */}
+            <ResiNavbar
+                onMenuToggle={(isOpen) => setIsNavbarMenuOpen(isOpen)}
+                isMobileSearchOpen={isMobileSearchOpen}
+                onCloseSearch={() => setIsMobileSearchOpen(false)}
+            />
 
-            <main className="max-w-3xl mx-auto px-4 sm:px-6 pt-8">
+            <main className="max-w-3xl mx-auto px-4 sm:px-6 pt-24 sm:pt-32 pb-20">
+                {/* Back Button */}
+                <div className="mb-6">
+                    <button
+                        onClick={handleBack}
+                        className="flex items-center gap-2 group text-gray-500 dark:text-gray-400 hover:text-[#F97316] dark:hover:text-[#F97316] transition-colors cursor-pointer"
+                        title="Back to Adopt a Pet"
+                    >
+                        <div className="w-10 h-10 rounded-xl bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-800 flex items-center justify-center text-gray-400 group-hover:text-[#F97316] group-hover:border-orange-200 dark:group-hover:border-orange-500/30 transition-all shadow-sm">
+                            <ArrowLeft className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
+                        </div>
+                        <span className="text-[11px] font-black uppercase tracking-widest text-[#1a1208] dark:text-white group-hover:text-[#F97316] dark:group-hover:text-[#F97316] transition-colors">Back to Adopt a Pet</span>
+                    </button>
+                </div>
                 {/* Animal Preview Card */}
                 {loadingAnimal ? (
                     <div className="bg-white dark:bg-[#151C2C] rounded-3xl p-6 border border-gray-200 dark:border-gray-800 animate-pulse mb-6 h-28" />
@@ -523,6 +539,7 @@ const AdoptionApplyForm = () => {
                     </form>
                 </div>
             </main>
+            <ResiMobileNav isNavbarMenuOpen={isNavbarMenuOpen} />
         </div>
     );
 };

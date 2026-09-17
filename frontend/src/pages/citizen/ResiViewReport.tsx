@@ -32,7 +32,7 @@ const categoryMap: Record<number, string> = {
 
 const FormattedReportDescription = ({ description }: { description: string }) => {
     if (!description) {
-        return <p className="text-sm text-gray-400 italic">No detailed description provided.</p>;
+        return <p className="text-sm text-gray-400 dark:text-gray-500 italic">No detailed description provided.</p>;
     }
 
     if (description.includes('[LOST PET REPORT]')) {
@@ -43,15 +43,15 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
 
         return (
             <div className="space-y-3.5 my-2">
-                <div className="flex items-center gap-2.5 p-3 px-4 bg-gradient-to-r from-red-50 to-orange-50 rounded-2xl border border-red-200/80 text-red-950 shadow-xs">
-                    <Siren className="w-5 h-5 animate-pulse shrink-0" />
+                <div className="flex items-center gap-2.5 p-3 px-4 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-950/40 dark:to-orange-950/30 rounded-2xl border border-red-200/80 dark:border-red-900/50 text-red-950 dark:text-red-200 shadow-xs">
+                    <Siren className="w-5 h-5 animate-pulse shrink-0 text-red-500" />
                     <p className="text-xs sm:text-sm font-black uppercase tracking-tight">
                         {headerLine.replace('[LOST PET REPORT]', '').trim() || 'Missing Registered Pet Alert'}
                     </p>
                 </div>
 
                 {bulletLines.length > 0 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-[#FAF9F6] p-4 rounded-3xl border border-stone-200/70 shadow-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-[#FAF9F6] dark:bg-[#151C2C] p-4 rounded-3xl border border-stone-200/70 dark:border-gray-800 shadow-xs">
                         {bulletLines.map((b, idx) => {
                             const raw = b.replace(/^•\s*/, '');
                             const colonIdx = raw.indexOf(':');
@@ -65,9 +65,9 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
                                 return (
                                     <div 
                                         key={idx} 
-                                        className={`p-3 rounded-2xl bg-white border border-stone-100 shadow-2xs ${isWide ? 'sm:col-span-2' : ''}`}
+                                        className={`p-3 rounded-2xl bg-white dark:bg-[#1E2738] border border-stone-100 dark:border-gray-700/80 shadow-2xs ${isWide ? 'sm:col-span-2' : ''}`}
                                     >
-                                        <p className="text-[9px] font-black text-amber-800 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                        <p className="text-[9px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest mb-1 flex items-center gap-1">
                                             {key.toLowerCase().includes('last seen') && <MapPin className="w-3 h-3" />}
                                             {key.toLowerCase().includes('breed') && <PawPrint className="w-3 h-3" />}
                                             {key.toLowerCase().includes('color') && <Palette className="w-3 h-3" />}
@@ -77,14 +77,14 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
                                             {key.toLowerCase().includes('circumstances') && <FileText className="w-3 h-3" />}
                                             <span>{key}</span>
                                         </p>
-                                        <p className="text-xs sm:text-[13px] font-bold text-gray-900 leading-snug">
+                                        <p className="text-xs sm:text-[13px] font-bold text-gray-900 dark:text-white leading-snug">
                                             {val}
                                         </p>
                                     </div>
                                 );
                             }
                             return (
-                                <div key={idx} className="sm:col-span-2 p-2.5 rounded-2xl bg-white border border-stone-100 text-xs font-semibold text-gray-800">
+                                <div key={idx} className="sm:col-span-2 p-2.5 rounded-2xl bg-white dark:bg-[#1E2738] border border-stone-100 dark:border-gray-700/80 text-xs font-semibold text-gray-800 dark:text-gray-200">
                                     • {raw}
                                 </div>
                             );
@@ -93,8 +93,8 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
                 )}
 
                 {closingLines.length > 0 && (
-                    <div className="p-3.5 bg-amber-500/10 rounded-2xl border border-amber-300/60 text-xs font-bold text-amber-950 flex items-start gap-2.5 shadow-2xs">
-                        <Megaphone className="w-4 h-4 text-amber-600 shrink-0" />
+                    <div className="p-3.5 bg-amber-500/10 dark:bg-amber-950/30 rounded-2xl border border-amber-300/60 dark:border-amber-700/50 text-xs font-bold text-amber-950 dark:text-amber-200 flex items-start gap-2.5 shadow-2xs">
+                        <Megaphone className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                         <p className="leading-relaxed">
                             {closingLines.join(' ')}
                         </p>
@@ -105,7 +105,7 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
     }
 
     return (
-        <p className="text-sm text-gray-800 leading-relaxed font-medium bg-stone-50/70 p-4 rounded-2xl border border-stone-100 whitespace-pre-line">
+        <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed font-medium bg-stone-50/70 dark:bg-[#1E2738] p-4 rounded-2xl border border-stone-100 dark:border-gray-700/80 whitespace-pre-line">
             {description}
         </p>
     );
@@ -553,15 +553,15 @@ const ResiViewReport = () => {
 
     if (!report) {
         return (
-            <div className="min-h-screen bg-[#F7F7F7] font-sans pb-24">
+            <div className="min-h-screen bg-[#F7F7F7] dark:bg-[#0B0F19] font-sans pb-24">
                 <ResiNavbar onMenuToggle={(isOpen) => setIsNavbarMenuOpen(isOpen)} />
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 pb-8 flex flex-col items-center justify-center h-[50vh]">
-                    <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mb-6 border border-red-100">
+                    <div className="w-16 h-16 bg-red-50 dark:bg-red-950/40 text-red-500 rounded-2xl flex items-center justify-center mb-6 border border-red-100 dark:border-red-900/40">
                         <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                     </div>
-                    <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2">Report Not Found</h2>
-                    <p className="text-xs text-gray-400 font-semibold mb-6">The incident report you are trying to view does not exist or has been deleted.</p>
-                    <button onClick={handleBack} className="px-6 py-3 bg-[#F97316] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-orange-100">
+                    <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight mb-2">Report Not Found</h2>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 font-semibold mb-6">The incident report you are trying to view does not exist or has been deleted.</p>
+                    <button onClick={handleBack} className="px-6 py-3 bg-[#F97316] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-orange-100 dark:shadow-none">
                         Go Back
                     </button>
                 </div>
@@ -587,20 +587,20 @@ const ResiViewReport = () => {
                 <div className="flex items-center justify-between mb-8">
                     <button
                         onClick={handleBack}
-                        className="flex items-center gap-2 group text-gray-500 hover:text-[#F97316] transition-colors"
+                        className="flex items-center gap-2 group text-gray-500 dark:text-gray-400 hover:text-[#F97316] dark:hover:text-[#F97316] transition-colors"
                     >
-                        <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-gray-400 group-hover:text-[#F97316] group-hover:border-orange-200 transition-all shadow-sm">
+                        <div className="w-10 h-10 rounded-xl bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-800 flex items-center justify-center text-gray-400 group-hover:text-[#F97316] group-hover:border-orange-200 dark:group-hover:border-orange-500/30 transition-all shadow-sm">
                             <svg className="w-5 h-5 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
                             </svg>
                         </div>
-                        <span className="text-[11px] font-black uppercase tracking-widest text-[#1a1208] group-hover:text-[#F97316] transition-colors">Go Back</span>
+                        <span className="text-[11px] font-black uppercase tracking-widest text-[#1a1208] dark:text-white group-hover:text-[#F97316] dark:group-hover:text-[#F97316] transition-colors">Go Back</span>
                     </button>
 
                     {report.user_id === currentUserId && report.status_id === 1 && (
                         <button
                             onClick={() => navigate('/resident-home', { state: { editReport: report, isViewMode: false, from: window.location.pathname } })}
-                            className="px-5 py-3 bg-[#F97316] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#EA580C] transition-all flex items-center gap-2 shadow-lg shadow-orange-100 cursor-pointer"
+                            className="px-5 py-3 bg-[#F97316] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#EA580C] transition-all flex items-center gap-2 shadow-lg shadow-orange-100 dark:shadow-none cursor-pointer"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -612,7 +612,7 @@ const ResiViewReport = () => {
 
                 {/* Look-Alike AI Match Banner for Matched Pet Owner */}
                 {userMatch && (
-                    <div className="mb-8 p-6 rounded-3xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-50 border-2 border-amber-300 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="mb-8 p-6 rounded-3xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-50 dark:from-amber-950/30 dark:via-orange-950/20 dark:to-[#151C2C] border-2 border-amber-300 dark:border-amber-700/60 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div className="flex items-center gap-4">
                             <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/30 shrink-0">
                                 <Search className="w-6 h-6" />
@@ -622,11 +622,11 @@ const ResiViewReport = () => {
                                     <span className="px-2.5 py-0.5 bg-amber-600 text-white rounded-lg text-[10px] font-black uppercase tracking-wider">
                                         AI Look-Alike Match ({userMatch.similarity_score}%)
                                     </span>
-                                    <span className="text-xs font-black text-amber-950">
+                                    <span className="text-xs font-black text-amber-950 dark:text-amber-200">
                                         Registered Pet: {userMatch.matched_pet?.pet_name}
                                     </span>
                                 </div>
-                                <p className="text-xs text-amber-900 font-semibold mt-1">
+                                <p className="text-xs text-amber-900 dark:text-amber-300 font-semibold mt-1">
                                     AI detected this reported stray looks like your registered pet! Compare photos, submit proof, or chat directly with responders.
                                 </p>
                             </div>
@@ -642,19 +642,19 @@ const ResiViewReport = () => {
                 )}
 
                 {/* Cover Banner Title */}
-                <div className="bg-white rounded-[2.5rem] border border-gray-100 p-8 sm:p-10 shadow-sm mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="bg-white dark:bg-[#151C2C] rounded-[2.5rem] border border-gray-100 dark:border-gray-800 p-8 sm:p-10 shadow-sm mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
                     <div className="flex items-center gap-6">
-                        <div className="w-16 h-16 rounded-[1.5rem] bg-orange-50 flex items-center justify-center text-orange-600 border border-orange-100 shrink-0">
+                        <div className="w-16 h-16 rounded-[1.5rem] bg-orange-50 dark:bg-orange-950/40 flex items-center justify-center text-orange-600 dark:text-orange-400 border border-orange-100 dark:border-orange-900/40 shrink-0">
                             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                         </div>
                         <div>
-                            <h1 className="text-xl sm:text-3xl font-black text-gray-900 uppercase tracking-tight">
+                            <h1 className="text-xl sm:text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tight">
                                 {(report.category_id === 6 || report.pet_id || (report.description && report.description.includes('[LOST PET REPORT]'))) ? 'Lost Pet Recovery Case' : 'Rescue Case Intelligence'}
                             </h1>
                             <div className="flex items-center gap-3 mt-1.5">
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Report ID: #STR-{(report.report_id || 0).toString().padStart(4, '0')}</span>
-                                <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
-                                <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest">
+                                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Report ID: #STR-{(report.report_id || 0).toString().padStart(4, '0')}</span>
+                                <div className="w-1.5 h-1.5 rounded-full bg-gray-200 dark:bg-gray-700" />
+                                <span className="text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest">
                                     {(report.category_id === 6 || report.pet_id || (report.description && report.description.includes('[LOST PET REPORT]'))) ? 'Lost Pet' : (categoryMap[report.category_id] || 'Incident Report')}
                                 </span>
                             </div>
@@ -687,19 +687,19 @@ const ResiViewReport = () => {
                             </button>
                         )}
 
-                        <div className="flex items-center gap-3 bg-[#FAFAF9] border border-gray-100 rounded-2xl p-4 w-fit">
+                        <div className="flex items-center gap-3 bg-[#FAFAF9] dark:bg-[#1E2738] border border-gray-100 dark:border-gray-700/80 rounded-2xl p-4 w-fit">
                             <div className="flex items-center gap-2">
                                 {report.visibility === 'Private' ? (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                     </svg>
                                 ) : (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                     </svg>
                                 )}
-                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{report.visibility} Sighting</span>
+                                <span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">{report.visibility} Sighting</span>
                             </div>
                         </div>
                     </div>
@@ -710,7 +710,7 @@ const ResiViewReport = () => {
 
                     {/* Left Column: Combined Media & Information Card (7/12) */}
                     <div className="lg:col-span-7">
-                        <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-8 flex flex-col">
+                        <div className="bg-white dark:bg-[#151C2C] p-6 sm:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm space-y-8 flex flex-col">
                             {/* Media Showcase Section */}
                             <div>
                                 <div
@@ -731,7 +731,7 @@ const ResiViewReport = () => {
                                         {originalMedia.slice(1, 5).map((m: any, idx: number) => (
                                             <div
                                                 key={m.media_id}
-                                                className="aspect-square rounded-xl overflow-hidden cursor-pointer shadow-sm border border-gray-50 relative group"
+                                                className="aspect-square rounded-xl overflow-hidden cursor-pointer shadow-sm border border-gray-50 dark:border-gray-800 relative group"
                                                 onClick={() => setActiveGallery({ media: originalMedia, index: idx + 1 })}
                                             >
                                                 {m.media_type === 'Video' ? (
@@ -780,10 +780,10 @@ const ResiViewReport = () => {
                                 return (
                                     <div className="space-y-6">
                                         {/* Reporter Profile & Name + Rescue Status + Date */}
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-gray-100">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-gray-100 dark:border-gray-800">
                                             {/* Reporter Profile & Name */}
                                             <div className="flex items-center gap-3.5">
-                                                <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-200 shadow-xs shrink-0 bg-gray-100 flex items-center justify-center">
+                                                <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-200 dark:border-gray-700 shadow-xs shrink-0 bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
                                                     {report.reporter_photo ? (
                                                         <img
                                                             src={getProfilePicture(report.reporter_photo)}
@@ -794,14 +794,14 @@ const ResiViewReport = () => {
                                                             }}
                                                         />
                                                     ) : (
-                                                        <div className="w-full h-full flex items-center justify-center text-lg font-bold bg-orange-50 text-[#F97316]">
+                                                        <div className="w-full h-full flex items-center justify-center text-lg font-bold bg-orange-50 dark:bg-orange-950/40 text-[#F97316]">
                                                             {(report.reporter_name || 'U').charAt(0).toUpperCase()}
                                                         </div>
                                                     )}
                                                 </div>
                                                 <div>
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Reported By</p>
-                                                    <h4 className="text-sm font-black text-gray-900 leading-tight">
+                                                    <p className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-0.5">Reported By</p>
+                                                    <h4 className="text-sm font-black text-gray-900 dark:text-white leading-tight">
                                                         {report.reporter_name || (report.user_id ? `Resident #${report.user_id}` : 'Resident')}
                                                     </h4>
                                                 </div>
@@ -810,14 +810,14 @@ const ResiViewReport = () => {
                                             {/* Rescue Status & Date Reported */}
                                             <div className="flex items-center gap-6 sm:gap-8 shrink-0">
                                                 <div>
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Rescue Status</p>
-                                                    <p className="text-xs sm:text-sm font-black text-orange-600 uppercase tracking-tight">
+                                                    <p className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Rescue Status</p>
+                                                    <p className="text-xs sm:text-sm font-black text-orange-600 dark:text-orange-400 uppercase tracking-tight">
                                                         {reportStatusMap[report.status_id ?? report.current_status_id ?? report.status?.status_id ?? 1] || 'Reported'}
                                                     </p>
                                                 </div>
                                                 <div>
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date Reported</p>
-                                                    <p className="text-xs sm:text-sm font-black text-[#1a1208] uppercase tracking-tight">
+                                                    <p className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Date Reported</p>
+                                                    <p className="text-xs sm:text-sm font-black text-[#1a1208] dark:text-white uppercase tracking-tight">
                                                         <RelativeTimestamp date={report.created_at} />
                                                     </p>
                                                 </div>
@@ -826,27 +826,27 @@ const ResiViewReport = () => {
 
                                         {/* Merged Duplicate Information Card for Citizen */}
                                         {(report.status_id === 18 || report.duplicate_of_report_id) && (
-                                            <div className="p-5 rounded-3xl bg-stone-50 border-2 border-stone-200 text-stone-900 space-y-3 shadow-2xs">
+                                            <div className="p-5 rounded-3xl bg-stone-50 dark:bg-[#1E2738] border-2 border-stone-200 dark:border-gray-700 text-stone-900 dark:text-white space-y-3 shadow-2xs">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-2xl bg-stone-200 text-stone-800 flex items-center justify-center shrink-0">
+                                                    <div className="w-10 h-10 rounded-2xl bg-stone-200 dark:bg-gray-700 text-stone-800 dark:text-gray-200 flex items-center justify-center shrink-0">
                                                         <Link2 className="w-5 h-5" />
                                                     </div>
                                                     <div>
                                                         <div className="flex items-center gap-2">
-                                                            <h4 className="text-xs font-black uppercase tracking-widest text-stone-900">
+                                                            <h4 className="text-xs font-black uppercase tracking-widest text-stone-900 dark:text-white">
                                                                 Linked Sighting Case
                                                             </h4>
-                                                            <span className="px-2 py-0.5 rounded-full bg-stone-200 text-stone-700 text-[9px] font-black uppercase">
+                                                            <span className="px-2 py-0.5 rounded-full bg-stone-200 dark:bg-gray-700 text-stone-700 dark:text-gray-300 text-[9px] font-black uppercase">
                                                                 Active Case #{report.duplicate_of_report_id || 'Active'}
                                                             </span>
                                                         </div>
-                                                        <p className="text-xs font-bold text-stone-600 mt-0.5">
+                                                        <p className="text-xs font-bold text-stone-600 dark:text-gray-400 mt-0.5">
                                                             Consolidated into active rescue operation
                                                         </p>
                                                     </div>
                                                 </div>
 
-                                                <p className="text-xs text-stone-700 font-medium leading-relaxed bg-white p-3.5 rounded-2xl border border-stone-100">
+                                                <p className="text-xs text-stone-700 dark:text-gray-300 font-medium leading-relaxed bg-white dark:bg-[#151C2C] p-3.5 rounded-2xl border border-stone-100 dark:border-gray-800">
                                                     <strong>Thank you for your report!</strong> Responding officers confirmed that this animal is currently being tracked under active <strong>Case #{report.duplicate_of_report_id}</strong>. Your submitted photo and sighting details have been credited and added to the official case record to assist the rescue team.
                                                 </p>
 
@@ -866,17 +866,17 @@ const ResiViewReport = () => {
 
                                         {/* Consolidated Sighting Evidence from Merged Duplicate Reports */}
                                         {report.merged_reports && report.merged_reports.length > 0 && (
-                                            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-orange-200/80 shadow-xs space-y-4">
+                                            <div className="bg-white dark:bg-[#1E2738] rounded-3xl p-6 sm:p-8 border border-orange-200/80 dark:border-orange-900/40 shadow-xs space-y-4">
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] border border-orange-200 flex items-center justify-center shrink-0">
+                                                        <div className="w-10 h-10 rounded-2xl bg-orange-50 dark:bg-orange-950/40 text-[#F97316] border border-orange-200 dark:border-orange-900/40 flex items-center justify-center shrink-0">
                                                             <Link2 className="w-5 h-5" />
                                                         </div>
                                                         <div>
-                                                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">
+                                                            <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide">
                                                                 Consolidated Sighting Evidence ({report.merged_reports.length} Merged {report.merged_reports.length === 1 ? 'Report' : 'Reports'})
                                                             </h3>
-                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                                            <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                                                                 Photos and sightings from other residents confirmed for this same animal
                                                             </p>
                                                         </div>
@@ -885,14 +885,14 @@ const ResiViewReport = () => {
 
                                                 <div className={`grid grid-cols-1 ${report.merged_reports.length === 2 ? 'sm:grid-cols-2' : report.merged_reports.length >= 3 ? 'sm:grid-cols-2 lg:grid-cols-3' : ''} gap-4 pt-2`}>
                                                     {report.merged_reports.map((mr: any, mrIdx: number) => (
-                                                        <div key={mr.report_id || mr.id || `merged-report-${mrIdx}`} className="p-4 rounded-2xl bg-stone-50/70 border border-stone-200 space-y-3 flex flex-col justify-between">
+                                                        <div key={mr.report_id || mr.id || `merged-report-${mrIdx}`} className="p-4 rounded-2xl bg-stone-50/70 dark:bg-[#151C2C] border border-stone-200 dark:border-gray-800 space-y-3 flex flex-col justify-between">
                                                             <div className="space-y-3">
                                                                 <div className="flex items-center justify-between gap-2 flex-wrap">
                                                                     <div className="flex items-center gap-2">
-                                                                        <span className="text-xs font-black text-gray-900">
+                                                                        <span className="text-xs font-black text-gray-900 dark:text-white">
                                                                             Report #{mr.report_id}
                                                                         </span>
-                                                                        <span className="px-2 py-0.5 rounded-md bg-stone-200 text-stone-700 text-[9px] font-black uppercase">
+                                                                        <span className="px-2 py-0.5 rounded-md bg-stone-200 dark:bg-gray-700 text-stone-700 dark:text-gray-300 text-[9px] font-black uppercase">
                                                                             Merged Duplicate
                                                                         </span>
                                                                     </div>
@@ -905,19 +905,19 @@ const ResiViewReport = () => {
                                                                     </Link>
                                                                 </div>
 
-                                                                <div className="flex items-center gap-2.5 text-xs text-gray-600">
-                                                                    <User className="w-3 h-3" />
-                                                                    <span className="font-bold text-gray-800">{mr.reporter_name}</span>
+                                                                <div className="flex items-center gap-2.5 text-xs text-gray-600 dark:text-gray-300">
+                                                                    <User className="w-3 h-3 text-gray-400" />
+                                                                    <span className="font-bold text-gray-800 dark:text-gray-200">{mr.reporter_name}</span>
                                                                     {mr.landmark && (
                                                                         <>
                                                                             <span>•</span>
-                                                                            <span className="truncate inline-flex items-center gap-1"><MapPin className="w-3 h-3" /> {mr.landmark}</span>
+                                                                            <span className="truncate inline-flex items-center gap-1"><MapPin className="w-3 h-3 text-gray-400" /> {mr.landmark}</span>
                                                                         </>
                                                                     )}
                                                                 </div>
 
                                                                 {mr.description && (
-                                                                    <p className="text-xs text-gray-600 italic bg-white p-2.5 rounded-xl border border-stone-100 leading-relaxed">
+                                                                    <p className="text-xs text-gray-600 dark:text-gray-300 italic bg-white dark:bg-[#1E2738] p-2.5 rounded-xl border border-stone-100 dark:border-gray-700/80 leading-relaxed">
                                                                         "{mr.description}"
                                                                     </p>
                                                                 )}
@@ -929,7 +929,7 @@ const ResiViewReport = () => {
                                                                         <div
                                                                             key={m.media_id || m.id || m.file_url || `merged-media-${mIdx}`}
                                                                             onClick={() => window.open(m.file_url, '_blank')}
-                                                                            className="w-20 h-20 rounded-xl overflow-hidden bg-gray-200 shrink-0 border border-stone-200 cursor-pointer hover:scale-105 transition-transform"
+                                                                            className="w-20 h-20 rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-800 shrink-0 border border-stone-200 dark:border-gray-700 cursor-pointer hover:scale-105 transition-transform"
                                                                             title="Click to view full photo"
                                                                         >
                                                                             <img src={m.file_url} alt="" className="w-full h-full object-cover" />
@@ -947,17 +947,17 @@ const ResiViewReport = () => {
                                         {report.verification_status === 'verified_true' && (
                                             <div className={`p-4 rounded-3xl border flex items-start gap-3.5 shadow-xs ${
                                                 (!report.verified_actual_bite && !report.verified_aggressive)
-                                                    ? 'bg-emerald-50/90 border-emerald-200 text-emerald-950'
-                                                    : 'bg-rose-50/90 border-rose-200 text-rose-950'
+                                                    ? 'bg-emerald-50/90 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-950 dark:text-emerald-200'
+                                                    : 'bg-rose-50/90 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800 text-rose-950 dark:text-rose-200'
                                             }`}>
-                                                {(!report.verified_actual_bite && !report.verified_aggressive) ? <Shield className="w-6 h-6 shrink-0" /> : <AlertTriangle className="w-6 h-6 shrink-0" />}
+                                                {(!report.verified_actual_bite && !report.verified_aggressive) ? <Shield className="w-6 h-6 shrink-0 text-emerald-600 dark:text-emerald-400" /> : <AlertTriangle className="w-6 h-6 shrink-0 text-rose-600 dark:text-rose-400" />}
                                                 <div className="space-y-1">
                                                     <div className="flex flex-wrap items-center gap-2">
                                                         <span className="text-[10px] font-black uppercase tracking-wider">
                                                             {(!report.verified_actual_bite && !report.verified_aggressive) ? 'On-Site Staff Verification: Clean Record' : 'On-Site Staff Verification: Confirmed'}
                                                         </span>
                                                         <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
-                                                            (!report.verified_actual_bite && !report.verified_aggressive) ? 'bg-white text-emerald-700 border-emerald-300' : 'bg-white text-rose-700 border-rose-300'
+                                                            (!report.verified_actual_bite && !report.verified_aggressive) ? 'bg-white dark:bg-[#1E2738] text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700' : 'bg-white dark:bg-[#1E2738] text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-700'
                                                         }`}>
                                                             {report.behavior_finding || 'Verified'}
                                                         </span>
@@ -973,7 +973,7 @@ const ResiViewReport = () => {
 
                                         {/* Lost Pet Owner Contact & Digital QR Tag Card */}
                                         {(report.pet_id || report.owner_phone || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
-                                            <div className="p-5 rounded-3xl bg-gradient-to-br from-amber-50/90 to-orange-50/70 border-2 border-amber-200/80 shadow-sm space-y-4">
+                                            <div className="p-5 rounded-3xl bg-gradient-to-br from-amber-50/90 to-orange-50/70 dark:from-amber-950/40 dark:to-orange-950/20 border-2 border-amber-200/80 dark:border-amber-800/60 shadow-sm space-y-4">
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-2.5">
                                                         <span className="px-2.5 py-1 bg-amber-500 text-white rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
@@ -981,31 +981,31 @@ const ResiViewReport = () => {
                                                             <span>Registered Lost Pet</span>
                                                         </span>
                                                         {report.pet_name && (
-                                                            <span className="text-xs font-black text-amber-950 uppercase">
+                                                            <span className="text-xs font-black text-amber-950 dark:text-amber-200 uppercase">
                                                                 {report.pet_name}
                                                             </span>
                                                         )}
                                                     </div>
                                                     {report.pet_qr_code_hash && (
-                                                        <span className="text-[9px] font-mono font-bold text-amber-900 bg-white/80 px-2 py-0.5 rounded-md border border-amber-200">
+                                                        <span className="text-[9px] font-mono font-bold text-amber-900 dark:text-amber-300 bg-white/80 dark:bg-[#1E2738] px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-700/60">
                                                             {report.pet_qr_code_hash}
                                                         </span>
                                                     )}
                                                 </div>
 
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                                                    <div className="bg-white/80 p-3 rounded-2xl border border-amber-100">
-                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Pet Owner</p>
-                                                        <p className="text-xs font-black text-gray-900">{report.owner_name ? report.owner_name : <span className="text-gray-500 font-bold italic">No Registered Owner (Community Animal)</span>}</p>
+                                                    <div className="bg-white/80 dark:bg-[#1E2738] p-3 rounded-2xl border border-amber-100 dark:border-amber-800/40">
+                                                        <p className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-0.5">Pet Owner</p>
+                                                        <p className="text-xs font-black text-gray-900 dark:text-white">{report.owner_name ? report.owner_name : <span className="text-gray-500 dark:text-gray-400 font-bold italic">No Registered Owner (Community Animal)</span>}</p>
                                                         {report.owner_address && (
-                                                            <p className="text-[10px] text-gray-500 font-medium mt-0.5">{report.owner_address}</p>
+                                                            <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">{report.owner_address}</p>
                                                         )}
                                                     </div>
 
-                                                    <div className="bg-white/80 p-3 rounded-2xl border border-amber-100 flex flex-col justify-between">
+                                                    <div className="bg-white/80 dark:bg-[#1E2738] p-3 rounded-2xl border border-amber-100 dark:border-amber-800/40 flex flex-col justify-between">
                                                         <div>
-                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Owner Contact</p>
-                                                            <p className="text-xs font-black text-amber-900">{report.owner_phone || 'No Private Owner Contact'}</p>
+                                                            <p className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-0.5">Owner Contact</p>
+                                                            <p className="text-xs font-black text-amber-900 dark:text-amber-300">{report.owner_phone || 'No Private Owner Contact'}</p>
                                                         </div>
                                                         {report.owner_phone && (
                                                             <a
@@ -1019,12 +1019,12 @@ const ResiViewReport = () => {
                                                 </div>
 
                                                 {report.pet_qr_code_url && (
-                                                    <div className="pt-2 flex items-center justify-between bg-white/90 p-3.5 rounded-2xl border border-amber-200 gap-4">
+                                                    <div className="pt-2 flex items-center justify-between bg-white/90 dark:bg-[#1E2738] p-3.5 rounded-2xl border border-amber-200 dark:border-amber-800/60 gap-4">
                                                         <div className="flex items-center gap-3">
                                                             <img 
                                                                 src={report.pet_qr_code_url} 
                                                                 alt="Pet QR Code" 
-                                                                className="w-12 h-12 rounded-xl object-contain bg-white border border-gray-100 p-1 cursor-pointer hover:scale-105 transition-transform"
+                                                                className="w-12 h-12 rounded-xl object-contain bg-white border border-gray-100 dark:border-gray-700 p-1 cursor-pointer hover:scale-105 transition-transform"
                                                                 onClick={() => setSelectedQrPreview({
                                                                     url: report.pet_qr_code_url,
                                                                     petName: report.pet_name,
@@ -1034,8 +1034,8 @@ const ResiViewReport = () => {
                                                                 })}
                                                             />
                                                             <div>
-                                                                <p className="text-xs font-black text-gray-900 uppercase">Pet Digital QR Tag</p>
-                                                                <p className="text-[10px] text-gray-500 font-medium">Scan with camera to verify pet ownership</p>
+                                                                <p className="text-xs font-black text-gray-900 dark:text-white uppercase">Pet Digital QR Tag</p>
+                                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Scan with camera to verify pet ownership</p>
                                                             </div>
                                                         </div>
                                                         <button
@@ -1047,7 +1047,7 @@ const ResiViewReport = () => {
                                                                 ownerName: report.owner_name || undefined,
                                                                 ownerPhone: report.owner_phone
                                                             })}
-                                                            className="px-3.5 py-2 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer"
+                                                            className="px-3.5 py-2 bg-amber-100 dark:bg-amber-950/60 hover:bg-amber-200 dark:hover:bg-amber-900/60 text-amber-900 dark:text-amber-200 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer"
                                                         >
                                                             Expand QR ↗
                                                         </button>
@@ -1057,56 +1057,56 @@ const ResiViewReport = () => {
                                         )}
 
                                         {/* Unified Animal Characteristics */}
-                                        <div className="pb-6 space-y-3.5 border-b border-gray-50">
+                                        <div className="pb-6 space-y-3.5 border-b border-gray-50 dark:border-gray-800">
                                             <div className="flex justify-between items-center">
-                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Animal Type</span>
-                                                <span className="text-xs font-black text-[#1a1208] uppercase">{displayType}</span>
+                                                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Animal Type</span>
+                                                <span className="text-xs font-black text-[#1a1208] dark:text-white uppercase">{displayType}</span>
                                             </div>
                                             <div className="flex justify-between items-center">
-                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Breed / Variety</span>
-                                                <span className="text-xs font-black text-gray-900 uppercase">{displayBreed}</span>
+                                                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Breed / Variety</span>
+                                                <span className="text-xs font-black text-gray-900 dark:text-white uppercase">{displayBreed}</span>
                                             </div>
                                             <div className="flex justify-between items-center">
-                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Coat Color</span>
-                                                <span className="text-xs font-black text-gray-900 uppercase">{displayColor}</span>
+                                                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Coat Color</span>
+                                                <span className="text-xs font-black text-gray-900 dark:text-white uppercase">{displayColor}</span>
                                             </div>
                                             <div className="flex justify-between items-center">
-                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Estimated Size</span>
-                                                <span className="text-xs font-black text-gray-900 uppercase">{displaySize}</span>
+                                                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Estimated Size</span>
+                                                <span className="text-xs font-black text-gray-900 dark:text-white uppercase">{displaySize}</span>
                                             </div>
                                             <div className="flex justify-between items-center">
-                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Animal Count</span>
-                                                <span className="text-xs font-black text-gray-900 uppercase">{report.animal_count || 1} Animal(s)</span>
+                                                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Animal Count</span>
+                                                <span className="text-xs font-black text-gray-900 dark:text-white uppercase">{report.animal_count || 1} Animal(s)</span>
                                             </div>
                                             {extractedPattern && (
                                                 <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Coat Pattern / Markings</span>
-                                                    <span className="text-xs font-black text-orange-600 uppercase">{extractedPattern}</span>
+                                                    <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Coat Pattern / Markings</span>
+                                                    <span className="text-xs font-black text-orange-600 dark:text-orange-400 uppercase">{extractedPattern}</span>
                                                 </div>
                                             )}
                                             {report.is_possible_owned !== undefined && (
                                                 <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ownership Indicator</span>
-                                                    <span className={`text-xs font-black uppercase ${report.is_possible_owned ? 'text-amber-600' : 'text-gray-600'}`}>
+                                                    <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Ownership Indicator</span>
+                                                    <span className={`text-xs font-black uppercase ${report.is_possible_owned ? 'text-amber-600 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400'}`}>
                                                         {report.is_possible_owned ? 'Possible Owned Pet' : 'Uncollared Stray'}
                                                     </span>
                                                 </div>
                                             )}
                                             {report.landmark && (
                                                 <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Landmark Location</span>
-                                                    <span className="text-xs font-black text-gray-900 uppercase">{report.landmark}</span>
+                                                    <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Landmark Location</span>
+                                                    <span className="text-xs font-black text-gray-900 dark:text-white uppercase">{report.landmark}</span>
                                                 </div>
                                             )}
                                         </div>
 
                                         {/* Observed Conditions & Incident Details */}
                                         {extractedConditions && (
-                                            <div className="pb-6 border-b border-gray-50">
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Observed Health & Behavior Conditions</p>
+                                            <div className="pb-6 border-b border-gray-50 dark:border-gray-800">
+                                                <p className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Observed Health & Behavior Conditions</p>
                                                 <div className="flex flex-wrap gap-2">
                                                     {extractedConditions.split(',').map((cond, i) => (
-                                                        <span key={i} className="px-3 py-1 bg-red-50 text-red-600 border border-red-100 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
+                                                        <span key={i} className="px-3 py-1 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-900/40 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
                                                             <Siren className="w-3 h-3" /> {cond.trim()}
                                                         </span>
                                                     ))}
@@ -1117,7 +1117,7 @@ const ResiViewReport = () => {
                                         {/* Cleaned Case Notes */}
                                         {cleanNotes && (
                                             <div>
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Case Description & Notes</p>
+                                                <p className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Case Description & Notes</p>
                                                 <FormattedReportDescription description={cleanNotes} />
                                             </div>
                                         )}
@@ -1129,28 +1129,28 @@ const ResiViewReport = () => {
 
                                          {/* Endorsement Letter section */}
                                          {report.endorsement_letter && (
-                                              <div className="pt-6 mt-6 border-t border-gray-50 space-y-3">
-                                                  <div className="bg-orange-50 border border-orange-100 rounded-3xl p-6">
-                                                      <h4 className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-4">Subdivision Escalation Note</h4>
+                                              <div className="pt-6 mt-6 border-t border-gray-50 dark:border-gray-800 space-y-3">
+                                                  <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-100 dark:border-orange-900/40 rounded-3xl p-6">
+                                                      <h4 className="text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest mb-4">Subdivision Escalation Note</h4>
                                                       
                                                       {report.endorsement_letter.title && (
-                                                          <p className="text-xs font-black text-orange-600 uppercase tracking-wider mb-2">
+                                                          <p className="text-xs font-black text-orange-600 dark:text-orange-400 uppercase tracking-wider mb-2">
                                                               {report.endorsement_letter.title}
                                                           </p>
                                                       )}
                                                       
-                                                      <p className="text-sm font-bold text-gray-900 leading-relaxed italic">
+                                                      <p className="text-sm font-bold text-gray-900 dark:text-white leading-relaxed italic">
                                                           "{report.endorsement_letter.letter_content}"
                                                       </p>
                                                       
                                                       <div className="mt-4 flex items-center gap-3">
-                                                          <div className="w-8 h-8 rounded-full bg-orange-200 flex items-center justify-center text-[10px] font-bold text-orange-700 border-2 border-white">
+                                                          <div className="w-8 h-8 rounded-full bg-orange-200 dark:bg-orange-900/60 flex items-center justify-center text-[10px] font-bold text-orange-700 dark:text-orange-300 border-2 border-white dark:border-gray-800">
                                                               {report.endorsement_letter.leader_name?.charAt(0) || 'L'}
                                                           </div>
                                                           <div>
-                                                              <p className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Sent by:</p>
-                                                              <p className="text-sm font-black text-orange-700">{report.endorsement_letter.leader_name || "Subdivision Leader"}</p>
-                                                              <p className="text-[9px] text-gray-500 uppercase tracking-widest font-medium">
+                                                              <p className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-widest">Sent by:</p>
+                                                              <p className="text-sm font-black text-orange-700 dark:text-orange-400">{report.endorsement_letter.leader_name || "Subdivision Leader"}</p>
+                                                              <p className="text-[9px] text-gray-500 dark:text-gray-400 uppercase tracking-widest font-medium">
                                                                   {report.endorsement_letter.leader_position || "Subdivision Official"} • {new Date(report.endorsement_letter.issued_at).toLocaleDateString()}
                                                               </p>
                                                           </div>
@@ -1164,9 +1164,9 @@ const ResiViewReport = () => {
                                                           
                                                           return (
                                                               <div className="mt-5 space-y-3">
-                                                                  <p className="text-[9px] font-black text-orange-600 uppercase tracking-[0.2em]">Endorsement Letter / Evidence</p>
+                                                                  <p className="text-[9px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-[0.2em]">Endorsement Letter / Evidence</p>
                                                                   {isImg ? (
-                                                                      <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="block rounded-2xl overflow-hidden border border-orange-100 hover:opacity-90 transition-opacity shadow-sm">
+                                                                      <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="block rounded-2xl overflow-hidden border border-orange-100 dark:border-orange-900/40 hover:opacity-90 transition-opacity shadow-sm">
                                                                           <img src={fileUrl} className="w-full max-h-64 object-cover" alt="Endorsement letter" />
                                                                       </a>
                                                                   ) : (
@@ -1174,7 +1174,7 @@ const ResiViewReport = () => {
                                                                           href={fileUrl}
                                                                           target="_blank"
                                                                           rel="noopener noreferrer"
-                                                                          className="w-full py-3 bg-white border border-orange-200 text-[#F97316] text-[9px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-orange-600 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
+                                                                          className="w-full py-3 bg-white dark:bg-[#1E2738] border border-orange-200 dark:border-orange-900/40 text-[#F97316] text-[9px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-orange-600 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
                                                                       >
                                                                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -1193,15 +1193,15 @@ const ResiViewReport = () => {
 
                     {/* Right Column: Rescue Timeline Card (5/12) */}
                     <div className="lg:col-span-5 relative">
-                        <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col h-full lg:h-auto min-h-[350px] lg:min-h-0 lg:absolute lg:inset-0">
-                            <div className="flex items-end justify-between border-b border-gray-50 pb-4 shrink-0 mb-6">
+                        <div className="bg-white dark:bg-[#151C2C] p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col h-full lg:h-auto min-h-[350px] lg:min-h-0 lg:absolute lg:inset-0">
+                            <div className="flex items-end justify-between border-b border-gray-50 dark:border-gray-800 pb-4 shrink-0 mb-6">
                                 <div>
-                                    <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Rescue Timeline</h3>
-                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Live sync updates from responders</p>
+                                    <h3 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tight">Rescue Timeline</h3>
+                                    <p className="text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-1">Live sync updates from responders</p>
                                 </div>
-                                <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-full border border-green-100">
+                                <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-950/40 rounded-full border border-green-100 dark:border-green-900/40">
                                     <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                                    <span className="text-[8px] font-black text-green-600 uppercase tracking-widest">Live Sync</span>
+                                    <span className="text-[8px] font-black text-green-600 dark:text-green-400 uppercase tracking-widest">Live Sync</span>
                                 </div>
                             </div>
                             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
@@ -1868,27 +1868,27 @@ const ResiViewReport = () => {
                     onClick={() => setSelectedQrPreview(null)}
                 >
                     <div 
-                        className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl border border-amber-100 animate-in zoom-in-95 duration-200 text-center relative"
+                        className="bg-white dark:bg-[#151C2C] rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl border border-amber-100 dark:border-amber-800/60 animate-in zoom-in-95 duration-200 text-center relative"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <button
                             onClick={() => setSelectedQrPreview(null)}
-                            className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-colors"
+                            className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
                         >
                             <X className="w-4 h-4" />
                         </button>
 
-                        <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-3">
+                        <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 flex items-center justify-center mx-auto mb-3">
                             <PawPrint className="w-6 h-6" />
                         </div>
-                        <h3 className="text-base font-black text-gray-900 uppercase tracking-tight mb-0.5">
+                        <h3 className="text-base font-black text-gray-900 dark:text-white uppercase tracking-tight mb-0.5">
                             {selectedQrPreview.petName || 'Registered Pet'}
                         </h3>
-                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-4">
+                        <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-4">
                             StraySafe Digital QR Tag
                         </p>
 
-                        <div className="p-4 bg-amber-50/50 rounded-2xl border-2 border-dashed border-amber-200 inline-block mb-4">
+                        <div className="p-4 bg-amber-50/50 dark:bg-amber-950/30 rounded-2xl border-2 border-dashed border-amber-200 dark:border-amber-800/60 inline-block mb-4">
                             <img
                                 src={selectedQrPreview.url}
                                 alt="Pet QR Code"
@@ -1897,18 +1897,18 @@ const ResiViewReport = () => {
                         </div>
 
                         {selectedQrPreview.hash && (
-                            <p className="text-xs font-mono font-bold text-gray-600 mb-2">
+                            <p className="text-xs font-mono font-bold text-gray-600 dark:text-gray-300 mb-2">
                                 Tag ID: {selectedQrPreview.hash}
                             </p>
                         )}
 
                         {selectedQrPreview.ownerPhone && (
-                            <div className="p-3 bg-amber-100/70 rounded-xl text-amber-950 text-xs font-bold mb-4">
+                            <div className="p-3 bg-amber-100/70 dark:bg-amber-950/60 rounded-xl text-amber-950 dark:text-amber-200 text-xs font-bold mb-4">
                                 Owner Hotline: <span className="font-extrabold">{selectedQrPreview.ownerPhone}</span>
                             </div>
                         )}
 
-                        <p className="text-[10px] text-gray-400 font-medium">
+                        <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
                             Scan this tag with the StraySafe Scanner to verify pet registry and instantly alert the owner.
                         </p>
                     </div>
@@ -1930,7 +1930,7 @@ const ResiViewReport = () => {
                 <div className="fixed bottom-6 right-6 z-40">
                     <button
                         onClick={() => setIsChatOpen(true)}
-                        className="px-4 py-3.5 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-full shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-2.5 cursor-pointer border-2 border-white"
+                        className="px-4 py-3.5 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-full shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-2.5 cursor-pointer border-2 border-white dark:border-gray-800"
                         title="Chat about this report"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1961,27 +1961,27 @@ const ResiViewReport = () => {
             {/* Resident Dispute Counter-Claim Modal */}
             {isDisputeModalOpen && report && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-300 border border-amber-100">
-                        <div className="px-8 py-6 border-b border-gray-150 flex justify-between items-center bg-amber-50/60">
+                    <div className="bg-white dark:bg-[#151C2C] rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-300 border border-amber-100 dark:border-gray-800">
+                        <div className="px-8 py-6 border-b border-gray-150 dark:border-gray-800 flex justify-between items-center bg-amber-50/60 dark:bg-amber-950/30">
                             <div className="flex items-center gap-3">
-                                <Scale className="w-8 h-8 text-amber-700" />
+                                <Scale className="w-8 h-8 text-amber-700 dark:text-amber-400" />
                                 <div>
-                                    <h3 className="text-xl font-black text-amber-950 uppercase tracking-tight">Dispute Report / Counter-Claim</h3>
-                                    <p className="text-xs text-amber-800/80 mt-0.5 font-medium">Submit vaccination card and home confinement proof to clear false accusations.</p>
+                                    <h3 className="text-xl font-black text-amber-950 dark:text-white uppercase tracking-tight">Dispute Report / Counter-Claim</h3>
+                                    <p className="text-xs text-amber-800/80 dark:text-gray-400 mt-0.5 font-medium">Submit vaccination card and home confinement proof to clear false accusations.</p>
                                 </div>
                             </div>
-                            <button onClick={() => setIsDisputeModalOpen(false)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-900 rounded-full hover:bg-gray-100 transition-all cursor-pointer">
+                            <button onClick={() => setIsDisputeModalOpen(false)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all cursor-pointer">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                         </div>
                         <form onSubmit={handleSubmitDispute} className="p-8 space-y-5 max-h-[80vh] overflow-y-auto custom-scrollbar">
                             {userPets.length > 0 && (
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Select Registered Pet (Optional)</label>
+                                    <label className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-widest ml-1">Select Registered Pet (Optional)</label>
                                     <select
                                         value={selectedDisputePetId}
                                         onChange={(e) => setSelectedDisputePetId(e.target.value)}
-                                        className="w-full px-5 py-3.5 bg-gray-50 border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-amber-100 focus:border-amber-500 outline-none transition-all"
+                                        className="w-full px-5 py-3.5 bg-gray-50 dark:bg-[#1E2738] border border-gray-300 dark:border-gray-700 rounded-2xl text-xs font-semibold text-gray-900 dark:text-white focus:ring-4 focus:ring-amber-100 focus:border-amber-500 outline-none transition-all"
                                     >
                                         <option value="">-- Unspecified / None --</option>
                                         {userPets.map((pet: any) => (
@@ -1994,52 +1994,52 @@ const ResiViewReport = () => {
                             )}
 
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Dispute Statement & Explanation</label>
+                                <label className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-widest ml-1">Dispute Statement & Explanation</label>
                                 <textarea
                                     rows={4}
                                     required
                                     value={disputeReason}
                                     onChange={(e) => setDisputeReason(e.target.value)}
                                     placeholder="Explain why this report is inaccurate (e.g. My pet was inside our fenced gate all afternoon; no bite occurred; anti-rabies up to date)..."
-                                    className="w-full px-5 py-3.5 bg-white border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-amber-100 focus:border-amber-500 outline-none transition-all resize-none"
+                                    className="w-full px-5 py-3.5 bg-white dark:bg-[#1E2738] border border-gray-300 dark:border-gray-700 rounded-2xl text-xs font-semibold text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-4 focus:ring-amber-100 focus:border-amber-500 outline-none transition-all resize-none"
                                 />
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1 flex items-center gap-1.5">
-                                    <Syringe className="w-3.5 h-3.5" /> Anti-Rabies Vaccination Card (Photo or PDF)
+                                <label className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                                    <Syringe className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" /> Anti-Rabies Vaccination Card (Photo or PDF)
                                 </label>
                                 <input
                                     type="file"
                                     accept=".pdf,.jpg,.jpeg,.png"
                                     onChange={(e) => setVaccineCardFile(e.target.files?.[0] || null)}
-                                    className="w-full text-xs text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:cursor-pointer"
+                                    className="w-full text-xs text-gray-500 dark:text-gray-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:bg-blue-50 dark:file:bg-blue-950/50 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-900/50 file:cursor-pointer"
                                 />
-                                {vaccineCardFile && <p className="text-[10px] text-blue-700 font-bold ml-1">Attached: {vaccineCardFile.name}</p>}
+                                {vaccineCardFile && <p className="text-[10px] text-blue-700 dark:text-blue-400 font-bold ml-1">Attached: {vaccineCardFile.name}</p>}
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1 flex items-center gap-1.5">
-                                    <Camera className="w-3.5 h-3.5" /> Supporting Photo (Pet Safe at Home / In Enclosure)
+                                <label className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                                    <Camera className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" /> Supporting Photo (Pet Safe at Home / In Enclosure)
                                 </label>
                                 <input
                                     type="file"
                                     accept="image/*"
                                     onChange={(e) => setSupportingPhotoFile(e.target.files?.[0] || null)}
-                                    className="w-full text-xs text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 file:cursor-pointer"
+                                    className="w-full text-xs text-gray-500 dark:text-gray-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:bg-emerald-50 dark:file:bg-emerald-950/50 file:text-emerald-700 dark:file:text-emerald-300 hover:file:bg-emerald-100 dark:hover:file:bg-emerald-900/50 file:cursor-pointer"
                                 />
-                                {supportingPhotoFile && <p className="text-[10px] text-emerald-700 font-bold ml-1">Attached: {supportingPhotoFile.name}</p>}
+                                {supportingPhotoFile && <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold ml-1">Attached: {supportingPhotoFile.name}</p>}
                             </div>
 
-                            <div className="p-3.5 bg-blue-50 rounded-2xl border border-blue-200 text-[11px] text-blue-950 font-medium leading-relaxed flex items-start gap-1.5">
-                                <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" /> <span><strong>Resident Protection:</strong> Submitting this counter-claim will place the report into <em>Disputed</em> status and alert subdivision officers to evaluate your evidence before taking any capture action.</span>
+                            <div className="p-3.5 bg-blue-50 dark:bg-blue-950/30 rounded-2xl border border-blue-200 dark:border-blue-900/50 text-[11px] text-blue-950 dark:text-blue-200 font-medium leading-relaxed flex items-start gap-1.5">
+                                <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-blue-500" /> <span><strong>Resident Protection:</strong> Submitting this counter-claim will place the report into <em>Disputed</em> status and alert subdivision officers to evaluate your evidence before taking any capture action.</span>
                             </div>
 
                             <div className="flex gap-4 pt-2">
                                 <button
                                     type="button"
                                     onClick={() => setIsDisputeModalOpen(false)}
-                                    className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all cursor-pointer"
+                                    className="flex-1 py-3.5 bg-gray-100 dark:bg-[#1E2738] hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all cursor-pointer"
                                 >
                                     Cancel
                                 </button>

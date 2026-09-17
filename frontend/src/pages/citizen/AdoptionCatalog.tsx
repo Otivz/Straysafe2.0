@@ -2,7 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { getPetPicture } from '../../utils/avatar';
-import { Heart, Search, MapPin, Phone, User, Shield, ArrowRight, Sparkles, AlertCircle } from 'lucide-react';
+import { Heart, Search, MapPin, Phone, User, Shield, ArrowRight, Sparkles, AlertCircle, ArrowLeft, ClipboardList } from 'lucide-react';
+import ResiNavbar from '../../components/Navbars/ResiNavbar';
+import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 
 interface CatalogAnimal {
     holding_id: number;
@@ -32,6 +34,8 @@ const AdoptionCatalog = () => {
     const [animals, setAnimals] = useState<CatalogAnimal[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isNavbarMenuOpen, setIsNavbarMenuOpen] = useState(false);
+    const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
     // Filter states
     const [typeFilter, setTypeFilter] = useState<'all' | 'dog' | 'cat'>('all');
@@ -41,6 +45,14 @@ const AdoptionCatalog = () => {
     const rawUser = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
     const residentObj = rawUser ? JSON.parse(rawUser) : null;
     const isResidentLoggedIn = Boolean((token || residentObj) && residentObj);
+
+    const handleBack = () => {
+        if (window.history.length > 2) {
+            navigate(-1);
+        } else {
+            navigate('/resident-home');
+        }
+    };
 
     useEffect(() => {
         const fetchCatalog = async () => {
@@ -87,58 +99,41 @@ const AdoptionCatalog = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#FBFBF9] dark:bg-[#0B0F19] text-[#1E293B] dark:text-[#F8FAFC] font-sans selection:bg-orange-100 selection:text-orange-900">
-            {/* Top Navigation */}
-            <header className="sticky top-0 z-40 bg-white/85 dark:bg-[#090C15]/90 backdrop-blur-md border-b border-[#E2E8F0] dark:border-gray-800 px-4 sm:px-8 py-3.5 flex items-center justify-between shadow-xs">
-                <Link to="/" className="flex items-center gap-3 group">
-                    <img src="/SSLOGO.png" alt="StraySafe" className="w-9 h-9 object-contain group-hover:scale-105 transition-transform" />
-                    <div>
-                        <span className="font-extrabold text-lg tracking-tight text-[#0F172A] dark:text-white flex items-center gap-1.5">
-                            STRAY<span className="text-[#F97316]">SAFE</span>
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 font-bold tracking-normal border border-transparent dark:border-orange-900/50">
-                                Adoption Portal
-                            </span>
-                        </span>
-                    </div>
-                </Link>
+        <div className="min-h-screen bg-[#FBFBF9] dark:bg-[#0B0F19] text-[#1E293B] dark:text-[#F8FAFC] font-sans selection:bg-orange-100 selection:text-orange-900 pb-20">
+            {/* Main Website Navbar */}
+            <ResiNavbar
+                onMenuToggle={(isOpen) => setIsNavbarMenuOpen(isOpen)}
+                isMobileSearchOpen={isMobileSearchOpen}
+                onCloseSearch={() => setIsMobileSearchOpen(false)}
+            />
 
-                <div className="flex items-center gap-3">
-                    {isResidentLoggedIn ? (
-                        <>
-                            <Link
-                                to="/adopt/applications"
-                                className="text-sm font-semibold text-gray-700 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400 transition-colors hidden sm:block"
-                            >
-                                My Applications
-                            </Link>
-                            <Link
-                                to="/resident-home"
-                                className="text-sm px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold transition-all shadow-xs hover:shadow-sm"
-                            >
-                                Resident Portal
-                            </Link>
-                        </>
-                    ) : (
-                        <div className="flex items-center gap-2">
-                            <Link
-                                to="/login"
-                                className="text-sm font-semibold text-gray-700 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400 px-3 py-1.5 transition-colors"
-                            >
-                                Log In
-                            </Link>
-                            <Link
-                                to="/login"
-                                className="text-sm px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold transition-all shadow-xs"
-                            >
-                                Register to Adopt
-                            </Link>
+            {/* Back & Request Adoption Action Bar */}
+            <div className="max-w-6xl mx-auto px-4 sm:px-8 pt-24 sm:pt-32 pb-2">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <button
+                        onClick={handleBack}
+                        className="flex items-center gap-2 group text-gray-500 dark:text-gray-400 hover:text-[#F97316] dark:hover:text-[#F97316] transition-colors cursor-pointer"
+                        title="Go Back"
+                    >
+                        <div className="w-10 h-10 rounded-xl bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-800 flex items-center justify-center text-gray-400 group-hover:text-[#F97316] group-hover:border-orange-200 dark:group-hover:border-orange-500/30 transition-all shadow-sm">
+                            <ArrowLeft className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
                         </div>
-                    )}
+                        <span className="text-[11px] font-black uppercase tracking-widest text-[#1a1208] dark:text-white group-hover:text-[#F97316] dark:group-hover:text-[#F97316] transition-colors">Back</span>
+                    </button>
+
+                    <button
+                        onClick={() => navigate('/adopt/applications')}
+                        className="px-5 py-3 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-2xl text-[11px] font-black uppercase tracking-wider transition-all shadow-lg shadow-orange-500/20 hover:scale-105 active:scale-95 flex items-center gap-2 shrink-0 cursor-pointer"
+                        title="View or track your adoption requests"
+                    >
+                        <ClipboardList className="w-4 h-4" />
+                        <span>Request Adoption</span>
+                    </button>
                 </div>
-            </header>
+            </div>
 
             {/* Hero Section */}
-            <section className="relative overflow-hidden bg-gradient-to-b from-orange-50/80 via-[#FBFBF9] to-[#FBFBF9] dark:from-[#151C2C] dark:via-[#0B0F19] dark:to-[#0B0F19] pt-12 pb-8 px-4 sm:px-8">
+            <section className="relative overflow-hidden bg-gradient-to-b from-orange-50/80 via-[#FBFBF9] to-[#FBFBF9] dark:from-[#151C2C] dark:via-[#0B0F19] dark:to-[#0B0F19] pt-6 pb-8 px-4 sm:px-8">
                 <div className="max-w-6xl mx-auto text-center relative z-10">
                     <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-orange-100/90 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300 text-xs font-bold uppercase tracking-wider mb-4 border border-orange-200/60 dark:border-orange-900/50 shadow-xs">
                         <Sparkles className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />
@@ -399,6 +394,7 @@ const AdoptionCatalog = () => {
                     </div>
                 )}
             </main>
+            <ResiMobileNav isNavbarMenuOpen={isNavbarMenuOpen} />
         </div>
     );
 };

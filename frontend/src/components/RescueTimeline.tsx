@@ -255,7 +255,7 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
     return (
         <div className="space-y-8">
             {/* Timeline Filter */}
-            <div className="flex items-center justify-between bg-white/50 backdrop-blur-md p-4 rounded-3xl border border-white/20 shadow-sm">
+            <div className="flex items-center justify-between bg-white/50 dark:bg-[#1E2738]/60 backdrop-blur-md p-4 rounded-3xl border border-white/20 dark:border-gray-750 shadow-sm">
                 <div className="flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-xl ${filter === 'all' ? 'bg-[#F97316]/10 text-[#F97316]' : (statusConfig[filter]?.nodeBg || 'bg-orange-50')} flex items-center justify-center transition-all`}>
                         {filter === 'all' ? (
@@ -264,16 +264,16 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
                             statusConfig[filter]?.icon || <span>📌</span>
                         )}
                     </div>
-                    <span className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Filter by Stage</span>
+                    <span className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-widest">Filter by Stage</span>
                 </div>
                 <select
                     value={filter}
                     onChange={(e) => setFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
                     className="bg-transparent text-[10px] font-black text-[#F97316] uppercase tracking-widest outline-none cursor-pointer"
                 >
-                    <option value="all">All Updates</option>
+                    <option value="all" className="dark:bg-[#151C2C] dark:text-white">All Updates</option>
                     {uniqueStages.map(stageId => (
-                        <option key={stageId} value={stageId}>{statusConfig[stageId]?.label || `Stage ${stageId}`}</option>
+                        <option key={stageId} value={stageId} className="dark:bg-[#151C2C] dark:text-white">{statusConfig[stageId]?.label || `Stage ${stageId}`}</option>
                     ))}
                 </select>
             </div>
@@ -281,11 +281,11 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             {/* Timeline List */}
             <div className="relative pl-8 space-y-12">
                 {/* Vertical Line */}
-                <div className="absolute left-[15px] top-2 bottom-2 w-0.5 bg-gradient-to-b from-[#F97316] to-gray-100" />
+                <div className="absolute left-[15px] top-2 bottom-2 w-0.5 bg-gradient-to-b from-[#F97316] to-gray-100 dark:to-gray-800" />
 
                 {filteredHistory.length === 0 ? (
                     <div className="text-center py-12 opacity-50">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">No updates found for this stage</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">No updates found for this stage</p>
                     </div>
                 ) : (
                     filteredHistory.map((entry, index) => {
@@ -300,11 +300,11 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
 
                         const config = isPureTransfer ? {
                             label: 'Facility Relocation',
-                            badgeStyle: 'bg-purple-50 text-purple-700 border-purple-200',
-                            cardBorder: 'border-purple-200 shadow-purple-500/10',
-                            nodeBg: 'bg-purple-50',
-                            nodeBorder: 'border-purple-200',
-                            nodeText: 'text-purple-600',
+                            badgeStyle: 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+                            cardBorder: 'border-purple-200 dark:border-purple-800/60 shadow-purple-500/10',
+                            nodeBg: 'bg-purple-50 dark:bg-purple-950/50',
+                            nodeBorder: 'border-purple-200 dark:border-purple-700',
+                            nodeText: 'text-purple-600 dark:text-purple-300',
                             icon: <span>🚚</span>
                         } : (statusConfig[entry.report_status_id] || statusConfig[1]);
 
@@ -319,7 +319,7 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
                                 </div>
 
                                 {/* Content Card */}
-                                <div className={`bg-white rounded-3xl border ${config.cardBorder} shadow-sm hover:shadow-md transition-all overflow-hidden`}>
+                                <div className={`bg-white dark:bg-[#1E2738] rounded-3xl border ${config.cardBorder} dark:border-gray-700/80 shadow-sm hover:shadow-md transition-all overflow-hidden`}>
                                     <div className="p-6">
                                         <div className="flex justify-between items-start mb-4">
                                             <div>
@@ -331,15 +331,15 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
                                                         Active
                                                     </span>
                                                 )}
-                                                <h4 className="text-sm font-black text-gray-900 mt-2 uppercase tracking-tight">
+                                                <h4 className="text-sm font-black text-gray-900 dark:text-white mt-2 uppercase tracking-tight">
                                                     {displayRemarks}
                                                 </h4>
                                             </div>
                                             <div className="text-right">
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                                                <p className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">
                                                     {new Date(entry.created_at).toLocaleDateString()}
                                                 </p>
-                                                <p className="text-[8px] font-bold text-gray-300 uppercase tracking-widest">
+                                                <p className="text-[8px] font-bold text-gray-300 dark:text-gray-500 uppercase tracking-widest">
                                                     {new Date(entry.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                 </p>
                                             </div>
@@ -348,20 +348,20 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
                                         {(() => {
                                             const handler = resolveHandlerName(entry);
                                             return (
-                                                <div className="flex items-center gap-3 mb-6 p-3 bg-gray-50/50 rounded-2xl border border-gray-50/50">
+                                                <div className="flex items-center gap-3 mb-6 p-3 bg-gray-50/50 dark:bg-[#151C2C] rounded-2xl border border-gray-50/50 dark:border-gray-800">
                                                     {entry.updater_photo ? (
                                                         <img
                                                             src={getProfilePicture(entry.updater_photo)}
-                                                            className="w-6 h-6 rounded-lg object-cover border border-gray-100 shadow-sm"
+                                                            className="w-6 h-6 rounded-lg object-cover border border-gray-100 dark:border-gray-700 shadow-sm"
                                                             alt={handler}
                                                             onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
                                                         />
                                                     ) : (
-                                                        <div className="w-6 h-6 rounded-lg bg-orange-100 flex items-center justify-center text-[10px] font-black text-orange-600 border border-orange-200 shadow-sm">
+                                                        <div className="w-6 h-6 rounded-lg bg-orange-100 dark:bg-orange-950/50 flex items-center justify-center text-[10px] font-black text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-900/40 shadow-sm">
                                                             {handler.charAt(0).toUpperCase()}
                                                         </div>
                                                     )}
-                                                    <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest">
+                                                    <span className="text-[10px] font-black text-gray-700 dark:text-gray-200 uppercase tracking-widest">
                                                         Handled by {handler}
                                                     </span>
                                                 </div>
@@ -370,9 +370,9 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
 
                                         {/* Endorsement Letter table details */}
                                         {entry.report_status_id === 4 && endorsementLetter && (
-                                             <div className="mb-6 p-5 bg-orange-50/40 rounded-2xl border border-orange-100/60 space-y-3">
-                                                 <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">Official Endorsement Sighting</p>
-                                                 <p className="text-sm text-gray-750 leading-relaxed font-semibold italic">
+                                             <div className="mb-6 p-5 bg-orange-50/40 dark:bg-orange-950/20 rounded-2xl border border-orange-100/60 dark:border-orange-900/40 space-y-3">
+                                                 <p className="text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest">Official Endorsement Sighting</p>
+                                                 <p className="text-sm text-gray-750 dark:text-gray-200 leading-relaxed font-semibold italic">
                                                      "{endorsementLetter.letter_content}"
                                                  </p>
                                                  {endorsementLetter.file_url && (
@@ -380,16 +380,16 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
                                                          href={endorsementLetter.file_url}
                                                          target="_blank"
                                                          rel="noopener noreferrer"
-                                                         className="flex items-center gap-4 p-4 bg-white hover:bg-orange-50/50 rounded-xl border border-orange-100/60 transition-all group/letter"
+                                                         className="flex items-center gap-4 p-4 bg-white dark:bg-[#151C2C] hover:bg-orange-50/50 dark:hover:bg-orange-950/30 rounded-xl border border-orange-100/60 dark:border-orange-900/40 transition-all group/letter"
                                                      >
-                                                         <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600 group-hover/letter:bg-orange-200 transition-colors">
+                                                         <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-950/50 flex items-center justify-center text-orange-600 dark:text-orange-400 group-hover/letter:bg-orange-200 dark:group-hover/letter:bg-orange-900/50 transition-colors">
                                                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                                              </svg>
                                                          </div>
                                                          <div className="flex-1 min-w-0">
-                                                             <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest">Official Endorsement Letter</p>
-                                                             <p className="text-[11px] font-bold text-gray-700 truncate">{endorsementLetter.file_url.split('/').pop()}</p>
+                                                             <p className="text-[9px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest">Official Endorsement Letter</p>
+                                                             <p className="text-[11px] font-bold text-gray-700 dark:text-gray-300 truncate">{endorsementLetter.file_url.split('/').pop()}</p>
                                                          </div>
                                                          <svg className="w-4 h-4 text-orange-400 group-hover/letter:text-orange-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
