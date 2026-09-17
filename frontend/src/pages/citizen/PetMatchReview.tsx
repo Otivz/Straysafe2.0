@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
+import { api } from '../../utils/api';
+import { validateFile, UPLOAD_ACCEPT } from '../../utils/uploadValidation';
+import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
@@ -219,8 +222,36 @@ const PetMatchReview = () => {
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
-            setEvidenceFile(e.target.files[0]);
+            const file = e.target.files[0];
+            const result = validateFile(file);
+            if (!result.valid) {
+                alert(result.error);
+                e.target.value = '';
+                return;
+            }
+            setEvidenceFile(file);
         }
+    };
+
+    // Validates a proof-of-ownership file before storing it, so residents get
+    // instant feedback instead of a failed upload after submitting the claim.
+    const pickValidatedFile = (
+        file: File | null,
+        setFile: (f: File | null) => void,
+        setName?: (n: string) => void
+    ) => {
+        if (!file) {
+            setFile(null);
+            setName?.('');
+            return;
+        }
+        const result = validateFile(file);
+        if (!result.valid) {
+            alert(result.error);
+            return;
+        }
+        setFile(file);
+        setName?.(file.name);
     };
 
     const handleSubmitClaim = async () => {
@@ -300,59 +331,27 @@ const PetMatchReview = () => {
                 alert("Could not submit the claim to the server. Your claim details might not be visible to the administrators. Technical error: " + (err.response?.data?.detail || err.message));
             }
 
-            // Upload files if backend succeeded
-            if (backendSucceeded) {
-                const uploadPromises = [];
-                const docTypes: string[] = [];
+            // Upload files if backend succeeded. Each file goes straight from the
+            // browser to Cloudinary (unsigned preset) first, then only the resulting
+            // URL is posted to the backend - keeps large evidence videos off our server.
+            if (backendSucceeded && claimData.claim_id) {
+                const evidenceItems: { file: File; documentType: string; label: string }[] = [];
+                if (vaccineCardFile) evidenceItems.push({ file: vaccineCardFile, documentType: 'vaccine_card', label: 'Vaccination Card' });
+                if (vetRecordFile) evidenceItems.push({ file: vetRecordFile, documentType: 'vet_record', label: 'Veterinary Records' });
+                if (petRegRecordFile) evidenceItems.push({ file: petRegRecordFile, documentType: 'registration_record', label: 'Registration Certificate' });
+                if (additionalPhotosFile) evidenceItems.push({ file: additionalPhotosFile, documentType: 'additional_photo', label: 'Additional Photos' });
 
-                if (vaccineCardFile && claimData.claim_id) {
-                    const fd = new FormData();
-                    fd.append('file', vaccineCardFile);
-                    docTypes.push("Vaccination Card");
-                    uploadPromises.push(
-                        axios.post(`http://localhost:8000/claims/${claimData.claim_id}/evidence?document_type=vaccine_card`, fd, {
-                            headers: { 'Content-Type': 'multipart/form-data' }
-                        })
-                    );
-                }
-                if (vetRecordFile && claimData.claim_id) {
-                    const fd = new FormData();
-                    fd.append('file', vetRecordFile);
-                    docTypes.push("Veterinary Records");
-                    uploadPromises.push(
-                        axios.post(`http://localhost:8000/claims/${claimData.claim_id}/evidence?document_type=vet_record`, fd, {
-                            headers: { 'Content-Type': 'multipart/form-data' }
-                        })
-                    );
-                }
-                if (petRegRecordFile && claimData.claim_id) {
-                    const fd = new FormData();
-                    fd.append('file', petRegRecordFile);
-                    docTypes.push("Registration Certificate");
-                    uploadPromises.push(
-                        axios.post(`http://localhost:8000/claims/${claimData.claim_id}/evidence?document_type=registration_record`, fd, {
-                            headers: { 'Content-Type': 'multipart/form-data' }
-                        })
-                    );
-                }
-                if (additionalPhotosFile && claimData.claim_id) {
-                    const fd = new FormData();
-                    fd.append('file', additionalPhotosFile);
-                    docTypes.push("Additional Photos");
-                    uploadPromises.push(
-                        axios.post(`http://localhost:8000/claims/${claimData.claim_id}/evidence?document_type=additional_photo`, fd, {
-                            headers: { 'Content-Type': 'multipart/form-data' }
-                        })
-                    );
-                }
-
-                for (let i = 0; i < uploadPromises.length; i++) {
+                for (const item of evidenceItems) {
                     try {
-                        const uploadRes = await uploadPromises[i];
-                        claimData = uploadRes.data;
+                        const { url } = await uploadDirectToCloudinary(item.file, 'claims');
+                        const evidenceRes = await api.post(`/claims/${claimData.claim_id}/evidence`, {
+                            file_url: url,
+                            document_type: item.documentType
+                        });
+                        claimData = evidenceRes.data;
                     } catch (uploadErr: any) {
-                        console.error(`Failed to upload ${docTypes[i]}:`, uploadErr);
-                        uploadErrors.push(`${docTypes[i]}: ${uploadErr.response?.data?.detail || uploadErr.message}`);
+                        console.error(`Failed to upload ${item.label}:`, uploadErr);
+                        uploadErrors.push(`${item.label}: ${uploadErr.response?.data?.detail || uploadErr.message}`);
                     }
                 }
 
@@ -420,10 +419,9 @@ const PetMatchReview = () => {
         if (!evidenceFile || !existingClaim) return;
         setIsSubmitting(true);
         try {
-            const formData = new FormData();
-            formData.append('file', evidenceFile);
-            const res = await axios.post(`http://localhost:8000/claims/${existingClaim.claim_id}/evidence`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+            const { url } = await uploadDirectToCloudinary(evidenceFile, 'claims');
+            const res = await api.post(`/claims/${existingClaim.claim_id}/evidence`, {
+                file_url: url
             });
             setExistingClaim(res.data);
             setEvidenceFile(null);
@@ -923,12 +921,12 @@ const PetMatchReview = () => {
                                 {existingClaim.status === 'Evidence Requested' && (
                                     <div className="space-y-4 pt-4 border-t border-gray-100">
                                         <h4 className="text-xs font-black text-[#1a1208] uppercase tracking-widest">Provide Proof of Ownership</h4>
-                                        <p className="text-[10px] text-gray-400 font-bold leading-normal uppercase">Upload a vaccine card, registration paper, or another photo showing you with the pet.</p>
-                                        <input 
-                                            type="file" 
+                                        <p className="text-[10px] text-gray-400 font-bold leading-normal uppercase">Upload a vaccine card, registration paper, a video, or another photo showing you with the pet.</p>
+                                        <input
+                                            type="file"
                                             className="w-full text-xs font-bold text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
                                             onChange={handleFileChange}
-                                            accept="image/*,.pdf"
+                                            accept={UPLOAD_ACCEPT.imageVideoDocument}
                                         />
                                         <Button
                                             disabled={!evidenceFile || isSubmitting}
@@ -1027,14 +1025,10 @@ const PetMatchReview = () => {
                                         {/* Vaccination Card */}
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Vaccination Card</label>
-                                            <input 
+                                            <input
                                                 type="file"
-                                                accept="image/*,application/pdf"
-                                                onChange={(e) => {
-                                                    const file = e.target.files?.[0] || null;
-                                                    setVaccineCardFile(file);
-                                                    setVaccineCardName(file?.name || '');
-                                                }}
+                                                accept={UPLOAD_ACCEPT.imageVideoDocument}
+                                                onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setVaccineCardFile, setVaccineCardName)}
                                                 className="w-full text-xs font-bold text-gray-455 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
                                             />
                                             {vaccineCardName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {vaccineCardName}</p>}
@@ -1043,14 +1037,10 @@ const PetMatchReview = () => {
                                         {/* Vet Records */}
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Veterinary Medical Records</label>
-                                            <input 
+                                            <input
                                                 type="file"
-                                                accept="image/*,application/pdf"
-                                                onChange={(e) => {
-                                                    const file = e.target.files?.[0] || null;
-                                                    setVetRecordFile(file);
-                                                    setVetRecordName(file?.name || '');
-                                                }}
+                                                accept={UPLOAD_ACCEPT.imageVideoDocument}
+                                                onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setVetRecordFile, setVetRecordName)}
                                                 className="w-full text-xs font-bold text-gray-455 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
                                             />
                                             {vetRecordName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {vetRecordName}</p>}
@@ -1059,14 +1049,10 @@ const PetMatchReview = () => {
                                         {/* Pet Registration Certificate */}
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Pet Registration Record (Optional)</label>
-                                            <input 
+                                            <input
                                                 type="file"
-                                                accept="image/*,application/pdf"
-                                                onChange={(e) => {
-                                                    const file = e.target.files?.[0] || null;
-                                                    setPetRegRecordFile(file);
-                                                    setPetRegRecordName(file?.name || '');
-                                                }}
+                                                accept={UPLOAD_ACCEPT.imageVideoDocument}
+                                                onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setPetRegRecordFile, setPetRegRecordName)}
                                                 className="w-full text-xs font-bold text-gray-460 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
                                             />
                                             {petRegRecordName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {petRegRecordName}</p>}
@@ -1074,16 +1060,26 @@ const PetMatchReview = () => {
 
                                         {/* Additional Photos bago mawala */}
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Additional Pet Photos (Before going missing)</label>
-                                            <input 
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Additional Pet Photos or Video (Before going missing)</label>
+                                            <input
                                                 type="file"
                                                 multiple
-                                                accept="image/*"
+                                                accept={UPLOAD_ACCEPT.imageVideo}
                                                 onChange={(e) => {
                                                     const files = e.target.files;
                                                     const file = files?.[0] || null;
+                                                    if (!file) {
+                                                        setAdditionalPhotosFile(null);
+                                                        setPrevPhotoName('');
+                                                        return;
+                                                    }
+                                                    const result = validateFile(file);
+                                                    if (!result.valid) {
+                                                        alert(result.error);
+                                                        return;
+                                                    }
                                                     setAdditionalPhotosFile(file);
-                                                    setPrevPhotoName(file?.name ? `${file.name}${files && files.length > 1 ? ` (+${files.length - 1} files)` : ''}` : '');
+                                                    setPrevPhotoName(`${file.name}${files && files.length > 1 ? ` (+${files.length - 1} files)` : ''}`);
                                                 }}
                                                 className="w-full text-xs font-bold text-gray-465 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
                                             />

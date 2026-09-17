@@ -1,5 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
+import {
+    PawPrint, Truck, MapPin, RefreshCw, Pill, Stethoscope, ClipboardList,
+    CheckCircle2, Cat, Dog, AlertTriangle, ScrollText, PartyPopper, Tag,
+    Building2, Settings, BarChart3, User, Phone, Info, Timer, X, Hourglass, Home
+} from 'lucide-react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 import SubdSidebar from '../../components/SubdSidebar';
@@ -88,14 +93,14 @@ const FACILITY_STATUSES = [
 const RESOLVED_IDS = new Set([3, 4, 5]);
 
 const EVENT_TYPE_META: Record<string, { icon: ReactNode; color: string }> = {
-    intake: { icon: <span>🐾</span>, color: 'bg-emerald-100 text-emerald-700' },
-    transfer: { icon: <span>🚚</span>, color: 'bg-indigo-100 text-indigo-700' },
-    relocation: { icon: <span>📍</span>, color: 'bg-indigo-100 text-indigo-700' },
-    status_change: { icon: <span>🔄</span>, color: 'bg-amber-100 text-amber-700' },
-    medical: { icon: <span>💊</span>, color: 'bg-purple-100 text-purple-600' },
-    treatment: { icon: <span>🩺</span>, color: 'bg-pink-100 text-pink-600' },
-    observation: { icon: <span>📋</span>, color: 'bg-gray-100 text-gray-600' },
-    outcome: { icon: <span>✅</span>, color: 'bg-green-100 text-green-700' },
+    intake: { icon: <PawPrint className="w-3.5 h-3.5" />, color: 'bg-emerald-100 text-emerald-700' },
+    transfer: { icon: <Truck className="w-3.5 h-3.5" />, color: 'bg-indigo-100 text-indigo-700' },
+    relocation: { icon: <MapPin className="w-3.5 h-3.5" />, color: 'bg-indigo-100 text-indigo-700' },
+    status_change: { icon: <RefreshCw className="w-3.5 h-3.5" />, color: 'bg-amber-100 text-amber-700' },
+    medical: { icon: <Pill className="w-3.5 h-3.5" />, color: 'bg-purple-100 text-purple-600' },
+    treatment: { icon: <Stethoscope className="w-3.5 h-3.5" />, color: 'bg-pink-100 text-pink-600' },
+    observation: { icon: <ClipboardList className="w-3.5 h-3.5" />, color: 'bg-gray-100 text-gray-600' },
+    outcome: { icon: <CheckCircle2 className="w-3.5 h-3.5" />, color: 'bg-green-100 text-green-700' },
 };
 
 function daysSince(dateStr: string | null): number {
@@ -128,10 +133,10 @@ function getStatusMeta(statusId: number) {
     };
 }
 
-function animalIcon(type: string | null): string {
-    if (type?.toLowerCase().includes('cat')) return '🐱';
-    if (type?.toLowerCase().includes('dog')) return '🐶';
-    return '🐾';
+function animalIcon(type: string | null, className = 'w-6 h-6'): ReactNode {
+    if (type?.toLowerCase().includes('cat')) return <Cat className={className} />;
+    if (type?.toLowerCase().includes('dog')) return <Dog className={className} />;
+    return <PawPrint className={className} />;
 }
 
 function getAnimalPhoto(animal: HoldingAnimal): string | undefined {
@@ -381,35 +386,35 @@ const SubdHoldingFacility = () => {
         {
             label: 'Total Animals Held',
             value: computedMetrics.activeTotal,
-            icon: '🐾',
+            icon: PawPrint,
             color: 'bg-orange-50 text-orange-600',
             border: 'border-orange-100',
         },
         {
             label: 'Need Treatment',
             value: computedMetrics.needTreatment,
-            icon: '💊',
+            icon: Pill,
             color: 'bg-red-50 text-red-600',
             border: 'border-red-100',
         },
         {
             label: 'Healthy / Monitored',
             value: computedMetrics.healthy,
-            icon: '✅',
+            icon: CheckCircle2,
             color: 'bg-emerald-50 text-emerald-600',
             border: 'border-emerald-100',
         },
         {
             label: computedMetrics.needsTransfer > 0 ? 'Needs Transfer' : 'Nearing Expiry',
             value: computedMetrics.needsTransfer > 0 ? computedMetrics.needsTransfer : computedMetrics.nearingExpiry,
-            icon: computedMetrics.needsTransfer > 0 ? '🚨' : '⚠️',
+            icon: computedMetrics.needsTransfer > 0 ? AlertTriangle : Hourglass,
             color: computedMetrics.needsTransfer > 0 ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600',
             border: computedMetrics.needsTransfer > 0 ? 'border-red-200 ring-1 ring-red-200' : 'border-amber-100',
         },
         {
             label: 'Past / Transferred History',
             value: computedMetrics.pastTotal,
-            icon: '📜',
+            icon: ScrollText,
             color: 'bg-indigo-50 text-indigo-600',
             border: 'border-indigo-100',
         },
@@ -417,35 +422,35 @@ const SubdHoldingFacility = () => {
         {
             label: 'Total Past Records',
             value: computedMetrics.pastTotal,
-            icon: '📜',
+            icon: ScrollText,
             color: 'bg-indigo-50 text-indigo-600',
             border: 'border-indigo-100',
         },
         {
             label: 'Transferred to Barangay',
             value: computedMetrics.transferredToBrgy,
-            icon: '🚚',
+            icon: Truck,
             color: 'bg-purple-50 text-purple-600',
             border: 'border-purple-100',
         },
         {
             label: 'Claimed by Owner',
             value: historyAnimals.filter(a => a.facility_status === 3).length,
-            icon: '🎉',
+            icon: PartyPopper,
             color: 'bg-blue-50 text-blue-600',
             border: 'border-blue-100',
         },
         {
             label: 'Other Discharges / Shelter',
             value: historyAnimals.filter(a => a.facility_status === 4 || a.facility_status === 5).length,
-            icon: '🏷️',
+            icon: Tag,
             color: 'bg-gray-100 text-gray-600',
             border: 'border-gray-200',
         },
         {
             label: 'Active in Shelter Now',
             value: computedMetrics.activeTotal,
-            icon: '🐾',
+            icon: PawPrint,
             color: 'bg-orange-50 text-orange-600',
             border: 'border-orange-100',
         },
@@ -475,8 +480,8 @@ const SubdHoldingFacility = () => {
                         {/* ── Facility Selector & Management Header ─────────── */}
                         <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 rounded-2xl bg-orange-500 text-white flex items-center justify-center text-2xl shadow-md shadow-orange-500/20">
-                                    🐾
+                                <div className="w-12 h-12 rounded-2xl bg-orange-500 text-white flex items-center justify-center shadow-md shadow-orange-500/20">
+                                    <PawPrint className="w-6 h-6" />
                                 </div>
                                 <div>
                                     <div className="flex items-center gap-2">
@@ -504,11 +509,11 @@ const SubdHoldingFacility = () => {
                                         className="w-full appearance-none bg-gray-50 hover:bg-gray-100 border-2 border-orange-200 focus:border-orange-500 text-gray-900 text-xs font-black rounded-xl px-4 py-2.5 pr-8 transition-all cursor-pointer outline-none shadow-xs"
                                     >
                                         <option value="all">
-                                            🏢 All Subdivision Facilities ({facilities.length})
+                                            All Subdivision Facilities ({facilities.length})
                                         </option>
                                         {facilities.map((fac) => (
                                             <option key={fac.landmark_id} value={fac.landmark_id}>
-                                                📍 {fac.name} {fac.capacity ? `(Cap: ${fac.capacity})` : ''}
+                                                {fac.name} {fac.capacity ? `(Cap: ${fac.capacity})` : ''}
                                             </option>
                                         ))}
                                     </select>
@@ -521,7 +526,7 @@ const SubdHoldingFacility = () => {
                                     to="/subd/settings"
                                     className="px-4 py-2.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-xs"
                                 >
-                                    <span>⚙️</span>
+                                    <Settings className="w-3.5 h-3.5" />
                                     <span>Manage Facilities</span>
                                 </Link>
                             </div>
@@ -535,12 +540,12 @@ const SubdHoldingFacility = () => {
                                         {activeFacility.name} — Status & Occupancy
                                     </p>
                                     <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600 font-semibold">
-                                        <span>📊 Type: <strong className="text-gray-900">{activeFacility.facility_type || 'Temporary Pen'}</strong></span>
+                                        <span className="inline-flex items-center gap-1"><BarChart3 className="w-3 h-3" /> Type: <strong className="text-gray-900">{activeFacility.facility_type || 'Temporary Pen'}</strong></span>
                                         {activeFacility.contact_person && (
-                                            <span>👤 Caretaker: <strong className="text-gray-900">{activeFacility.contact_person}</strong></span>
+                                            <span className="inline-flex items-center gap-1"><User className="w-3 h-3" /> Caretaker: <strong className="text-gray-900">{activeFacility.contact_person}</strong></span>
                                         )}
                                         {activeFacility.contact_number && (
-                                            <span>📞 Phone: <strong className="text-gray-900">{activeFacility.contact_number}</strong></span>
+                                            <span className="inline-flex items-center gap-1"><Phone className="w-3 h-3" /> Phone: <strong className="text-gray-900">{activeFacility.contact_number}</strong></span>
                                         )}
                                     </div>
                                 </div>
@@ -563,7 +568,7 @@ const SubdHoldingFacility = () => {
                         {facilities.length === 0 && !loading && (
                             <div className="bg-amber-50 rounded-2xl border border-amber-200 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                 <div className="flex items-center gap-3">
-                                    <span className="text-2xl">⚠️</span>
+                                    <AlertTriangle className="w-6 h-6 text-amber-600" />
                                     <div>
                                         <p className="text-xs font-black text-amber-900 uppercase tracking-wider">No Designated Holding Facility Found in Subdivision</p>
                                         <p className="text-xs text-amber-700 font-medium">Designate a landmark (e.g. Clubhouse Pet Pen, Guardhouse Temporary Unit) in Subdivision Settings so rescued pets can be placed here.</p>
@@ -585,8 +590,8 @@ const SubdHoldingFacility = () => {
                                     key={i}
                                     className={`bg-white rounded-2xl border ${m.border} shadow-sm p-5 flex items-center gap-3 hover:shadow-md transition-all`}
                                 >
-                                    <div className={`w-11 h-11 rounded-xl ${m.color} flex items-center justify-center text-lg shrink-0`}>
-                                        {m.icon}
+                                    <div className={`w-11 h-11 rounded-xl ${m.color} flex items-center justify-center shrink-0`}>
+                                        <m.icon className="w-5 h-5" />
                                     </div>
                                     <div>
                                         <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none">{m.label}</p>
@@ -601,8 +606,8 @@ const SubdHoldingFacility = () => {
                             <div className="bg-gradient-to-r from-red-500/10 via-amber-500/10 to-orange-500/5 rounded-3xl border-2 border-red-300 p-5 md:p-6 shadow-md animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-red-200/60">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-2xl bg-red-600 text-white flex items-center justify-center text-xl shadow-md shadow-red-500/30 animate-pulse shrink-0">
-                                            🚨
+                                        <div className="w-10 h-10 rounded-2xl bg-red-600 text-white flex items-center justify-center shadow-md shadow-red-500/30 animate-pulse shrink-0">
+                                            <AlertTriangle className="w-5 h-5" />
                                         </div>
                                         <div>
                                             <div className="flex items-center gap-2 flex-wrap">
@@ -640,7 +645,7 @@ const SubdHoldingFacility = () => {
                                                         {thumbImg ? (
                                                             <img src={thumbImg.startsWith('http') ? thumbImg : `http://localhost:8000${thumbImg}`} alt={animal.animal_name || 'Animal'} className="w-full h-full object-cover" />
                                                         ) : (
-                                                            <div className="w-full h-full flex items-center justify-center text-2xl">
+                                                            <div className="w-full h-full flex items-center justify-center">
                                                                 {animalIcon(animal.animal_type)}
                                                             </div>
                                                         )}
@@ -660,8 +665,8 @@ const SubdHoldingFacility = () => {
                                                         <h4 className="text-xs font-black text-gray-900 truncate mt-0.5">
                                                             {animal.animal_name || `${animal.animal_type || 'Animal'} #${animal.holding_id}`}
                                                         </h4>
-                                                        <p className="text-[10px] text-gray-500 font-medium truncate">
-                                                            {animal.breed || 'Unknown Breed'} • 📍 {animal.facility_name || animal.report_landmark || 'Facility'}
+                                                        <p className="text-[10px] text-gray-500 font-medium truncate flex items-center gap-1">
+                                                            {animal.breed || 'Unknown Breed'} • <MapPin className="w-2.5 h-2.5" /> {animal.facility_name || animal.report_landmark || 'Facility'}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -700,7 +705,7 @@ const SubdHoldingFacility = () => {
                                             : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200/50'
                                     }`}
                                 >
-                                    <span>🐾</span>
+                                    <PawPrint className="w-3.5 h-3.5" />
                                     <span>Currently In Shelter ({activeAnimals.length})</span>
                                 </button>
                                 <button
@@ -712,7 +717,7 @@ const SubdHoldingFacility = () => {
                                             : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200/50'
                                     }`}
                                 >
-                                    <span>📜</span>
+                                    <ScrollText className="w-3.5 h-3.5" />
                                     <span>Past Facility History ({historyAnimals.length})</span>
                                 </button>
                             </div>
@@ -720,11 +725,11 @@ const SubdHoldingFacility = () => {
                             <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
                                 {tabMode === 'active' ? (
                                     <span className="flex items-center gap-1.5 text-orange-700 bg-orange-50 px-3 py-1.5 rounded-xl border border-orange-100">
-                                        <span>🟢</span> Showing active pets currently residing in subdivision shelter
+                                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" /> Showing active pets currently residing in subdivision shelter
                                     </span>
                                 ) : (
                                     <span className="flex items-center gap-1.5 text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">
-                                        <span>📜</span> Showing pets previously held here (Transferred to Barangay / Claimed)
+                                        <ScrollText className="w-3.5 h-3.5" /> Showing pets previously held here (Transferred to Barangay / Claimed)
                                     </span>
                                 )}
                             </div>
@@ -831,7 +836,7 @@ const SubdHoldingFacility = () => {
                             </div>
                         ) : filtered.length === 0 ? (
                             <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center space-y-3">
-                                <div className="text-4xl">{tabMode === 'active' ? '🐾' : '📜'}</div>
+                                <div className="flex justify-center text-gray-300">{tabMode === 'active' ? <PawPrint className="w-10 h-10" /> : <ScrollText className="w-10 h-10" />}</div>
                                 <p className="text-base font-black text-gray-700">
                                     {tabMode === 'active'
                                         ? 'No animals currently held in the subdivision shelter'
@@ -878,20 +883,20 @@ const SubdHoldingFacility = () => {
                                                         }}
                                                     />
                                                 ) : (
-                                                    <div className="text-5xl opacity-40">
-                                                        🐾
+                                                    <div className="opacity-40">
+                                                        <PawPrint className="w-10 h-10" />
                                                     </div>
                                                 )}
 
                                                 <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-xs text-white px-2.5 py-1 rounded-lg text-xs font-black">
-                                                    <span>{animalIcon(animal.animal_type)}</span>
+                                                    {animalIcon(animal.animal_type, 'w-3.5 h-3.5')}
                                                     <span>#{animal.report_id}</span>
                                                 </div>
 
                                                 <div className="absolute top-3 right-3 flex items-center gap-1">
                                                     {isTransferredToBrgy ? (
-                                                        <span className="px-2.5 py-1 rounded-lg text-xs font-black border border-indigo-200 bg-indigo-50 text-indigo-700 shadow-xs">
-                                                            🚚 In Brgy Holding
+                                                        <span className="px-2.5 py-1 rounded-lg text-xs font-black border border-indigo-200 bg-indigo-50 text-indigo-700 shadow-xs inline-flex items-center gap-1">
+                                                            <Truck className="w-3 h-3" /> In Brgy Holding
                                                         </span>
                                                     ) : (
                                                         <span className={`px-2.5 py-1 rounded-lg text-xs font-black border ${statusMeta.color} bg-white shadow-xs`}>
@@ -920,7 +925,7 @@ const SubdHoldingFacility = () => {
                                                     </div>
 
                                                     <p className="text-xs text-gray-500 font-medium mt-1 flex items-center gap-1.5">
-                                                        <span>{isTransferredToBrgy ? '🏢' : '📍'}</span>
+                                                        {isTransferredToBrgy ? <Building2 className="w-3.5 h-3.5" /> : <MapPin className="w-3.5 h-3.5" />}
                                                         <span className={`truncate ${isTransferredToBrgy ? 'text-indigo-700 font-bold' : ''}`}>
                                                             {animal.facility_name || animal.report_landmark || 'Subdivision Shelter'}
                                                         </span>
@@ -937,12 +942,12 @@ const SubdHoldingFacility = () => {
                                                 <div className="space-y-2.5 pt-3 border-t border-gray-100">
                                                     {/* Stay Breakdown Pill */}
                                                     <div className="flex items-center justify-between gap-1 p-2 bg-orange-50/50 rounded-xl border border-orange-100/70 text-[10px]">
-                                                        <span className="font-bold text-orange-900 truncate">
-                                                            🏡 Subd: <strong className="text-orange-700">{animal.subd_duration_display || `${daysSince(animal.intake_date)}d`}</strong>
+                                                        <span className="font-bold text-orange-900 truncate inline-flex items-center gap-1">
+                                                            <Home className="w-2.5 h-2.5" /> Subd: <strong className="text-orange-700">{animal.subd_duration_display || `${daysSince(animal.intake_date)}d`}</strong>
                                                         </span>
                                                         <span className="text-gray-300">|</span>
-                                                        <span className="font-bold text-orange-900 truncate">
-                                                            🏢 Brgy: <strong className="text-orange-700">{animal.brgy_duration_display || '0 days'}</strong>
+                                                        <span className="font-bold text-orange-900 truncate inline-flex items-center gap-1">
+                                                            <Building2 className="w-2.5 h-2.5" /> Brgy: <strong className="text-orange-700">{animal.brgy_duration_display || '0 days'}</strong>
                                                         </span>
                                                     </div>
 
@@ -951,11 +956,11 @@ const SubdHoldingFacility = () => {
                                                         {!isResolved && !isTransferredToBrgy && (
                                                             isOverdue ? (
                                                                 <span className="text-red-600 font-black inline-flex items-center gap-1 animate-pulse">
-                                                                    🚨 Needs Transfer ({days}/{impoundStayDuration}d)
+                                                                    <AlertTriangle className="w-3 h-3" /> Needs Transfer ({days}/{impoundStayDuration}d)
                                                                 </span>
                                                             ) : (
-                                                                <span className={daysLeft <= 2 ? 'text-amber-600 font-extrabold' : 'text-gray-500'}>
-                                                                    ⏳ {daysLeft}d left
+                                                                <span className={`inline-flex items-center gap-1 ${daysLeft <= 2 ? 'text-amber-600 font-extrabold' : 'text-gray-500'}`}>
+                                                                    <Hourglass className="w-3 h-3" /> {daysLeft}d left
                                                                 </span>
                                                             )
                                                         )}
@@ -977,7 +982,7 @@ const SubdHoldingFacility = () => {
                                                                 : 'bg-orange-50 hover:bg-orange-100 text-orange-700'
                                                         }`}
                                                     >
-                                                        <span>{isHistoryItem ? '📜' : '📋'}</span>
+                                                        {isHistoryItem ? <ScrollText className="w-3.5 h-3.5" /> : <ClipboardList className="w-3.5 h-3.5" />}
                                                         <span>{isHistoryItem ? 'View Past History & Custody Logs' : 'View Details & Log Care'}</span>
                                                     </button>
                                                 </div>
@@ -1003,7 +1008,7 @@ const SubdHoldingFacility = () => {
                             {/* Header */}
                             <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent">
                                 <div className="flex items-center gap-3">
-                                    <span className="text-3xl">{animalIcon(selected.animal_type)}</span>
+                                    {animalIcon(selected.animal_type, 'w-8 h-8')}
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <h2 className="text-lg font-black text-gray-900">
@@ -1025,14 +1030,14 @@ const SubdHoldingFacility = () => {
                                     onClick={() => setSelected(null)}
                                     className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 font-bold transition-all"
                                 >
-                                    ✕
+                                    <X className="w-4 h-4" />
                                 </button>
                             </div>
 
                             {/* History Banner Notice if Transferred */}
                             {isSelectedInHistory && (
                                 <div className="bg-indigo-50 border-b border-indigo-100 px-6 py-3 flex items-center gap-3">
-                                    <span className="text-xl">ℹ️</span>
+                                    <Info className="w-5 h-5 text-indigo-600" />
                                     <div className="text-xs text-indigo-900">
                                         <p className="font-black uppercase tracking-wider">Past Facility Record (Read-Only)</p>
                                         <p className="text-indigo-700 font-medium">
@@ -1066,8 +1071,8 @@ const SubdHoldingFacility = () => {
                                         {!isSelectedInHistory && daysSince(selected.intake_date) >= impoundStayDuration && (
                                             <div className="bg-red-50/90 border-2 border-red-300 rounded-2xl p-4 shadow-xs space-y-2 animate-in fade-in duration-200">
                                                 <div className="flex items-start gap-3">
-                                                    <div className="w-9 h-9 rounded-xl bg-red-600 text-white flex items-center justify-center text-lg shrink-0 shadow-sm animate-pulse">
-                                                        🚨
+                                                    <div className="w-9 h-9 rounded-xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
+                                                        <AlertTriangle className="w-4 h-4" />
                                                     </div>
                                                     <div>
                                                         <div className="flex items-center gap-2">
@@ -1088,15 +1093,15 @@ const SubdHoldingFacility = () => {
                                         {/* Stay Duration Highlight Banner */}
                                         <div className="bg-gradient-to-br from-orange-50/80 via-amber-50/40 to-white p-4 rounded-2xl border border-orange-100 shadow-sm">
                                             <p className="text-[10px] font-black text-orange-950 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
-                                                <span>⏱️</span> Stay Duration Breakdown
+                                                <Timer className="w-3.5 h-3.5" /> Stay Duration Breakdown
                                             </p>
                                             <div className="grid grid-cols-3 gap-2.5">
                                                 <div className="bg-white/90 p-3 rounded-xl border border-orange-100 shadow-2xs">
-                                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">🏡 Subd Stay</p>
+                                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1"><Home className="w-2.5 h-2.5" /> Subd Stay</p>
                                                     <p className="text-sm font-black text-orange-700 mt-0.5">{selected.subd_duration_display || `${daysSince(selected.intake_date)}d`}</p>
                                                 </div>
                                                 <div className="bg-white/90 p-3 rounded-xl border border-orange-100 shadow-2xs">
-                                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">🏢 Brgy Stay</p>
+                                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1"><Building2 className="w-2.5 h-2.5" /> Brgy Stay</p>
                                                     <p className="text-sm font-black text-orange-700 mt-0.5">{selected.brgy_duration_display || '0 days'}</p>
                                                 </div>
                                                 <div className="bg-orange-600 text-white p-3 rounded-xl shadow-xs">
@@ -1158,7 +1163,7 @@ const SubdHoldingFacility = () => {
                                                     isSelectedInHistory ? 'w-full' : 'px-5'
                                                 } py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-black rounded-xl text-xs transition-all text-center flex items-center justify-center gap-1.5`}
                                             >
-                                                <span>📋</span>
+                                                <ClipboardList className="w-3.5 h-3.5" />
                                                 <span>Open Original Report</span>
                                             </Link>
                                         </div>
@@ -1292,10 +1297,10 @@ const SubdHoldingFacility = () => {
                                     onChange={e => setTimelineForm({ ...timelineForm, event_type: e.target.value })}
                                     className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-bold"
                                 >
-                                    <option value="observation">📋 General Observation</option>
-                                    <option value="medical">💊 Medical Checkup</option>
-                                    <option value="treatment">🩺 Treatment Given</option>
-                                    <option value="status_change">🔄 Status Update</option>
+                                    <option value="observation">General Observation</option>
+                                    <option value="medical">Medical Checkup</option>
+                                    <option value="treatment">Treatment Given</option>
+                                    <option value="status_change">Status Update</option>
                                 </select>
                             </div>
 

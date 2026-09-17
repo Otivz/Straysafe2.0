@@ -27,6 +27,10 @@ class PetClaimStatusUpdate(BaseModel):
     status: str
     remarks: Optional[str] = None
 
+class ClaimEvidenceSubmit(BaseModel):
+    file_url: str
+    document_type: Optional[str] = None
+
 class PetClaimUpdate(BaseModel):
     status: Optional[str] = None
     remarks: Optional[str] = None

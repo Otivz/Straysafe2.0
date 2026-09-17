@@ -7,6 +7,7 @@ import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import MapComponent from '../../components/MapComponent';
 import Button from '../../components/Button';
 import Select from '../../components/Dropdown';
+import MediaPreview from '../../components/Shared/MediaPreview';
 import { getCachedData, setCachedData } from '../../utils/cache';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -865,7 +866,7 @@ const BrgyPetClaims = () => {
                                                     <div className="grid grid-cols-2 gap-1.5">
                                                         {selectedClaim.previous_photos.slice(0, 4).map((photo: string, i: number) => (
                                                             <div key={i} onClick={() => setLightboxImage(photo)} className="h-16 rounded-lg overflow-hidden border border-gray-100 bg-gray-50 cursor-pointer group">
-                                                                <img src={photo} alt={`prev-${i}`} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                                                                <MediaPreview url={photo} alt={`prev-${i}`} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
                                                             </div>
                                                         ))}
                                                     </div>
@@ -883,7 +884,7 @@ const BrgyPetClaims = () => {
                                                     <div className="grid grid-cols-2 gap-1.5">
                                                         {selectedClaim.owner_pet_photos.slice(0, 4).map((photo: string, i: number) => (
                                                             <div key={i} onClick={() => setLightboxImage(photo)} className="h-16 rounded-lg overflow-hidden border border-gray-100 bg-gray-50 cursor-pointer group">
-                                                                <img src={photo} alt={`owner-pet-${i}`} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                                                                <MediaPreview url={photo} alt={`owner-pet-${i}`} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
                                                             </div>
                                                         ))}
                                                     </div>
@@ -1186,7 +1187,7 @@ const BrgyPetClaims = () => {
                             Close
                         </button>
                         <div className="w-full max-h-[80vh] rounded-2xl overflow-hidden bg-black flex items-center justify-center shadow-2xl border border-white/10">
-                            <img src={lightboxImage} className="max-w-full max-h-[80vh] object-contain" alt="Preview" />
+                            <MediaPreview url={lightboxImage} className="max-w-full max-h-[80vh] object-contain" alt="Preview" />
                         </div>
                     </div>
                 </div>

@@ -1,8 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
-import os
-import uuid
 
 from app.database import get_db
 from app.models.pet_claim import PetClaim
@@ -11,8 +9,8 @@ from app.models.user import User
 from app.models.report import Report, StatusHistory
 from app.models.report_match import ReportMatch
 from app.models.notification import Notification
-from app.schemas.pet_claim import PetClaimCreate, PetClaimResponse, PetClaimStatusUpdate
-from app.utils.cloudinary_config import upload_to_cloudinary
+from app.schemas.pet_claim import PetClaimCreate, PetClaimResponse, PetClaimStatusUpdate, ClaimEvidenceSubmit
+from app.utils.uploads import validate_cloudinary_url
 from app.utils.audit import log_activity
 
 router = APIRouter(prefix="/claims", tags=["claims"])
@@ -158,25 +156,22 @@ def create_or_update_claim(claim_in: PetClaimCreate, db: Session = Depends(get_d
     return new_claim
 
 @router.post("/{claim_id}/evidence", response_model=PetClaimResponse)
-async def upload_claim_evidence(
+def upload_claim_evidence(
     claim_id: int,
-    file: UploadFile = File(...),
-    document_type: Optional[str] = None,
+    payload: ClaimEvidenceSubmit,
     db: Session = Depends(get_db)
 ):
     claim = db.query(PetClaim).filter(PetClaim.claim_id == claim_id).first()
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
 
-    try:
-        content = await file.read()
-        file_extension = os.path.splitext(file.filename or "")[1]
-        unique_filename = f"claim_{claim_id}_{uuid.uuid4()}{file_extension}"
-        
-        file_url = upload_to_cloudinary(content, folder="claims", filename=unique_filename)
-        if not file_url:
-            raise Exception("Upload to Cloudinary failed")
+    # File already lives in Cloudinary (browser uploaded directly via the
+    # unsigned preset); just verify the URL is genuinely ours before trusting it.
+    validate_cloudinary_url(payload.file_url, allowed={'Image', 'Video', 'Document'})
+    file_url = payload.file_url
+    document_type = payload.document_type
 
+    try:
         if document_type == "vaccine_card":
             claim.vaccine_card_url = file_url
         elif document_type == "vet_record":
@@ -191,7 +186,7 @@ async def upload_claim_evidence(
         claim.status = "Pending Review"
         db.commit()
         db.refresh(claim)
-        
+
         # Notify leaders or confirm upload
         return claim
     except Exception as e:

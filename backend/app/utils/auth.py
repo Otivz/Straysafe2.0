@@ -6,11 +6,19 @@ from typing import Optional
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+from dotenv import load_dotenv
 
 from app.database import get_db
 from app.models.user import User
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "straysafe_super_secret_jwt_key_2026_safe_hash_897162")
+# Load environment variables from the project root if needed
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), '.env')
+load_dotenv(dotenv_path=env_path)
+
+SECRET_KEY = os.getenv("JWT_SECRET_KEY") or os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY or SECRET_KEY environment variable is required and must not be empty.")
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
 

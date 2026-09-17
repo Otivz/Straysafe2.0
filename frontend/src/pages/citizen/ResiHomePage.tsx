@@ -20,7 +20,12 @@ import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import SuccessModal from '../../components/Modals/SuccessModal';
 import { getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
 import { createLandmarkPinIcon, getLandmarkCategory } from '../../utils/landmarkIcons';
-import { Eye, Shield, MapPin } from 'lucide-react';
+import {
+    Eye, Shield, MapPin, Siren, PawPrint, Palette, Tag, User, Gift, FileText,
+    Megaphone, MessageCircle, AlertTriangle, Camera, Video, X, Bandage, Dog, Cat,
+    Bot, Check, Map, Pin, Home, Rocket, Search, Users, Ban, Sparkles, Ruler, Phone,
+    ClipboardList, Star, Info, LifeBuoy
+} from 'lucide-react';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -198,7 +203,7 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
             <div className="space-y-3.5 my-3">
                 {/* Header / Banner notice */}
                 <div className="flex items-center gap-2.5 p-3 px-4 bg-gradient-to-r from-red-50 to-orange-50 rounded-2xl border border-red-200/80 text-red-950 shadow-xs">
-                    <span className="text-lg animate-pulse shrink-0">🚨</span>
+                    <Siren className="w-5 h-5 animate-pulse shrink-0" />
                     <p className="text-xs sm:text-sm font-black uppercase tracking-tight">
                         {headerLine.replace('[LOST PET REPORT]', '').trim() || 'Missing Registered Pet Alert'}
                     </p>
@@ -223,13 +228,13 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
                                         className={`p-3 rounded-2xl bg-white border border-stone-100 shadow-2xs ${isWide ? 'sm:col-span-2' : ''}`}
                                     >
                                         <p className="text-[9px] font-black text-amber-800 uppercase tracking-widest mb-1 flex items-center gap-1">
-                                            {key.toLowerCase().includes('last seen') && <span>📍</span>}
-                                            {key.toLowerCase().includes('breed') && <span>🐾</span>}
-                                            {key.toLowerCase().includes('color') && <span>🎨</span>}
-                                            {key.toLowerCase().includes('collar') && <span>🏷️</span>}
-                                            {key.toLowerCase().includes('owner') && <span>👤</span>}
-                                            {key.toLowerCase().includes('reward') && <span>🎁</span>}
-                                            {key.toLowerCase().includes('circumstances') && <span>📝</span>}
+                                            {key.toLowerCase().includes('last seen') && <MapPin className="w-3 h-3" />}
+                                            {key.toLowerCase().includes('breed') && <PawPrint className="w-3 h-3" />}
+                                            {key.toLowerCase().includes('color') && <Palette className="w-3 h-3" />}
+                                            {key.toLowerCase().includes('collar') && <Tag className="w-3 h-3" />}
+                                            {key.toLowerCase().includes('owner') && <User className="w-3 h-3" />}
+                                            {key.toLowerCase().includes('reward') && <Gift className="w-3 h-3" />}
+                                            {key.toLowerCase().includes('circumstances') && <FileText className="w-3 h-3" />}
                                             <span>{key}</span>
                                         </p>
                                         <p className="text-xs sm:text-[13px] font-bold text-gray-900 leading-snug">
@@ -250,7 +255,7 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
                 {/* Closing / Callout */}
                 {closingLines.length > 0 && (
                     <div className="p-3.5 bg-amber-500/10 rounded-2xl border border-amber-300/60 text-xs font-bold text-amber-950 flex items-start gap-2.5 shadow-2xs">
-                        <span className="text-amber-600 text-base shrink-0">📢</span>
+                        <Megaphone className="w-4 h-4 text-amber-600 shrink-0" />
                         <p className="leading-relaxed">
                             {closingLines.join(' ')}
                         </p>
@@ -684,7 +689,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
         const fetchBreeds = async () => {
             try {
                 if (formData.animalType === 'Dog') {
-                    const apiKey = import.meta.env.VITE_DOG_API_KEY || 'live_J9RdXZq7OGRCUigDyq3y8rGqcG3Brarp46ohljsIMO572q0KYcW1alD0z88OADKs';
+                    const apiKey = import.meta.env.VITE_DOG_API_KEY || '';
                     const res = await fetch('https://api.thedogapi.com/v1/breeds', {
                         headers: apiKey ? { 'x-api-key': apiKey } : {}
                     });
@@ -695,7 +700,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                         throw new Error('API failed');
                     }
                 } else if (formData.animalType === 'Cat') {
-                    const apiKey = import.meta.env.VITE_CAT_API_KEY || 'live_GqD4rtVuossncqXxRcSvcmptrS9rD7NFoigE6UP59wNG69yZ0YhLh35HRma3ZbEm';
+                    const apiKey = import.meta.env.VITE_CAT_API_KEY || '';
                     const res = await fetch('https://api.thecatapi.com/v1/breeds', {
                         headers: apiKey ? { 'x-api-key': apiKey } : {}
                     });
@@ -754,8 +759,8 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                     const isDog = formData.animalType === 'Dog';
                     const baseUrl = isDog ? 'https://api.thedogapi.com' : 'https://api.thecatapi.com';
                     const apiKey = isDog
-                        ? (import.meta.env.VITE_DOG_API_KEY || 'live_J9RdXZq7OGRCUigDyq3y8rGqcG3Brarp46ohljsIMO572q0KYcW1alD0z88OADKs')
-                        : (import.meta.env.VITE_CAT_API_KEY || 'live_GqD4rtVuossncqXxRcSvcmptrS9rD7NFoigE6UP59wNG69yZ0YhLh35HRma3ZbEm');
+                        ? (import.meta.env.VITE_DOG_API_KEY || '')
+                        : (import.meta.env.VITE_CAT_API_KEY || '');
 
                     const res = await fetch(`${baseUrl}/v1/images/search?breed_id=${matchedBreed.id}`, {
                         headers: apiKey ? { 'x-api-key': apiKey } : {}
@@ -1566,8 +1571,8 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
                         <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300">
                             <div className="p-8 pb-6 flex flex-col items-center border-b border-gray-50 bg-gradient-to-b from-yellow-50/50 to-white">
-                                <div className="w-20 h-20 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center text-4xl mb-4 shadow-sm border-4 border-white">
-                                    ⚠️
+                                <div className="w-20 h-20 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mb-4 shadow-sm border-4 border-white">
+                                    <AlertTriangle className="w-10 h-10" />
                                 </div>
                                 <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tight text-center">Subdivision Notice</h3>
                                 <p className="text-[10px] font-black text-yellow-600 uppercase tracking-widest mt-1 bg-yellow-100 px-3 py-1 rounded-full">
@@ -1647,22 +1652,22 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                         <span className="px-2.5 py-0.5 rounded-full bg-orange-100 text-[#F97316] font-black text-[10px] uppercase tracking-wider">
                                             Step {reportStep} of 10
                                         </span>
-                                        {reportStep === 1 && <span className="text-[10px] font-black text-red-500">⭐ Required</span>}
-                                        {reportStep === 2 && <span className="text-[10px] font-black text-red-500">⭐ Required</span>}
-                                        {reportStep === 5 && <span className="text-[10px] font-black text-red-500">⭐ Required</span>}
-                                        {reportStep === 6 && <span className="text-[10px] font-black text-red-500">⭐ Required</span>}
+                                        {reportStep === 1 && <span className="text-[10px] font-black text-red-500 inline-flex items-center gap-0.5"><Star className="w-2.5 h-2.5" /> Required</span>}
+                                        {reportStep === 2 && <span className="text-[10px] font-black text-red-500 inline-flex items-center gap-0.5"><Star className="w-2.5 h-2.5" /> Required</span>}
+                                        {reportStep === 5 && <span className="text-[10px] font-black text-red-500 inline-flex items-center gap-0.5"><Star className="w-2.5 h-2.5" /> Required</span>}
+                                        {reportStep === 6 && <span className="text-[10px] font-black text-red-500 inline-flex items-center gap-0.5"><Star className="w-2.5 h-2.5" /> Required</span>}
                                     </div>
-                                    <h2 className="text-xl md:text-2xl font-black text-[#1a1208] uppercase tracking-tight mt-1">
-                                        {reportStep === 1 && "📝 Step 1: Upload Media"}
-                                        {reportStep === 2 && "🏷️ Step 2: Report Category"}
-                                        {reportStep === 3 && "🤖 Step 3: AI Animal Analysis"}
-                                        {reportStep === 4 && "🐾 Step 4: Animal Details"}
-                                        {reportStep === 5 && "⚠️ Step 5: Observed Condition"}
-                                        {reportStep === 6 && "📍 Step 6: Location & Pin"}
-                                        {reportStep === 7 && "ℹ️ Step 7: Additional Information"}
-                                        {reportStep === 8 && "👁️ Step 8: Report Visibility"}
-                                        {reportStep === 9 && "📋 Step 9: Review Report"}
-                                        {reportStep === 10 && "🚀 Step 10: Submit Report"}
+                                    <h2 className="text-xl md:text-2xl font-black text-[#1a1208] uppercase tracking-tight mt-1 flex items-center gap-2">
+                                        {reportStep === 1 && <><FileText className="w-5 h-5 shrink-0" /> Step 1: Upload Media</>}
+                                        {reportStep === 2 && <><Tag className="w-5 h-5 shrink-0" /> Step 2: Report Category</>}
+                                        {reportStep === 3 && <><Bot className="w-5 h-5 shrink-0" /> Step 3: AI Animal Analysis</>}
+                                        {reportStep === 4 && <><PawPrint className="w-5 h-5 shrink-0" /> Step 4: Animal Details</>}
+                                        {reportStep === 5 && <><AlertTriangle className="w-5 h-5 shrink-0" /> Step 5: Observed Condition</>}
+                                        {reportStep === 6 && <><MapPin className="w-5 h-5 shrink-0" /> Step 6: Location & Pin</>}
+                                        {reportStep === 7 && <><Info className="w-5 h-5 shrink-0" /> Step 7: Additional Information</>}
+                                        {reportStep === 8 && <><Eye className="w-5 h-5 shrink-0" /> Step 8: Report Visibility</>}
+                                        {reportStep === 9 && <><ClipboardList className="w-5 h-5 shrink-0" /> Step 9: Review Report</>}
+                                        {reportStep === 10 && <><Rocket className="w-5 h-5 shrink-0" /> Step 10: Submit Report</>}
                                     </h2>
                                 </div>
                                 <button
@@ -1700,7 +1705,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                 className="py-5 px-4 bg-orange-50/50 border-2 border-dashed border-orange-200 hover:border-orange-400 rounded-3xl flex flex-col items-center justify-center gap-2 transition-all group"
                                             >
                                                 <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-[#F97316] group-hover:scale-110 transition-transform">
-                                                    📷
+                                                    <Camera className="w-6 h-6" />
                                                 </div>
                                                 <span className="text-xs font-black text-[#1a1208] uppercase tracking-wider">Take / Upload Photos</span>
                                             </button>
@@ -1711,7 +1716,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                 className="py-5 px-4 bg-gray-50 border-2 border-dashed border-gray-200 hover:border-gray-300 rounded-3xl flex flex-col items-center justify-center gap-2 transition-all group"
                                             >
                                                 <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-gray-500 group-hover:scale-110 transition-transform">
-                                                    🎥
+                                                    <Video className="w-6 h-6" />
                                                 </div>
                                                 <span className="text-xs font-black text-gray-700 uppercase tracking-wider">Upload Video (Optional)</span>
                                             </button>
@@ -1766,7 +1771,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                                 }}
                                                                 className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold"
                                                             >
-                                                                ✕
+                                                                <X className="w-3 h-3" />
                                                             </button>
                                                         </div>
                                                     ))}
@@ -1782,11 +1787,11 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                         <p className="text-xs font-bold text-gray-500">Why are you reporting this animal?</p>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                             {[
-                                                { id: 1, name: 'Injured Animal', icon: '🩹', desc: 'Wounded, bleeding, or physically hurt' },
-                                                { id: 2, name: 'Aggressive Stray', icon: '⚠️', desc: 'Biting, barking aggressively, or chasing people' },
-                                                { id: 3, name: 'Possible Rabies Risk', icon: '🚨', desc: 'Foaming at mouth, disorientation, erratic behavior' },
-                                                { id: 4, name: 'Roaming', icon: '🐕', desc: 'Stray Roaming in the Neighborhood' },
-                                                { id: 5, name: 'Animal Rescue Needed', icon: '🆘', desc: 'Trapped, sick/weak, or in general distress' },
+                                                { id: 1, name: 'Injured Animal', icon: Bandage, desc: 'Wounded, bleeding, or physically hurt' },
+                                                { id: 2, name: 'Aggressive Stray', icon: AlertTriangle, desc: 'Biting, barking aggressively, or chasing people' },
+                                                { id: 3, name: 'Possible Rabies Risk', icon: Siren, desc: 'Foaming at mouth, disorientation, erratic behavior' },
+                                                { id: 4, name: 'Roaming', icon: Dog, desc: 'Stray Roaming in the Neighborhood' },
+                                                { id: 5, name: 'Animal Rescue Needed', icon: LifeBuoy, desc: 'Trapped, sick/weak, or in general distress' },
                                             ].map((cat) => (
                                                 <label
                                                     key={cat.id}
@@ -1805,7 +1810,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                     />
                                                     <div>
                                                         <div className="flex items-center gap-1.5">
-                                                            <span className="text-sm">{cat.icon}</span>
+                                                            <cat.icon className="w-4 h-4 text-[#F97316]" />
                                                             <span className="text-xs font-black text-[#1a1208]">{cat.name}</span>
                                                         </div>
                                                         <p className="text-[10px] font-bold text-gray-400 mt-0.5">{cat.desc}</p>
@@ -1829,8 +1834,8 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                             </div>
                                         ) : aiAnalysisResult && !aiAnalysisResult.animalDetected ? (
                                             <div className="p-6 bg-red-50/80 border-2 border-red-200 rounded-3xl space-y-5 text-center animate-in fade-in">
-                                                <div className="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto text-2xl shadow-sm border border-red-200">
-                                                    ⚠️
+                                                <div className="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto shadow-sm border border-red-200">
+                                                    <AlertTriangle className="w-7 h-7" />
                                                 </div>
                                                 <div>
                                                     <h4 className="text-sm font-black uppercase tracking-wider text-red-900">
@@ -1843,7 +1848,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
 
                                                 <div className="p-4 bg-white rounded-2xl border border-red-100 text-left text-xs space-y-2 shadow-xs">
                                                     <p className="font-black text-red-800 flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
-                                                        <span>📷</span> Photo Requirements:
+                                                        <Camera className="w-3.5 h-3.5" /> Photo Requirements:
                                                     </p>
                                                     <ul className="list-disc list-inside space-y-1 text-gray-600 text-[11px] font-bold pl-1">
                                                         <li>Ensure the stray dog or cat is clearly in frame and focused.</li>
@@ -1856,16 +1861,16 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                     <button
                                                         type="button"
                                                         onClick={() => setReportStep(1)}
-                                                        className="px-5 py-3.5 bg-red-600 hover:bg-red-700 text-white font-black text-[11px] uppercase tracking-wider rounded-2xl transition-all shadow-md active:scale-95"
+                                                        className="px-5 py-3.5 bg-red-600 hover:bg-red-700 text-white font-black text-[11px] uppercase tracking-wider rounded-2xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5"
                                                     >
-                                                        ← Upload Clear Animal Photo
+                                                        <ArrowLeft className="w-3.5 h-3.5" /> Upload Clear Animal Photo
                                                     </button>
                                                     <button
                                                         type="button"
                                                         onClick={() => setReportStep(4)}
-                                                        className="px-5 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-black text-[11px] uppercase tracking-wider rounded-2xl transition-all"
+                                                        className="px-5 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-black text-[11px] uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-1.5"
                                                     >
-                                                        Continue Manually →
+                                                        Continue Manually <ArrowRight className="w-3.5 h-3.5" />
                                                     </button>
                                                 </div>
                                             </div>
@@ -1873,8 +1878,8 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                             <div className="p-5 bg-orange-50/60 border border-orange-200 rounded-3xl space-y-4">
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-2xl bg-[#F97316] text-white flex items-center justify-center font-black text-lg shadow-md">
-                                                            🤖
+                                                        <div className="w-10 h-10 rounded-2xl bg-[#F97316] text-white flex items-center justify-center shadow-md">
+                                                            <Bot className="w-5 h-5" />
                                                         </div>
                                                         <div>
                                                             <h4 className="text-xs font-black uppercase tracking-wider text-[#1a1208]">AI Analysis Suggestions</h4>
@@ -1882,7 +1887,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                         </div>
                                                     </div>
                                                     <span className="px-3 py-1 bg-emerald-100 text-emerald-700 font-black text-[9px] uppercase tracking-wider rounded-full flex items-center gap-1 border border-emerald-200">
-                                                        ✓ {formData.animalType} Detected
+                                                        <Check className="w-3 h-3" /> {formData.animalType} Detected
                                                     </span>
                                                 </div>
 
@@ -2094,7 +2099,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                 {/* STEP 5: Observed Condition */}
                                 {reportStep === 5 && (
                                     <div className="space-y-4 animate-in fade-in duration-300">
-                                        <p className="text-xs font-bold text-gray-500">Select the condition that best describes the animal ⭐</p>
+                                        <p className="text-xs font-bold text-gray-500 flex items-center gap-1">Select the condition that best describes the animal <Star className="w-3 h-3" /></p>
                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                             {[
                                                 'Healthy', 'Injured', 'Bleeding', 'Limping', 'Weak',
@@ -2213,9 +2218,9 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                     <button
                                                         type="button"
                                                         onClick={handleGetUseCurrentLocation}
-                                                        className="px-3 py-2 bg-white border border-orange-200 text-[#F97316] rounded-2xl text-[11px] font-black uppercase tracking-wider hover:bg-orange-50 transition-all cursor-pointer"
+                                                        className="px-3 py-2 bg-white border border-orange-200 text-[#F97316] rounded-2xl text-[11px] font-black uppercase tracking-wider hover:bg-orange-50 transition-all cursor-pointer flex items-center gap-1.5"
                                                     >
-                                                        📍 Use GPS
+                                                        <MapPin className="w-3.5 h-3.5" /> Use GPS
                                                     </button>
                                                     <button
                                                         type="button"
@@ -2223,9 +2228,9 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                             setTempLandmark(formData.landmark);
                                                             setIsMapPickerOpen(true);
                                                         }}
-                                                        className="px-4 py-2 bg-[#F97316] text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-sm hover:scale-105 transition-all cursor-pointer"
+                                                        className="px-4 py-2 bg-[#F97316] text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-sm hover:scale-105 transition-all cursor-pointer flex items-center gap-1.5"
                                                     >
-                                                        🗺️ Map Pin
+                                                        <Map className="w-3.5 h-3.5" /> Map Pin
                                                     </button>
                                                 </div>
                                             </div>
@@ -2268,10 +2273,10 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                     </button>
                                                 </div>
                                                 <div className="flex items-center justify-between pt-1 text-xs">
-                                                    <span className="text-[10px] font-bold text-gray-500">
+                                                    <span className="text-[10px] font-bold text-gray-500 inline-flex items-center gap-1">
                                                         {formData.securedLocationMode === 'with_animal'
-                                                            ? '📍 With animal at current location'
-                                                            : '📌 Pinned holding spot on map'}
+                                                            ? <><MapPin className="w-3 h-3 shrink-0" /> With animal at current location</>
+                                                            : <><Pin className="w-3 h-3 shrink-0" /> Pinned holding spot on map</>}
                                                     </span>
                                                     <span className="font-mono text-[11px] font-black text-emerald-700">
                                                         {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
@@ -2308,8 +2313,8 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
 
                                             {landmarks.length > 0 && (
                                                 <div className="pt-1">
-                                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">
-                                                        📍 Pick From Registered Landmarks:
+                                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1 mb-1.5">
+                                                        <MapPin className="w-3 h-3" /> Pick From Registered Landmarks:
                                                     </span>
                                                     <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
                                                         {landmarks.map((lm) => (
@@ -2386,8 +2391,10 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                             <div className="flex justify-between py-1 border-b border-gray-100"><span className="text-gray-400">Category:</span> <span>{formData.category || 'Injured Animal'}</span></div>
                                             <div className="flex justify-between py-1 border-b border-gray-100">
                                                 <span className="text-gray-400">Animal Custody:</span> 
-                                                <span className={`font-black ${formData.custodyStatus === 'Secured' ? 'text-emerald-600' : 'text-[#F97316]'}`}>
-                                                    {formData.custodyStatus === 'Secured' ? '🏠 Secured in Safe Place' : '👁️ Sighting Only (Not Touched)'}
+                                                <span className={`font-black inline-flex items-center gap-1 ${formData.custodyStatus === 'Secured' ? 'text-emerald-600' : 'text-[#F97316]'}`}>
+                                                    {formData.custodyStatus === 'Secured'
+                                                        ? <><Home className="w-3.5 h-3.5" /> Secured in Safe Place</>
+                                                        : <><Eye className="w-3.5 h-3.5" /> Sighting Only (Not Touched)</>}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between py-1 border-b border-gray-100"><span className="text-gray-400">Location:</span> <span>{formData.landmark || resolvedAddress || 'Selera Homes'}</span></div>
@@ -2400,8 +2407,8 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                 {/* STEP 10: Submit Report */}
                                 {reportStep === 10 && (
                                     <div className="space-y-6 text-center animate-in fade-in duration-300 py-4">
-                                        <div className="w-16 h-16 bg-orange-100 text-[#F97316] rounded-3xl flex items-center justify-center text-2xl mx-auto shadow-md">
-                                            🚀
+                                        <div className="w-16 h-16 bg-orange-100 text-[#F97316] rounded-3xl flex items-center justify-center mx-auto shadow-md">
+                                            <Rocket className="w-8 h-8" />
                                         </div>
                                         <div>
                                             <h3 className="text-lg font-black uppercase tracking-tight text-[#1a1208]">Ready to Submit</h3>
@@ -2496,7 +2503,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                 <div className="space-y-3 font-semibold text-[#1a1208]">
                                     <div className="flex items-center justify-between py-1.5 border-b border-gray-100/50">
                                         <div className="flex items-center gap-3">
-                                            <span className="text-[#F97316] font-black text-sm">✓</span>
+                                            <Check className="w-4 h-4 text-[#F97316] shrink-0" />
                                             <span className="text-xs">
                                                 Animal Type: <strong className="uppercase font-black text-[#F97316] ml-1">{revertAnimalType ? animalTypeValidation.user_animal_type : animalTypeValidation.ai_animal_type}</strong>
                                                 {revertAnimalType && <span className="ml-2 text-[9px] text-gray-400 font-bold italic">(reverted)</span>}
@@ -2511,7 +2518,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                     </div>
                                     <div className="flex items-center justify-between py-1.5 border-b border-gray-100/50">
                                         <div className="flex items-center gap-3">
-                                            <span className="text-[#F97316] font-black text-sm">✓</span>
+                                            <Check className="w-4 h-4 text-[#F97316] shrink-0" />
                                             <span className="text-xs flex items-center gap-2">
                                                 Colors Detected:
                                                 {!revertColors && <span className="inline-block w-3.5 h-3.5 rounded-full border border-gray-200 shadow-sm shrink-0" style={{ background: getSwatchStyle(animalTypeValidation.ai_dominant_color) }} />}
@@ -2528,7 +2535,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                     </div>
                                     <div className="flex items-center justify-between py-1.5 border-b border-gray-100/50">
                                         <div className="flex items-center gap-3">
-                                            <span className="text-[#F97316] font-black text-sm">✓</span>
+                                            <Check className="w-4 h-4 text-[#F97316] shrink-0" />
                                             <span className="text-xs">
                                                 Size: <strong className="uppercase font-black text-[#F97316] ml-1">{revertSize ? animalTypeValidation.user_estimated_size : animalTypeValidation.ai_estimated_size}</strong>
                                                 {revertSize && <span className="ml-2 text-[9px] text-gray-400 font-bold italic">(reverted)</span>}
@@ -2589,7 +2596,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                             <div className="flex flex-col items-center justify-center gap-6">
                                 <div className="relative flex items-center justify-center">
                                     <div className="w-16 h-16 rounded-full border-4 border-orange-100 border-t-[#F97316] animate-spin" />
-                                    <div className="absolute text-xl">🔍</div>
+                                    <Search className="absolute w-5 h-5 text-[#F97316]" />
                                 </div>
                                 <div>
                                     <h3 className="text-lg font-black uppercase tracking-tight text-[#1a1208] mb-1">AI Scan Active</h3>
@@ -2695,8 +2702,8 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                         <div className="absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setNoAnimalModal({ show: false, message: '' })} />
                         <div className="relative w-full max-w-md bg-white rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 p-10 text-[#1a1208] border border-gray-50 text-center">
                             <div className="mb-6">
-                                <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mb-5 mx-auto border border-red-100 text-2xl shadow-sm">
-                                    {noAnimalModal.isMultiple ? '👥' : '🚫'}
+                                <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mb-5 mx-auto border border-red-100 shadow-sm">
+                                    {noAnimalModal.isMultiple ? <Users className="w-8 h-8" /> : <Ban className="w-8 h-8" />}
                                 </div>
                                 <h3 className="text-xl font-black uppercase tracking-tight text-[#1a1208] mb-1.5">
                                     {noAnimalModal.title || 'No Animal Detected'}
@@ -2772,8 +2779,8 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                             {ann.content}
                                                         </p>
                                                         {ann.location && (
-                                                            <p className="text-sm font-bold text-gray-800 mb-4">
-                                                                📍 {ann.location}
+                                                            <p className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-1.5">
+                                                                <MapPin className="w-4 h-4" /> {ann.location}
                                                             </p>
                                                         )}
                                                         {/* Main Media (first item) */}
@@ -2827,8 +2834,8 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                                 </svg>
                                                                 <span>{ann.reactions ? ann.reactions.length : 0} Likes</span>
                                                             </button>
-                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                                                💬 {ann.comments ? ann.comments.length : 0} Comments
+                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                                                                <MessageCircle className="w-3 h-3" /> {ann.comments ? ann.comments.length : 0} Comments
                                                             </div>
                                                         </div>
                                                     </div>
@@ -3202,7 +3209,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                         <div className="mb-3.5 flex flex-wrap items-center gap-1.5">
                                                             {/* Animal Type & Breed */}
                                                             <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-stone-100/90 border border-stone-200/80 rounded-xl text-stone-800 text-[11px] font-bold shadow-2xs">
-                                                                <span>{displayType.toLowerCase() === 'cat' ? '🐱' : '🐕'}</span>
+                                                                {displayType.toLowerCase() === 'cat' ? <Cat className="w-3.5 h-3.5" /> : <Dog className="w-3.5 h-3.5" />}
                                                                 <span className="font-extrabold text-[#1a1208]">{displayType}</span>
                                                                 {displayBreed && (
                                                                     <>
@@ -3215,7 +3222,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                             {/* Color */}
                                                             {displayColor && (
                                                                 <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-stone-50 border border-stone-200/60 rounded-xl text-stone-700 text-[11px] font-bold shadow-2xs">
-                                                                    <span>🎨</span>
+                                                                    <Palette className="w-3 h-3" />
                                                                     <span>{displayColor}</span>
                                                                 </div>
                                                             )}
@@ -3223,7 +3230,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                             {/* Pattern */}
                                                             {displayPattern && displayPattern.toLowerCase() !== 'unknown' && (
                                                                 <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-stone-50 border border-stone-200/60 rounded-xl text-stone-700 text-[11px] font-bold shadow-2xs">
-                                                                    <span>✨</span>
+                                                                    <Sparkles className="w-3 h-3" />
                                                                     <span>{displayPattern}</span>
                                                                 </div>
                                                             )}
@@ -3231,7 +3238,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                             {/* Size */}
                                                             {displaySize && (
                                                                 <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-stone-50 border border-stone-200/60 rounded-xl text-stone-700 text-[11px] font-bold shadow-2xs">
-                                                                    <span>📏</span>
+                                                                    <Ruler className="w-3 h-3" />
                                                                     <span>{displaySize}</span>
                                                                 </div>
                                                             )}
@@ -3242,7 +3249,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                                 if (!trimmed || trimmed.toLowerCase() === 'none' || trimmed.toLowerCase() === 'none specified') return null;
                                                                 return (
                                                                     <div key={i} className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 border border-amber-200/80 text-amber-800 rounded-xl text-[11px] font-bold shadow-2xs">
-                                                                        <span>🩹</span>
+                                                                        <Bandage className="w-3 h-3" />
                                                                         <span>{trimmed}</span>
                                                                     </div>
                                                                 );
@@ -3251,7 +3258,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                             {/* Landmark */}
                                                             {report.landmark && (
                                                                 <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 border border-blue-200/70 text-blue-800 rounded-xl text-[11px] font-bold shadow-2xs">
-                                                                    <span>📍</span>
+                                                                    <MapPin className="w-3 h-3" />
                                                                     <span className="truncate max-w-[200px]">{report.landmark}</span>
                                                                 </div>
                                                             )}
@@ -3263,8 +3270,8 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                 {(report.pet_id || report.owner_phone || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
                                                     <div className="mb-5 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50/80 border-2 border-amber-200 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                                         <div className="flex items-start sm:items-center gap-3.5">
-                                                            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-600 to-orange-500 text-white flex items-center justify-center font-black text-xl shadow-md shrink-0">
-                                                                🐾
+                                                            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-600 to-orange-500 text-white flex items-center justify-center shadow-md shrink-0">
+                                                                <PawPrint className="w-5 h-5" />
                                                             </div>
                                                             <div>
                                                                 <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -3279,7 +3286,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                                 </div>
                                                                 <p className="text-xs font-bold text-amber-950">
                                                                     Owner: <span className="font-extrabold">{report.owner_name ? report.owner_name : 'No Registered Owner (Community Animal)'}</span>
-                                                                    {report.owner_phone && <span className="text-amber-800 font-bold ml-1.5">• 📞 {report.owner_phone}</span>}
+                                                                    {report.owner_phone && <span className="text-amber-800 font-bold ml-1.5 inline-flex items-center gap-1">• <Phone className="w-3 h-3" /> {report.owner_phone}</span>}
                                                                 </p>
                                                                 {report.pet_qr_code_hash && (
                                                                     <p className="text-[10px] font-bold text-amber-800/90 tracking-tight mt-1 flex items-center gap-1">
@@ -3295,7 +3302,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                                     href={`tel:${report.owner_phone}`}
                                                                     className="flex-1 sm:flex-initial px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center shadow-sm flex items-center justify-center gap-1.5"
                                                                 >
-                                                                    <span>📞</span>
+                                                                    <Phone className="w-3.5 h-3.5" />
                                                                     <span>Contact Owner</span>
                                                                 </a>
                                                             )}
@@ -3639,7 +3646,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                     <div className="flex items-start justify-between gap-2">
                                                         <div className="flex-1">
                                                             <h4 className="text-xs font-black text-[#1a1208]">
-                                                                {notif.title}
+                                                                {(notif.title || '').replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]+\s*/u, '')}
                                                             </h4>
                                                             <p className="text-[11px] font-semibold text-gray-650 mt-1 leading-relaxed">
                                                                 {notif.message}
@@ -3657,7 +3664,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                                                         }}
                                                                         className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
                                                                     >
-                                                                        <span>💬 Open Chat</span>
+                                                                        <MessageCircle className="w-3 h-3" /> Open Chat
                                                                     </button>
                                                                 )}
                                                             </div>
@@ -3864,7 +3871,7 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                         <div className="px-6 py-4 bg-white border-b border-gray-100 flex items-center justify-between z-20 shrink-0">
                             <div>
                                 <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
-                                    <span>📍 Pinpoint Landmark & Location</span>
+                                    <MapPin className="w-5 h-5" /> <span>Pinpoint Landmark & Location</span>
                                 </h3>
                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
                                     Click anywhere on the map to set pin and auto-fetch landmark API details
@@ -3988,8 +3995,8 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                         <div className="p-5 bg-white border-t border-gray-100 shadow-2xl z-20 shrink-0 space-y-3">
                             {landmarks.length > 0 && (
                                 <div className="space-y-1">
-                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block">
-                                        📍 Click Landmark to Snap Pin:
+                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                                        <MapPin className="w-3 h-3" /> Click Landmark to Snap Pin:
                                     </label>
                                     <div className="flex flex-wrap gap-1.5 max-h-16 overflow-y-auto pr-1">
                                         {landmarks.map((lm) => (
@@ -4032,8 +4039,8 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                                         onChange={(e) => setTempLandmark(e.target.value)}
                                         placeholder="Type or auto-detected landmark (e.g. PEL PHARMA SELERA)..."
                                     />
-                                    <p className="text-[9px] font-semibold text-[#F97316] truncate mt-1">
-                                        📍 {isGeocoding ? 'Resolving address details...' : (resolvedAddress || 'No address detected')}
+                                    <p className="text-[9px] font-semibold text-[#F97316] truncate mt-1 flex items-center gap-1">
+                                        <MapPin className="w-2.5 h-2.5 shrink-0" /> {isGeocoding ? 'Resolving address details...' : (resolvedAddress || 'No address detected')}
                                     </p>
                                 </div>
 
@@ -4072,11 +4079,11 @@ alert(err.response?.data?.detail || 'Failed to acknowledge warning.');
                             onClick={() => setActiveQrModal(null)}
                             className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-colors"
                         >
-                            ✕
+                            <X className="w-4 h-4" />
                         </button>
-                        
-                        <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl font-black mx-auto mb-3">
-                            🐾
+
+                        <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-3">
+                            <PawPrint className="w-6 h-6" />
                         </div>
                         <h3 className="text-base font-black text-gray-900 uppercase tracking-tight mb-0.5">
                             {activeQrModal.petName || 'Registered Pet'}

@@ -1,4 +1,10 @@
 import { useState, useEffect } from 'react';
+import {
+    AlertTriangle, Mail, MessageCircle, Check, X, Shield, User, Lock, RefreshCw,
+    Search, Link2, Ban, Scale, Home, MapPin, Flag, Building2, PawPrint, Phone,
+    Syringe, Camera, Rocket, ScrollText, FileText, Pin, CheckCircle2, ClipboardList,
+    Sparkles, Zap, Siren, Bandage, Hourglass
+} from 'lucide-react';
 import axios from 'axios';
 import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
@@ -887,7 +893,7 @@ const SubdViewReport = () => {
                             </div>
                         ) : !report ? (
                             <div className="bg-white rounded-[2.5rem] border border-gray-100 p-20 text-center shadow-sm">
-                                <span className="text-5xl block mb-4">⚠️</span>
+                                <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                                 <h3 className="text-gray-900 font-black uppercase text-sm tracking-wider">Report Not Found</h3>
                                 <p className="text-gray-400 text-xs mt-1.5 leading-relaxed">The report ID you are trying to view does not exist or has been deleted.</p>
                                 <Link to="/subd/reports" className="inline-block mt-6 px-6 py-3 bg-[#F97316] hover:bg-[#EA580C] text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-md">
@@ -902,8 +908,8 @@ const SubdViewReport = () => {
                                 {report.pending_transfer_to_id === currentUserId && ![11, 12, 14, 3].includes(report.status_id) && (
                                     <div className="p-6 rounded-3xl bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-orange-500/15 border-2 border-orange-400 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 shadow-lg shadow-orange-500/10 animate-in slide-in-from-top duration-300">
                                         <div className="flex items-start gap-4">
-                                            <div className="w-12 h-12 rounded-2xl bg-[#F97316] text-white flex items-center justify-center text-2xl font-black shadow-md shadow-orange-500/30 shrink-0">
-                                                📨
+                                            <div className="w-12 h-12 rounded-2xl bg-[#F97316] text-white flex items-center justify-center shadow-md shadow-orange-500/30 shrink-0">
+                                                <Mail className="w-6 h-6" />
                                             </div>
                                             <div className="space-y-1">
                                                 <h4 className="text-sm font-black text-gray-900 uppercase tracking-wide flex items-center gap-2">
@@ -914,8 +920,8 @@ const SubdViewReport = () => {
                                                     <strong className="text-orange-950 font-black">{report.pending_transfer_from_name || 'An officer'}</strong> has requested to transfer Report #{report.report_id} to you.
                                                 </p>
                                                 {report.pending_transfer_notes && (
-                                                    <div className="mt-2 p-2.5 rounded-xl bg-white/90 border border-orange-200 text-xs text-gray-800 font-medium">
-                                                        💬 <span className="text-gray-500 font-bold">Handover Note:</span> "{report.pending_transfer_notes}"
+                                                    <div className="mt-2 p-2.5 rounded-xl bg-white/90 border border-orange-200 text-xs text-gray-800 font-medium flex items-start gap-1.5">
+                                                        <MessageCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" /> <span><span className="text-gray-500 font-bold">Handover Note:</span> "{report.pending_transfer_notes}"</span>
                                                     </div>
                                                 )}
                                             </div>
@@ -927,14 +933,14 @@ const SubdViewReport = () => {
                                                 disabled={isAcceptingTransfer}
                                                 className="flex-1 sm:flex-none px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                                             >
-                                                {isAcceptingTransfer ? 'Accepting...' : '✓ Accept Case'}
+                                                {isAcceptingTransfer ? 'Accepting...' : <><Check className="w-3.5 h-3.5" /> Accept Case</>}
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => setIsRejectTransferModalOpen(true)}
                                                 className="flex-1 sm:flex-none px-5 py-3 rounded-2xl bg-white hover:bg-red-50 text-red-600 border border-red-200 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                                             >
-                                                ✕ Decline
+                                                <X className="w-3.5 h-3.5" /> Decline
                                             </button>
                                         </div>
                                     </div>
@@ -944,8 +950,8 @@ const SubdViewReport = () => {
                                 {report.pending_transfer_from_id === currentUserId && report.pending_transfer_to_id && ![11, 12, 14, 3].includes(report.status_id) && (
                                     <div className="p-5 rounded-3xl bg-amber-500/10 border border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300">
                                         <div className="flex items-center gap-3.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl font-black shadow-md shadow-amber-500/20 shrink-0">
-                                                ⏳
+                                            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0">
+                                                <Hourglass className="w-5 h-5" />
                                             </div>
                                             <div>
                                                 <h4 className="text-xs font-black text-amber-950 uppercase tracking-widest flex items-center gap-2">
@@ -956,7 +962,7 @@ const SubdViewReport = () => {
                                                     Transfer requested to <strong className="font-bold text-amber-950">{report.pending_transfer_to_name || 'Officer'}</strong>. You remain responsible for this report until they accept.
                                                 </p>
                                                 {report.pending_transfer_notes && (
-                                                    <p className="text-[11px] text-amber-700 italic mt-1 font-medium">💬 Note: "{report.pending_transfer_notes}"</p>
+                                                    <p className="text-[11px] text-amber-700 italic mt-1 font-medium flex items-start gap-1"><MessageCircle className="w-3 h-3 mt-0.5 shrink-0" /> Note: "{report.pending_transfer_notes}"</p>
                                                 )}
                                             </div>
                                         </div>
@@ -976,8 +982,8 @@ const SubdViewReport = () => {
                                     !report.assigned_leader_id ? (
                                     <div className="p-5 rounded-3xl bg-amber-500/10 border border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                         <div className="flex items-center gap-3.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl font-black shadow-md shadow-amber-500/20 shrink-0">
-                                                ⚠️
+                                            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0">
+                                                <AlertTriangle className="w-5 h-5" />
                                             </div>
                                             <div>
                                                 <h4 className="text-xs font-black text-amber-950 uppercase tracking-widest flex items-center gap-2">
@@ -1002,7 +1008,7 @@ const SubdViewReport = () => {
                                                 </>
                                             ) : (
                                                 <>
-                                                    <span>🛡️ Claim This Report</span>
+                                                    <Shield className="w-3.5 h-3.5" /> <span>Claim This Report</span>
                                                 </>
                                             )}
                                         </button>
@@ -1010,8 +1016,8 @@ const SubdViewReport = () => {
                                 ) : report.assigned_leader_id === currentUserId ? (
                                     <div className="p-5 rounded-3xl bg-emerald-500/10 border border-emerald-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                         <div className="flex items-center gap-3.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center text-xl font-black shadow-md shadow-emerald-600/20 shrink-0">
-                                                🛡️
+                                            <div className="w-11 h-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-600/20 shrink-0">
+                                                <Shield className="w-5 h-5" />
                                             </div>
                                             <div>
                                                 <h4 className="text-xs font-black text-emerald-950 uppercase tracking-widest flex items-center gap-2">
@@ -1048,7 +1054,7 @@ const SubdViewReport = () => {
                                                     ? 'bg-amber-600 shadow-amber-600/20'
                                                     : 'bg-blue-600 shadow-blue-600/20'
                                             }`}>
-                                                {report.is_takeover_eligible ? '⚠️' : '👤'}
+                                                {report.is_takeover_eligible ? <AlertTriangle className="w-5 h-5" /> : <User className="w-5 h-5" />}
                                             </div>
                                             <div>
                                                 <div className="flex items-center gap-2 flex-wrap">
@@ -1058,8 +1064,8 @@ const SubdViewReport = () => {
                                                         Handled by {report.assigned_leader_name || `Officer #${report.assigned_leader_id}`}
                                                     </h4>
                                                     {report.is_takeover_eligible ? (
-                                                        <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white font-black text-[9px] uppercase tracking-wider shadow-xs animate-pulse">
-                                                            ⚠️ Inactive / Stalled ({report.takeover_inactivity_hours_threshold || 24}h No Progress)
+                                                        <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white font-black text-[9px] uppercase tracking-wider shadow-xs animate-pulse inline-flex items-center gap-1">
+                                                            <AlertTriangle className="w-2.5 h-2.5" /> Inactive / Stalled ({report.takeover_inactivity_hours_threshold || 24}h No Progress)
                                                         </span>
                                                     ) : (
                                                         <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold text-[9px] uppercase tracking-wider border border-blue-200">
@@ -1078,7 +1084,7 @@ const SubdViewReport = () => {
                                                 </p>
                                                 {!report.is_takeover_eligible && (report.takeover_cooldown_remaining_seconds || 0) > 0 && (
                                                     <p className="text-[11px] font-bold text-blue-600/90 mt-1 flex items-center gap-1">
-                                                        <span>🔒</span>
+                                                        <Lock className="w-3 h-3" />
                                                         <span>Takeover unlocks in <strong>{formatCooldownTimer(report.takeover_cooldown_remaining_seconds)}</strong> if no progress is made.</span>
                                                     </p>
                                                 )}
@@ -1092,14 +1098,14 @@ const SubdViewReport = () => {
                                                 onClick={() => setIsTakeoverModalOpen(true)}
                                                 className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 animate-in zoom-in-95 hover:scale-105 active:scale-95"
                                             >
-                                                <span>🔄 Take Over Report</span>
+                                                <RefreshCw className="w-3.5 h-3.5" /> <span>Take Over Report</span>
                                                 {currentUser?.role_id === 4 && !report.is_takeover_eligible && (
                                                     <span className="text-[9px] bg-amber-700/50 px-1.5 py-0.5 rounded text-white font-normal">Admin Override</span>
                                                 )}
                                             </button>
                                         ) : (
                                             <div className="w-full sm:w-auto px-4 py-2.5 rounded-2xl bg-gray-100 border border-gray-200 text-gray-400 font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-not-allowed opacity-80 shrink-0" title="Takeover is locked while the assigned officer is within the active response period.">
-                                                <span>🔒 Takeover Locked ({formatCooldownTimer(report.takeover_cooldown_remaining_seconds)})</span>
+                                                <Lock className="w-3 h-3" /> <span>Takeover Locked ({formatCooldownTimer(report.takeover_cooldown_remaining_seconds)})</span>
                                             </div>
                                         )}
                                     </div>
@@ -1109,8 +1115,8 @@ const SubdViewReport = () => {
                                 {!RESOLVED_STATUS_IDS.includes(report.status_id) && !report.duplicate_of_report_id && (duplicateMatches.length > 0 || report.has_duplicate_flag) && (
                                     <div className="p-5 rounded-3xl bg-amber-500/10 border-2 border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300 mb-4">
                                         <div className="flex items-start sm:items-center gap-3.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl font-black shadow-md shadow-amber-500/20 shrink-0">
-                                                ⚠️
+                                            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0">
+                                                <AlertTriangle className="w-5 h-5" />
                                             </div>
                                             <div>
                                                 <div className="flex items-center gap-2 flex-wrap">
@@ -1146,7 +1152,7 @@ const SubdViewReport = () => {
                                                     onClick={() => setActiveReviewMatch(duplicateMatches[0])}
                                                     className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md shadow-amber-600/20 flex items-center gap-1.5 cursor-pointer"
                                                 >
-                                                    <span>🔍 Compare Side-by-Side</span>
+                                                    <Search className="w-3.5 h-3.5" /> <span>Compare Side-by-Side</span>
                                                 </button>
                                             )}
                                             <button
@@ -1154,7 +1160,7 @@ const SubdViewReport = () => {
                                                 onClick={() => setIsMergeModalOpen(true)}
                                                 className="px-3.5 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer"
                                             >
-                                                <span>🔗 Merge Case</span>
+                                                <Link2 className="w-3.5 h-3.5" /> <span>Merge Case</span>
                                             </button>
                                             {duplicateMatches[0] && (
                                                 <button
@@ -1174,8 +1180,8 @@ const SubdViewReport = () => {
                                 {report.status_id === 18 || report.duplicate_of_report_id ? (
                                     <div className="p-5 rounded-3xl bg-stone-100 border-2 border-stone-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300">
                                         <div className="flex items-start sm:items-center gap-3.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-stone-800 text-white flex items-center justify-center text-xl font-black shadow-md shadow-stone-800/20 shrink-0">
-                                                🔗
+                                            <div className="w-11 h-11 rounded-2xl bg-stone-800 text-white flex items-center justify-center shadow-md shadow-stone-800/20 shrink-0">
+                                                <Link2 className="w-5 h-5" />
                                             </div>
                                             <div>
                                                 <div className="flex items-center gap-2">
@@ -1219,8 +1225,8 @@ const SubdViewReport = () => {
                                 ) : report.status_id === 14 || report.verification_status === 'false_alarm' ? (
                                     <div className="p-5 rounded-3xl bg-rose-500/10 border border-rose-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300">
                                         <div className="flex items-start sm:items-center gap-3.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-rose-600 text-white flex items-center justify-center text-xl font-black shadow-md shadow-rose-600/20 shrink-0">
-                                                🚫
+                                            <div className="w-11 h-11 rounded-2xl bg-rose-600 text-white flex items-center justify-center shadow-md shadow-rose-600/20 shrink-0">
+                                                <Ban className="w-5 h-5" />
                                             </div>
                                             <div>
                                                 <div className="flex items-center gap-2">
@@ -1247,8 +1253,8 @@ const SubdViewReport = () => {
                                 ) : report.status_id === 15 || report.verification_status === 'disputed' ? (
                                     <div className="p-5 rounded-3xl bg-amber-500/15 border-2 border-amber-400 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-pulse">
                                         <div className="flex items-start sm:items-center gap-3.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-amber-600 text-white flex items-center justify-center text-xl font-black shadow-md shadow-amber-600/20 shrink-0">
-                                                ⚖️
+                                            <div className="w-11 h-11 rounded-2xl bg-amber-600 text-white flex items-center justify-center shadow-md shadow-amber-600/20 shrink-0">
+                                                <Scale className="w-5 h-5" />
                                             </div>
                                             <div>
                                                 <div className="flex items-center gap-2">
@@ -1267,8 +1273,8 @@ const SubdViewReport = () => {
                                     </div>
                                 ) : report.verification_status === 'verified_true' ? (
                                     <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-sm font-black shrink-0">
-                                            ✓
+                                        <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                                            <Check className="w-4 h-4" />
                                         </div>
                                         <div className="flex-1">
                                             <p className="text-xs font-black text-emerald-900 uppercase">
@@ -1372,8 +1378,8 @@ const SubdViewReport = () => {
                                     <div className="p-6 rounded-3xl bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-amber-500/10 border-2 border-amber-300/80 shadow-sm space-y-4 animate-in fade-in duration-300">
                                         <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-amber-200/60">
                                             <div className="flex items-center gap-2.5">
-                                                <span className="w-10 h-10 rounded-2xl bg-amber-600 text-white flex items-center justify-center text-xl font-black shadow-md shadow-amber-600/20">
-                                                    🏠
+                                                <span className="w-10 h-10 rounded-2xl bg-amber-600 text-white flex items-center justify-center shadow-md shadow-amber-600/20">
+                                                    <Home className="w-5 h-5" />
                                                 </span>
                                                 <div>
                                                     <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black uppercase tracking-wider shadow-xs">
@@ -1385,12 +1391,12 @@ const SubdViewReport = () => {
                                                 </div>
                                             </div>
                                             {report.facility?.subdivision_name ? (
-                                                <span className="px-3 py-1 bg-white border border-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider">
-                                                    📍 {report.facility.subdivision_name}
+                                                <span className="px-3 py-1 bg-white border border-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
+                                                    <MapPin className="w-3 h-3" /> {report.facility.subdivision_name}
                                                 </span>
                                             ) : (
-                                                <span className="px-3 py-1 bg-white border border-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider">
-                                                    📍 Barangay Holding Facility
+                                                <span className="px-3 py-1 bg-white border border-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
+                                                    <MapPin className="w-3 h-3" /> Barangay Holding Facility
                                                 </span>
                                             )}
                                         </div>
@@ -1399,8 +1405,8 @@ const SubdViewReport = () => {
                                         <div className="space-y-3">
                                             {/* 1. Spotted (Preserved Incident Origin) */}
                                             <div className="flex items-start gap-3 bg-white/95 p-3.5 rounded-2xl border border-amber-200 shadow-2xs">
-                                                <div className="w-8 h-8 rounded-xl bg-orange-100 text-[#F97316] flex items-center justify-center text-sm shrink-0 font-black">
-                                                    🚩
+                                                <div className="w-8 h-8 rounded-xl bg-orange-100 text-[#F97316] flex items-center justify-center shrink-0">
+                                                    <Flag className="w-4 h-4" />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center justify-between gap-2">
@@ -1425,8 +1431,8 @@ const SubdViewReport = () => {
                                             {/* 2. Previous Facility Holding Location(s) */}
                                             {custodyProgression.steps.filter(s => !s.isCurrent).map((prevStep, idx) => (
                                                 <div key={`custody-step-${prevStep.name || idx}-${idx}`} className="flex items-start gap-3 bg-white/80 p-3.5 rounded-2xl border border-amber-200/80 shadow-2xs">
-                                                    <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-sm shrink-0 font-black">
-                                                        🏡
+                                                    <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                                                        <Home className="w-4 h-4" />
                                                     </div>
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center justify-between gap-2">
@@ -1451,8 +1457,8 @@ const SubdViewReport = () => {
 
                                             {/* 3. Current Facility Holding Location / Transferred To */}
                                             <div className="flex items-start gap-3 bg-gradient-to-r from-orange-50/90 to-amber-50/90 p-4 rounded-2xl border-2 border-[#F97316] shadow-xs">
-                                                <div className="w-8 h-8 rounded-xl bg-[#F97316] text-white flex items-center justify-center text-sm shrink-0 font-black">
-                                                    🏢
+                                                <div className="w-8 h-8 rounded-xl bg-[#F97316] text-white flex items-center justify-center shrink-0">
+                                                    <Building2 className="w-4 h-4" />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center justify-between gap-2">
@@ -1486,7 +1492,7 @@ const SubdViewReport = () => {
                                                 <span className={`px-3 py-1 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm ${
                                                     report.owner_name ? 'bg-amber-600' : 'bg-emerald-600'
                                                 }`}>
-                                                    <span>🐾</span>
+                                                    <PawPrint className="w-3 h-3" />
                                                     <span>{report.owner_name ? 'Registered Pet Case' : 'Registered Community Animal Record'}</span>
                                                 </span>
                                                 {report.pet_name && (
@@ -1504,9 +1510,9 @@ const SubdViewReport = () => {
                                                         className="px-3 py-1 bg-gradient-to-r from-amber-600 to-[#B35D25] hover:from-amber-700 hover:to-[#964E1F] text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm hover:shadow transition-all cursor-pointer"
                                                     >
                                                         {isLoadingPetDetail ? (
-                                                            <span className="animate-spin text-xs">⏳</span>
+                                                            <Hourglass className="w-3 h-3 animate-spin" />
                                                         ) : (
-                                                            <span>🐾 View Animal Record</span>
+                                                            <><PawPrint className="w-3 h-3" /> View Animal Record</>
                                                         )}
                                                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -1547,7 +1553,7 @@ const SubdViewReport = () => {
                                                         href={`tel:${report.owner_phone}`}
                                                         className="mt-3 inline-flex items-center justify-center gap-2 w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm"
                                                     >
-                                                        📞 Call Pet Owner
+                                                        <Phone className="w-3 h-3" /> Call Pet Owner
                                                     </a>
                                                 )}
                                             </div>
@@ -1564,11 +1570,11 @@ const SubdViewReport = () => {
                                                             onClick={handleOpenQrTag}
                                                         />
                                                     ) : (
-                                                        <div 
+                                                        <div
                                                             onClick={handleOpenQrTag}
-                                                            className="w-14 h-14 rounded-xl bg-amber-100 flex items-center justify-center text-2xl cursor-pointer hover:scale-105 transition-transform border border-amber-200"
+                                                            className="w-14 h-14 rounded-xl bg-amber-100 flex items-center justify-center cursor-pointer hover:scale-105 transition-transform border border-amber-200"
                                                         >
-                                                            🐾
+                                                            <PawPrint className="w-6 h-6 text-amber-700" />
                                                         </div>
                                                     )}
                                                     <div>
@@ -1632,8 +1638,8 @@ const SubdViewReport = () => {
                                     <div className="bg-amber-50/50 border-2 border-amber-200 rounded-3xl p-6 sm:p-7 space-y-5 shadow-xs">
                                         <div className="flex items-center justify-between border-b border-amber-200/80 pb-4">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl font-black shadow-sm">
-                                                    ⚖️
+                                                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-sm">
+                                                    <Scale className="w-5 h-5" />
                                                 </div>
                                                 <div>
                                                     <h4 className="text-sm font-black text-amber-950 uppercase tracking-tight">
@@ -1694,7 +1700,7 @@ const SubdViewReport = () => {
                                                                 rel="noopener noreferrer"
                                                                 className="flex items-center gap-3 p-3 bg-blue-50/50 hover:bg-blue-50 border border-blue-100 rounded-xl transition-all group"
                                                             >
-                                                                <span className="text-2xl">💉</span>
+                                                                <Syringe className="w-6 h-6 text-blue-600" />
                                                                 <div className="overflow-hidden">
                                                                     <p className="text-[11px] font-black text-blue-900 uppercase tracking-wider group-hover:text-blue-700">
                                                                         Anti-Rabies Card
@@ -1711,7 +1717,7 @@ const SubdViewReport = () => {
                                                                 rel="noopener noreferrer"
                                                                 className="flex items-center gap-3 p-3 bg-emerald-50/50 hover:bg-emerald-50 border border-emerald-100 rounded-xl transition-all group"
                                                             >
-                                                                <span className="text-2xl">📸</span>
+                                                                <Camera className="w-6 h-6 text-emerald-600" />
                                                                 <div className="overflow-hidden">
                                                                     <p className="text-[11px] font-black text-emerald-900 uppercase tracking-wider group-hover:text-emerald-700">
                                                                         Home Confinement Photo
@@ -1744,7 +1750,7 @@ const SubdViewReport = () => {
                                                                             onClick={() => handleReviewDispute(dispute.dispute_id, 'Accepted')}
                                                                             className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
                                                                         >
-                                                                            {isReviewingDispute ? 'Processing...' : '✓ Accept Dispute & Clear Pet'}
+                                                                            {isReviewingDispute ? 'Processing...' : <><Check className="w-3.5 h-3.5 inline mr-1" /> Accept Dispute & Clear Pet</>}
                                                                         </button>
                                                                         <button
                                                                             type="button"
@@ -1752,7 +1758,7 @@ const SubdViewReport = () => {
                                                                             onClick={() => handleReviewDispute(dispute.dispute_id, 'Rejected')}
                                                                             className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
                                                                         >
-                                                                            {isReviewingDispute ? 'Processing...' : '✕ Reject Dispute'}
+                                                                            {isReviewingDispute ? 'Processing...' : <><X className="w-3.5 h-3.5 inline mr-1" /> Reject Dispute</>}
                                                                         </button>
                                                                         <button
                                                                             type="button"
@@ -1767,9 +1773,9 @@ const SubdViewReport = () => {
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => setReviewingDisputeId(dispute.dispute_id)}
-                                                                    className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-xs cursor-pointer"
+                                                                    className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
                                                                 >
-                                                                    🔍 Review & Resolve This Dispute
+                                                                    <Search className="w-3.5 h-3.5" /> Review & Resolve This Dispute
                                                                 </button>
                                                             )}
                                                         </div>
@@ -2042,8 +2048,8 @@ const SubdViewReport = () => {
                                         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-orange-200/80 shadow-xs space-y-4">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] border border-orange-200 flex items-center justify-center text-lg font-black shrink-0">
-                                                        🔗
+                                                    <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] border border-orange-200 flex items-center justify-center shrink-0">
+                                                        <Link2 className="w-5 h-5" />
                                                     </div>
                                                     <div>
                                                         <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">
@@ -2077,12 +2083,12 @@ const SubdViewReport = () => {
                                                         </div>
 
                                                         <div className="flex items-center gap-2.5 text-xs text-gray-600">
-                                                            <span>👤</span>
+                                                            <User className="w-3 h-3" />
                                                             <span className="font-bold text-gray-800">{mr.reporter_name}</span>
                                                             {mr.landmark && (
                                                                 <>
                                                                     <span>•</span>
-                                                                    <span className="truncate">📍 {mr.landmark}</span>
+                                                                    <span className="truncate inline-flex items-center gap-1"><MapPin className="w-3 h-3" /> {mr.landmark}</span>
                                                                 </>
                                                             )}
                                                         </div>
@@ -2288,12 +2294,12 @@ const SubdViewReport = () => {
                                             <div className={`p-5 rounded-2xl border text-center space-y-2.5 ${
                                                 report.is_takeover_eligible ? 'bg-amber-50/80 border-amber-300' : 'bg-blue-50/70 border-blue-200'
                                             }`}>
-                                                <p className={`text-xs font-bold ${report.is_takeover_eligible ? 'text-amber-950' : 'text-blue-900'}`}>
-                                                    🔒 Operational controls are reserved for the assigned case officer (<span className={`font-black ${report.is_takeover_eligible ? 'text-amber-800' : 'text-blue-700'}`}>{report.assigned_leader_name || `Officer #${report.assigned_leader_id}`}</span>).
+                                                <p className={`text-xs font-bold flex items-start justify-center gap-1.5 ${report.is_takeover_eligible ? 'text-amber-950' : 'text-blue-900'}`}>
+                                                    <Lock className="w-3.5 h-3.5 mt-0.5 shrink-0" /> <span>Operational controls are reserved for the assigned case officer (<span className={`font-black ${report.is_takeover_eligible ? 'text-amber-800' : 'text-blue-700'}`}>{report.assigned_leader_name || `Officer #${report.assigned_leader_id}`}</span>).</span>
                                                 </p>
                                                 {report.is_takeover_eligible ? (
-                                                    <p className="text-[11px] text-amber-800 font-semibold">
-                                                        ⚠️ This report has had no updates for over {report.takeover_inactivity_hours_threshold || 24} hours. You can take over handling now.
+                                                    <p className="text-[11px] text-amber-800 font-semibold flex items-start justify-center gap-1">
+                                                        <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /> <span>This report has had no updates for over {report.takeover_inactivity_hours_threshold || 24} hours. You can take over handling now.</span>
                                                     </p>
                                                 ) : (
                                                     <p className="text-[11px] text-blue-700/80 font-medium">
@@ -2305,17 +2311,17 @@ const SubdViewReport = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => setIsTakeoverModalOpen(true)}
-                                                        className="mt-2 px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black uppercase tracking-wider shadow-sm transition-all cursor-pointer hover:scale-105 active:scale-95"
+                                                        className="mt-2 px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black uppercase tracking-wider shadow-sm transition-all cursor-pointer hover:scale-105 active:scale-95 inline-flex items-center gap-1.5"
                                                     >
-                                                        🔄 Take Over Report (Stalled)
+                                                        <RefreshCw className="w-3.5 h-3.5" /> Take Over Report (Stalled)
                                                     </button>
                                                 ) : (
                                                     <button
                                                         type="button"
                                                         disabled
-                                                        className="mt-2 px-6 py-2.5 rounded-xl bg-gray-100 border border-gray-200 text-gray-400 text-xs font-black uppercase tracking-wider shadow-xs cursor-not-allowed opacity-80"
+                                                        className="mt-2 px-6 py-2.5 rounded-xl bg-gray-100 border border-gray-200 text-gray-400 text-xs font-black uppercase tracking-wider shadow-xs cursor-not-allowed opacity-80 inline-flex items-center gap-1.5"
                                                     >
-                                                        🔒 Takeover Locked ({formatCooldownTimer(report.takeover_cooldown_remaining_seconds)})
+                                                        <Lock className="w-3.5 h-3.5" /> Takeover Locked ({formatCooldownTimer(report.takeover_cooldown_remaining_seconds)})
                                                     </button>
                                                 )}
                                             </div>
@@ -2324,16 +2330,16 @@ const SubdViewReport = () => {
                                         {/* CASE IS UNASSIGNED */}
                                         {!report.assigned_leader_id && report.status_id !== 18 && !report.duplicate_of_report_id && ![3, 9, 10, 11, 12, 14, 18].includes(report.status_id) && (
                                             <div className="p-5 rounded-2xl bg-amber-50/80 border border-amber-200 text-center space-y-2">
-                                                <p className="text-xs font-bold text-amber-900">
-                                                    ⚠️ Please claim this incident report to unlock verification, warning citations, and resolution actions.
+                                                <p className="text-xs font-bold text-amber-900 flex items-start justify-center gap-1.5">
+                                                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" /> <span>Please claim this incident report to unlock verification, warning citations, and resolution actions.</span>
                                                 </p>
                                                 <button
                                                     type="button"
                                                     onClick={handleClaimReport}
                                                     disabled={isClaiming}
-                                                    className="mt-2 px-6 py-2.5 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+                                                    className="mt-2 px-6 py-2.5 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider shadow-sm transition-all disabled:opacity-50 cursor-pointer inline-flex items-center gap-1.5"
                                                 >
-                                                    {isClaiming ? 'Claiming...' : '🛡️ Claim This Report'}
+                                                    {isClaiming ? 'Claiming...' : <><Shield className="w-3.5 h-3.5" /> Claim This Report</>}
                                                 </button>
                                             </div>
                                         )}
@@ -2353,8 +2359,8 @@ const SubdViewReport = () => {
                                                 ) ? (
                                                     <div className="w-full p-6 bg-gradient-to-br from-indigo-50/90 via-purple-50/50 to-white border-2 border-indigo-200/80 rounded-3xl shadow-sm flex flex-col gap-4 animate-in fade-in duration-300">
                                                         <div className="flex items-start gap-3.5">
-                                                            <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-xl shrink-0 shadow-md shadow-indigo-600/20">
-                                                                🏢
+                                                            <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-600/20">
+                                                                <Building2 className="w-5 h-5" />
                                                             </div>
                                                             <div className="flex-1">
                                                                 <div className="flex items-center gap-2">
@@ -2377,7 +2383,7 @@ const SubdViewReport = () => {
                                                                 to="/subd/escalated"
                                                                 className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-indigo-600/25 cursor-pointer"
                                                             >
-                                                                <span>🚀</span>
+                                                                <Rocket className="w-3.5 h-3.5" />
                                                                 <span>Track in Escalated Missions →</span>
                                                             </Link>
                                                         </div>
@@ -2390,7 +2396,7 @@ const SubdViewReport = () => {
                                                                 onClick={() => setIsAddPetModalOpen(true)}
                                                                 className="w-full py-3.5 border-2 border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 text-[#F97316] rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer hover:scale-[1.01] active:scale-95"
                                                             >
-                                                                <span className="text-base">🐾</span>
+                                                                <PawPrint className="w-4 h-4" />
                                                                 <span>Add Record for this Animal in System</span>
                                                             </button>
                                                         )}
@@ -2449,7 +2455,7 @@ const SubdViewReport = () => {
                                                                 }}
                                                                 className="w-full py-3.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
                                                             >
-                                                                <span>🚫</span>
+                                                                <Ban className="w-3.5 h-3.5" />
                                                                 <span>Mark as False Alarm / Dismiss</span>
                                                             </button>
                                                         )}
@@ -2477,7 +2483,7 @@ const SubdViewReport = () => {
                                                                 onClick={openIssueWarningModal}
                                                                 className="w-full py-4 bg-yellow-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-yellow-100 hover:bg-yellow-600 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
                                                             >
-                                                                <span className="text-base">⚠️</span>
+                                                                <AlertTriangle className="w-4 h-4" />
                                                                 ISSUE OWNER WARNING
                                                             </button>
                                                         )}
@@ -2490,7 +2496,7 @@ const SubdViewReport = () => {
                                                                 }}
                                                                 className="w-full py-3.5 border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100 text-emerald-700 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
                                                             >
-                                                                <span>{(report.category_id === 6 || !!report.pet_id || (!!report.description && report.description.includes('[LOST PET REPORT]'))) ? '🏠' : '🐾'}</span>
+                                                                {(report.category_id === 6 || !!report.pet_id || (!!report.description && report.description.includes('[LOST PET REPORT]'))) ? <Home className="w-3.5 h-3.5" /> : <PawPrint className="w-3.5 h-3.5" />}
                                                                 Update Animal Status
                                                             </button>
                                                         )}
@@ -2502,7 +2508,7 @@ const SubdViewReport = () => {
                                                                  onClick={() => setIsTransferModalOpen(true)}
                                                                  className="w-full py-3.5 border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 text-purple-800 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs hover:scale-[1.01] active:scale-95"
                                                              >
-                                                                 <span className="text-base">🔄</span>
+                                                                 <RefreshCw className="w-4 h-4" />
                                                                  <span>Transfer Report to Another Leader</span>
                                                              </button>
                                                          )}
@@ -2514,7 +2520,7 @@ const SubdViewReport = () => {
                                                                  onClick={() => setIsMergeModalOpen(true)}
                                                                  className="w-full py-3.5 border border-stone-300 bg-stone-50 hover:bg-stone-100 text-stone-800 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
                                                              >
-                                                                 <span className="text-base">🔗</span>
+                                                                 <Link2 className="w-4 h-4" />
                                                                  <span>Mark as Duplicate / Merge Report</span>
                                                              </button>
                                                          )}
@@ -2536,8 +2542,8 @@ const SubdViewReport = () => {
                                         {report.status_id === 11 && (
                                             <div className="w-full p-5 bg-green-50 border border-green-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in duration-300">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-full bg-green-100 text-green-700 flex items-center justify-center font-black text-sm shrink-0">
-                                                        ✓
+                                                    <div className="w-10 h-10 rounded-full bg-green-100 text-green-700 flex items-center justify-center shrink-0">
+                                                        <Check className="w-5 h-5" />
                                                     </div>
                                                     <div>
                                                         <h5 className="text-xs font-black text-green-800 uppercase tracking-wide">Incident Resolved</h5>
@@ -2556,8 +2562,8 @@ const SubdViewReport = () => {
                                         {report.status_id === 14 && (
                                             <div className="w-full p-5 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in duration-300">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-black text-sm shrink-0">
-                                                        🚫
+                                                    <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                                                        <Ban className="w-5 h-5" />
                                                     </div>
                                                     <div>
                                                         <h5 className="text-xs font-black text-amber-800 uppercase tracking-wide">False Alarm / Dismissed</h5>
@@ -2576,8 +2582,8 @@ const SubdViewReport = () => {
                                         {report.status_id === 3 && (
                                             <div className="w-full p-5 bg-red-50 border border-red-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in duration-300">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center font-black text-sm shrink-0">
-                                                        ✕
+                                                    <div className="w-10 h-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center shrink-0">
+                                                        <X className="w-5 h-5" />
                                                     </div>
                                                     <div>
                                                         <h5 className="text-xs font-black text-red-800 uppercase tracking-wide">Report Rejected</h5>
@@ -2607,8 +2613,8 @@ const SubdViewReport = () => {
                                     <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 sm:p-10 shadow-sm">
                                         <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] flex items-center justify-center text-lg font-black shadow-xs">
-                                                    📜
+                                                <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] flex items-center justify-center shadow-xs">
+                                                    <ScrollText className="w-5 h-5" />
                                                 </div>
                                                 <div>
                                                     <h4 className="text-sm font-black text-gray-900 uppercase tracking-wide">
@@ -2633,8 +2639,8 @@ const SubdViewReport = () => {
                                         <div className="relative pl-6 space-y-5 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-gray-100 max-h-[600px] overflow-y-auto pr-2">
                                             {/* Initial Report Submission */}
                                             <div className="relative flex items-start gap-4 group">
-                                                <div className="absolute -left-6 mt-1 w-5 h-5 rounded-full bg-blue-500 border-4 border-white shadow-xs flex items-center justify-center text-white text-[8px]">
-                                                    📝
+                                                <div className="absolute -left-6 mt-1 w-5 h-5 rounded-full bg-blue-500 border-4 border-white shadow-xs flex items-center justify-center text-white">
+                                                    <FileText className="w-2.5 h-2.5" />
                                                 </div>
                                                 <div className="flex-1 bg-gray-50/70 hover:bg-gray-50 rounded-2xl p-4 border border-gray-100 transition-all">
                                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
@@ -2663,48 +2669,48 @@ const SubdViewReport = () => {
                                                 const isFalseAlarm = remarksLower.includes('false alarm') || remarksLower.includes('dismiss');
                                                 const isEscalated = remarksLower.includes('escalat') || hist.report_status_id === 4;
 
-                                                let icon = '📌';
+                                                let Icon: typeof Pin = Pin;
                                                 let dotColor = 'bg-orange-500';
                                                 let cardBg = 'bg-gray-50/70';
                                                 let borderColor = 'border-gray-100';
 
                                                 if (isFacilityRelocation) {
-                                                    icon = '🏠';
+                                                    Icon = Home;
                                                     dotColor = 'bg-amber-600';
                                                     cardBg = 'bg-gradient-to-br from-amber-50/90 to-orange-50/60';
                                                     borderColor = 'border-amber-300';
                                                 } else if (isTransfer) {
-                                                    icon = '🔄';
+                                                    Icon = RefreshCw;
                                                     dotColor = 'bg-purple-500';
                                                     cardBg = 'bg-purple-50/40';
                                                     borderColor = 'border-purple-100';
                                                 } else if (isClaim) {
-                                                    icon = '🛡️';
+                                                    Icon = Shield;
                                                     dotColor = 'bg-emerald-500';
                                                     cardBg = 'bg-emerald-50/40';
                                                     borderColor = 'border-emerald-100';
                                                 } else if (isWarning) {
-                                                    icon = '⚠️';
+                                                    Icon = AlertTriangle;
                                                     dotColor = 'bg-amber-500';
                                                     cardBg = 'bg-amber-50/40';
                                                     borderColor = 'border-amber-100';
                                                 } else if (isResolved) {
-                                                    icon = '✅';
+                                                    Icon = CheckCircle2;
                                                     dotColor = 'bg-green-600';
                                                     cardBg = 'bg-green-50/40';
                                                     borderColor = 'border-green-100';
                                                 } else if (isVerified) {
-                                                    icon = '🔍';
+                                                    Icon = Search;
                                                     dotColor = 'bg-blue-500';
                                                     cardBg = 'bg-blue-50/40';
                                                     borderColor = 'border-blue-100';
                                                 } else if (isFalseAlarm) {
-                                                    icon = '🚫';
+                                                    Icon = Ban;
                                                     dotColor = 'bg-rose-500';
                                                     cardBg = 'bg-rose-50/40';
                                                     borderColor = 'border-rose-100';
                                                 } else if (isEscalated) {
-                                                    icon = '🚀';
+                                                    Icon = Rocket;
                                                     dotColor = 'bg-orange-600';
                                                     cardBg = 'bg-orange-50/40';
                                                     borderColor = 'border-orange-100';
@@ -2712,13 +2718,13 @@ const SubdViewReport = () => {
 
                                                 return (
                                                     <div key={hist.history_id || hist.id || `history-${histIdx}`} className="relative flex items-start gap-4 group animate-in fade-in duration-300">
-                                                        <div className={`absolute -left-6 mt-1 w-5 h-5 rounded-full ${dotColor} border-4 border-white shadow-xs flex items-center justify-center text-white text-[8px]`}>
-                                                            {icon}
+                                                        <div className={`absolute -left-6 mt-1 w-5 h-5 rounded-full ${dotColor} border-4 border-white shadow-xs flex items-center justify-center text-white`}>
+                                                            <Icon className="w-2.5 h-2.5" />
                                                         </div>
                                                         <div className={`flex-1 ${cardBg} hover:bg-gray-50 rounded-2xl p-4 border ${borderColor} transition-all`}>
                                                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                                                                 <span className="text-xs font-black text-gray-900 flex items-center gap-1.5">
-                                                                    <span>{icon}</span>
+                                                                    <Icon className="w-3.5 h-3.5 shrink-0" />
                                                                     <span>{isFacilityRelocation ? 'Animal Relocated & Secured in Facility' : (hist.updater_name || 'Subdivision Officer')}</span>
                                                                 </span>
                                                                 <span className="text-[10px] font-bold text-gray-400">
@@ -2822,7 +2828,7 @@ const SubdViewReport = () => {
                     <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-300">
                         <div className="px-8 py-6 border-b border-gray-150 flex justify-between items-center bg-yellow-50/50">
                             <div className="flex items-center gap-3">
-                                <span className="text-3xl">⚠️</span>
+                                <AlertTriangle className="w-8 h-8 text-yellow-600" />
                                 <div>
                                     <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Issue Owner Warning</h3>
                                     <p className="text-xs text-gray-500 mt-1 font-medium">Issue a formal notice to the registered pet owner.</p>
@@ -2852,7 +2858,7 @@ const SubdViewReport = () => {
                             ) : priorWarnings.length > 0 ? (
                                 <div className="p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-2xl text-[11px] text-amber-900 flex flex-col gap-1.5 animate-in fade-in duration-200">
                                     <div className="font-black flex items-center justify-between text-amber-900 uppercase tracking-wider text-[10px]">
-                                        <span className="flex items-center gap-1.5">📋 Prior Citations ({priorWarnings.length})</span>
+                                        <span className="flex items-center gap-1.5"><ClipboardList className="w-3 h-3" /> Prior Citations ({priorWarnings.length})</span>
                                         <span className="text-amber-700 font-medium">auto-escalated to: <strong className="uppercase">{warningTier}</strong></span>
                                     </div>
                                     <div className="max-h-24 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar text-[10px]">
@@ -2866,7 +2872,7 @@ const SubdViewReport = () => {
                                 </div>
                             ) : (
                                 <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-2xl text-[10px] font-bold text-blue-800 flex items-center gap-2">
-                                    <span>✨</span> First recorded violation for this resident. Defaulted to Notice (Friendly Reminder).
+                                    <Sparkles className="w-3 h-3" /> First recorded violation for this resident. Defaulted to Notice (Friendly Reminder).
                                 </div>
                             )}
 
@@ -2875,7 +2881,7 @@ const SubdViewReport = () => {
                                     <div className="flex items-center justify-between">
                                         <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Warning Tier</label>
                                         <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 tracking-wider">
-                                            {priorWarnings.length === 0 ? '✨ Notice' : `⚡ Step ${Math.min(priorWarnings.length + 1, 4)}/4`}
+                                            {priorWarnings.length === 0 ? <><Sparkles className="w-2.5 h-2.5 inline mr-0.5" /> Notice</> : <><Zap className="w-2.5 h-2.5 inline mr-0.5" /> Step {Math.min(priorWarnings.length + 1, 4)}/4</>}
                                         </span>
                                     </div>
                                     <select
@@ -3115,11 +3121,11 @@ const SubdViewReport = () => {
                             onClick={() => setSelectedQrPreview(null)}
                             className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-colors"
                         >
-                            ✕
+                            <X className="w-4 h-4" />
                         </button>
-                        
-                        <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl font-black mx-auto mb-3">
-                            🐾
+
+                        <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-3">
+                            <PawPrint className="w-6 h-6" />
                         </div>
                         <h3 className="text-base font-black text-gray-900 uppercase tracking-tight mb-0.5">
                             {selectedQrPreview.petName || 'Registered Pet'}
@@ -3278,7 +3284,7 @@ const SubdViewReport = () => {
                     <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-300 border border-rose-100">
                         <div className="px-8 py-6 border-b border-gray-150 flex justify-between items-center bg-rose-50/50">
                             <div className="flex items-center gap-3">
-                                <span className="text-3xl">🚫</span>
+                                <Ban className="w-8 h-8 text-rose-600" />
                                 <div>
                                     <h3 className="text-xl font-black text-rose-950 uppercase tracking-tight">Dismiss as False Alarm</h3>
                                     <p className="text-xs text-rose-700/80 mt-0.5 font-medium">Record field inspection findings before closing this report.</p>
@@ -3317,8 +3323,8 @@ const SubdViewReport = () => {
                                 />
                             </div>
 
-                            <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-[11px] text-amber-900 font-medium leading-relaxed">
-                                <strong>⚠️ Audit Notice:</strong> This action will update Report #{report.report_id} status to <em>False Alarm / Dismissed</em>, record your officer name in the audit log, and notify the resident reporter.
+                            <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-[11px] text-amber-900 font-medium leading-relaxed flex items-start gap-1.5">
+                                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" /> <span><strong>Audit Notice:</strong> This action will update Report #{report.report_id} status to <em>False Alarm / Dismissed</em>, record your officer name in the audit log, and notify the resident reporter.</span>
                             </div>
 
                             <div className="flex gap-4 pt-1">
@@ -3348,7 +3354,7 @@ const SubdViewReport = () => {
                     <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-blue-100 max-h-[92vh] flex flex-col">
                         <div className="px-8 py-5 border-b border-gray-150 flex justify-between items-center bg-blue-50/60">
                             <div className="flex items-center gap-3">
-                                <span className="text-3xl">🔍</span>
+                                <Search className="w-8 h-8 text-blue-600" />
                                 <div>
                                     <h3 className="text-xl font-black text-blue-950 uppercase tracking-tight">On-Site Field Verification</h3>
                                     <p className="text-xs text-blue-700/80 mt-0.5 font-medium">Record ground truth investigation findings to confirm or clear animal records.</p>
@@ -3387,12 +3393,12 @@ const SubdViewReport = () => {
                                     }}
                                     className="w-full px-4 py-3 bg-white border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
                                 >
-                                    <option value="Unsubstantiated / Friendly Dog">🛡️ Unsubstantiated / Friendly Dog (Keep Record Clean)</option>
-                                    <option value="Injured Animal (Docile / Needs Care)">🩹 Injured Animal (Docile / Needs Medical Attention)</option>
-                                    <option value="Exaggerated Claim (Playful / No Threat)">🛡️ Exaggerated Claim (Playful / Harmless Behavior)</option>
-                                    <option value="Normal Stray (Docile / No Bite)">🛡️ Normal Stray (Docile / Non-Aggressive)</option>
-                                    <option value="Substantiated Aggressive Incident">⚠️ Substantiated Aggressive Incident (Hostile / Threat Confirmed)</option>
-                                    <option value="Confirmed Physical Bite Incident">🚨 Confirmed Physical Bite Incident (Victim Injured)</option>
+                                    <option value="Unsubstantiated / Friendly Dog">Unsubstantiated / Friendly Dog (Keep Record Clean)</option>
+                                    <option value="Injured Animal (Docile / Needs Care)">Injured Animal (Docile / Needs Medical Attention)</option>
+                                    <option value="Exaggerated Claim (Playful / No Threat)">Exaggerated Claim (Playful / Harmless Behavior)</option>
+                                    <option value="Normal Stray (Docile / No Bite)">Normal Stray (Docile / Non-Aggressive)</option>
+                                    <option value="Substantiated Aggressive Incident">Substantiated Aggressive Incident (Hostile / Threat Confirmed)</option>
+                                    <option value="Confirmed Physical Bite Incident">Confirmed Physical Bite Incident (Victim Injured)</option>
                                 </select>
                             </div>
 
@@ -3523,8 +3529,8 @@ const SubdViewReport = () => {
                                             className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500"
                                         />
                                         <div className="flex-1 flex items-center justify-between">
-                                            <span className="text-xs">
-                                                {verifyAggressive ? '⚠️ Confirmed Hostile / Aggressive Temperament Observed' : '✓ Non-Aggressive / Calm & Friendly Demeanor'}
+                                            <span className="text-xs inline-flex items-center gap-1.5">
+                                                {verifyAggressive ? <><AlertTriangle className="w-3 h-3 shrink-0" /> Confirmed Hostile / Aggressive Temperament Observed</> : <><Check className="w-3 h-3 shrink-0" /> Non-Aggressive / Calm & Friendly Demeanor</>}
                                             </span>
                                             {Boolean((report as any).ai_behavior_aggressive) && (
                                                 <span className="text-[9px] px-1.5 py-0.5 bg-rose-200/80 text-rose-800 rounded font-bold uppercase">AI Flagged</span>
@@ -3540,7 +3546,7 @@ const SubdViewReport = () => {
                                 if (isAggressiveThreat) {
                                     return (
                                         <div className="p-3.5 bg-rose-50 rounded-2xl border border-rose-200 text-xs text-rose-900 flex items-start gap-2">
-                                            <span className="text-base flex-shrink-0">⚠️</span>
+                                            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                                             <p className="leading-relaxed">
                                                 <strong>Substantiated Threat:</strong> Aggression or bite confirmed. This will be recorded on the animal's permanent profile and may escalate dispatch or rabies observation protocols.
                                             </p>
@@ -3550,7 +3556,7 @@ const SubdViewReport = () => {
                                 if (verifyInjury) {
                                     return (
                                         <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
-                                            <span className="text-base flex-shrink-0">🩹</span>
+                                            <Bandage className="w-4 h-4 flex-shrink-0" />
                                             <p className="leading-relaxed">
                                                 <strong>Medical Care Priority:</strong> Physical inspection confirmed the animal is injured / bleeding, but <em>non-aggressive</em>. The animal's behavioral record remains clean, and medical aid will be prioritized.
                                             </p>
@@ -3559,7 +3565,7 @@ const SubdViewReport = () => {
                                 }
                                 return (
                                     <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200 text-xs text-emerald-900 flex items-start gap-2">
-                                        <span className="text-base flex-shrink-0">🛡️</span>
+                                        <Shield className="w-4 h-4 flex-shrink-0" />
                                         <p className="leading-relaxed">
                                             <strong>Clean Record Mode:</strong> No biting or aggression observed. This will record the dog as <em>friendly/unsubstantiated</em>, ensuring the pet or animal's registry remains clean and preventing wrongful penalties.
                                         </p>

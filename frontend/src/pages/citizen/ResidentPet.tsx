@@ -468,8 +468,8 @@ const ResidentPet = () => {
               : 'https://api.thecatapi.com/v1/breeds';
               
             const apiKey = formData.species === 'Dog'
-              ? (import.meta.env.VITE_DOG_API_KEY || 'live_J9RdXZq7OGRCUigDyq3y8rGqcG3Brarp46ohljsIMO572q0KYcW1alD0z88OADKs')
-              : (import.meta.env.VITE_CAT_API_KEY || 'live_GqD4rtVuossncqXxRcSvcmptrS9rD7NFoigE6UP59wNG69yZ0YhLh35HRma3ZbEm');
+              ? (import.meta.env.VITE_DOG_API_KEY || '')
+              : (import.meta.env.VITE_CAT_API_KEY || '');
 
             try {
               const headers: Record<string, string> = {};
@@ -527,8 +527,8 @@ const ResidentPet = () => {
                     const isDog = formData.species === 'Dog';
                     const baseUrl = isDog ? 'https://api.thedogapi.com' : 'https://api.thecatapi.com';
                     const apiKey = isDog 
-                        ? (import.meta.env.VITE_DOG_API_KEY || 'live_J9RdXZq7OGRCUigDyq3y8rGqcG3Brarp46ohljsIMO572q0KYcW1alD0z88OADKs')
-                        : (import.meta.env.VITE_CAT_API_KEY || 'live_GqD4rtVuossncqXxRcSvcmptrS9rD7NFoigE6UP59wNG69yZ0YhLh35HRma3ZbEm');
+                        ? (import.meta.env.VITE_DOG_API_KEY || '')
+                        : (import.meta.env.VITE_CAT_API_KEY || '');
                     
                     const res = await fetch(`${baseUrl}/v1/images/search?breed_id=${matchedBreed.id}`, {
                         headers: apiKey ? { 'x-api-key': apiKey } : {}

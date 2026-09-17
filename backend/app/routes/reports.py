@@ -1484,14 +1484,14 @@ async def upload_report_media(
     file_extension = os.path.splitext(safe_filename)[1]
     unique_filename = f"{uuid.uuid4()}{file_extension}"
 
-    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
-    
+    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+
     try:
         file_content = await file.read()
         if len(file_content) > MAX_FILE_SIZE:
              raise HTTPException(
-                status_code=413, 
-                detail=f"File too large ({len(file_content)} bytes). Maximum allowed is 10MB."
+                status_code=413,
+                detail=f"File too large ({len(file_content) / (1024 * 1024):.1f}MB). Maximum allowed is 50MB."
             )
         
         file_url = upload_to_cloudinary(file_content, filename=unique_filename)
