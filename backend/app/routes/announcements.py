@@ -1,13 +1,14 @@
+from app.tasks import unassigned_checker
 from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from sqlalchemy import or_
+from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.database import get_db
 from app.models.announcement import Announcement, AnnouncementMedia, AnnouncementCategory, AnnouncementComment, AnnouncementReaction
 from app.utils.audit import log_activity
-from app.models.user import User
+from app.models.user import User, Subdivision
 from app.schemas.announcement import (
     AnnouncementCreate,
     AnnouncementResponse,
@@ -102,12 +103,76 @@ def get_subdivision_announcements(subdivision_id: int, db: Session = Depends(get
             selectinload(Announcement.reactions),
         )
         .filter(
-            Announcement.subdivision_id == subdivision_id,
+            or_(
+                Announcement.subdivision_id == subdivision_id,
+                and_(Announcement.subdivision_id.is_(None), Announcement.visibility == "Public")
+            )
         )
         .order_by(Announcement.published_at.desc(), Announcement.created_at.desc())
         .all()
     )
     return [_to_response(row) for row in rows]
+
+
+@router.get("/barangay/{barangay_id}", response_model=List[AnnouncementResponse])
+def get_barangay_announcements(
+    barangay_id: int,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Retrieve community alerts and announcements scoped to a specific barangay or its subdivisions."""
+    query = (
+        db.query(Announcement)
+        .options(
+            joinedload(Announcement.creator),
+            joinedload(Announcement.category),
+            joinedload(Announcement.subdivision),
+            joinedload(Announcement.media),
+            selectinload(Announcement.comments).joinedload(AnnouncementComment.user),
+            selectinload(Announcement.reactions),
+        )
+        .filter(
+            or_(
+                Announcement.barangay_id == barangay_id,
+                Announcement.subdivision.has(Subdivision.barangay_id == barangay_id)
+            )
+        )
+    )
+    if status:
+        query = query.filter(Announcement.status == status)
+
+    rows = query.order_by(Announcement.published_at.desc(), Announcement.created_at.desc()).all()
+    return [_to_response(row) for row in rows]
+
+
+@router.patch("/{announcement_id}/status", response_model=AnnouncementResponse)
+def update_announcement_status(
+    announcement_id: int,
+    status: str,
+    db: Session = Depends(get_db)
+):
+    """Update status of an alert (e.g. Published, Archived, Draft)."""
+    ann = db.query(Announcement).filter(Announcement.announcement_id == announcement_id).first()
+    if not ann:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    
+    ann.status = status
+    db.commit()
+    db.refresh(ann)
+    ann = (
+        db.query(Announcement)
+        .options(
+            joinedload(Announcement.creator),
+            joinedload(Announcement.category),
+            joinedload(Announcement.subdivision),
+            joinedload(Announcement.media),
+            selectinload(Announcement.comments).joinedload(AnnouncementComment.user),
+            selectinload(Announcement.reactions)
+        )
+        .filter(Announcement.announcement_id == announcement_id)
+        .first()
+    )
+    return _to_response(ann)
 
 
 @router.get("/feed/resident/{user_id}", response_model=List[AnnouncementResponse])
@@ -163,7 +228,7 @@ def create_announcement(payload: AnnouncementCreate, db: Session = Depends(get_d
 
     target_status = payload.status or "Published"
     row = Announcement(
-        barangay_id=payload.barangay_id,  # type: ignore
+        barangay_id=payload.barangay_id or creator.barangay_id,  # type: ignore
         subdivision_id=payload.subdivision_id or creator.subdivision_id,  # type: ignore
         created_by=payload.created_by,  # type: ignore
         category_id=category.category_id,  # type: ignore

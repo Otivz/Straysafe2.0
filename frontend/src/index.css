@@ -463,3 +463,26 @@
   visibility: visible !important;
   display: block !important;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Eliminate browser focus rectangle / black box on map elements and polygons */
+/* -------------------------------------------------------------------------- */
+.leaflet-container *:focus,
+.leaflet-container *:focus-visible,
+.leaflet-container *:active,
+.leaflet-interactive,
+.leaflet-interactive:focus,
+.leaflet-interactive:focus-visible,
+.leaflet-overlay-pane svg,
+.leaflet-overlay-pane svg:focus,
+.leaflet-overlay-pane svg:focus-visible,
+.leaflet-overlay-pane path,
+.leaflet-overlay-pane path:focus,
+.leaflet-overlay-pane path:focus-visible,
+path.leaflet-interactive,
+path.leaflet-interactive:focus,
+path.leaflet-interactive:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+}

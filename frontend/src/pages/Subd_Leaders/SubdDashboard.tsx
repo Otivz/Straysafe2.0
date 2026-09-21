@@ -44,21 +44,25 @@ const SubdDashboard = () => {
     const navigate = useNavigate();
 
     const [reports, setReports] = useState<Report[]>(() => getCachedData<Report[]>('subd_dashboard_reports') || []);
-    const [rescues, setRescues] = useState<RescueRequest[]>(() => getCachedData<RescueRequest[]>('subd_dashboard_rescues') || []);
+    const [_rescues, setRescues] = useState<RescueRequest[]>(() => getCachedData<RescueRequest[]>('subd_dashboard_rescues') || []);
     const [claims, setClaims] = useState<any[]>(() => getCachedData<any[]>('subd_dashboard_claims') || []);
     const [holdingAnimals, setHoldingAnimals] = useState<any[]>(() => getCachedData<any[]>('subd_dashboard_holding') || []);
+    const [petsList, setPetsList] = useState<any[]>(() => getCachedData<any[]>('subd_dashboard_pets') || []);
     const [petCount, setPetCount] = useState<number>(() => getCachedData<number>('subd_dashboard_pets_count') || 0);
+    const [announcements, setAnnouncements] = useState<any[]>(() => getCachedData<any[]>('subd_dashboard_announcements') || []);
     const [loading, setLoading] = useState<boolean>(() => !getCachedData<Report[]>('subd_dashboard_reports'));
     const [priorityFilter, setPriorityFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
+    const [mapMode, setMapMode] = useState<'pins' | 'heatmap' | 'both'>('both');
     const [isMapExpanded, setIsMapExpanded] = useState(false);
     const [selectedDetailReport, setSelectedDetailReport] = useState<any>(null);
     const [selectedReport, setSelectedReport] = useState<any>(null);
+    const [selectedMapCoords, setSelectedMapCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [isNavigating, setIsNavigating] = useState(false);
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [trendFilter, setTrendFilter] = useState<'7D' | '4W' | '6M' | '1Y'>('7D');
-    
+
     // Cases tab states (2nd photo)
     const [activeCaseTab, setActiveCaseTab] = useState<'my' | 'escalated'>('my');
     const [casesSubFilter, setCasesSubFilter] = useState<'my' | 'unassigned'>('my');
@@ -104,7 +108,7 @@ const SubdDashboard = () => {
     useEffect(() => {
         const rawUser = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
         const user = rawUser ? JSON.parse(rawUser) : null;
-        const subId = user?.subdivision_id;
+        const subId = user?.subdivision_id || 1;
 
         const fetchAll = async () => {
             if (!getCachedData('subd_dashboard_reports')) {
@@ -116,13 +120,15 @@ const SubdDashboard = () => {
                 const petsUrl = subId ? `/pets/subdivision/${subId}` : '/pets/';
                 const claimsUrl = subId ? `/claims/?subdivision_id=${subId}` : '/claims/';
                 const holdingUrl = subId ? `/holding/?subdivision_id=${subId}` : '/holding/';
+                const announcementsUrl = subId ? `/announcements/subdivision/${subId}` : '/announcements/';
 
-                const [reportsRes, rescuesRes, petsRes, claimsRes, holdingRes] = await Promise.allSettled([
+                const [reportsRes, rescuesRes, petsRes, claimsRes, holdingRes, announcementsRes] = await Promise.allSettled([
                     api.get(reportsUrl),
                     api.get(rescuesUrl),
                     api.get(petsUrl),
                     api.get(claimsUrl),
                     api.get(holdingUrl),
+                    api.get(announcementsUrl),
                 ]);
                 if (reportsRes.status === 'fulfilled') {
                     const repData = reportsRes.value.data || [];
@@ -135,9 +141,11 @@ const SubdDashboard = () => {
                     setCachedData('subd_dashboard_rescues', rescData);
                 }
                 if (petsRes.status === 'fulfilled') {
-                    const petCountVal = (petsRes.value.data || []).length;
-                    setPetCount(petCountVal);
-                    setCachedData('subd_dashboard_pets_count', petCountVal);
+                    const pData = petsRes.value.data || [];
+                    setPetsList(pData);
+                    setPetCount(pData.length);
+                    setCachedData('subd_dashboard_pets', pData);
+                    setCachedData('subd_dashboard_pets_count', pData.length);
                 }
                 if (claimsRes.status === 'fulfilled') {
                     const claimsData = claimsRes.value.data || [];
@@ -149,6 +157,11 @@ const SubdDashboard = () => {
                     setHoldingAnimals(hData);
                     setCachedData('subd_dashboard_holding', hData);
                 }
+                if (announcementsRes.status === 'fulfilled') {
+                    const annData = announcementsRes.value.data || [];
+                    setAnnouncements(annData);
+                    setCachedData('subd_dashboard_announcements', annData);
+                }
             } catch (err) {
                 console.error('Dashboard fetch error:', err);
             } finally {
@@ -158,45 +171,76 @@ const SubdDashboard = () => {
         fetchAll();
     }, []);
 
-    const isResolvedOrClosed = (r: Report) => [6, 11, 12, 3, 9, 10, 14].includes(r.status_id);
+    const isResolvedOrClosed = (r: Report) => [6, 11, 12, 3, 9, 10, 14, 17, 18].includes(r.status_id);
     const activeReports = reports.filter(r => !isResolvedOrClosed(r));
-    const currentUserId = currentUser?.user_id || currentUser?.id;
+    const currentUserId = currentUser?.user_id || currentUser?.id || 3;
 
-    // Cases Filtering
+    // Cases Filtering strictly from database
     const rawMyCases = reports.filter(r => r.assigned_leader_id === currentUserId && !isResolvedOrClosed(r));
     const rawUnassigned = reports.filter(r => !r.assigned_leader_id && !isResolvedOrClosed(r));
     const rawEscalated = reports.filter(r => r.status_id === 4);
 
-    // Fallback sample cases if DB is empty so UI always matches reference
-    const sampleMyCases: Report[] = [
-        { report_id: 6, category_id: 1, animal_type: 'Injured Animal', landmark: 'Phase 2, Block C', status_id: 2, description: 'Pattern: Bicolor | Observed Conditions: Weak', is_verified: true, priority_level: 'High', created_at: new Date().toISOString(), latitude: 14.8085, longitude: 121.0022 },
-        { report_id: 20, category_id: 4, animal_type: 'Roaming Pack', landmark: 'Basketball Court', status_id: 2, description: 'Custody: Stray sighting (not touched) | Pattern: Bicolor | Observed Conditions: Healthy', is_verified: true, priority_level: 'Medium', created_at: new Date().toISOString(), latitude: 14.8099, longitude: 121.0035 },
-        { report_id: 14, category_id: 2, animal_type: 'Aggressive Stray', landmark: 'Main Gate', status_id: 2, description: 'Pattern: Brown/Black | Observed Conditions: Aggressive barking', is_verified: true, priority_level: 'High', created_at: new Date().toISOString(), latitude: 14.8072, longitude: 121.0041 },
-    ];
+    const myCasesCount = rawMyCases.length;
+    const unassignedCount = rawUnassigned.length;
+    const escalatedCount = rawEscalated.length;
 
-    const sampleUnassigned: Report[] = [
-        { report_id: 25, category_id: 5, animal_type: 'Animal Rescue Needed', landmark: 'Phase 3, Block B', status_id: 1, description: 'Kitten trapped under drainage grate | Observed Conditions: Active', is_verified: false, priority_level: 'Medium', created_at: new Date().toISOString(), latitude: 14.8105, longitude: 121.0018 },
-    ];
+    // Summary Card Statistics Calculations based on real database records
+    const pendingReviewReports = reports.filter(r =>
+        (r.status_id === 1 || r.status_id === 2 || !r.is_verified || r.verification_status === 'unverified') &&
+        !isResolvedOrClosed(r)
+    );
+    const pendingReviewCount = pendingReviewReports.length;
 
-    const sampleEscalated: Report[] = [
-        { report_id: 9, category_id: 3, animal_type: 'Possible Rabies Risk', landmark: 'Phase 1, Block A', status_id: 4, description: 'Disoriented stray dog exhibiting excessive drooling', is_verified: true, priority_level: 'High', created_at: new Date().toISOString(), latitude: 14.8065, longitude: 121.0029 },
-    ];
+    // Comparison calculations
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterdayStart = new Date(todayStart);
+    yesterdayStart.setDate(yesterdayStart.getDate() - 1);
 
-    const displayMyCases = rawMyCases.length > 0 ? rawMyCases : sampleMyCases;
-    const displayUnassigned = rawUnassigned.length > 0 ? rawUnassigned : sampleUnassigned;
-    const displayEscalated = rawEscalated.length > 0 ? rawEscalated : sampleEscalated;
+    const reportsToday = reports.filter(r => r.created_at && new Date(r.created_at) >= todayStart).length;
+    const reportsYesterday = reports.filter(r => {
+        if (!r.created_at) return false;
+        const d = new Date(r.created_at);
+        return d >= yesterdayStart && d < todayStart;
+    }).length;
+    const pendingDiff = reportsToday - reportsYesterday;
+    const pendingComparison = pendingDiff > 0
+        ? { text: `${pendingDiff} more than yesterday`, symbol: '↑', color: 'text-orange-600', bg: 'bg-orange-100' }
+        : pendingDiff < 0
+            ? { text: `${Math.abs(pendingDiff)} less than yesterday`, symbol: '↓', color: 'text-emerald-600', bg: 'bg-emerald-100' }
+            : { text: '0 change', symbol: '→', color: 'text-slate-500', bg: 'bg-slate-100' };
 
-    const myCasesCount = rawMyCases.length > 0 ? rawMyCases.length : 3;
-    const unassignedCount = rawUnassigned.length > 0 ? rawUnassigned.length : 0;
-    const escalatedCount = rawEscalated.length > 0 ? rawEscalated.length : 0;
+    const underBrgyCount = reports.filter(r => [4, 5, 13].includes(r.status_id)).length;
+    const displayPetCount = petCount;
 
-    // Stats calculations
-    const pendingReviewCount = reports.filter(r => r.status_id === 1 || r.status_id === 2 || !r.is_verified).length || 8;
-    const underBrgyCount = reports.filter(r => [4, 5, 13].includes(r.status_id)).length || 3;
-    const displayPetCount = petCount > 0 ? petCount : 5;
-    const pendingClaimsCount = claims.filter(c => c.status === 'Under Review' || c.status === 'Pending Review' || c.status === 'Evidence Requested').length || rescues.filter(r => r.status_id === 7 || r.status_id === 8).length || 4;
-    const activeHoldingAnimals = holdingAnimals.filter(a => ![3, 4, 5].includes(a.facility_status));
-    const holdingCount = activeHoldingAnimals.length > 0 ? activeHoldingAnimals.length : 2;
+    // Subtitle for Registered Pets: calculate pets registered in the current month (or last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const petsRegisteredThisMonth = petsList.filter(p => p.created_at && new Date(p.created_at) >= thirtyDaysAgo).length;
+
+    const pendingClaimsList = claims.filter(c => {
+        const s = (c.status || '').toLowerCase();
+        return s.includes('pending') || s.includes('review') || s.includes('evidence') || s.includes('potential') || s.includes('match');
+    });
+    const pendingClaimsCount = pendingClaimsList.length;
+
+    const claimsToday = claims.filter(c => {
+        const d = new Date(c.created_at || c.updated_at || 0);
+        return d >= todayStart;
+    }).length;
+    const claimsYesterday = claims.filter(c => {
+        const d = new Date(c.created_at || c.updated_at || 0);
+        return d >= yesterdayStart && d < todayStart;
+    }).length;
+    const claimsDiff = claimsToday - claimsYesterday;
+    const claimsComparison = claimsDiff > 0
+        ? { text: `${claimsDiff} more than yesterday`, symbol: '↑', color: 'text-purple-600', bg: 'bg-purple-100' }
+        : claimsDiff < 0
+            ? { text: `${Math.abs(claimsDiff)} less than yesterday`, symbol: '↓', color: 'text-slate-500', bg: 'bg-slate-100' }
+            : { text: '0 change', symbol: '→', color: 'text-purple-600', bg: 'bg-purple-100' };
+
+    const activeHoldingAnimals = holdingAnimals.filter(a => ![3, 4, 5, 7, 8].includes(a.facility_status));
+    const holdingCount = activeHoldingAnimals.length;
 
     // Filtered reports for Map based on priority
     const filteredMapReports = activeReports.filter(r => {
@@ -205,55 +249,55 @@ const SubdDashboard = () => {
         return p === priorityFilter;
     });
 
-    const highCount = activeReports.filter(r => (r.priority_level || '').toLowerCase() === 'high').length || 4;
-    const medCount = activeReports.filter(r => (r.priority_level || '').toLowerCase() === 'medium').length || 3;
-    const lowCount = activeReports.filter(r => (r.priority_level || '').toLowerCase() === 'low').length || 4;
-    const totalActiveCount = activeReports.length || 3;
+    const highCount = activeReports.filter(r => (r.priority_level || '').toLowerCase() === 'high').length;
+    const medCount = activeReports.filter(r => (r.priority_level || '').toLowerCase() === 'medium').length;
+    const lowCount = activeReports.filter(r => (r.priority_level || '').toLowerCase() === 'low').length;
+    const totalActiveCount = activeReports.length;
 
-    // Trend chart data calculation
+    // Trend chart data calculation from actual database reports
     const trendData = (() => {
         const data: { label: string; count: number }[] = [];
-        const now = new Date();
+        const nowDate = new Date();
 
         if (trendFilter === '7D') {
             for (let i = 6; i >= 0; i--) {
                 const d = new Date();
-                d.setDate(now.getDate() - i);
-                const label = d.toLocaleDateString('en-US', { weekday: 'short' });
+                d.setDate(nowDate.getDate() - i);
+                const label = d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
                 const dateStr = d.toISOString().slice(0, 10);
-                const count = reports.filter(r => r.created_at?.slice(0, 10) === dateStr).length;
-                data.push({ label, count: count > 0 ? count : (i === 1 ? 2 : i === 3 ? 3 : i === 5 ? 1 : 0) });
+                const count = reports.filter(r => r.created_at && r.created_at.slice(0, 10) === dateStr).length;
+                data.push({ label, count });
             }
         } else if (trendFilter === '4W') {
             for (let i = 3; i >= 0; i--) {
-                const start = new Date(now);
-                start.setDate(now.getDate() - (i + 1) * 7);
-                const end = new Date(now);
-                end.setDate(now.getDate() - i * 7);
+                const start = new Date(nowDate);
+                start.setDate(nowDate.getDate() - (i + 1) * 7);
+                const end = new Date(nowDate);
+                end.setDate(nowDate.getDate() - i * 7);
                 const label = `Wk ${4 - i}`;
                 const count = reports.filter(r => {
                     if (!r.created_at) return false;
                     const rDate = new Date(r.created_at);
                     return rDate >= start && rDate < end;
                 }).length;
-                data.push({ label, count: count > 0 ? count : [3, 6, 4, 5][i] });
+                data.push({ label, count });
             }
         } else if (trendFilter === '6M') {
             for (let i = 5; i >= 0; i--) {
-                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-                const nextMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+                const d = new Date(nowDate.getFullYear(), nowDate.getMonth() - i, 1);
+                const nextMonth = new Date(nowDate.getFullYear(), nowDate.getMonth() - i + 1, 1);
                 const label = d.toLocaleDateString('en-US', { month: 'short' });
                 const count = reports.filter(r => {
                     if (!r.created_at) return false;
                     const rDate = new Date(r.created_at);
                     return rDate >= d && rDate < nextMonth;
                 }).length;
-                data.push({ label, count: count > 0 ? count : [5, 8, 7, 11, 8, 10][i] });
+                data.push({ label, count });
             }
         } else if (trendFilter === '1Y') {
             for (let i = 11; i >= 0; i--) {
-                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-                const nextMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+                const d = new Date(nowDate.getFullYear(), nowDate.getMonth() - i, 1);
+                const nextMonth = new Date(nowDate.getFullYear(), nowDate.getMonth() - i + 1, 1);
                 const monthName = d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
                 const label = monthName === 'SEP' ? 'SEPT' : monthName;
                 const count = reports.filter(r => {
@@ -261,7 +305,7 @@ const SubdDashboard = () => {
                     const rDate = new Date(r.created_at);
                     return rDate >= d && rDate < nextMonth;
                 }).length;
-                data.push({ label, count: count > 0 ? count : [4, 6, 8, 5, 9, 12, 7, 10, 9, 6, 8, 11][i] });
+                data.push({ label, count });
             }
         }
 
@@ -318,14 +362,6 @@ const SubdDashboard = () => {
     };
 
     const mapMarkers = [
-        {
-            id: -1,
-            lat: ADMIN_HQ[0],
-            lng: ADMIN_HQ[1],
-            title: "Subdivision Gate / Office",
-            category: "HQ",
-            time: "Base"
-        },
         ...(userLocation ? [{
             id: -2,
             lat: userLocation[0],
@@ -333,6 +369,15 @@ const SubdDashboard = () => {
             title: "Your Location",
             category: "Leader",
             time: "Live"
+        }] : []),
+        ...(selectedMapCoords ? [{
+            id: -999,
+            lat: selectedMapCoords.lat,
+            lng: selectedMapCoords.lng,
+            title: `Selected Spot (${selectedMapCoords.lat.toFixed(5)}, ${selectedMapCoords.lng.toFixed(5)})`,
+            category: "Pinpoint",
+            color: "orange",
+            time: "Selected"
         }] : []),
         ...filteredMapReports
             .filter(r => r.latitude && r.longitude)
@@ -401,31 +446,20 @@ const SubdDashboard = () => {
         };
     };
 
-    // Fallback sample claims for Recent Pet Claims Queue
-    const sampleClaims = [
-        { claim_id: 101, pet_name: 'Bantay', breed: 'Aspin / Mix', claimant_name: 'Maria Santos', landmark: 'Phase 1', similarity_score: 96, status: 'Under Review' },
-        { claim_id: 102, pet_name: 'Luna', breed: 'Shih Tzu', claimant_name: 'Carlos Reyes', landmark: 'Phase 2', similarity_score: 92, status: 'Evidence Requested' },
-        { claim_id: 103, pet_name: 'Max', breed: 'Golden Mix', claimant_name: 'Ana Dizon', landmark: 'Basketball Court', similarity_score: 88, status: 'Approved' },
-        { claim_id: 104, pet_name: 'Mochi', breed: 'Persian Cat', claimant_name: 'Elena Cruz', landmark: 'Phase 1', similarity_score: 94, status: 'Pending Review' },
-        { claim_id: 105, pet_name: 'Rocky', breed: 'Shepherd Mix', claimant_name: 'Juan Dela Cruz', landmark: 'Phase 2', similarity_score: 85, status: 'Under Review' },
-    ];
-
-    const recentClaimsData = claims.length >= 2 
-        ? claims.slice(0, 5).map((c, idx) => ({
-            claim_id: c.claim_id || (idx + 101),
-            pet_name: c.pet?.pet_name || c.pet_name || 'Pet',
-            breed: c.pet?.breed || c.breed || 'Dog/Cat',
-            claimant_name: c.pet?.owner?.name || c.claimant?.name || c.claimant_name || 'Resident',
-            landmark: c.report?.landmark || c.sighting_location || c.landmark || `Phase ${(idx % 3) + 1}`,
-            similarity_score: (() => {
-                if (c.match_score !== undefined && c.match_score !== null) return c.match_score;
-                if (c.similarity_score !== undefined && c.similarity_score !== null) return c.similarity_score;
-                const match = c.remarks?.match(/AI detected a (\d+)% potential match/i);
-                return match ? parseInt(match[1]) : 90;
-            })(),
-            status: c.status || 'Under Review'
-        }))
-        : sampleClaims;
+    const recentClaimsData = claims.slice(0, 5).map((c, idx) => ({
+        claim_id: c.claim_id || (idx + 101),
+        pet_name: c.pet?.pet_name || c.pet_name || 'Pet',
+        breed: c.pet?.breed || c.breed || 'Dog/Cat',
+        claimant_name: c.pet?.owner?.name || c.claimant?.name || c.claimant_name || 'Resident',
+        landmark: c.report?.landmark || c.sighting_location || c.landmark || `Phase ${(idx % 3) + 1}`,
+        similarity_score: (() => {
+            if (c.match_score !== undefined && c.match_score !== null) return c.match_score;
+            if (c.similarity_score !== undefined && c.similarity_score !== null) return c.similarity_score;
+            const match = c.remarks?.match(/AI detected a (\d+)% potential match/i);
+            return match ? parseInt(match[1]) : 90;
+        })(),
+        status: c.status || 'Under Review'
+    }));
 
     const leaderName = currentUser?.name || currentUser?.full_name || 'Kyla Joy Arriola';
 
@@ -450,7 +484,7 @@ const SubdDashboard = () => {
 
                 {/* Dashboard Scrollable Body */}
                 <div className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6 pb-24 md:pb-8 flex flex-col gap-5 bg-[#F8FAFC]">
-                    
+
                     {/* 1. Greeting Hero Banner */}
                     <div className="bg-white rounded-3xl py-7 px-7 sm:px-9 border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.03)] flex flex-col sm:flex-row items-center justify-between gap-5 relative overflow-hidden group hover:shadow-[0_8px_30px_rgba(249,115,22,0.08)] transition-all duration-300 min-h-[110px]">
                         {/* Decorative background glow */}
@@ -487,148 +521,148 @@ const SubdDashboard = () => {
 
                     {/* 2. Key Metric Stat Cards */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                        
+
                         {/* Card 1: Pending Review */}
-                        <div 
+                        <div
                             onClick={() => navigate('/subd/reports')}
-                            className="bg-white rounded-3xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between h-[168px] min-h-[168px] transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_16px_36px_-6px_rgba(249,115,22,0.18)] hover:border-orange-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-orange-500 before:to-amber-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
+                            className="bg-white rounded-3xl p-4.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_16px_36px_-6px_rgba(249,115,22,0.18)] hover:border-orange-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-orange-500 before:to-amber-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
                         >
-                            <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start justify-between gap-2.5">
                                 <div className="min-w-0 flex-1">
-                                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-orange-600 transition-colors truncate">
+                                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-orange-600 transition-colors leading-tight">
                                         Pending Review
                                     </h3>
-                                    <p className="text-[11px] text-slate-400 mt-0.5 truncate">Awaiting your verification</p>
+                                    <p className="text-[11px] text-slate-400 mt-1 leading-snug break-words">Awaiting your verification</p>
                                 </div>
-                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-100/80 text-orange-500 flex items-center justify-center shrink-0 border border-orange-200/60 shadow-xs group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-100/80 text-orange-500 flex items-center justify-center shrink-0 border border-orange-200/60 shadow-xs group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
                                     </svg>
                                 </div>
                             </div>
-                            <div>
+                            <div className="mt-3">
                                 <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-orange-600 group-hover:scale-105 origin-left transition-all duration-300">
                                     {loading ? '...' : pendingReviewCount}
                                 </p>
-                                <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-orange-600">
-                                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-orange-100 text-orange-700 text-[9px] shrink-0">↑</span>
-                                    <span className="truncate">2 more than yesterday</span>
+                                <div className={`mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold ${pendingComparison.color}`}>
+                                    <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full ${pendingComparison.bg} text-[9px] shrink-0 font-black`}>{pendingComparison.symbol}</span>
+                                    <span className="leading-tight">{pendingComparison.text}</span>
                                 </div>
                             </div>
                         </div>
 
                         {/* Card 2: Under Barangay Action */}
-                        <div 
+                        <div
                             onClick={() => navigate('/subd/escalated')}
-                            className="bg-white rounded-3xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between h-[168px] min-h-[168px] transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_16px_36px_-6px_rgba(59,130,246,0.18)] hover:border-blue-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-blue-500 before:to-cyan-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
+                            className="bg-white rounded-3xl p-4.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_16px_36px_-6px_rgba(59,130,246,0.18)] hover:border-blue-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-blue-500 before:to-cyan-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
                         >
-                            <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start justify-between gap-2.5">
                                 <div className="min-w-0 flex-1">
-                                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-blue-600 transition-colors truncate">
+                                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-blue-600 transition-colors leading-tight">
                                         Barangay Action
                                     </h3>
-                                    <p className="text-[11px] text-slate-400 mt-0.5 truncate">Already endorsed / for dispatch</p>
+                                    <p className="text-[11px] text-slate-400 mt-1 leading-snug break-words">Endorsed to Barangay</p>
                                 </div>
-                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-50 to-cyan-100/80 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200/60 shadow-xs group-hover:scale-110 group-hover:-rotate-6 transition-all duration-300">
-                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-blue-50 to-cyan-100/80 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200/60 shadow-xs group-hover:scale-110 group-hover:-rotate-6 transition-all duration-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
                                     </svg>
                                 </div>
                             </div>
-                            <div>
+                            <div className="mt-3">
                                 <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-blue-600 group-hover:scale-105 origin-left transition-all duration-300">
                                     {loading ? '...' : underBrgyCount}
                                 </p>
                                 <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-blue-600">
                                     <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-100 text-blue-700 text-[9px] shrink-0">→</span>
-                                    <span className="truncate">0 change</span>
+                                    <span className="leading-tight">0 change</span>
                                 </div>
                             </div>
                         </div>
 
                         {/* Card 3: Registered Pets */}
-                        <div 
+                        <div
                             onClick={() => navigate('/subd/pets')}
-                            className="bg-white rounded-3xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between h-[168px] min-h-[168px] transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_16px_36px_-6px_rgba(16,185,129,0.18)] hover:border-emerald-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-emerald-500 before:to-teal-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
+                            className="bg-white rounded-3xl p-4.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_16px_36px_-6px_rgba(16,185,129,0.18)] hover:border-emerald-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-emerald-500 before:to-teal-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
                         >
-                            <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start justify-between gap-2.5">
                                 <div className="min-w-0 flex-1">
-                                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-emerald-600 transition-colors truncate">
+                                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-emerald-600 transition-colors leading-tight">
                                         Registered Pets
                                     </h3>
-                                    <p className="text-[11px] text-slate-400 mt-0.5 truncate">Total verified subdivision pets</p>
+                                    <p className="text-[11px] text-slate-400 mt-1 leading-snug break-words">Verified subdivision pets</p>
                                 </div>
-                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-100/80 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200/60 shadow-xs group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-100/80 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200/60 shadow-xs group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
                                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                                         <path d="M12 21.5c-3.038 0-5.5-2.462-5.5-5.5s2.462-5.5 5.5-5.5s5.5 2.462 5.5 5.5s-2.462 5.5-5.5 5.5zm-5.5-12c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zm11 0c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zM12 8c-1.381 0-2.5-1.119-2.5-2.5S10.619 3 12 3s2.5 1.119 2.5 2.5S13.381 8 12 8z" />
                                     </svg>
                                 </div>
                             </div>
-                            <div>
+                            <div className="mt-3">
                                 <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-emerald-600 group-hover:scale-105 origin-left transition-all duration-300">
                                     {loading ? '...' : displayPetCount}
                                 </p>
                                 <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-emerald-600">
-                                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 text-[9px] shrink-0">↑</span>
-                                    <span className="truncate">3 registered this month</span>
+                                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 text-[9px] shrink-0 font-black">↑</span>
+                                    <span className="leading-tight">{petsRegisteredThisMonth} registered this month</span>
                                 </div>
                             </div>
                         </div>
 
                         {/* Card 4: Pending Claims */}
-                        <div 
+                        <div
                             onClick={() => navigate('/subd/pet-claims')}
-                            className="bg-white rounded-3xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between h-[168px] min-h-[168px] transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_16px_36px_-6px_rgba(168,85,247,0.18)] hover:border-purple-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-purple-500 before:to-indigo-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
+                            className="bg-white rounded-3xl p-4.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_16px_36px_-6px_rgba(168,85,247,0.18)] hover:border-purple-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-purple-500 before:to-indigo-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
                         >
-                            <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start justify-between gap-2.5">
                                 <div className="min-w-0 flex-1">
-                                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-purple-600 transition-colors truncate">
+                                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-purple-600 transition-colors leading-tight">
                                         Pending Claims
                                     </h3>
-                                    <p className="text-[11px] text-slate-400 mt-0.5 truncate">Awaiting owner confirmation</p>
+                                    <p className="text-[11px] text-slate-400 mt-1 leading-snug break-words">Awaiting owner confirmation</p>
                                 </div>
-                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-50 to-indigo-100/80 text-purple-600 flex items-center justify-center shrink-0 border border-purple-200/60 shadow-xs group-hover:scale-110 group-hover:-rotate-6 transition-all duration-300">
-                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
+                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-purple-50 to-indigo-100/80 text-purple-600 flex items-center justify-center shrink-0 border border-purple-200/60 shadow-xs group-hover:scale-110 group-hover:-rotate-6 transition-all duration-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                 </div>
                             </div>
-                            <div>
+                            <div className="mt-3">
                                 <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-purple-600 group-hover:scale-105 origin-left transition-all duration-300">
                                     {loading ? '...' : pendingClaimsCount}
                                 </p>
-                                <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-purple-600">
-                                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-purple-100 text-purple-700 text-[9px] shrink-0">↑</span>
-                                    <span className="truncate">1 more than yesterday</span>
+                                <div className={`mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold ${claimsComparison.color}`}>
+                                    <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full ${claimsComparison.bg} text-[9px] shrink-0 font-black`}>{claimsComparison.symbol}</span>
+                                    <span className="leading-tight">{claimsComparison.text}</span>
                                 </div>
                             </div>
                         </div>
 
                         {/* Card 5: Holding Facility */}
-                        <div 
+                        <div
                             onClick={() => navigate('/subd/holding-facility')}
-                            className="bg-white rounded-3xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between h-[168px] min-h-[168px] transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_16px_36px_-6px_rgba(20,184,166,0.18)] hover:border-teal-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-teal-500 before:to-cyan-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
+                            className="bg-white rounded-3xl p-4.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_16px_36px_-6px_rgba(20,184,166,0.18)] hover:border-teal-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-teal-500 before:to-cyan-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
                         >
-                            <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start justify-between gap-2.5">
                                 <div className="min-w-0 flex-1">
-                                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-teal-600 transition-colors truncate">
+                                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-teal-600 transition-colors leading-tight">
                                         Holding Facility
                                     </h3>
-                                    <p className="text-[11px] text-slate-400 mt-0.5 truncate">Animals currently sheltered</p>
+                                    <p className="text-[11px] text-slate-400 mt-1 leading-snug break-words">Animals currently sheltered</p>
                                 </div>
-                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-teal-50 to-cyan-100/80 text-teal-600 flex items-center justify-center shrink-0 border border-teal-200/60 shadow-xs group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-teal-50 to-cyan-100/80 text-teal-600 flex items-center justify-center shrink-0 border border-teal-200/60 shadow-xs group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                                     </svg>
                                 </div>
                             </div>
-                            <div>
+                            <div className="mt-3">
                                 <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-teal-600 group-hover:scale-105 origin-left transition-all duration-300">
                                     {loading ? '...' : holdingCount}
                                 </p>
                                 <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-teal-600">
-                                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-teal-100 text-teal-700 text-[9px] shrink-0">↑</span>
-                                    <span className="truncate">Active in facility</span>
+                                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-teal-100 text-teal-700 text-[9px] shrink-0 font-black">✓</span>
+                                    <span className="leading-tight">{holdingCount === 1 ? '1 active in facility' : `${holdingCount} active in facility`}</span>
                                 </div>
                             </div>
                         </div>
@@ -637,13 +671,13 @@ const SubdDashboard = () => {
 
                     {/* 3. Main Workspace Grid: Map & Trend (Left) & Actions/Notices/Queue (Right) */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                        
+
                         {/* LEFT COLUMN: Map + Incident Trend (8 cols) */}
                         <div className="lg:col-span-8 flex flex-col gap-5">
-                            
+
                             {/* A. Community Incident Map Card */}
                             <div ref={mapSectionRef} className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col min-h-[520px]">
-                                
+
                                 {/* Map Header & Filter Pills */}
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                                     <div>
@@ -661,504 +695,591 @@ const SubdDashboard = () => {
                                         </p>
                                     </div>
 
-                                    {/* Priority Filter Pills */}
-                                    <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-2xl border border-slate-200/80 overflow-x-auto text-[11px] font-bold">
-                                        <button
-                                            onClick={() => setPriorityFilter('all')}
-                                            className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 ${
-                                                priorityFilter === 'all'
-                                                    ? 'bg-[#F97316] text-white shadow-xs font-black scale-[1.02]'
-                                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                                            }`}
-                                        >
-                                            All ({totalActiveCount})
-                                        </button>
-                                        <button
-                                            onClick={() => setPriorityFilter('high')}
-                                            className={`px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 transition-all duration-200 ${
-                                                priorityFilter === 'high'
-                                                    ? 'bg-rose-500 text-white shadow-xs font-black scale-[1.02]'
-                                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                                            }`}
-                                        >
-                                            <span className="w-2 h-2 rounded-full bg-rose-500 inline-block border border-white" />
-                                            <span>High ({highCount})</span>
-                                        </button>
-                                        <button
-                                            onClick={() => setPriorityFilter('medium')}
-                                            className={`px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 transition-all duration-200 ${
-                                                priorityFilter === 'medium'
-                                                    ? 'bg-amber-500 text-white shadow-xs font-black scale-[1.02]'
-                                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                                        }`}
-                                    >
-                                        <span className="w-2 h-2 rounded-full bg-amber-500 inline-block border border-white" />
-                                        <span>Medium ({medCount})</span>
-                                    </button>
-                                    <button
-                                        onClick={() => setPriorityFilter('low')}
-                                        className={`px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 transition-all duration-200 ${
-                                            priorityFilter === 'low'
-                                                ? 'bg-emerald-500 text-white shadow-xs font-black scale-[1.02]'
-                                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                                        }`}
-                                    >
-                                        <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block border border-white" />
-                                        <span>Low ({lowCount})</span>
-                                    </button>
+                                    {/* Priority Filter Pills & Map Mode Controls */}
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {/* Priority Filter Pills */}
+                                        <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-2xl border border-slate-200/80 overflow-x-auto text-[11px] font-bold">
+                                            <button
+                                                onClick={() => setPriorityFilter('all')}
+                                                className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${priorityFilter === 'all'
+                                                        ? 'bg-[#F97316] text-white shadow-xs font-black scale-[1.02]'
+                                                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                                                    }`}
+                                            >
+                                                All ({totalActiveCount})
+                                            </button>
+                                            <button
+                                                onClick={() => setPriorityFilter('high')}
+                                                className={`px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 transition-all duration-200 cursor-pointer ${priorityFilter === 'high'
+                                                        ? 'bg-rose-500 text-white shadow-xs font-black scale-[1.02]'
+                                                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                                                    }`}
+                                            >
+                                                <span className="w-2 h-2 rounded-full bg-rose-500 inline-block border border-white" />
+                                                <span>High ({highCount})</span>
+                                            </button>
+                                            <button
+                                                onClick={() => setPriorityFilter('medium')}
+                                                className={`px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 transition-all duration-200 cursor-pointer ${priorityFilter === 'medium'
+                                                        ? 'bg-amber-500 text-white shadow-xs font-black scale-[1.02]'
+                                                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                                                    }`}
+                                            >
+                                                <span className="w-2 h-2 rounded-full bg-amber-500 inline-block border border-white" />
+                                                <span>Medium ({medCount})</span>
+                                            </button>
+                                            <button
+                                                onClick={() => setPriorityFilter('low')}
+                                                className={`px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 transition-all duration-200 cursor-pointer ${priorityFilter === 'low'
+                                                        ? 'bg-emerald-500 text-white shadow-xs font-black scale-[1.02]'
+                                                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                                                    }`}
+                                            >
+                                                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block border border-white" />
+                                                <span>Low ({lowCount})</span>
+                                            </button>
 
-                                    {/* Fullscreen Expand button */}
-                                    <button
-                                        onClick={() => setIsMapExpanded(true)}
-                                        className="w-8 h-8 flex items-center justify-center bg-white hover:bg-slate-100 text-slate-600 rounded-xl border border-slate-200 shadow-2xs ml-1 shrink-0 active:scale-95 transition-all"
-                                        title="Expand Map"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
-                                        </svg>
-                                    </button>
+                                            {/* Fullscreen Expand button */}
+                                            <button
+                                                onClick={() => setIsMapExpanded(true)}
+                                                className="w-8 h-8 flex items-center justify-center bg-white hover:bg-slate-100 text-slate-600 rounded-xl border border-slate-200 shadow-2xs ml-1 shrink-0 active:scale-95 transition-all cursor-pointer"
+                                                title="Expand Map"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+                                                </svg>
+                                            </button>
+                                        </div>
+
+                                        {/* Map Mode Selector (Pins / Heatmap / Both) */}
+                                        <div className="flex items-center bg-slate-50 p-1 rounded-2xl border border-slate-200/80 text-[10px] font-black uppercase shadow-2xs">
+                                            <button
+                                                onClick={() => setMapMode('pins')}
+                                                className={`px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                                                    mapMode === 'pins'
+                                                        ? 'bg-[#F97316] text-white shadow-2xs font-black'
+                                                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/60'
+                                                }`}
+                                            >
+                                                Pins
+                                            </button>
+                                            <button
+                                                onClick={() => setMapMode('heatmap')}
+                                                className={`px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                                                    mapMode === 'heatmap'
+                                                        ? 'bg-[#F97316] text-white shadow-2xs font-black'
+                                                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/60'
+                                                }`}
+                                            >
+                                                Heatmap
+                                            </button>
+                                            <button
+                                                onClick={() => setMapMode('both')}
+                                                className={`px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                                                    mapMode === 'both'
+                                                        ? 'bg-[#F97316] text-white shadow-2xs font-black'
+                                                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/60'
+                                                }`}
+                                            >
+                                                Both
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
 
-                            {/* Map Canvas Container */}
-                            <div className="w-full flex-1 min-h-[420px] rounded-2xl overflow-hidden border border-slate-100 relative bg-slate-50">
-                                <MapComponent
-                                    height="100%"
-                                    center={[14.8093, 121.0028]}
-                                    zoom={15}
-                                    markers={mapMarkers}
-                                    showHeatmap={false}
-                                    heatmapPoints={heatmapPoints}
-                                    onViewDetails={(marker) => {
-                                        const reportId = marker.rawData?.report_id || (marker.id > 0 ? marker.id : null);
-                                        if (reportId) {
-                                            navigate(`/subd/reports/${reportId}`);
-                                        }
-                                    }}
-                                    routing={getRoutingConfig()}
-                                    onMarkerClick={(m) => {
-                                        if (m.id === -1) {
-                                            setSelectedReport(null);
-                                            setIsNavigating(false);
-                                        } else {
-                                            const fullReport = reports.find(r => r.report_id.toString() === m.id.toString());
-                                            if (fullReport) {
-                                                setSelectedReport(fullReport);
-                                                setIsNavigating(true);
+                                {/* Map Canvas Container */}
+                                <div className="w-full flex-1 min-h-[420px] rounded-2xl overflow-hidden border border-slate-100 relative bg-slate-50">
+                                    <MapComponent
+                                        height="100%"
+                                        center={[14.8013, 121.0036]}
+                                        zoom={16.5}
+                                        markers={mapMode !== 'heatmap' ? mapMarkers : mapMarkers.filter(m => m.id < 0)}
+                                        showHeatmap={mapMode !== 'pins'}
+                                        heatmapPoints={heatmapPoints}
+                                        showGeofence={true}
+                                        showLandmarks={true}
+                                        onMapClick={(lat, lng) => setSelectedMapCoords({ lat, lng })}
+                                        onViewDetails={(marker) => {
+                                            const reportId = marker.rawData?.report_id || (marker.id > 0 ? marker.id : null);
+                                            if (reportId) {
+                                                navigate(`/subd/reports/${reportId}`);
                                             }
-                                        }
-                                    }}
-                                />
+                                        }}
+                                        routing={getRoutingConfig()}
+                                        onMarkerClick={(m) => {
+                                            if (m.id < 0) {
+                                                setSelectedReport(null);
+                                                setIsNavigating(false);
+                                            } else {
+                                                const fullReport = reports.find(r => r.report_id.toString() === m.id.toString());
+                                                if (fullReport) {
+                                                    setSelectedReport(fullReport);
+                                                    setIsNavigating(true);
+                                                }
+                                            }
+                                        }}
+                                    />
 
-                                {/* Bottom-Left Overlay Legend */}
-                                <div className="absolute bottom-4 left-4 z-[1000]">
-                                    <div className="bg-white/95 backdrop-blur-md p-3.5 rounded-2xl shadow-xl border border-slate-200/90 text-[11px] font-bold text-slate-700 flex flex-col gap-2 min-w-[135px]">
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-xs shrink-0" />
-                                            <span>High Priority</span>
+                                    {/* Floating Coordinate Pill Overlay when clicking on map */}
+                                    {selectedMapCoords && (
+                                        <div className="absolute top-4 right-4 z-[1000] bg-white/95 backdrop-blur-md px-3.5 py-2 rounded-2xl shadow-xl border border-orange-200/90 flex items-center gap-2.5 text-xs animate-in fade-in zoom-in-95 duration-150">
+                                            <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />
+                                            <span className="font-black text-slate-800 tracking-tight">
+                                                {selectedMapCoords.lat.toFixed(6)}, {selectedMapCoords.lng.toFixed(6)}
+                                            </span>
+                                            <button
+                                                onClick={() => {
+                                                    if (navigator.clipboard) {
+                                                        navigator.clipboard.writeText(`${selectedMapCoords.lat.toFixed(6)}, ${selectedMapCoords.lng.toFixed(6)}`);
+                                                    }
+                                                }}
+                                                className="px-2 py-0.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-bold text-[10px] transition-colors shadow-2xs cursor-pointer"
+                                                title="Copy coordinates"
+                                            >
+                                                Copy
+                                            </button>
+                                            <button
+                                                onClick={() => setSelectedMapCoords(null)}
+                                                className="text-slate-400 hover:text-slate-600 font-bold ml-1 cursor-pointer"
+                                                title="Clear pinpoint"
+                                            >
+                                                ✕
+                                            </button>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-xs shrink-0" />
-                                            <span>Medium Priority</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs shrink-0" />
-                                            <span>Low Priority</span>
-                                        </div>
-                                        <div className="h-px bg-slate-100 my-0.5" />
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-xs shrink-0" />
-                                            <span>Verified</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-2.5 h-2.5 rounded-full bg-slate-300 border border-slate-400 shadow-xs shrink-0" />
-                                            <span>Unverified</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                                    )}
 
-                        {/* B. Incident Report Trend Card (Below Map) */}
-                        <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col gap-3">
-                            {/* Trend Header */}
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-orange-500 font-bold">📈</span>
-                                        <h3 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-tight">
-                                            Incident Report Trend
-                                        </h3>
-                                    </div>
-                                    <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                                        Frequency of reports received over time
-                                    </p>
-                                </div>
-
-                                {/* Segmented Filter Pills */}
-                                <div className="flex items-center bg-slate-100/90 p-1 rounded-2xl border border-slate-200/60">
-                                    {(['7D', '4W', '6M', '1Y'] as const).map((period) => (
-                                        <button
-                                            key={period}
-                                            onClick={() => setTrendFilter(period)}
-                                            className={`px-3 py-1 text-[10px] font-black rounded-xl transition-all ${
-                                                trendFilter === period
-                                                    ? 'bg-[#0F172A] text-white shadow-xs'
-                                                    : 'text-[#64748B] hover:text-slate-900 hover:bg-white/60'
-                                            }`}
-                                        >
-                                            {period}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Chart Area */}
-                            {loading ? (
-                                <div className="h-[140px] bg-slate-50 rounded-2xl animate-pulse" />
-                            ) : (
-                                <div className="relative h-[150px] w-full flex pt-2">
-                                    {/* Left Y-Axis */}
-                                    <div className="w-6 sm:w-7 shrink-0 flex flex-col justify-between pb-6 select-none z-20 bg-white">
-                                        {[2, 1, 0].map((step, i) => {
-                                            const maxScale = maxTrend <= 2 ? 2 : Math.ceil(maxTrend / 2) * 2;
-                                            const val = Math.round((maxScale / 2) * step);
-                                            return (
-                                                <span key={i} className="text-[9px] font-bold text-slate-300 text-right pr-2 -mt-2">
-                                                    {val}
-                                                </span>
-                                            );
-                                        })}
-                                    </div>
-
-                                    {/* Scrollable Track */}
-                                    <div 
-                                        ref={chartScrollRef}
-                                        className="flex-1 relative overflow-x-auto overflow-y-hidden custom-scrollbar pb-1"
-                                        style={{ scrollbarWidth: 'thin' }}
-                                    >
-                                        {/* Dashed Gridlines */}
-                                        <div className="absolute inset-0 flex flex-col justify-between pb-6 pointer-events-none min-w-full">
-                                            {[2, 1, 0].map((_, i) => (
-                                                <div key={i} className="w-full h-0 border-t border-dashed border-slate-100" />
-                                            ))}
-                                        </div>
-                                        
-                                        {/* Bars Track */}
-                                        <div 
-                                            className="flex items-end justify-between relative z-10 h-full pb-6 px-3 gap-2 sm:gap-3"
-                                            style={{ minWidth: trendFilter === '1Y' ? '600px' : trendFilter === '6M' ? '320px' : '100%' }}
-                                        >
-                                            {trendData.map((day, i) => {
-                                                const maxScale = maxTrend <= 2 ? 2 : Math.ceil(maxTrend / 2) * 2;
-                                                const heightPct = maxScale > 0 ? (day.count / maxScale) * 100 : 0;
-                                                
-                                                return (
-                                                    <div key={i} className="flex flex-col items-center justify-end h-full flex-1 min-w-[24px] sm:min-w-[28px] max-w-[48px] group relative">
-                                                        {day.count > 0 ? (
-                                                            <>
-                                                                <div className="mb-1 text-[9px] font-black text-orange-600 bg-orange-50 border border-orange-200/80 shadow-2xs rounded px-1.5 py-0.5 z-20 transition-transform group-hover:scale-110">
-                                                                    {day.count}
-                                                                </div>
-                                                                <div 
-                                                                    className="w-[18px] sm:w-[22px] bg-gradient-to-t from-orange-500 to-amber-400 group-hover:from-orange-600 group-hover:to-amber-500 rounded-t-md transition-all duration-300 shadow-xs"
-                                                                    style={{ height: `${heightPct}%` }}
-                                                                />
-                                                            </>
-                                                        ) : (
-                                                            <div className="w-[14px] h-[3px] bg-slate-200 rounded-full mb-0.5" />
-                                                        )}
-                                                        
-                                                        {/* X-axis label */}
-                                                        <span className="absolute -bottom-5 text-[9px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
-                                                            {day.label}
-                                                        </span>
+                                    {/* Bottom-Left Overlay Legend */}
+                                    <div className="absolute bottom-4 left-4 z-[1000]">
+                                        <div className="bg-white/95 backdrop-blur-md p-3.5 rounded-2xl shadow-xl border border-slate-200/90 text-[11px] font-bold text-slate-700 flex flex-col gap-2 min-w-[135px]">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-xs shrink-0" />
+                                                <span>High Priority</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-xs shrink-0" />
+                                                <span>Medium Priority</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs shrink-0" />
+                                                <span>Low Priority</span>
+                                            </div>
+                                            <div className="h-px bg-slate-100 my-0.5" />
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-xs shrink-0" />
+                                                <span>Verified</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-2.5 h-2.5 rounded-full bg-slate-300 border border-slate-400 shadow-xs shrink-0" />
+                                                <span>Unverified</span>
+                                            </div>
+                                            {mapMode !== 'pins' && (
+                                                <>
+                                                    <div className="h-px bg-slate-100 my-0.5" />
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="w-4 h-2 rounded bg-gradient-to-r from-blue-500 via-amber-400 to-rose-500 shadow-xs shrink-0" />
+                                                        <span>Incident Heat</span>
                                                     </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* B. Incident Report Trend Card (Below Map) */}
+                            <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col gap-3">
+                                {/* Trend Header */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
+                                                <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+                                            </svg>
+                                            <h3 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-tight">
+                                                Incident Report Trend
+                                            </h3>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                                            Frequency of reports received over time
+                                        </p>
+                                    </div>
+
+                                    {/* Segmented Filter Pills */}
+                                    <div className="flex items-center bg-slate-100/90 p-1 rounded-2xl border border-slate-200/60">
+                                        {(['7D', '4W', '6M', '1Y'] as const).map((period) => (
+                                            <button
+                                                key={period}
+                                                onClick={() => setTrendFilter(period)}
+                                                className={`px-3 py-1 text-[10px] font-black rounded-xl transition-all ${trendFilter === period
+                                                        ? 'bg-[#0F172A] text-white shadow-xs'
+                                                        : 'text-[#64748B] hover:text-slate-900 hover:bg-white/60'
+                                                    }`}
+                                            >
+                                                {period}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Chart Area */}
+                                {loading ? (
+                                    <div className="h-[140px] bg-slate-50 rounded-2xl animate-pulse" />
+                                ) : (
+                                    <div className="relative h-[150px] w-full flex pt-2">
+                                        {/* Left Y-Axis */}
+                                        <div className="w-6 sm:w-7 shrink-0 flex flex-col justify-between pb-6 select-none z-20 bg-white">
+                                            {[2, 1, 0].map((step, i) => {
+                                                const maxScale = maxTrend <= 2 ? 2 : Math.ceil(maxTrend / 2) * 2;
+                                                const val = Math.round((maxScale / 2) * step);
+                                                return (
+                                                    <span key={i} className="text-[9px] font-bold text-slate-300 text-right pr-2 -mt-2">
+                                                        {val}
+                                                    </span>
                                                 );
                                             })}
                                         </div>
+
+                                        {/* Scrollable Track */}
+                                        <div
+                                            ref={chartScrollRef}
+                                            className="flex-1 relative overflow-x-auto overflow-y-hidden custom-scrollbar pb-1"
+                                            style={{ scrollbarWidth: 'thin' }}
+                                        >
+                                            {/* Dashed Gridlines */}
+                                            <div className="absolute inset-0 flex flex-col justify-between pb-6 pointer-events-none min-w-full">
+                                                {[2, 1, 0].map((_, i) => (
+                                                    <div key={i} className="w-full h-0 border-t border-dashed border-slate-100" />
+                                                ))}
+                                            </div>
+
+                                            {/* Bars Track */}
+                                            <div
+                                                className="flex items-end justify-between relative z-10 h-full pb-6 px-3 gap-2 sm:gap-3"
+                                                style={{ minWidth: trendFilter === '1Y' ? '600px' : trendFilter === '6M' ? '320px' : '100%' }}
+                                            >
+                                                {trendData.map((day, i) => {
+                                                    const maxScale = maxTrend <= 2 ? 2 : Math.ceil(maxTrend / 2) * 2;
+                                                    const heightPct = maxScale > 0 ? (day.count / maxScale) * 100 : 0;
+
+                                                    return (
+                                                        <div key={i} className="flex flex-col items-center justify-end h-full flex-1 min-w-[24px] sm:min-w-[28px] max-w-[48px] group relative">
+                                                            {day.count > 0 ? (
+                                                                <>
+                                                                    <div className="mb-1 text-[9px] font-black text-orange-600 bg-orange-50 border border-orange-200/80 shadow-2xs rounded px-1.5 py-0.5 z-20 transition-transform group-hover:scale-110">
+                                                                        {day.count}
+                                                                    </div>
+                                                                    <div
+                                                                        className="w-[18px] sm:w-[22px] bg-gradient-to-t from-orange-500 to-amber-400 group-hover:from-orange-600 group-hover:to-amber-500 rounded-t-md transition-all duration-300 shadow-xs"
+                                                                        style={{ height: `${heightPct}%` }}
+                                                                    />
+                                                                </>
+                                                            ) : (
+                                                                <div className="w-[14px] h-[3px] bg-slate-200 rounded-full mb-0.5" />
+                                                            )}
+
+                                                            {/* X-axis label */}
+                                                            <span className="absolute -bottom-5 text-[9px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                                                                {day.label}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
                                     </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* RIGHT COLUMN: Quick Actions, Cases Tab Section, Active Hazard Notices, Recent Incident Queue (4 cols) */}
+                        <div className="lg:col-span-4 flex flex-col gap-5">
+
+                            {/* 1. Quick Actions */}
+                            <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col gap-3">
+                                <div className="flex items-center gap-2 text-slate-900 font-black text-xs uppercase tracking-wider">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                                    </svg>
+                                    <span>Quick Actions</span>
                                 </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* RIGHT COLUMN: Quick Actions, Cases Tab Section, Active Hazard Notices, Recent Incident Queue (4 cols) */}
-                    <div className="lg:col-span-4 flex flex-col gap-5">
-                        
-                        {/* 1. Quick Actions */}
-                        <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col gap-3">
-                            <div className="flex items-center gap-2 text-slate-900 font-black text-xs uppercase tracking-wider">
-                                <span className="text-orange-500 animate-bounce">⚡</span>
-                                <span>Quick Actions</span>
-                            </div>
-                            <div className="flex flex-col gap-2.5">
-                                {/* Action 1 */}
-                                <button
-                                    onClick={() => navigate('/subd/reports')}
-                                    className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-orange-500 via-[#F97316] to-amber-500 text-white font-bold text-xs shadow-md shadow-orange-500/20 hover:shadow-lg hover:shadow-orange-500/30 hover:scale-[1.01] active:scale-[0.98] transition-all duration-200 group cursor-pointer"
-                                >
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center text-white group-hover:rotate-6 transition-transform">
-                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                            </svg>
-                                        </div>
-                                        <span>Verify Incoming Reports</span>
-                                    </div>
-                                    <span className="text-white/90 group-hover:translate-x-1 transition-transform font-bold">→</span>
-                                </button>
-
-                                {/* Action 2 */}
-                                <button
-                                    onClick={() => navigate('/subd/hazard-alert')}
-                                    className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-blue-500 via-cyan-500 to-sky-500 text-white font-bold text-xs shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:scale-[1.01] active:scale-[0.98] transition-all duration-200 group cursor-pointer"
-                                >
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center text-white group-hover:rotate-6 transition-transform">
-                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
-                                            </svg>
-                                        </div>
-                                        <span>Broadcast Hazard Alert</span>
-                                    </div>
-                                    <span className="text-white/90 group-hover:translate-x-1 transition-transform font-bold">→</span>
-                                </button>
-
-                                {/* Action 3 */}
-                                <button
-                                    onClick={() => navigate('/subd/escalated')}
-                                    className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-purple-500 via-indigo-500 to-violet-500 text-white font-bold text-xs shadow-md shadow-purple-500/20 hover:shadow-lg hover:shadow-purple-500/30 hover:scale-[1.01] active:scale-[0.98] transition-all duration-200 group cursor-pointer"
-                                >
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center text-white group-hover:rotate-6 transition-transform">
-                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                                            </svg>
-                                        </div>
-                                        <span>View Escalated Missions</span>
-                                    </div>
-                                    <span className="text-white/90 group-hover:translate-x-1 transition-transform font-bold">→</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* 2. Cases Section (Tabbed: MY CASES / ESCALATED - 2nd Photo) */}
-                        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col overflow-hidden">
-                            {/* Tabs Header */}
-                            <div className="flex items-center border-b border-slate-100 px-5 pt-3.5 gap-6 bg-white shrink-0">
-                                <button 
-                                    onClick={() => setActiveCaseTab('my')}
-                                    className={`pb-2.5 text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 relative cursor-pointer ${
-                                        activeCaseTab === 'my' 
-                                            ? 'text-slate-900 border-b-2 border-[#F97316]' 
-                                            : 'text-slate-400 hover:text-slate-700'
-                                    }`}
-                                >
-                                    <span>MY CASES ({myCasesCount})</span>
-                                </button>
-                                <button 
-                                    onClick={() => setActiveCaseTab('escalated')}
-                                    className={`pb-2.5 text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 relative cursor-pointer ${
-                                        activeCaseTab === 'escalated' 
-                                            ? 'text-slate-900 border-b-2 border-[#F97316]' 
-                                            : 'text-slate-400 hover:text-slate-700'
-                                    }`}
-                                >
-                                    <span>ESCALATED ({escalatedCount})</span>
-                                </button>
-                            </div>
-
-                            {/* Sub-bar for My Cases */}
-                            {activeCaseTab === 'my' && (
-                                <div className="flex items-center justify-between px-5 py-3 bg-white border-b border-slate-50 text-xs">
-                                    <div className="flex items-center gap-2">
-                                        <button 
-                                            onClick={() => setCasesSubFilter('my')} 
-                                            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                                                casesSubFilter === 'my' 
-                                                    ? 'bg-[#F97316] text-white shadow-xs' 
-                                                    : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
-                                            }`}
-                                        >
-                                            Assigned to Me ({myCasesCount})
-                                        </button>
-                                        <button 
-                                            onClick={() => setCasesSubFilter('unassigned')} 
-                                            className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                                                casesSubFilter === 'unassigned' 
-                                                    ? 'bg-[#F97316] text-white shadow-xs' 
-                                                    : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
-                                            }`}
-                                        >
-                                            Unassigned ({unassignedCount})
-                                        </button>
-                                    </div>
-                                    <button 
+                                <div className="flex flex-col gap-2.5">
+                                    {/* Action 1 */}
+                                    <button
                                         onClick={() => navigate('/subd/reports')}
-                                        className="text-[11px] font-bold text-[#F97316] hover:underline cursor-pointer"
+                                        className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-orange-500 via-[#F97316] to-amber-500 text-white font-bold text-xs shadow-md shadow-orange-500/20 hover:shadow-lg hover:shadow-orange-500/30 hover:scale-[1.01] active:scale-[0.98] transition-all duration-200 group cursor-pointer"
                                     >
-                                        All Reports →
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center text-white group-hover:rotate-6 transition-transform">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
+                                                </svg>
+                                            </div>
+                                            <span>Verify Incoming Reports</span>
+                                        </div>
+                                        <span className="text-white/90 group-hover:translate-x-1 transition-transform font-bold">→</span>
+                                    </button>
+
+                                    {/* Action 2 */}
+                                    <button
+                                        onClick={() => navigate('/subd/hazard-alert')}
+                                        className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-blue-500 via-cyan-500 to-sky-500 text-white font-bold text-xs shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:scale-[1.01] active:scale-[0.98] transition-all duration-200 group cursor-pointer"
+                                    >
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center text-white group-hover:rotate-6 transition-transform">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fillRule="evenodd" d="M18 3a1 1 0 00-1.447-.894L8.763 6H5a3 3 0 000 6h.28l1.771 5.316A1 1 0 008 18h1a1 1 0 001-1v-4.382l6.553 3.276A1 1 0 0018 15V3z" clipRule="evenodd" />
+                                                </svg>
+                                            </div>
+                                            <span>Broadcast Hazard Alert</span>
+                                        </div>
+                                        <span className="text-white/90 group-hover:translate-x-1 transition-transform font-bold">→</span>
+                                    </button>
+
+                                    {/* Action 3 */}
+                                    <button
+                                        onClick={() => navigate('/subd/escalated')}
+                                        className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-purple-500 via-indigo-500 to-violet-500 text-white font-bold text-xs shadow-md shadow-purple-500/20 hover:shadow-lg hover:shadow-purple-500/30 hover:scale-[1.01] active:scale-[0.98] transition-all duration-200 group cursor-pointer"
+                                    >
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center text-white group-hover:rotate-6 transition-transform">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                                                </svg>
+                                            </div>
+                                            <span>View Escalated Missions</span>
+                                        </div>
+                                        <span className="text-white/90 group-hover:translate-x-1 transition-transform font-bold">→</span>
                                     </button>
                                 </div>
-                            )}
+                            </div>
 
-                            {/* Cases List Body */}
-                            <div className="p-4 space-y-3.5 overflow-y-auto max-h-[380px] custom-scrollbar">
-                                {activeCaseTab === 'my' && casesSubFilter === 'my' && (
-                                    displayMyCases.map(r => (
-                                        <div key={r.report_id} className="border border-slate-100 shadow-xs rounded-2xl p-4 flex flex-col gap-2.5 hover:border-slate-300 transition-colors bg-white relative overflow-hidden group">
-                                            <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#F97316] rounded-l-2xl" />
-                                            <div className="flex justify-between items-center pl-1">
-                                                <span className="text-xs font-black text-slate-900">
-                                                    ID #{r.report_id.toString().padStart(4, '0')} — {categoryMap[r.category_id] || r.animal_type || 'Incident'}
-                                                </span>
-                                                <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 rounded-md text-[9px] font-black uppercase tracking-wider">
-                                                    {getStatusName(r.status_id)}
-                                                </span>
-                                            </div>
-                                            <p className="text-xs text-slate-600 leading-relaxed line-clamp-2 pl-1">
-                                                {r.description || `Incident reported at ${r.landmark || 'subdivision'}.`}
-                                            </p>
-                                            
-                                            {r.landmark && (
-                                                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg ml-1">
-                                                    <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                                    </svg>
-                                                    <span className="truncate">{r.landmark}</span>
-                                                </div>
-                                            )}
+                            {/* 2. Cases Section (Tabbed: MY CASES / ESCALATED - 2nd Photo) */}
+                            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col overflow-hidden">
+                                {/* Tabs Header */}
+                                <div className="flex items-center border-b border-slate-100 px-5 pt-3.5 gap-6 bg-white shrink-0">
+                                    <button
+                                        onClick={() => setActiveCaseTab('my')}
+                                        className={`pb-2.5 text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 relative cursor-pointer ${activeCaseTab === 'my'
+                                                ? 'text-slate-900 border-b-2 border-[#F97316]'
+                                                : 'text-slate-400 hover:text-slate-700'
+                                            }`}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
+                                        </svg>
+                                        <span>MY CASES ({myCasesCount})</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveCaseTab('escalated')}
+                                        className={`pb-2.5 text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 relative cursor-pointer ${activeCaseTab === 'escalated'
+                                                ? 'text-slate-900 border-b-2 border-[#F97316]'
+                                                : 'text-slate-400 hover:text-slate-700'
+                                            }`}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                                        </svg>
+                                        <span>ESCALATED ({escalatedCount})</span>
+                                    </button>
+                                </div>
 
-                                            <div className="grid grid-cols-2 gap-2.5 mt-1 pt-2.5 border-t border-slate-100 text-xs pl-1">
-                                                <button 
-                                                    onClick={() => handleLocateOnMap(r)}
-                                                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs bg-white hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
-                                                >
-                                                    <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                                    </svg>
-                                                    Locate
-                                                </button>
-                                                <button 
-                                                    onClick={() => setSelectedDetailReport(r)} 
-                                                    className="flex items-center justify-center py-2 px-3 rounded-xl bg-[#F97316] hover:bg-orange-600 text-white font-bold text-xs transition-colors shadow-xs cursor-pointer"
-                                                >
-                                                    Details
-                                                </button>
-                                            </div>
+                                {/* Sub-bar for My Cases */}
+                                {activeCaseTab === 'my' && (
+                                    <div className="flex items-center justify-between px-5 py-3 bg-white border-b border-slate-50 text-xs">
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => setCasesSubFilter('my')}
+                                                className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${casesSubFilter === 'my'
+                                                        ? 'bg-[#F97316] text-white shadow-xs'
+                                                        : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
+                                                    }`}
+                                            >
+                                                Assigned to Me ({myCasesCount})
+                                            </button>
+                                            <button
+                                                onClick={() => setCasesSubFilter('unassigned')}
+                                                className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${casesSubFilter === 'unassigned'
+                                                        ? 'bg-[#F97316] text-white shadow-xs'
+                                                        : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
+                                                    }`}
+                                            >
+                                                Unassigned ({unassignedCount})
+                                            </button>
                                         </div>
-                                    ))
+                                        <button
+                                            onClick={() => navigate('/subd/reports')}
+                                            className="text-[11px] font-bold text-[#F97316] hover:underline cursor-pointer"
+                                        >
+                                            All Reports →
+                                        </button>
+                                    </div>
                                 )}
 
-                                {activeCaseTab === 'my' && casesSubFilter === 'unassigned' && (
-                                    displayUnassigned.length > 0 ? (
-                                        displayUnassigned.map(r => (
-                                            <div key={r.report_id} className="border border-amber-100 bg-[#FFFDF7] shadow-xs rounded-2xl p-4 flex flex-col gap-2.5 hover:border-amber-300 transition-colors relative overflow-hidden">
-                                                <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-amber-400 rounded-l-2xl" />
-                                                <div className="flex justify-between items-center pl-1">
-                                                    <span className="text-xs font-black text-slate-900">
-                                                        ID #{r.report_id.toString().padStart(4, '0')} — {categoryMap[r.category_id] || r.animal_type || 'Incident'}
-                                                    </span>
-                                                    <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md text-[9px] font-black uppercase tracking-wider">
-                                                        UNASSIGNED
-                                                    </span>
-                                                </div>
-                                                <p className="text-xs text-slate-600 leading-relaxed line-clamp-2 pl-1">
-                                                    {r.description || `Incident reported at ${r.landmark || 'subdivision'}.`}
-                                                </p>
-                                                
-                                                {r.landmark && (
-                                                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 bg-white/80 border border-amber-50 px-2.5 py-1 rounded-lg ml-1">
-                                                        <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                                                        <span className="truncate">{r.landmark}</span>
+                                {/* Cases List Body */}
+                                <div className="p-4 space-y-3.5 overflow-y-auto max-h-[380px] custom-scrollbar">
+                                    {activeCaseTab === 'my' && casesSubFilter === 'my' && (
+                                        rawMyCases.length > 0 ? (
+                                            rawMyCases.map(r => (
+                                                <div key={r.report_id} className="border border-slate-100 shadow-xs rounded-2xl p-4 flex flex-col gap-2.5 hover:border-slate-300 transition-colors bg-white relative overflow-hidden group">
+                                                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#F97316] rounded-l-2xl" />
+                                                    <div className="flex justify-between items-center pl-1">
+                                                        <span className="text-xs font-black text-slate-900">
+                                                            ID #{r.report_id.toString().padStart(4, '0')} — {categoryMap[r.category_id] || r.animal_type || 'Incident'}
+                                                        </span>
+                                                        <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 rounded-md text-[9px] font-black uppercase tracking-wider">
+                                                            {getStatusName(r.status_id)}
+                                                        </span>
                                                     </div>
-                                                )}
+                                                    <p className="text-xs text-slate-600 leading-relaxed line-clamp-2 pl-1">
+                                                        {r.description || `Incident reported at ${r.landmark || 'subdivision'}.`}
+                                                    </p>
 
-                                                <div className="grid grid-cols-2 gap-2.5 mt-1 pt-2.5 border-t border-amber-100/60 text-xs pl-1">
-                                                    <button 
-                                                        onClick={() => setSelectedDetailReport(r)} 
-                                                        className="flex items-center justify-center py-2 px-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs bg-white hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
-                                                    >
-                                                        View
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => handleClaimReport(r.report_id)}
-                                                        disabled={claimingId === r.report_id}
-                                                        className="flex items-center justify-center py-2 px-3 rounded-xl bg-[#F97316] hover:bg-[#ea580c] text-white font-bold text-xs transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
-                                                    >
-                                                        {claimingId === r.report_id ? 'Claiming...' : 'Claim Case'}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <div className="text-center text-slate-400 py-8">
-                                            <p className="text-xs font-bold text-slate-600">No unassigned cases</p>
-                                        </div>
-                                    )
-                                )}
+                                                    {r.landmark && (
+                                                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg ml-1">
+                                                            <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                            </svg>
+                                                            <span className="truncate">{r.landmark}</span>
+                                                        </div>
+                                                    )}
 
-                                {activeCaseTab === 'escalated' && (
-                                    displayEscalated.length > 0 ? (
-                                        displayEscalated.map(r => (
-                                            <div key={r.report_id} className="border border-orange-100 bg-[#FFF9F5] rounded-2xl p-4 flex flex-col gap-2.5 relative overflow-hidden shadow-xs">
-                                                <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#EA580C] rounded-l-2xl" />
-                                                <div className="flex justify-between items-center pl-1">
-                                                    <span className="text-xs font-black text-slate-900">
-                                                        ID #{r.report_id.toString().padStart(4, '0')} — {categoryMap[r.category_id] || r.animal_type || 'Incident'}
-                                                    </span>
-                                                    <span className="px-2 py-0.5 bg-orange-100 text-[#EA580C] rounded-md text-[9px] font-black uppercase tracking-wider">
-                                                        FORWARDED TO BRGY
-                                                    </span>
-                                                </div>
-                                                <p className="text-xs text-slate-600 leading-relaxed line-clamp-2 pl-1">
-                                                    {r.description || `Incident reported at ${r.landmark || 'subdivision'}.`}
-                                                </p>
-                                                
-                                                {r.landmark && (
-                                                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 bg-white px-2.5 py-1 rounded-lg border border-orange-50 ml-1">
-                                                        <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                                                        <span className="truncate">{r.landmark}</span>
+                                                    <div className="grid grid-cols-2 gap-2.5 mt-1 pt-2.5 border-t border-slate-100 text-xs pl-1">
+                                                        <button
+                                                            onClick={() => handleLocateOnMap(r)}
+                                                            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs bg-white hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
+                                                        >
+                                                            <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                            </svg>
+                                                            Locate
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setSelectedDetailReport(r)}
+                                                            className="flex items-center justify-center py-2 px-3 rounded-xl bg-[#F97316] hover:bg-orange-600 text-white font-bold text-xs transition-colors shadow-xs cursor-pointer"
+                                                        >
+                                                            Details
+                                                        </button>
                                                     </div>
-                                                )}
-
-                                                <div className="grid grid-cols-2 gap-2.5 mt-1 pt-2.5 border-t border-orange-100/60 text-xs pl-1">
-                                                    <button 
-                                                        onClick={() => handleLocateOnMap(r)}
-                                                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs bg-white hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
-                                                    >
-                                                        <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                                                        Locate
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => setSelectedDetailReport(r)} 
-                                                        className="flex items-center justify-center py-2 px-3 rounded-xl bg-[#F97316] hover:bg-[#ea580c] text-white font-bold text-xs transition-colors shadow-xs cursor-pointer"
-                                                    >
-                                                        Details
-                                                    </button>
                                                 </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-center text-slate-400 py-8">
+                                                <p className="text-xs font-bold text-slate-600">No cases assigned to you</p>
+                                                <p className="text-[11px] text-slate-400 mt-1">Check Unassigned tab to claim new reports.</p>
                                             </div>
-                                        ))
-                                    ) : (
-                                        <div className="text-center text-slate-400 py-8">
-                                            <p className="text-xs font-bold text-slate-600">No escalated cases</p>
-                                        </div>
-                                    )
-                                )}
+                                        )
+                                    )}
+
+                                    {activeCaseTab === 'my' && casesSubFilter === 'unassigned' && (
+                                        rawUnassigned.length > 0 ? (
+                                            rawUnassigned.map(r => (
+                                                <div key={r.report_id} className="border border-amber-100 bg-[#FFFDF7] shadow-xs rounded-2xl p-4 flex flex-col gap-2.5 hover:border-amber-300 transition-colors relative overflow-hidden">
+                                                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-amber-400 rounded-l-2xl" />
+                                                    <div className="flex justify-between items-center pl-1">
+                                                        <span className="text-xs font-black text-slate-900">
+                                                            ID #{r.report_id.toString().padStart(4, '0')} — {categoryMap[r.category_id] || r.animal_type || 'Incident'}
+                                                        </span>
+                                                        <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md text-[9px] font-black uppercase tracking-wider">
+                                                            UNASSIGNED
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-slate-600 leading-relaxed line-clamp-2 pl-1">
+                                                        {r.description || `Incident reported at ${r.landmark || 'subdivision'}.`}
+                                                    </p>
+
+                                                    {r.landmark && (
+                                                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 bg-white/80 border border-amber-50 px-2.5 py-1 rounded-lg ml-1">
+                                                            <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                                            <span className="truncate">{r.landmark}</span>
+                                                        </div>
+                                                    )}
+
+                                                    <div className="grid grid-cols-2 gap-2.5 mt-1 pt-2.5 border-t border-amber-100/60 text-xs pl-1">
+                                                        <button
+                                                            onClick={() => setSelectedDetailReport(r)}
+                                                            className="flex items-center justify-center py-2 px-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs bg-white hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
+                                                        >
+                                                            View
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleClaimReport(r.report_id)}
+                                                            disabled={claimingId === r.report_id}
+                                                            className="flex items-center justify-center py-2 px-3 rounded-xl bg-[#F97316] hover:bg-[#ea580c] text-white font-bold text-xs transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+                                                        >
+                                                            {claimingId === r.report_id ? 'Claiming...' : 'Claim Case'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-center text-slate-400 py-8">
+                                                <p className="text-xs font-bold text-slate-600">No unassigned cases</p>
+                                            </div>
+                                        )
+                                    )}
+
+                                    {activeCaseTab === 'escalated' && (
+                                        rawEscalated.length > 0 ? (
+                                            rawEscalated.map(r => (
+                                                <div key={r.report_id} className="border border-orange-100 bg-[#FFF9F5] rounded-2xl p-4 flex flex-col gap-2.5 relative overflow-hidden shadow-xs">
+                                                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#EA580C] rounded-l-2xl" />
+                                                    <div className="flex justify-between items-center pl-1">
+                                                        <span className="text-xs font-black text-slate-900">
+                                                            ID #{r.report_id.toString().padStart(4, '0')} — {categoryMap[r.category_id] || r.animal_type || 'Incident'}
+                                                        </span>
+                                                        <span className="px-2 py-0.5 bg-orange-100 text-[#EA580C] rounded-md text-[9px] font-black uppercase tracking-wider">
+                                                            FORWARDED TO BRGY
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-slate-600 leading-relaxed line-clamp-2 pl-1">
+                                                        {r.description || `Incident reported at ${r.landmark || 'subdivision'}.`}
+                                                    </p>
+
+                                                    {r.landmark && (
+                                                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 bg-white px-2.5 py-1 rounded-lg border border-orange-50 ml-1">
+                                                            <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                                            <span className="truncate">{r.landmark}</span>
+                                                        </div>
+                                                    )}
+
+                                                    <div className="grid grid-cols-2 gap-2.5 mt-1 pt-2.5 border-t border-orange-100/60 text-xs pl-1">
+                                                        <button
+                                                            onClick={() => handleLocateOnMap(r)}
+                                                            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs bg-white hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
+                                                        >
+                                                            <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                                            Locate
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setSelectedDetailReport(r)}
+                                                            className="flex items-center justify-center py-2 px-3 rounded-xl bg-[#F97316] hover:bg-[#ea580c] text-white font-bold text-xs transition-colors shadow-xs cursor-pointer"
+                                                        >
+                                                            Details
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-center text-slate-400 py-8">
+                                                <p className="text-xs font-bold text-slate-600">No escalated cases</p>
+                                            </div>
+                                        )
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                {/* 4. Secondary Row: Active Hazard Notices (Left) & Recent Pet Claims (Right) */}
+                    {/* 4. Secondary Row: Active Hazard Notices (Left) & Recent Pet Claims (Right) */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-                        
+
                         {/* A. Active Hazard Notices */}
                         <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col gap-3">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2 text-slate-900 font-black text-xs uppercase tracking-wider">
-                                    <span className="text-amber-500">⚠️</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M18 3a1 1 0 00-1.447-.894L8.763 6H5a3 3 0 000 6h.28l1.771 5.316A1 1 0 008 18h1a1 1 0 001-1v-4.382l6.553 3.276A1 1 0 0018 15V3z" clipRule="evenodd" />
+                                    </svg>
                                     <span>Active Hazard Notices</span>
                                 </div>
                                 <button
@@ -1170,59 +1291,89 @@ const SubdDashboard = () => {
                             </div>
 
                             <div className="flex flex-col gap-2.5">
-                                {/* Notice 1 */}
-                                <div 
-                                    onClick={() => navigate('/subd/hazard-alert')}
-                                    className="p-3.5 rounded-2xl bg-rose-50/70 border border-rose-100/90 flex items-start justify-between gap-2.5 hover:bg-rose-50 hover:translate-x-1 transition-all duration-200 cursor-pointer group"
-                                >
-                                    <div className="flex items-start gap-3">
-                                        <div className="w-8 h-8 rounded-xl bg-rose-500 text-white flex items-center justify-center shrink-0 mt-0.5 text-xs font-black shadow-xs group-hover:scale-110 transition-transform">
-                                            !
-                                        </div>
-                                        <div>
-                                            <h4 className="text-xs font-black text-rose-900 group-hover:text-rose-700 transition-colors">Rabies Alert — Near Phase 3</h4>
-                                            <p className="text-[11px] text-rose-700 mt-0.5 leading-snug">Stray dog with aggressive behavior reported.</p>
-                                            <span className="text-[9px] text-rose-500 font-semibold block mt-1">Sept 15, 2026 · 10:24 AM</span>
-                                        </div>
-                                    </div>
-                                    <span className="text-rose-400 group-hover:text-rose-600 group-hover:translate-x-0.5 transition-all font-bold text-xs mt-1">›</span>
-                                </div>
+                                {announcements && announcements.length > 0 ? (
+                                    announcements.slice(0, 3).map((ann, idx) => {
+                                        const isEmergency = ann.category === 'Emergency' || (ann.title || '').toLowerCase().includes('rabies') || (ann.title || '').toLowerCase().includes('alert');
+                                        const isAdvisory = ann.category === 'Advisory' || (ann.title || '').toLowerCase().includes('stray');
 
-                                {/* Notice 2 */}
-                                <div 
-                                    onClick={() => navigate('/subd/hazard-alert')}
-                                    className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-100/90 flex items-start justify-between gap-2.5 hover:bg-amber-50 hover:translate-x-1 transition-all duration-200 cursor-pointer group"
-                                >
-                                    <div className="flex items-start gap-3">
-                                        <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 mt-0.5 text-xs font-black shadow-xs group-hover:scale-110 transition-transform">
-                                            🐾
-                                        </div>
-                                        <div>
-                                            <h4 className="text-xs font-black text-amber-900 group-hover:text-amber-700 transition-colors">Stray Pack Sighted — Phase 1</h4>
-                                            <p className="text-[11px] text-amber-700 mt-0.5 leading-snug">3-5 dogs, possible breeding group.</p>
-                                            <span className="text-[9px] text-amber-500 font-semibold block mt-1">Sept 15, 2026 · 09:12 AM</span>
-                                        </div>
-                                    </div>
-                                    <span className="text-amber-400 group-hover:text-amber-600 group-hover:translate-x-0.5 transition-all font-bold text-xs mt-1">›</span>
-                                </div>
+                                        const cardBg = isEmergency
+                                            ? 'bg-rose-50/70 border-rose-100/90 text-rose-900'
+                                            : isAdvisory
+                                                ? 'bg-amber-50/70 border-amber-100/90 text-amber-900'
+                                                : 'bg-blue-50/70 border-blue-100/90 text-blue-900';
 
-                                {/* Notice 3 */}
-                                <div 
-                                    onClick={() => navigate('/subd/hazard-alert')}
-                                    className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-100/90 flex items-start justify-between gap-2.5 hover:bg-blue-50 hover:translate-x-1 transition-all duration-200 cursor-pointer group"
-                                >
-                                    <div className="flex items-start gap-3">
-                                        <div className="w-8 h-8 rounded-xl bg-blue-500 text-white flex items-center justify-center shrink-0 mt-0.5 text-xs font-black shadow-xs group-hover:scale-110 transition-transform">
-                                            🌡️
-                                        </div>
-                                        <div>
-                                            <h4 className="text-xs font-black text-blue-900 group-hover:text-blue-700 transition-colors">Heat Alert — High Temperature</h4>
-                                            <p className="text-[11px] text-blue-700 mt-0.5 leading-snug">Keep pets indoors and hydrated.</p>
-                                            <span className="text-[9px] text-blue-500 font-semibold block mt-1">Sept 15, 2026 · 07:00 AM</span>
-                                        </div>
+                                        const iconBg = isEmergency
+                                            ? 'bg-rose-500 text-white'
+                                            : isAdvisory
+                                                ? 'bg-amber-500 text-white'
+                                                : 'bg-blue-500 text-white';
+
+                                        const titleColor = isEmergency
+                                            ? 'text-rose-900 group-hover:text-rose-700'
+                                            : isAdvisory
+                                                ? 'text-amber-900 group-hover:text-amber-700'
+                                                : 'text-blue-900 group-hover:text-blue-700';
+
+                                        const textColor = isEmergency ? 'text-rose-700' : isAdvisory ? 'text-amber-700' : 'text-blue-700';
+                                        const metaColor = isEmergency ? 'text-rose-500' : isAdvisory ? 'text-amber-500' : 'text-blue-500';
+                                        const arrowColor = isEmergency
+                                            ? 'text-rose-400 group-hover:text-rose-600'
+                                            : isAdvisory
+                                                ? 'text-amber-400 group-hover:text-amber-600'
+                                                : 'text-blue-400 group-hover:text-blue-600';
+
+                                        const formattedTime = ann.created_at
+                                            ? new Date(ann.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+                                            ' · ' +
+                                            new Date(ann.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                                            : 'Recent';
+
+                                        return (
+                                            <div
+                                                key={ann.announcement_id || idx}
+                                                onClick={() => navigate('/subd/hazard-alert')}
+                                                className={`p-3.5 rounded-2xl border flex items-start justify-between gap-2.5 hover:translate-x-1 transition-all duration-200 cursor-pointer group ${cardBg}`}
+                                            >
+                                                <div className="flex items-start gap-3">
+                                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 shadow-xs group-hover:scale-110 transition-transform ${iconBg}`}>
+                                                        {isEmergency ? (
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                                                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                            </svg>
+                                                        ) : isAdvisory ? (
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                                                <path d="M12 21.5c-3.038 0-5.5-2.462-5.5-5.5s2.462-5.5 5.5-5.5s5.5 2.462 5.5 5.5s-2.462 5.5-5.5 5.5zm-5.5-12c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zm11 0c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zM12 8c-1.381 0-2.5-1.119-2.5-2.5S10.619 3 12 3s2.5 1.119 2.5 2.5S13.381 8 12 8z" />
+                                                            </svg>
+                                                        ) : (
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                                                                <path fillRule="evenodd" d="M18 3a1 1 0 00-1.447-.894L8.763 6H5a3 3 0 000 6h.28l1.771 5.316A1 1 0 008 18h1a1 1 0 001-1v-4.382l6.553 3.276A1 1 0 0018 15V3z" clipRule="evenodd" />
+                                                            </svg>
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <h4 className={`text-xs font-black transition-colors ${titleColor}`}>
+                                                            {ann.title}
+                                                        </h4>
+                                                        <p className={`text-[11px] mt-0.5 leading-snug line-clamp-2 ${textColor}`}>
+                                                            {ann.content}
+                                                        </p>
+                                                        <span className={`text-[9px] font-semibold block mt-1 ${metaColor}`}>
+                                                            {formattedTime}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <span className={`group-hover:translate-x-0.5 transition-all font-bold text-xs mt-1 ${arrowColor}`}>
+                                                    ›
+                                                </span>
+                                            </div>
+                                        );
+                                    })
+                                ) : (
+                                    <div className="p-6 text-center text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                                        <p className="text-xs font-bold text-slate-600">No active hazard notices</p>
+                                        <p className="text-[11px] text-slate-400 mt-1">All clear in Selera Subdivision.</p>
                                     </div>
-                                    <span className="text-blue-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all font-bold text-xs mt-1">›</span>
-                                </div>
+                                )}
                             </div>
                         </div>
 
@@ -1230,7 +1381,9 @@ const SubdDashboard = () => {
                         <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col gap-3">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-purple-500 font-bold">🏷️</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
                                     <h3 className="text-slate-900 font-black text-xs uppercase tracking-wider">
                                         Recent Pet Claims
                                     </h3>
@@ -1253,53 +1406,59 @@ const SubdDashboard = () => {
 
                             {/* Table Rows */}
                             <div className="flex flex-col gap-1.5">
-                                {recentClaimsData.map((item, idx) => {
-                                    const matchVal = item.similarity_score || 90;
-                                    return (
-                                        <div 
-                                            key={item.claim_id || idx} 
-                                            className="grid grid-cols-12 gap-2 items-center text-xs py-2 px-2 border-b border-slate-50 last:border-0 hover:bg-orange-50/50 hover:shadow-2xs rounded-xl transition-all duration-200 group"
-                                        >
-                                            {/* Pet & Owner Info */}
-                                            <div className="col-span-4 min-w-0">
-                                                <p className="font-black text-slate-900 text-xs truncate group-hover:text-orange-600 transition-colors">
-                                                    {item.pet_name}
-                                                </p>
-                                                <p className="text-[10px] text-slate-400 font-medium truncate">
-                                                    {item.claimant_name} • {item.landmark}
-                                                </p>
-                                            </div>
+                                {recentClaimsData && recentClaimsData.length > 0 ? (
+                                    recentClaimsData.map((item, idx) => {
+                                        const matchVal = item.similarity_score || 90;
+                                        return (
+                                            <div
+                                                key={item.claim_id || idx}
+                                                className="grid grid-cols-12 gap-2 items-center text-xs py-2 px-2 border-b border-slate-50 last:border-0 hover:bg-orange-50/50 hover:shadow-2xs rounded-xl transition-all duration-200 group"
+                                            >
+                                                {/* Pet & Owner Info */}
+                                                <div className="col-span-4 min-w-0">
+                                                    <p className="font-black text-slate-900 text-xs truncate group-hover:text-orange-600 transition-colors">
+                                                        {item.pet_name}
+                                                    </p>
+                                                    <p className="text-[10px] text-slate-400 font-medium truncate">
+                                                        {item.claimant_name} • {item.landmark}
+                                                    </p>
+                                                </div>
 
-                                            {/* AI Match Badge */}
-                                            <div className="col-span-2 flex justify-center">
-                                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-black tracking-tight ${
-                                                    matchVal >= 90
-                                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                                        : matchVal >= 80
-                                                        ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                                        : 'bg-slate-100 text-slate-700 border border-slate-200'
-                                                }`}>
-                                                    {matchVal}%
-                                                </span>
-                                            </div>
+                                                {/* AI Match Badge */}
+                                                <div className="col-span-2 flex justify-center">
+                                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-black tracking-tight ${matchVal >= 90
+                                                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                            : matchVal >= 80
+                                                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                                                : 'bg-slate-100 text-slate-700 border border-slate-200'
+                                                        }`}>
+                                                        {matchVal}%
+                                                    </span>
+                                                </div>
 
-                                            {/* Claim Status Badge */}
-                                            <div className="col-span-4 flex items-center">
-                                                {getClaimStatusBadge(item.status)}
-                                            </div>
+                                                {/* Claim Status Badge */}
+                                                <div className="col-span-4 flex items-center">
+                                                    {getClaimStatusBadge(item.status)}
+                                                </div>
 
-                                            {/* Action Button */}
-                                            <div className="col-span-2 text-right">
-                                                <button
-                                                    onClick={() => navigate('/subd/pet-claims')}
-                                                    className="px-3 py-1 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-black text-[10px] rounded-lg transition-all shadow-xs hover:shadow-sm cursor-pointer"
-                                                >
-                                                    Review
-                                                </button>
+                                                {/* Action Button */}
+                                                <div className="col-span-2 text-right">
+                                                    <button
+                                                        onClick={() => navigate('/subd/pet-claims')}
+                                                        className="px-3 py-1 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-black text-[10px] rounded-lg transition-all shadow-xs hover:shadow-sm cursor-pointer"
+                                                    >
+                                                        Review
+                                                    </button>
+                                                </div>
                                             </div>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })
+                                ) : (
+                                    <div className="p-6 text-center text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                                        <p className="text-xs font-bold text-slate-600">No pet claims pending</p>
+                                        <p className="text-[11px] text-slate-400 mt-1">No community claims at this time.</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -1362,30 +1521,55 @@ const SubdDashboard = () => {
                 <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
                     <div className="bg-white rounded-3xl shadow-2xl w-[98%] sm:w-[95%] h-[98%] sm:h-[92%] flex flex-col p-4 sm:p-6 animate-in zoom-in-95 duration-200">
                         {/* Header */}
-                        <div className="flex justify-between items-start mb-3 sm:mb-4 shrink-0">
+                        <div className="flex justify-between items-center mb-3 sm:mb-4 shrink-0">
                             <div>
                                 <h3 className="text-sm sm:text-xl font-black text-gray-900 uppercase tracking-tight">Geospatial Community Map</h3>
                                 <p className="text-[9px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Full Subdivision Real-Time View</p>
                             </div>
-                            <button
-                                onClick={() => setIsMapExpanded(false)}
-                                className="p-1 sm:p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors text-gray-500 hover:text-gray-800 shrink-0 cursor-pointer"
-                            >
-                                <svg className="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
+                            <div className="flex items-center gap-2 sm:gap-3">
+                                <div className="flex bg-slate-100/90 p-1 rounded-2xl text-[10px] font-black uppercase border border-slate-200/80 shadow-2xs">
+                                    <button
+                                        onClick={() => setMapMode('pins')}
+                                        className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${mapMode === 'pins' ? 'bg-[#F97316] text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900'}`}
+                                    >
+                                        Pins
+                                    </button>
+                                    <button
+                                        onClick={() => setMapMode('heatmap')}
+                                        className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${mapMode === 'heatmap' ? 'bg-[#F97316] text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900'}`}
+                                    >
+                                        Heatmap
+                                    </button>
+                                    <button
+                                        onClick={() => setMapMode('both')}
+                                        className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${mapMode === 'both' ? 'bg-[#F97316] text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900'}`}
+                                    >
+                                        Both
+                                    </button>
+                                </div>
+                                <button
+                                    onClick={() => setIsMapExpanded(false)}
+                                    className="p-1 sm:p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors text-gray-500 hover:text-gray-800 shrink-0 cursor-pointer"
+                                >
+                                    <svg className="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
 
                         {/* Map Area */}
                         <div className="flex-1 rounded-2xl overflow-hidden relative border border-gray-100 min-h-0">
                             <MapComponent
                                 height="100%"
-                                center={[14.8093, 121.0028]}
-                                zoom={15.5}
-                                markers={mapMarkers}
-                                showHeatmap={false}
+                                center={[14.8013, 121.0036]}
+                                zoom={17}
+                                markers={mapMode !== 'heatmap' ? mapMarkers : mapMarkers.filter(m => m.id < 0)}
+                                showHeatmap={mapMode !== 'pins'}
                                 heatmapPoints={heatmapPoints}
+                                showGeofence={true}
+                                showLandmarks={true}
+                                onMapClick={(lat, lng) => setSelectedMapCoords({ lat, lng })}
                                 onViewDetails={(marker) => {
                                     const reportId = marker.rawData?.report_id || (marker.id > 0 ? marker.id : null);
                                     if (reportId) {
@@ -1395,6 +1579,34 @@ const SubdDashboard = () => {
                                 }}
                                 routing={getRoutingConfig()}
                             />
+
+                            {/* Floating Coordinate Pill Overlay in expanded modal */}
+                            {selectedMapCoords && (
+                                <div className="absolute top-4 right-4 z-[1000] bg-white/95 backdrop-blur-md px-3.5 py-2 rounded-2xl shadow-xl border border-orange-200/90 flex items-center gap-2.5 text-xs animate-in fade-in zoom-in-95 duration-150">
+                                    <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />
+                                    <span className="font-black text-slate-800 tracking-tight">
+                                        {selectedMapCoords.lat.toFixed(6)}, {selectedMapCoords.lng.toFixed(6)}
+                                    </span>
+                                    <button
+                                        onClick={() => {
+                                            if (navigator.clipboard) {
+                                                navigator.clipboard.writeText(`${selectedMapCoords.lat.toFixed(6)}, ${selectedMapCoords.lng.toFixed(6)}`);
+                                            }
+                                        }}
+                                        className="px-2 py-0.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-bold text-[10px] transition-colors shadow-2xs cursor-pointer"
+                                        title="Copy coordinates"
+                                    >
+                                        Copy
+                                    </button>
+                                    <button
+                                        onClick={() => setSelectedMapCoords(null)}
+                                        className="text-slate-400 hover:text-slate-600 font-bold ml-1 cursor-pointer"
+                                        title="Clear pinpoint"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -1441,9 +1653,8 @@ const SubdDashboard = () => {
                                 </div>
                                 <div>
                                     <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Priority Level</span>
-                                    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider mt-0.5 ${
-                                        (selectedDetailReport.priority_level || '').toLowerCase() === 'high' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'
-                                    }`}>
+                                    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider mt-0.5 ${(selectedDetailReport.priority_level || '').toLowerCase() === 'high' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'
+                                        }`}>
                                         {selectedDetailReport.priority_level || 'Medium'}
                                     </span>
                                 </div>
@@ -1470,7 +1681,7 @@ const SubdDashboard = () => {
                                 className="px-4 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer"
                             >
                                 <span>Open Full Report</span>
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                             </button>
                             <button
                                 onClick={() => setSelectedDetailReport(null)}

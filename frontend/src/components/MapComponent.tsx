@@ -248,6 +248,45 @@ export const createFacilityHoldingIcon = (
     });
 };
 
+const createSelectedPinIcon = () => {
+    return L.divIcon({
+        html: `
+            <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
+                <div style="
+                    background: #F97316;
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 50% 50% 50% 0;
+                    transform: rotate(-45deg);
+                    border: 2px solid white;
+                    box-shadow: 0 4px 14px rgba(249,115,22,0.5);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                ">
+                    <div style="transform: rotate(45deg); font-size: 14px; color: white;">📍</div>
+                </div>
+                <div style="
+                    background: #1E293B;
+                    color: white;
+                    font-size: 8px;
+                    font-weight: 900;
+                    padding: 1.5px 5px;
+                    border-radius: 4px;
+                    text-transform: uppercase;
+                    margin-top: 3px;
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+                    white-space: nowrap;
+                ">SELECTED</div>
+            </div>
+        `,
+        className: 'selected-location-pin',
+        iconSize: [40, 52],
+        iconAnchor: [20, 48],
+        popupAnchor: [0, -48]
+    });
+};
+
 
 
 const InitialSightingIcon = L.divIcon({
@@ -421,6 +460,27 @@ mapStyleElement.textContent = `
         visibility: visible !important;
         display: block !important;
     }
+    /* Eliminate browser focus rectangle / black box on all map paths and SVG elements */
+    .leaflet-container *:focus,
+    .leaflet-container *:focus-visible,
+    .leaflet-container *:active,
+    .leaflet-interactive,
+    .leaflet-interactive:focus,
+    .leaflet-interactive:focus-visible,
+    .leaflet-overlay-pane svg,
+    .leaflet-overlay-pane svg:focus,
+    .leaflet-overlay-pane svg:focus-visible,
+    .leaflet-overlay-pane path,
+    .leaflet-overlay-pane path:focus,
+    .leaflet-overlay-pane path:focus-visible,
+    path.leaflet-interactive,
+    path.leaflet-interactive:focus,
+    path.leaflet-interactive:focus-visible,
+    svg.leaflet-zoom-animated:focus {
+        outline: none !important;
+        box-shadow: none !important;
+        -webkit-tap-highlight-color: transparent !important;
+    }
 `;
 
 const createColoredIncidentIcon = (colorName: string = 'red', category: string = '') => {
@@ -589,6 +649,8 @@ interface MapComponentProps {
         dashArray?: string;
         opacity?: number;
     }[];
+    showPopups?: boolean;
+    showReturnToSelera?: boolean;
 }
 
 // Internal component to handle view changes
@@ -653,6 +715,9 @@ const MapEventsHandler = ({
 }) => {
     useMapEvents({
         click(e) {
+            if (e.originalEvent?.target && typeof (e.originalEvent.target as any).blur === 'function') {
+                (e.originalEvent.target as any).blur();
+            }
             if (onMapClick) {
                 onMapClick(e.latlng.lat, e.latlng.lng);
             }
@@ -784,7 +849,9 @@ const MapComponent = ({
     showConnectingLine = false,
     onRouteCalculated,
     polylines = [],
-    onMapClick
+    onMapClick,
+    showPopups = true,
+    showReturnToSelera = true
 }: MapComponentProps) => {
     const SELERA_BOUNDS: [number, number][] = [
         [14.801496, 121.005174],
@@ -907,17 +974,24 @@ const MapComponent = ({
                     pathOptions={{
                         color: '#F97316',
                         fillColor: '#F97316',
-                        fillOpacity: 0.1,
-                        weight: 2,
-                        dashArray: '5, 10'
+                        fillOpacity: 0.12,
+                        weight: 2.5,
+                        dashArray: '6, 8',
+                        className: 'outline-none focus:outline-none'
+                    }}
+                    eventHandlers={{
+                        click: (e) => {
+                            if (e.originalEvent?.target && typeof (e.originalEvent.target as any).blur === 'function') {
+                                (e.originalEvent.target as any).blur();
+                            }
+                            if (onMapClick) onMapClick(e.latlng.lat, e.latlng.lng);
+                            if (onLocationChange) onLocationChange(e.latlng.lat, e.latlng.lng);
+                        }
                     }}
                 >
-                    <Popup>
-                        <div className="p-2 text-center">
-                            <p className="text-[10px] font-black uppercase text-[#F97316]">Selera Homes Reporting Zone</p>
-                            <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest mt-1">Stray reports are only accepted within this area</p>
-                        </div>
-                    </Popup>
+                    <Tooltip sticky direction="top" className="custom-hover-tooltip">
+                        <span>Selera Homes Reporting Zone</span>
+                    </Tooltip>
                 </Polygon>
             )}
 
@@ -930,33 +1004,35 @@ const MapComponent = ({
                     <Tooltip direction="top" offset={[0, -Math.round(getLandmarkZoomMetrics(currentZoom).size / 2) - 4]} className="custom-hover-tooltip">
                         <span>🏛️ Barangay {barangayHQ.barangay_name || 'San Vicente'} Operations HQ</span>
                     </Tooltip>
-                    <Popup className="custom-popup">
-                        <div className="p-3 w-[220px] text-gray-800 flex flex-col gap-1.5">
-                            <div className="flex items-center gap-2 pb-1.5 border-b border-blue-100">
-                                <span className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center text-base shadow-xs">
-                                    🏛️
-                                </span>
-                                <div>
-                                    <p className="text-[11px] font-black text-blue-950 uppercase tracking-tight">Barangay {barangayHQ.barangay_name || 'San Vicente'} HQ</p>
-                                    <p className="text-[8px] font-bold text-blue-600 uppercase tracking-wider">Operations & Dispatch Center</p>
+                    {showPopups && (
+                        <Popup className="custom-popup">
+                            <div className="p-3 w-[220px] text-gray-800 flex flex-col gap-1.5">
+                                <div className="flex items-center gap-2 pb-1.5 border-b border-blue-100">
+                                    <span className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center text-base shadow-xs">
+                                        🏛️
+                                    </span>
+                                    <div>
+                                        <p className="text-[11px] font-black text-blue-950 uppercase tracking-tight">Barangay {barangayHQ.barangay_name || 'San Vicente'} HQ</p>
+                                        <p className="text-[8px] font-bold text-blue-600 uppercase tracking-wider">Operations & Dispatch Center</p>
+                                    </div>
+                                </div>
+                                <div className="text-[10px] space-y-1 text-gray-600">
+                                    <p><span className="font-bold text-gray-800">City:</span> {barangayHQ.city || 'Santa Maria, Bulacan'}</p>
+                                    {barangayHQ.contact_no && <p><span className="font-bold text-gray-800">Contact:</span> {barangayHQ.contact_no}</p>}
+                                    {barangayHQ.hq_plus_code && <p><span className="font-bold text-gray-800">Plus Code:</span> {barangayHQ.hq_plus_code}</p>}
+                                </div>
+                                <div className="mt-1 pt-1.5 border-t border-gray-100 flex items-center justify-between text-[8px] text-gray-400 font-bold uppercase">
+                                    <span>Official Station</span>
+                                    <span className="text-blue-600">Active</span>
                                 </div>
                             </div>
-                            <div className="text-[10px] space-y-1 text-gray-600">
-                                <p><span className="font-bold text-gray-800">City:</span> {barangayHQ.city || 'Santa Maria, Bulacan'}</p>
-                                {barangayHQ.contact_no && <p><span className="font-bold text-gray-800">Contact:</span> {barangayHQ.contact_no}</p>}
-                                {barangayHQ.hq_plus_code && <p><span className="font-bold text-gray-800">Plus Code:</span> {barangayHQ.hq_plus_code}</p>}
-                            </div>
-                            <div className="mt-1 pt-1.5 border-t border-gray-100 flex items-center justify-between text-[8px] text-gray-400 font-bold uppercase">
-                                <span>Official Station</span>
-                                <span className="text-blue-600">Active</span>
-                            </div>
-                        </div>
-                    </Popup>
+                        </Popup>
+                    )}
                 </Marker>
             )}
 
-            {/* ── Registered Holding Facilities & Community Landmarks ── */}
-            {deconflictedLandmarks && deconflictedLandmarks.length > 0 ? (
+            {/* ── Registered Holding Facilities & Community Landmarks (Database) ── */}
+            {deconflictedLandmarks && deconflictedLandmarks.length > 0 && (
                 deconflictedLandmarks.map((lm: any) => {
                     const lmLat = lm.lat;
                     const lmLng = lm.lng;
@@ -987,9 +1063,8 @@ const MapComponent = ({
                             icon={iconToUse}
                             eventHandlers={{
                                 click: () => {
-                                    if (onLocationChange) {
-                                        onLocationChange(lmLat, lmLng);
-                                    }
+                                    if (onLocationChange) onLocationChange(lmLat, lmLng);
+                                    if (onMapClick) onMapClick(lmLat, lmLng);
                                 }
                             }}
                         >
@@ -999,26 +1074,31 @@ const MapComponent = ({
                         </Marker>
                     );
                 })
-            ) : (
-                showLandmarks && PRESET_LANDMARKS.map(lm => (
-                    <Marker
-                        key={`poi-lm-${lm.id}`}
-                        position={[lm.lat, lm.lng]}
-                        icon={createLandmarkIcon(lm.icon, lm.name, false, currentZoom)}
-                        eventHandlers={{
-                            click: () => {
-                                if (onLocationChange) {
-                                    onLocationChange(lm.lat, lm.lng);
-                                }
-                            }
-                        }}
-                    >
-                        <Tooltip direction="top" offset={[0, -Math.round(getLandmarkZoomMetrics(currentZoom).size / 2) - 4]} className="custom-hover-tooltip">
-                            <span>{lm.icon} {lm.name}</span>
-                        </Tooltip>
-                    </Marker>
-                ))
             )}
+
+            {/* ── Community Landmarks inside Selera Subdivision (Establishments, Gates, Facilities) ── */}
+            {showLandmarks && PRESET_LANDMARKS.filter(pl => {
+                return !deconflictedLandmarks.some((dl: any) =>
+                    (Math.abs(dl.lat - pl.lat) < 0.0004 && Math.abs(dl.lng - pl.lng) < 0.0004) ||
+                    (dl.name && dl.name.toLowerCase().includes(pl.name.toLowerCase()))
+                );
+            }).map(lm => (
+                <Marker
+                    key={`poi-lm-${lm.id}`}
+                    position={[lm.lat, lm.lng]}
+                    icon={createLandmarkIcon(lm.icon, lm.name, false, currentZoom)}
+                    eventHandlers={{
+                        click: () => {
+                            if (onLocationChange) onLocationChange(lm.lat, lm.lng);
+                            if (onMapClick) onMapClick(lm.lat, lm.lng);
+                        }
+                    }}
+                >
+                    <Tooltip direction="top" offset={[0, -Math.round(getLandmarkZoomMetrics(currentZoom).size / 2) - 4]} className="custom-hover-tooltip">
+                        <span>{lm.icon} {lm.name}</span>
+                    </Tooltip>
+                </Marker>
+            ))}
 
 
             {/* Road-following Route Line between markers */}
@@ -1098,6 +1178,7 @@ const MapComponent = ({
                         position={[marker.lat, marker.lng]}
                         draggable={Boolean(marker.draggable)}
                         icon={
+                            marker.category === 'Selected Location' ? createSelectedPinIcon() :
                             (marker.category === 'Barangay Office' || marker.category === 'HQ') ? createBarangayHQIcon(currentZoom) :
                                 isUserLoc ? createUserLocationIcon() :
                                     isHoldingFacility ? createFacilityHoldingIcon(animalTypeStr, facilityNameStr, petImage, lmIcon, currentZoom) :
@@ -1105,6 +1186,7 @@ const MapComponent = ({
                                             marker.color ? createColoredIncidentIcon(marker.color, animalTypeStr || marker.category) : IncidentIcon
                         }
                         eventHandlers={{
+                            click: () => onMarkerClick && onMarkerClick(marker),
                             popupopen: () => onMarkerClick && onMarkerClick(marker),
                             dragend: (e: any) => {
                                 if (marker.onDragEnd) {
@@ -1127,10 +1209,27 @@ const MapComponent = ({
                                 </div>
                             </Tooltip>
                         )}
-                        {!isUserLoc && !isHoldingFacility && (
+                        {!isUserLoc && !isHoldingFacility && showPopups && (
                             <Popup className="custom-popup">
                                 <div className="p-3.5 w-[285px] max-w-[310px] text-gray-800 flex flex-col gap-2 select-none">
-                                    {marker.rawData ? (
+                                    {marker.category === 'Selected Location' ? (
+                                        <div className="flex flex-col gap-2">
+                                            <div className="flex items-center gap-2 pb-1.5 border-b border-orange-100">
+                                                <div className="w-7 h-7 rounded-xl bg-orange-500 text-white flex items-center justify-center text-sm shadow-xs shrink-0">
+                                                    📍
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-tight">Selected Location</h4>
+                                                    <p className="text-[8.5px] font-bold text-orange-600 uppercase tracking-wider">Map Coordinates</p>
+                                                </div>
+                                            </div>
+                                            <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100 font-mono text-[10.5px] space-y-1 text-slate-700">
+                                                <p><span className="font-bold text-slate-900">Latitude:</span> {marker.lat.toFixed(6)}</p>
+                                                <p><span className="font-bold text-slate-900">Longitude:</span> {marker.lng.toFixed(6)}</p>
+                                            </div>
+                                            <p className="text-[8.5px] text-slate-400 italic">Click anywhere on the map to re-pinpoint coordinates.</p>
+                                        </div>
+                                    ) : marker.rawData ? (
                                         <>
                                             {/* Header */}
                                             {isHoldingFacility ? (
@@ -1333,7 +1432,7 @@ const MapComponent = ({
                 <HeatmapLayer points={heatmapPoints} />
             )}
 
-            <ReturnToSeleraButton />
+            {showReturnToSelera && <ReturnToSeleraButton />}
         </MapContainer>
     );
 };

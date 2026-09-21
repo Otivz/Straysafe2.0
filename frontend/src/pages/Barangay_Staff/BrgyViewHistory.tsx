@@ -7,6 +7,7 @@ import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import MapComponent from '../../components/MapComponent';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
+import { api } from '../../utils/api';
 
 interface Report {
     report_id: number;
@@ -46,6 +47,7 @@ interface Report {
     verified_by_user_id?: number | null;
     verified_by_name?: string | null;
     false_alarm_reason?: string | null;
+    duplicate_of_report_id?: number | null;
 }
 
 interface RescueRequest {
@@ -123,17 +125,36 @@ const BrgyViewHistory = () => {
         if (!id) return;
         try {
             setLoading(true);
+            let loadedReport = null;
             // 1. Fetch report details
-            const reportResponse = await axios.get(`http://localhost:8000/reports/${id}`);
-            if (reportResponse.data) {
-                setReport(reportResponse.data);
+            try {
+                const reportResponse = await api.get(`/reports/${id}`);
+                if (reportResponse.data) {
+                    loadedReport = reportResponse.data;
+                    setReport(loadedReport);
+                }
+            } catch (err) {
+                console.warn(`Could not load report directly by id ${id}:`, err);
             }
 
             // 2. Fetch rescue request details
             try {
-                const rescueResponse = await axios.get(`http://localhost:8000/rescue-requests/report/${id}`);
-                if (rescueResponse.data) {
-                    setRescue(rescueResponse.data);
+                let rescueRes = null;
+                const repId = loadedReport?.report_id || id;
+                try {
+                    rescueRes = await api.get(`/rescue-requests/report/${repId}`);
+                } catch {
+                    try {
+                        rescueRes = await api.get(`/rescue-requests/${id}`);
+                    } catch {
+                        // ignore
+                    }
+                }
+                if (rescueRes?.data) {
+                    setRescue(rescueRes.data);
+                    if (!loadedReport && rescueRes.data.report) {
+                        setReport(rescueRes.data.report);
+                    }
                 }
             } catch (err) {
                 console.log('No rescue request associated with this report or error fetching:', err);
@@ -246,6 +267,30 @@ const BrgyViewHistory = () => {
     const getTimelineData = () => {
         const steps: TimelineStep[] = [];
         if (!report) return steps;
+
+        // If cannot be found, short circuit
+        if (report.status_id === 17) {
+            const notFoundHistory = report.history?.find((h: any) => h.report_status_id === 17);
+            steps.push({
+                label: 'Animal Cannot Be Found',
+                status: 'Resolved',
+                timestamp: notFoundHistory?.created_at ? new Date(notFoundHistory.created_at).toLocaleString() : 'N/A',
+                note: notFoundHistory?.remarks || 'Search completed; the reported animal could not be located on site.'
+            });
+            return steps;
+        }
+
+        // If duplicate merged, short circuit
+        if (report.status_id === 18 || report.duplicate_of_report_id) {
+            const mergedHistory = report.history?.find((h: any) => h.report_status_id === 18);
+            steps.push({
+                label: 'Merged into Primary Report',
+                status: 'Resolved',
+                timestamp: mergedHistory?.created_at ? new Date(mergedHistory.created_at).toLocaleString() : 'N/A',
+                note: mergedHistory?.remarks || `Case consolidated into primary incident Report #${report.duplicate_of_report_id}.`
+            });
+            return steps;
+        }
 
         // If dismissed as false alarm, short circuit
         if (report.status_id === 14) {
@@ -385,10 +430,12 @@ const BrgyViewHistory = () => {
 
     const isReportEscalated = (rep: any) => {
         if (!rep) return false;
-        if ([4, 5, 6, 7, 8, 9, 10, 13].includes(rep.status_id)) return true;
+        const currentStat = rep.status_id ?? rep.current_status_id;
+        if ([4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18].includes(currentStat)) return true;
+        if (rep.barangay_id != null) return true;
         if (rep.endorsement_letter) return true;
         if (rep.rescue_id || (rep.rescues && rep.rescues.length > 0)) return true;
-        if (rep.history?.some((h: any) => h.report_status_id === 4 || h.rescue_id)) return true;
+        if (rep.history?.some((h: any) => [4, 5, 6, 7, 8, 13].includes(h.report_status_id) || h.rescue_id)) return true;
         return false;
     };
 

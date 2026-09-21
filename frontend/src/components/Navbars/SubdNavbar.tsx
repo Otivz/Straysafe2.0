@@ -41,8 +41,8 @@ const formatRelativeTime = (dateStr: string) => {
         if (diffSecs < 45) return 'Just now';
         if (diffMins < 60) return `${diffMins}m ago`;
         if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays === 1) return 'Yesterday';
-        if (diffDays < 7) return `${diffDays}d ago`;
+        if (diffDays === 1) return '1 day ago';
+        if (diffDays < 7) return `${diffDays} days ago`;
         return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     } catch {
         return '';
@@ -343,7 +343,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                         </svg>
                     </button>
                 )}
-                <div className="flex flex-col justify-center min-w-0">
+                <div className="flex flex-col justify-center min-w-0 [&_h1]:text-slate-900 [&_h1]:font-black [&_h1]:tracking-tight [&_p]:text-slate-500 [&_p]:font-bold [&_p]:text-[11px] [&_p]:tracking-wide">
                     {leftContent}
                 </div>
             </div>
@@ -359,10 +359,10 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                             setIsMessagesOpen(!isMessagesOpen);
                             if (isNotifOpen) setIsNotifOpen(false);
                         }}
-                        className={`relative p-2.5 rounded-xl transition-all flex items-center justify-center group cursor-pointer ${
+                        className={`relative p-2.5 rounded-xl transition-all flex items-center justify-center group cursor-pointer border ${
                             isMessagesOpen
-                                ? 'bg-orange-50 text-[#F97316]'
-                                : 'text-gray-500 hover:text-[#F97316] hover:bg-orange-50'
+                                ? 'bg-orange-50 border-orange-200/80 text-[#F97316] shadow-xs'
+                                : 'border-transparent text-slate-500 hover:text-[#F97316] hover:bg-orange-50/70 hover:border-orange-100/70'
                         }`}
                         title="Case Messages & Look-Alike Inquiries"
                         aria-label="Messages"
@@ -373,7 +373,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
 
                         {/* Unread message badge */}
                         {unreadMessageCount > 0 && (
-                            <span className="absolute -top-0.5 -right-0.5 min-w-[1.25rem] h-5 px-1 bg-[#F97316] text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-xs animate-pulse">
+                            <span className="absolute -top-1 -right-1 min-w-[20px] h-[20px] px-1 bg-[#F97316] text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-xs animate-pulse">
                                 {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
                             </span>
                         )}
@@ -398,10 +398,10 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                 <div className="relative" ref={notifRef}>
                     <button
                         onClick={() => setIsNotifOpen(!isNotifOpen)}
-                        className={`relative p-2.5 rounded-xl transition-all flex items-center justify-center group ${
+                        className={`relative p-2.5 rounded-xl transition-all flex items-center justify-center group cursor-pointer border ${
                             isNotifOpen
-                                ? 'bg-orange-50 text-[#F97316]'
-                                : 'text-gray-500 hover:text-[#F97316] hover:bg-orange-50'
+                                ? 'bg-orange-50 border-orange-200/80 text-[#F97316] shadow-xs'
+                                : 'border-transparent text-slate-500 hover:text-[#F97316] hover:bg-orange-50/70 hover:border-orange-100/70'
                         }`}
                         title="Notifications"
                         aria-label="Notifications"
@@ -412,7 +412,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
 
                         {/* Unread badge */}
                         {unreadCount > 0 && (
-                            <span className="absolute -top-0.5 -right-0.5 min-w-[1.25rem] h-5 px-1 bg-[#EF4444] text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-pulse">
+                            <span className="absolute -top-1 -right-1 min-w-[20px] h-[20px] px-1 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-xs animate-pulse">
                                 {unreadCount > 9 ? '9+' : unreadCount}
                             </span>
                         )}
@@ -662,7 +662,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                 {/* Settings Quick Button */}
                 <button
                     onClick={() => navigate('/subd/settings')}
-                    className="p-2.5 text-gray-500 hover:text-[#F97316] hover:bg-orange-50 rounded-xl transition-all group cursor-pointer"
+                    className="p-2.5 text-slate-500 hover:text-[#F97316] hover:bg-orange-50/70 rounded-xl transition-all group cursor-pointer border border-transparent hover:border-orange-100/70"
                     title="Settings & Operations"
                     aria-label="Settings and Operations"
                 >
@@ -673,20 +673,20 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                 </button>
 
                 {/* Vertical Divider */}
-                <div className="h-7 w-px bg-gray-200 mx-1"></div>
+                <div className="h-7 w-px bg-slate-200 mx-1"></div>
 
                 {/* Profile Section with Dropdown */}
                 <div className="relative" ref={profileRef}>
                     <button
                         onClick={() => setIsProfileOpen(!isProfileOpen)}
-                        className="flex items-center space-x-3 pl-2 pr-1 py-1 hover:bg-gray-50 rounded-2xl transition-all cursor-pointer group"
+                        className="flex items-center space-x-3 pl-3 pr-1 py-1 hover:bg-slate-50/80 rounded-2xl transition-all cursor-pointer group"
                         aria-label="User Profile Menu"
                     >
                         <div className="flex flex-col text-right hidden lg:block">
-                            <p className="text-sm font-bold text-gray-900 leading-none group-hover:text-[#F97316] transition-colors">{user.name || 'Staff User'}</p>
-                            <p className="text-[10px] font-medium text-gray-400 mt-1 uppercase tracking-wider">Subdivision Leader</p>
+                            <p className="text-sm font-black text-slate-900 leading-tight group-hover:text-[#F97316] transition-colors">{user.name || 'Staff User'}</p>
+                            <p className="text-[11px] font-bold text-slate-500 mt-0.5 uppercase tracking-wide">Subdivision Leader</p>
                         </div>
-                        <div className="w-10 h-10 rounded-full border-2 border-white shadow-sm overflow-hidden bg-gray-200 flex items-center justify-center group-hover:ring-2 group-hover:ring-[#F97316]/30 transition-all">
+                        <div className="w-10 h-10 rounded-full border-2 border-white shadow-sm ring-1 ring-slate-200/90 group-hover:ring-2 group-hover:ring-[#F97316]/40 overflow-hidden bg-slate-100 flex items-center justify-center transition-all">
                             <img 
                                 src={getProfilePicture(user.profile_picture)} 
                                 alt={user.name || 'User'} 
@@ -699,9 +699,9 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                     {/* Profile Dropdown Menu */}
                     {isProfileOpen && (
                         <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
-                            <div className="px-4 py-3 border-b border-gray-50 bg-gray-50/50">
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Signed in as</p>
-                                <p className="text-xs font-bold text-gray-900 truncate">{user.email}</p>
+                            <div className="px-4 py-3 border-b border-gray-100 bg-slate-50/70">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Signed in as</p>
+                                <p className="text-xs font-bold text-slate-800 truncate mt-0.5">{user.email}</p>
                             </div>
 
                             <div className="p-1">

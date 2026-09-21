@@ -50,6 +50,7 @@ import BrgyMessages from '../pages/Barangay_Staff/BrgyMessages';
 import BrgySettings from '../pages/Barangay_Staff/BrgySettings';
 import BrgyPetRecords from '../pages/Barangay_Staff/BrgyPetRecords';
 import BrgyPetClaims from '../pages/Barangay_Staff/BrgyPetClaims';
+import BrgyAdoptions from '../pages/Barangay_Staff/BrgyAdoptions';
 import PetMatchReview from '../pages/citizen/PetMatchReview';
 import PetClaimsDashboard from '../pages/citizen/PetClaimsDashboard';
 import ReportStrayPage from '../pages/citizen/ReportStrayPage';
@@ -58,7 +59,6 @@ import AdoptionCatalog from '../pages/citizen/AdoptionCatalog';
 import AnimalJourneyMap from '../pages/citizen/AnimalJourneyMap';
 import AdoptionApplyForm from '../pages/citizen/AdoptionApplyForm';
 import MyAdoptionApplications from '../pages/citizen/MyAdoptionApplications';
-import BrgyAdoptions from '../pages/Barangay_Staff/BrgyAdoptions';
 
 const AppRoutes = () => {
     return (
@@ -134,6 +134,7 @@ const AppRoutes = () => {
                 <Route path="/brgy/holding-facility" element={<BrgyHoldingFacility />} />
                 <Route path="/brgy/pet-records" element={<BrgyPetRecords />} />
                 <Route path="/brgy/pet-claims" element={<BrgyPetClaims />} />
+                <Route path="/brgy/adoptions" element={<BrgyAdoptions />} />
                 <Route path="/brgy/history" element={<BrgyHistoryReports />} />
                 <Route path="/brgy/history/:id" element={<BrgyViewHistory />} />
             </Route>

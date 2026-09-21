@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.heat';
@@ -19,36 +19,56 @@ const HeatmapLayer = ({ points, options }: HeatmapLayerProps) => {
              typeof p[1] === 'number' && !isNaN(p[1]) && isFinite(p[1])
     );
 
+    const safeReset = useCallback(() => {
+        if (!map || !heatLayerRef.current) return;
+        const layer = heatLayerRef.current as any;
+        if (!layer._map) return;
+        const size = map.getSize();
+        if (!size || size.x <= 0 || size.y <= 0) return;
+
+        try {
+            const topLeft = map.containerPointToLayerPoint([0, 0]);
+            if (layer._canvas) {
+                L.DomUtil.setPosition(layer._canvas, topLeft);
+                if (layer._canvas.width !== size.x || layer._canvas.height !== size.y) {
+                    layer._canvas.width = size.x;
+                    layer._canvas.height = size.y;
+                }
+                if (layer._heat) {
+                    layer._heat._width = size.x;
+                    layer._heat._height = size.y;
+                }
+            }
+            if (typeof layer._redraw === 'function') {
+                layer._redraw();
+            }
+        } catch (err) {
+            console.warn('Heatmap safeReset error:', err);
+        }
+    }, [map]);
+
     useEffect(() => {
         if (!map) return;
 
-        if (heatLayerRef.current) {
-            try {
-                heatLayerRef.current.setLatLngs(validPoints);
-            } catch (err) {
-                console.warn('Could not update heatmap points:', err);
-            }
-            return;
-        }
-
         try {
-            // @ts-ignore - heatLayer is added to L by the plugin
+            // @ts-ignore - heatLayer is added to L by the leaflet.heat plugin
             const layer = L.heatLayer(validPoints, {
-                radius: 25,
-                blur: 15,
+                radius: 28,
+                blur: 18,
                 maxZoom: 17,
                 gradient: {
-                    0.4: 'blue',
-                    0.6: 'cyan',
-                    0.7: 'lime',
-                    0.8: 'yellow',
-                    1.0: 'red'
+                    0.4: '#3B82F6',
+                    0.6: '#06B6D4',
+                    0.7: '#10B981',
+                    0.8: '#F59E0B',
+                    1.0: '#EF4444'
                 },
                 ...options
             });
 
             if (layer) {
                 const anyLayer = layer as any;
+
                 // Guard _redraw against 0 height canvas IndexSizeError
                 const origRedraw = anyLayer._redraw;
                 if (typeof origRedraw === 'function') {
@@ -65,54 +85,76 @@ const HeatmapLayer = ({ points, options }: HeatmapLayerProps) => {
                     };
                 }
 
-                // Guard _reset against 0 height canvas IndexSizeError
-                const origReset = anyLayer._reset;
-                if (typeof origReset === 'function') {
-                    anyLayer._reset = function (this: any) {
-                        if (!this._map) return;
-                        const size = this._map.getSize();
-                        if (!size || size.x <= 0 || size.y <= 0) return;
-                        try {
-                            origReset.call(this);
-                        } catch (e) {
-                            console.warn('leaflet-heat reset suppressed:', e);
-                        }
-                    };
-                }
-
                 layer.addTo(map);
                 heatLayerRef.current = layer;
+                safeReset();
             }
         } catch (err) {
             console.warn('Failed to initialize HeatmapLayer:', err);
         }
 
+        // Attach listeners to keep heatmap strictly pinned to the map coordinates on every map action
+        map.on('move', safeReset);
+        map.on('moveend', safeReset);
+        map.on('zoomend', safeReset);
+        map.on('viewreset', safeReset);
+        map.on('resize', safeReset);
+
+        // Multiple scheduled resets to accommodate CSS transitions, layout shifts, or modal expansion
+        const timers = [
+            setTimeout(safeReset, 50),
+            setTimeout(safeReset, 150),
+            setTimeout(safeReset, 300),
+            setTimeout(safeReset, 600),
+            setTimeout(safeReset, 1000)
+        ];
+
+        // ResizeObserver on the map container so any size change immediately aligns the canvas
+        let observer: ResizeObserver | null = null;
+        const container = map.getContainer();
+        if (typeof ResizeObserver !== 'undefined' && container) {
+            observer = new ResizeObserver(() => {
+                safeReset();
+            });
+            observer.observe(container);
+        }
+
         return () => {
+            map.off('move', safeReset);
+            map.off('moveend', safeReset);
+            map.off('zoomend', safeReset);
+            map.off('viewreset', safeReset);
+            map.off('resize', safeReset);
+
+            timers.forEach(clearTimeout);
+            if (observer) {
+                observer.disconnect();
+            }
+
             if (heatLayerRef.current && map) {
                 try {
                     map.removeLayer(heatLayerRef.current);
-                } catch (e) {
+                } catch {
                     // Ignore removal error
                 }
                 heatLayerRef.current = null;
             }
         };
-    }, [map]);
+    }, [map, safeReset]);
 
-    // Update coordinates whenever validPoints changes
+    // Update coordinates & re-align canvas whenever validPoints change
     useEffect(() => {
         if (heatLayerRef.current) {
             try {
                 heatLayerRef.current.setLatLngs(validPoints);
+                safeReset();
             } catch (err) {
                 console.warn('Could not update heatmap coordinates:', err);
             }
         }
-    }, [JSON.stringify(validPoints)]);
+    }, [JSON.stringify(validPoints), safeReset]);
 
     return null;
 };
 
 export default HeatmapLayer;
-
-

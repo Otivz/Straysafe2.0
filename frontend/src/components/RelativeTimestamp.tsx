@@ -50,8 +50,11 @@ export default function RelativeTimestamp({ date, timestamp }: RelativeTimestamp
       if (diffHours < 24) {
         return `${diffHours}h ago`;
       }
+      if (diffDays === 1) {
+        return '1 day ago';
+      }
       if (diffDays < 7) {
-        return `${diffDays}d ago`;
+        return `${diffDays} days ago`;
       }
       
       // Fallback to a clean readable date

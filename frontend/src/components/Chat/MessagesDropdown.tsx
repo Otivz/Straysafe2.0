@@ -27,8 +27,8 @@ const formatTime = (dateStr?: string) => {
         if (diffMins < 1) return 'Just now';
         if (diffMins < 60) return `${diffMins}m ago`;
         if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays === 1) return 'Yesterday';
-        if (diffDays < 7) return `${diffDays}d ago`;
+        if (diffDays === 1) return '1 day ago';
+        if (diffDays < 7) return `${diffDays} days ago`;
         return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     } catch {
         return '';
@@ -81,6 +81,8 @@ export default function MessagesDropdown({
         onClose();
         if (currentRole === 'subd') {
             navigate('/subd/messages');
+        } else if (currentRole === 'brgy') {
+            navigate('/brgy/messages');
         } else if (thread.thread_mode === 'match' && thread.report_id) {
             navigate(`/resident/reports/${thread.report_id}/match-review?openChat=true`);
         } else if (thread.report_id) {
@@ -300,15 +302,15 @@ export default function MessagesDropdown({
             </div>
 
             {/* Panel Footer */}
-            {currentRole === 'subd' && (
+            {(currentRole === 'subd' || currentRole === 'brgy') && (
                 <div className="p-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-[#0E131F] flex items-center justify-between">
                     <span className="text-[11px] font-semibold text-gray-400 dark:text-gray-400">
-                        Designated Leader Inbox
+                        {currentRole === 'subd' ? 'Designated Leader Inbox' : 'Barangay Operations Inbox'}
                     </span>
                     <button
                         onClick={() => {
                             onClose();
-                            navigate('/subd/messages');
+                            navigate(currentRole === 'subd' ? '/subd/messages' : '/brgy/messages');
                         }}
                         className="text-xs font-bold text-[#F97316] dark:text-orange-400 hover:text-[#EA580C] dark:hover:text-orange-300 transition-colors flex items-center gap-1 cursor-pointer"
                     >

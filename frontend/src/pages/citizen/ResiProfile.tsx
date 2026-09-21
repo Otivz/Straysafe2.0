@@ -6,7 +6,8 @@ import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
-import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
+import { MapPin, Maximize2, ExternalLink, X } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -45,6 +46,17 @@ const RecenterMap = ({ position }: { position: [number, number] }) => {
     return null;
 };
 
+const MapResizeHandler = () => {
+    const map = useMap();
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            map.invalidateSize();
+        }, 150);
+        return () => clearTimeout(timer);
+    }, [map]);
+    return null;
+};
+
 const ResiProfile = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -52,6 +64,8 @@ const ResiProfile = () => {
     const [reports, setReports] = useState<any[]>([]);
     const [isNavbarMenuOpen, setIsNavbarMenuOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [showMiniMap, setShowMiniMap] = useState(false);
+    const [isMapModalOpen, setIsMapModalOpen] = useState(false);
     const [openMenuId, setOpenMenuId] = useState<number | null>(null);
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -282,16 +296,99 @@ const ResiProfile = () => {
                                     <span className="font-bold text-gray-800 truncate max-w-[180px]">{userData.address || 'Not specified'}</span>
                                 </div>
                                 {userData.latitude && userData.longitude && (
-                                    <div className="flex justify-between items-center text-sm">
-                                        <div className="flex items-center gap-3 text-gray-500">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                                            </svg>
-                                            <span>Pinpoint Location</span>
-                                        </div>
-                                        <span className="font-bold text-orange-500 text-xs truncate max-w-[180px]">
-                                            {parseFloat(userData.latitude).toFixed(5)}, {parseFloat(userData.longitude).toFixed(5)}
-                                        </span>
+                                    <div className="rounded-xl transition-all">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowMiniMap(prev => !prev)}
+                                            className="w-full flex justify-between items-center text-sm py-1.5 px-2 -mx-2 rounded-xl hover:bg-orange-50/80 dark:hover:bg-orange-950/30 transition-all cursor-pointer group text-left border border-transparent hover:border-orange-200/60"
+                                            title="Click to view pinpoint location map thumbnail"
+                                        >
+                                            <div className="flex items-center gap-3 text-gray-500 group-hover:text-orange-600 transition-colors">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-orange-500 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                                </svg>
+                                                <span className="font-medium text-gray-700 dark:text-gray-300 group-hover:text-orange-600 transition-colors">Pinpoint Location</span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="font-bold text-orange-500 text-xs tracking-tight group-hover:underline">
+                                                    {parseFloat(userData.latitude).toFixed(5)}, {parseFloat(userData.longitude).toFixed(5)}
+                                                </span>
+                                                <span className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-md transition-colors ${showMiniMap ? 'bg-orange-500 text-white shadow-sm' : 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 group-hover:bg-orange-200'}`}>
+                                                    {showMiniMap ? 'Hide' : 'Map'}
+                                                    <svg className={`w-3 h-3 transition-transform duration-200 ${showMiniMap ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                                    </svg>
+                                                </span>
+                                            </div>
+                                        </button>
+
+                                        {/* Mini Map Thumbnail */}
+                                        {showMiniMap && (
+                                            <div className="mt-2 p-2.5 bg-orange-50/70 dark:bg-zinc-800/80 rounded-xl border border-orange-200/80 dark:border-zinc-700 shadow-sm transition-all animate-in fade-in zoom-in-95 duration-200">
+                                                <div className="flex items-center justify-between mb-1.5 px-0.5">
+                                                    <span className="text-[11px] font-bold text-gray-700 dark:text-gray-200 flex items-center gap-1.5">
+                                                        <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+                                                        Map Thumbnail
+                                                    </span>
+                                                    <div className="flex items-center gap-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setIsMapModalOpen(true);
+                                                            }}
+                                                            className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-600 dark:text-gray-300 hover:text-orange-600 px-2 py-0.5 rounded bg-white dark:bg-zinc-700 hover:bg-orange-50 border border-gray-200 dark:border-zinc-600 transition-colors shadow-xs"
+                                                            title="Enlarge Map"
+                                                        >
+                                                            <Maximize2 className="w-3 h-3" />
+                                                            Expand
+                                                        </button>
+                                                        <a
+                                                            href={`https://www.google.com/maps?q=${userData.latitude},${userData.longitude}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="p-1 rounded bg-white dark:bg-zinc-700 hover:bg-orange-50 text-gray-500 hover:text-orange-600 border border-gray-200 dark:border-zinc-600 transition-colors shadow-xs"
+                                                            title="Open in Google Maps"
+                                                        >
+                                                            <ExternalLink className="w-3 h-3" />
+                                                        </a>
+                                                    </div>
+                                                </div>
+
+                                                <div className="w-full h-44 rounded-lg overflow-hidden border border-gray-200 dark:border-zinc-700 relative z-0 shadow-inner">
+                                                    <MapContainer
+                                                        key="profile-mini-map"
+                                                        center={[parseFloat(userData.latitude), parseFloat(userData.longitude)]}
+                                                        zoom={16}
+                                                        scrollWheelZoom={false}
+                                                        className="h-full w-full"
+                                                    >
+                                                        <TileLayer
+                                                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                                                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                                        />
+                                                        <Marker position={[parseFloat(userData.latitude), parseFloat(userData.longitude)]}>
+                                                            <Popup>
+                                                                <div className="text-xs font-sans">
+                                                                    <p className="font-bold text-gray-900">{userData.name || 'Resident'}</p>
+                                                                    <p className="text-gray-600 text-[11px]">{userData.address || 'Saved Address'}</p>
+                                                                </div>
+                                                            </Popup>
+                                                        </Marker>
+                                                        <RecenterMap position={[parseFloat(userData.latitude), parseFloat(userData.longitude)]} />
+                                                        <MapResizeHandler />
+                                                    </MapContainer>
+                                                </div>
+
+                                                <div className="mt-2 flex items-center justify-between px-0.5 text-[10px] text-gray-500 dark:text-gray-400">
+                                                    <span className="truncate max-w-[180px] font-medium">{userData.address || 'Pinpointed Location'}</span>
+                                                    <span className="font-mono text-[9px] text-orange-600 dark:text-orange-400 font-bold">
+                                                        {parseFloat(userData.latitude).toFixed(4)}, {parseFloat(userData.longitude).toFixed(4)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                                 <div className="flex justify-between items-center text-sm">
@@ -624,6 +721,79 @@ const ResiProfile = () => {
                             <Button variant="primary" fullWidth className="py-4" onClick={handleSaveProfile}>
                                 Save Changes
                             </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* View on Map Enlarged Modal */}
+            {isMapModalOpen && userData.latitude && userData.longitude && (
+                <div className="fixed inset-0 z-[650] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-[#1a1208]/60 backdrop-blur-sm" onClick={() => setIsMapModalOpen(false)} />
+                    <div className="relative bg-white dark:bg-[#1a1a1a] w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden p-6 animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-zinc-800 z-10">
+                        <div className="flex justify-between items-start mb-4">
+                            <div>
+                                <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <MapPin className="w-5 h-5 text-orange-500" />
+                                    Residence Pinpoint Location
+                                </h2>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    {userData.address || 'Saved residence location'}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setIsMapModalOpen(false)}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="w-full h-80 rounded-xl overflow-hidden border border-gray-200 dark:border-zinc-700 relative z-0 mb-4 shadow-inner">
+                            <MapContainer
+                                key="enlarged-profile-map"
+                                center={[parseFloat(userData.latitude), parseFloat(userData.longitude)]}
+                                zoom={17}
+                                className="h-full w-full"
+                            >
+                                <TileLayer
+                                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                />
+                                <Marker position={[parseFloat(userData.latitude), parseFloat(userData.longitude)]}>
+                                    <Popup>
+                                        <div className="text-xs font-sans">
+                                            <p className="font-bold text-gray-900">{userData.name || 'Resident'}</p>
+                                            <p className="text-gray-600 text-[11px]">{userData.address || 'Saved Address'}</p>
+                                        </div>
+                                    </Popup>
+                                </Marker>
+                                <RecenterMap position={[parseFloat(userData.latitude), parseFloat(userData.longitude)]} />
+                                <MapResizeHandler />
+                            </MapContainer>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-gray-100 dark:border-zinc-800 text-xs">
+                            <div className="text-gray-500 dark:text-gray-400">
+                                Coordinates: <span className="font-bold text-orange-500">{parseFloat(userData.latitude).toFixed(6)}, {parseFloat(userData.longitude).toFixed(6)}</span>
+                            </div>
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                                <a
+                                    href={`https://www.google.com/maps?q=${userData.latitude},${userData.longitude}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-200 rounded-lg transition-colors font-semibold"
+                                >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                    Open Google Maps
+                                </a>
+                                <button
+                                    onClick={() => setIsMapModalOpen(false)}
+                                    className="flex-1 sm:flex-none px-4 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white font-bold rounded-lg transition-colors shadow-xs cursor-pointer"
+                                >
+                                    Close
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

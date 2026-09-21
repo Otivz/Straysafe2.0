@@ -158,6 +158,22 @@ def create_rescue_request(request_in: RescueRequestCreate, db: Session = Depends
             }
             db_rescue = Rescue(**{k: v for k, v in rescue_data.items() if v is not None or k == "report_id"})
             db.add(db_rescue)
+            db.flush()
+
+        # Transition report to Escalated (status 4) if it was Reported (1) or Verified (2)
+        if target_report and target_report.current_status_id in (1, 2):
+            target_report.current_status_id = 4
+            db.add(StatusHistory(
+                rescue_id=db_rescue.rescue_id,
+                report_id=target_report.report_id,
+                report_status_id=4,
+                rescue_status_id=request_in.status_id,
+                updated_by=request_in.leader_id or (request_in.barangay_staff_id if hasattr(request_in, 'barangay_staff_id') else None),
+                latitude=target_report.latitude,
+                longitude=target_report.longitude,
+                landmark=target_report.landmark,
+                remarks=request_in.description or "Report forwarded to Barangay Operations for official review and approval."
+            ))
         
         # Create or update EndorsementLetter record if escalated by subdivision leader (leader_id is set)
         if request_in.leader_id:
@@ -233,10 +249,17 @@ def create_rescue_request(request_in: RescueRequestCreate, db: Session = Depends
 
 
 @router.get("/", response_model=List[RescueRequestResponse])
-def get_rescue_requests(subdivision_id: Optional[int] = None, db: Session = Depends(get_db)):
+def get_rescue_requests(
+    subdivision_id: Optional[int] = None,
+    barangay_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
     query = db.query(Rescue).join(Rescue.report)
     if subdivision_id is not None:
         query = query.filter(Report.subdivision_id == subdivision_id)
+
+    if barangay_id is not None:
+        query = query.filter(Report.subdivision.has(Subdivision.barangay_id == barangay_id))
 
     rescues = query.options(
         joinedload(Rescue.report).joinedload(Report.media),
@@ -247,7 +270,7 @@ def get_rescue_requests(subdivision_id: Optional[int] = None, db: Session = Depe
         joinedload(Rescue.staff),
         joinedload(Rescue.leader).joinedload(User.position),
         joinedload(Rescue.assignments).joinedload(RescueAssignment.staff)
-    ).all()
+    ).order_by(Rescue.rescue_id.desc()).all()
 
     for rescue in rescues:
         _populate_rescue_fields(rescue, db)
@@ -270,7 +293,25 @@ def get_request_by_report(report_id: int, db: Session = Depends(get_db)):
     return _populate_rescue_fields(rescue, db)
 
 
+@router.get("/{rescue_id}", response_model=Optional[RescueRequestResponse])
+def get_rescue_request(rescue_id: int, db: Session = Depends(get_db)):
+    rescue = db.query(Rescue).options(
+        joinedload(Rescue.report).joinedload(Report.media),
+        joinedload(Rescue.report).joinedload(Report.reporter),
+        joinedload(Rescue.report).joinedload(Report.facility),
+        joinedload(Rescue.report).joinedload(Report.history).joinedload(StatusHistory.updater),
+        joinedload(Rescue.report).joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position),
+        joinedload(Rescue.staff),
+        joinedload(Rescue.leader).joinedload(User.position),
+        joinedload(Rescue.assignments).joinedload(RescueAssignment.staff)
+    ).filter(Rescue.rescue_id == rescue_id).first()
+    if not rescue:
+        raise HTTPException(status_code=404, detail="Rescue not found")
+    return _populate_rescue_fields(rescue, db)
+
+
 @router.patch("/{rescue_id}", response_model=RescueRequestResponse)
+@router.put("/{rescue_id}", response_model=RescueRequestResponse)
 def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: Session = Depends(get_db)):
     try:
         db_rescue = db.query(Rescue).options(

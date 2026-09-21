@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
 import { api } from '../../utils/api';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
@@ -121,7 +120,7 @@ const BrgyAdoptions = () => {
 
     const fetchCatalog = async () => {
         try {
-            const res = await axios.get('http://localhost:8000/adoptions/catalog');
+            const res = await api.get('/adoptions/catalog');
             setCatalogAnimals(Array.isArray(res.data) ? res.data : []);
         } catch (err: any) {
             console.error("Failed to load adoption catalog", err);

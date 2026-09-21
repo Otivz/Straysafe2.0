@@ -220,7 +220,7 @@ const BrgyPetRecords: React.FC = () => {
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
-                                <span>Archived / Removed</span>
+                                <span>Archived Records</span>
                                 {totalRemovedCount > 0 && (
                                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
                                         activeTab === 'removed' ? 'bg-rose-100 text-rose-600' : 'bg-gray-200 text-gray-600'
@@ -343,7 +343,7 @@ const BrgyPetRecords: React.FC = () => {
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex items-center justify-between">
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Removed Records</p>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Archived Records</p>
                                         <h3 className="text-3xl font-black text-gray-900 mt-1">{totalRemovedCount}</h3>
                                         <p className="text-xs text-gray-400 font-medium mt-1">Archived pet registrations</p>
                                     </div>
@@ -355,7 +355,7 @@ const BrgyPetRecords: React.FC = () => {
                                     <div>
                                         <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Archived Canines</p>
                                         <h3 className="text-3xl font-black text-gray-900 mt-1">{removedDogCount}</h3>
-                                        <p className="text-xs text-gray-400 font-medium mt-1">Removed dog profiles</p>
+                                        <p className="text-xs text-gray-400 font-medium mt-1">Archived dog profiles</p>
                                     </div>
                                     <div className="w-12 h-12 rounded-2xl bg-orange-50 text-[#F97316] flex items-center justify-center font-bold">
                                         🐕
@@ -365,7 +365,7 @@ const BrgyPetRecords: React.FC = () => {
                                     <div>
                                         <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Archived Felines</p>
                                         <h3 className="text-3xl font-black text-gray-900 mt-1">{removedCatCount}</h3>
-                                        <p className="text-xs text-gray-400 font-medium mt-1">Removed cat profiles</p>
+                                        <p className="text-xs text-gray-400 font-medium mt-1">Archived cat profiles</p>
                                     </div>
                                     <div className="w-12 h-12 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center font-bold">
                                         🐈
@@ -406,7 +406,7 @@ const BrgyPetRecords: React.FC = () => {
                                     <button
                                         onClick={fetchRemovedPets}
                                         className="p-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-all cursor-pointer ml-2"
-                                        title="Refresh Removed Pets"
+                                        title="Refresh Archived Pets"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${loadingRemoved ? 'animate-spin text-rose-500' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -429,7 +429,7 @@ const BrgyPetRecords: React.FC = () => {
                                         </div>
                                         <h3 className="text-base font-black text-gray-800 uppercase tracking-wide">No Archived Records</h3>
                                         <p className="text-xs text-gray-400 max-w-sm mt-1">
-                                            {removedSearchTerm ? 'No records match your search criteria.' : 'There are currently no archived or deleted pet profiles in the barangay database.'}
+                                            {removedSearchTerm ? 'No records match your search criteria.' : 'There are currently no archived pet profiles in the barangay database.'}
                                         </p>
                                     </div>
                                 ) : (

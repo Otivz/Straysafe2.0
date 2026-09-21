@@ -128,7 +128,7 @@ const AdminSidebar = () => {
     ];
 
     return (
-        <aside className={`${isOpen ? 'w-64' : 'w-20'} relative bg-white border-r border-gray-100 flex flex-col justify-between flex-shrink-0 transition-all duration-300 z-50`}>
+        <aside className={`${isOpen ? 'w-72' : 'w-20'} relative bg-white border-r border-gray-100 flex flex-col justify-between flex-shrink-0 transition-all duration-300 z-50`}>
 
             {/* Toggle Button */}
             <Button
@@ -160,10 +160,10 @@ const AdminSidebar = () => {
                                 <div key={item.label} className="relative group overflow-hidden">
                                     <button
                                         onClick={item.onClick}
-                                        className={`w-full flex items-center py-3 font-bold text-xs uppercase tracking-widest transition-colors text-gray-400 hover:text-[#F97316] hover:bg-orange-50/50 cursor-pointer ${isOpen ? 'px-8' : 'justify-center px-0'}`}
+                                        className={`w-full flex items-center py-3 font-bold text-xs uppercase tracking-wider transition-colors text-gray-400 hover:text-[#F97316] hover:bg-orange-50/50 cursor-pointer ${isOpen ? 'px-6' : 'justify-center px-0'}`}
                                     >
                                         <span className="shrink-0">{item.icon}</span>
-                                        {isOpen && <span className="ml-4 whitespace-nowrap animate-in fade-in duration-300">{item.label}</span>}
+                                        {isOpen && <span className="ml-3.5 whitespace-nowrap animate-in fade-in duration-300">{item.label}</span>}
                                     </button>
                                 </div>
                             );
@@ -177,11 +177,11 @@ const AdminSidebar = () => {
                                 )}
                                 <Link 
                                     to={item.path || '#'} 
-                                    className={`flex items-center py-3 font-bold text-xs uppercase tracking-widest transition-colors ${
+                                    className={`flex items-center py-3 font-bold text-xs uppercase tracking-wider transition-colors ${
                                         isActive 
                                             ? 'bg-orange-50 text-[#F97316]' 
                                             : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
-                                    } ${isOpen ? 'px-8' : 'justify-center px-0'}`}
+                                    } ${isOpen ? 'px-6' : 'justify-center px-0'}`}
                                 >
                                     <div className="relative shrink-0">
                                         {item.icon}
@@ -192,8 +192,8 @@ const AdminSidebar = () => {
                                         )}
                                     </div>
                                     {isOpen && (
-                                        <div className="ml-4 flex-1 flex items-center justify-between overflow-hidden">
-                                            <span className="truncate">{item.label}</span>
+                                        <div className="ml-3.5 flex-1 flex items-center justify-between overflow-hidden">
+                                            <span className="truncate whitespace-nowrap">{item.label}</span>
                                             {hasBadge && (
                                                 <span className="ml-2 shrink-0 bg-[#F97316] text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-sm animate-pulse">
                                                     {item.badgeCount}

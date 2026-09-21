@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
     Upload,
@@ -29,10 +28,8 @@ import {
     Lightbulb,
     LifeBuoy
 } from 'lucide-react';
-import ResiNavbar from '../../components/Navbars/ResiNavbar';
-import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
-import SuccessModal from '../../components/Modals/SuccessModal';
-import StraySafeLoading, { AnimalLoadingOverlay } from '../../components/StraySafeLoading';
+import SuccessModal from './SuccessModal';
+import StraySafeLoading, { AnimalLoadingOverlay } from '../StraySafeLoading';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMapEvents, Polygon, useMap } from 'react-leaflet';
 import { createLandmarkPinIcon, getLandmarkCategory } from '../../utils/landmarkIcons';
@@ -41,7 +38,7 @@ import L from 'leaflet';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-import ReturnToSeleraButton from '../../components/MapControls/ReturnToSeleraButton';
+import ReturnToSeleraButton from '../MapControls/ReturnToSeleraButton';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -109,8 +106,27 @@ const steps = [
     { id: 9, title: 'Review & Submit' }
 ];
 
-export default function ReportStrayPage() {
-    const navigate = useNavigate();
+const VALID_COAT_PATTERNS = ['Solid', 'Bicolor', 'Tricolor', 'Spotted', 'Striped', 'Patched', 'Brindle', 'Merle', 'Tabby', 'Calico', 'Tortoiseshell', 'Mixed', 'Unknown'];
+const VALID_PRIMARY_COLORS = ['Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange', 'Mixed'];
+const VALID_SECONDARY_COLORS = ['None', 'Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange'];
+const VALID_TERTIARY_COLORS = ['None', 'Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange'];
+
+const normalizeOption = (val: string, options: string[], defaultVal: string) => {
+    if (!val) return defaultVal;
+    const clean = val.trim();
+    const found = options.find(o => o.toLowerCase() === clean.toLowerCase());
+    if (found) return found;
+    const partial = options.find(o => clean.toLowerCase().includes(o.toLowerCase()) || o.toLowerCase().includes(clean.toLowerCase()));
+    return partial || defaultVal;
+};
+
+interface SubdReportModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSuccess?: () => void;
+}
+
+export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdReportModalProps) {
     const [currentStep, setCurrentStep] = useState(1);
     const [isAiProcessing, setIsAiProcessing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -126,60 +142,6 @@ export default function ReportStrayPage() {
     const [isCameraOpen, setIsCameraOpen] = useState(false);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
-
-    const startCamera = async () => {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            document.getElementById('camera-file-input')?.click();
-            return;
-        }
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: { ideal: 'environment' } },
-                audio: false
-            });
-            mediaStreamRef.current = stream;
-            setIsCameraOpen(true);
-        } catch (err) {
-            console.warn('MediaDevices camera access failed/rejected, using native camera picker fallback:', err);
-            document.getElementById('camera-file-input')?.click();
-        }
-    };
-
-    const stopCamera = () => {
-        if (mediaStreamRef.current) {
-            mediaStreamRef.current.getTracks().forEach(track => track.stop());
-            mediaStreamRef.current = null;
-        }
-        setIsCameraOpen(false);
-    };
-
-    useEffect(() => {
-        if (isCameraOpen && videoRef.current && mediaStreamRef.current) {
-            videoRef.current.srcObject = mediaStreamRef.current;
-            videoRef.current.play().catch(console.error);
-        }
-    }, [isCameraOpen]);
-
-    const capturePhoto = () => {
-        if (!videoRef.current) return;
-        const video = videoRef.current;
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth || 1280;
-        canvas.height = video.videoHeight || 720;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob((blob) => {
-            if (!blob) return;
-            const capturedFile = new File([blob], `stray_camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
-            setFormData(prev => ({
-                ...prev,
-                mediaFiles: [...prev.mediaFiles, capturedFile]
-            }));
-            stopCamera();
-        }, 'image/jpeg', 0.92);
-    };
 
     // Main Form State
     const [formData, setFormData] = useState({
@@ -224,12 +186,26 @@ export default function ReportStrayPage() {
         message?: string;
     } | null>(null);
     const [lastAnalyzedSignature, setLastAnalyzedSignature] = useState<string | null>(null);
-
-    const userStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
-    const currentUser = userStr ? JSON.parse(userStr) : null;
-    const currentUserId = currentUser ? Number(currentUser.user_id || currentUser.id) : null;
-    const currentSubdivisionId = currentUser ? Number(currentUser.subdivision_id || 1) : 1;
     const [landmarks, setLandmarks] = useState<any[]>([]);
+
+    // Get current staff user info
+    const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user') || localStorage.getItem('resident_user');
+    const currentUser = userStr ? JSON.parse(userStr) : null;
+    const currentUserId = currentUser ? Number(currentUser.user_id || currentUser.id) : 1;
+    const currentSubdivisionId = currentUser ? Number(currentUser.subdivision_id || 1) : 1;
+
+    // Reset state on open/close
+    useEffect(() => {
+        if (!isOpen) {
+            stopCamera();
+            setCurrentStep(1);
+            setDeclaration(false);
+            setUploadProgress(null);
+            setIsSubmitting(false);
+            setAiAnalysisResult(null);
+            setLastAnalyzedSignature(null);
+        }
+    }, [isOpen]);
 
     useEffect(() => {
         const fetchLandmarks = async () => {
@@ -245,8 +221,9 @@ export default function ReportStrayPage() {
         fetchLandmarks();
     }, []);
 
-    // Auto Reverse Geocode Location
+    // Reverse geocode
     useEffect(() => {
+        if (!isOpen) return;
         const fetchAddress = async () => {
             setIsGeocoding(true);
             try {
@@ -281,9 +258,63 @@ export default function ReportStrayPage() {
         }, 400);
 
         return () => clearTimeout(timer);
-    }, [formData.latitude, formData.longitude]);
+    }, [formData.latitude, formData.longitude, isOpen]);
 
-    // Handle Media Files Upload
+    // Live Camera Handlers
+    const startCamera = async () => {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            document.getElementById('subd-camera-file-input')?.click();
+            return;
+        }
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: 'environment' } },
+                audio: false
+            });
+            mediaStreamRef.current = stream;
+            setIsCameraOpen(true);
+        } catch (err) {
+            console.warn('MediaDevices camera access failed/rejected, using native camera picker fallback:', err);
+            document.getElementById('subd-camera-file-input')?.click();
+        }
+    };
+
+    const stopCamera = () => {
+        if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach(track => track.stop());
+            mediaStreamRef.current = null;
+        }
+        setIsCameraOpen(false);
+    };
+
+    useEffect(() => {
+        if (isCameraOpen && videoRef.current && mediaStreamRef.current) {
+            videoRef.current.srcObject = mediaStreamRef.current;
+            videoRef.current.play().catch(console.error);
+        }
+    }, [isCameraOpen]);
+
+    const capturePhoto = () => {
+        if (!videoRef.current) return;
+        const video = videoRef.current;
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth || 1280;
+        canvas.height = video.videoHeight || 720;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+            if (!blob) return;
+            const capturedFile = new File([blob], `stray_camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
+            setFormData(prev => ({
+                ...prev,
+                mediaFiles: [...prev.mediaFiles, capturedFile]
+            }));
+            stopCamera();
+        }, 'image/jpeg', 0.92);
+    };
+
     const handleFileChange = (files: FileList | null) => {
         if (!files) return;
         const newFiles = Array.from(files);
@@ -300,28 +331,13 @@ export default function ReportStrayPage() {
         }));
     };
 
-    // Step 3 Real AI Processing via backend API
-    const VALID_COAT_PATTERNS = ['Solid', 'Bicolor', 'Tricolor', 'Spotted', 'Striped', 'Patched', 'Brindle', 'Merle', 'Tabby', 'Calico', 'Tortoiseshell', 'Mixed', 'Unknown'];
-    const VALID_PRIMARY_COLORS = ['Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange', 'Mixed'];
-    const VALID_SECONDARY_COLORS = ['None', 'Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange'];
-    const VALID_TERTIARY_COLORS = ['None', 'Black', 'Brown', 'White', 'Gray', 'Tan', 'Golden', 'Cream', 'Orange'];
-
-    const normalizeOption = (val: string, options: string[], defaultVal: string) => {
-        if (!val) return defaultVal;
-        const clean = val.trim();
-        const found = options.find(o => o.toLowerCase() === clean.toLowerCase());
-        if (found) return found;
-        const partial = options.find(o => clean.toLowerCase().includes(o.toLowerCase()) || o.toLowerCase().includes(clean.toLowerCase()));
-        return partial || defaultVal;
-    };
-
+    // AI Analysis
     const triggerAiAnalysis = async (forceReanalyze = false) => {
         if (!formData.mediaFiles || formData.mediaFiles.length === 0) return;
-        
+
         const primaryFile = formData.mediaFiles[0];
         const currentSignature = `${primaryFile.name}-${primaryFile.size}-${primaryFile.lastModified}`;
 
-        // If already analyzed this exact media file and we have results, preserve and do not re-analyze
         if (!forceReanalyze && aiAnalysisResult && lastAnalyzedSignature === currentSignature) {
             return;
         }
@@ -334,7 +350,7 @@ export default function ReportStrayPage() {
             if (res.status === 200 && res.data) {
                 const ai = res.data;
                 const isDetected = ai.animal_detected !== false && !['unknown', 'none', ''].includes((ai.animal_type || '').toLowerCase());
-                
+
                 if (!isDetected) {
                     setAiAnalysisResult({
                         animalDetected: false,
@@ -423,16 +439,18 @@ export default function ReportStrayPage() {
 
         if (currentStep < 9) {
             setCurrentStep(prev => prev + 1);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            const bodyEl = document.getElementById('subd-modal-scroll-body');
+            if (bodyEl) bodyEl.scrollTo({ top: 0, behavior: 'smooth' });
         }
     };
 
     const handleBack = () => {
         if (currentStep > 1) {
             setCurrentStep(prev => prev - 1);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            const bodyEl = document.getElementById('subd-modal-scroll-body');
+            if (bodyEl) bodyEl.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
-            navigate('/resident-home');
+            onClose();
         }
     };
 
@@ -472,7 +490,7 @@ export default function ReportStrayPage() {
             }
 
             const extraDetails = [
-                `Custody: ${formData.custodyStatus === 'Secured' ? 'Secured in safe place by resident' : 'Stray sighting (not touched)'}`,
+                `Custody: ${formData.custodyStatus === 'Secured' ? 'Secured in safe place' : 'Stray sighting (not touched)'}`,
                 formData.coatPattern !== 'Unknown' ? `Pattern: ${formData.coatPattern}` : null,
                 formData.distinctiveMarkings ? `Markings: ${formData.distinctiveMarkings}` : null,
                 formData.observedConditions.length > 0 ? `Observed Conditions: ${formData.observedConditions.join(', ')}` : null,
@@ -494,7 +512,7 @@ export default function ReportStrayPage() {
                 animal_color: compiledColor,
                 estimated_size: formData.estimatedSize,
                 custody_status: formData.custodyStatus,
-                description: extraDetails || 'No additional details provided.',
+                description: extraDetails || 'Reported by Subdivision Staff.',
                 condition: formData.observedConditions.length > 0 ? formData.observedConditions.join(', ') : 'Healthy',
                 latitude: formData.latitude,
                 longitude: formData.longitude,
@@ -562,7 +580,7 @@ export default function ReportStrayPage() {
             }
         } catch (err: any) {
             console.error('Error submitting report:', err?.response?.data || err);
-            const detailMsg = err?.response?.data?.detail 
+            const detailMsg = err?.response?.data?.detail
                 ? (typeof err.response.data.detail === 'string' ? err.response.data.detail : JSON.stringify(err.response.data.detail))
                 : (err.message || 'Failed to submit report. Please try again.');
             alert(`Failed to submit report: ${detailMsg}`);
@@ -572,63 +590,76 @@ export default function ReportStrayPage() {
         }
     };
 
-    return (
-        <div className="min-h-screen bg-[#F7F7F7] font-sans pb-28">
-            <ResiNavbar />
+    if (!isOpen) return null;
 
-            <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-24 sm:pt-28">
-                {/* Header Title */}
-                <div className="flex items-center justify-between mb-8">
-                    <div>
-                        <button
-                            onClick={handleBack}
-                            className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 hover:text-[#F97316] transition-colors mb-2"
-                        >
-                            <ArrowLeft className="w-4 h-4" /> Back to Feed
-                        </button>
-                        <h1 className="text-2xl sm:text-3xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-3">
-                            <ClipboardList className="w-6 h-6 shrink-0" /> <span>STRAY-SAFE Report a Stray Animal</span>
-                        </h1>
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+            <div className="bg-[#F8FAFC] rounded-[2.5rem] shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden border border-white/20 animate-in zoom-in-95 duration-300">
+                
+                {/* Modal Header */}
+                <div className="px-6 sm:px-8 py-5 border-b border-gray-200 bg-white flex justify-between items-center shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-orange-100 flex items-center justify-center text-[#F97316]">
+                            <ClipboardList className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h2 className="text-lg sm:text-xl font-black text-[#1a1208] uppercase tracking-tight">
+                                Report Stray Animal
+                            </h2>
+                            <p className="text-[11px] font-bold text-gray-400">
+                                Step {currentStep} of 9 &mdash; {steps.find(s => s.id === currentStep)?.title}
+                            </p>
+                        </div>
                     </div>
-                    <span className="px-4 py-1.5 rounded-full bg-orange-100 text-[#F97316] text-xs font-black uppercase tracking-widest">
-                        Step {currentStep} of 9
-                    </span>
+                    <div className="flex items-center gap-3">
+                        <span className="hidden sm:inline-block px-3 py-1 rounded-full bg-orange-100 text-[#F97316] text-xs font-black uppercase tracking-widest">
+                            Step {currentStep}/9
+                        </span>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-all cursor-pointer"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Top Stepper Indicator */}
-                <div className="mb-8 overflow-x-auto custom-scrollbar pb-2">
-                    <div className="flex items-center min-w-max space-x-2 sm:space-x-3 bg-white p-3 rounded-3xl border border-gray-100 shadow-sm">
+                <div className="px-6 sm:px-8 py-3 bg-white border-b border-gray-100 overflow-x-auto custom-scrollbar shrink-0">
+                    <div className="flex items-center min-w-max space-x-2 sm:space-x-3">
                         {steps.map((step) => {
                             const isActive = currentStep === step.id;
                             const isCompleted = currentStep > step.id;
                             return (
                                 <div key={step.id} className="flex items-center gap-2">
                                     <button
+                                        type="button"
                                         onClick={() => {
                                             if (step.id < currentStep) setCurrentStep(step.id);
                                         }}
                                         disabled={step.id > currentStep}
-                                        className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-black transition-all ${isActive
-                                                ? 'bg-[#F97316] text-white shadow-md shadow-orange-100'
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${isActive
+                                                ? 'bg-[#F97316] text-white shadow-sm'
                                                 : isCompleted
                                                     ? 'bg-orange-50 text-[#F97316] hover:bg-orange-100'
-                                                    : 'bg-gray-50 text-gray-400 opacity-60'
+                                                    : 'bg-gray-100 text-gray-400 opacity-60'
                                             }`}
                                     >
-                                        <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-[10px]">
-                                            {isCompleted ? <Check className="w-3 h-3" /> : step.id}
+                                        <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[9px]">
+                                            {isCompleted ? <Check className="w-2.5 h-2.5" /> : step.id}
                                         </span>
-                                        <span className="uppercase tracking-wider text-[11px] whitespace-nowrap">{step.title}</span>
+                                        <span className="uppercase tracking-wider text-[10px] whitespace-nowrap">{step.title}</span>
                                     </button>
-                                    {step.id < steps.length && <div className="w-3 h-0.5 bg-gray-200" />}
+                                    {step.id < steps.length && <div className="w-2 h-0.5 bg-gray-200" />}
                                 </div>
                             );
                         })}
                     </div>
                 </div>
 
-                {/* Step Content Cards */}
-                <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden p-6 sm:p-10 mb-8 transition-all duration-300">
+                {/* Scrollable Form Body */}
+                <div id="subd-modal-scroll-body" className="p-6 sm:p-8 overflow-y-auto custom-scrollbar flex-1 bg-white">
 
                     {/* STEP 1: Upload Media */}
                     {currentStep === 1 && (
@@ -644,22 +675,22 @@ export default function ReportStrayPage() {
                             </div>
 
                             {/* Alert Notice */}
-                            <div className="flex items-center gap-3 p-4 bg-orange-50/60 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-900/60 rounded-2xl text-xs font-bold text-[#F97316] dark:text-orange-400">
+                            <div className="flex items-center gap-3 p-4 bg-orange-50/60 border border-orange-100 rounded-2xl text-xs font-bold text-[#F97316]">
                                 <Sparkles className="w-5 h-5 shrink-0" />
                                 <span>AI analysis will begin automatically after media upload.</span>
                             </div>
 
                             {/* Drag & Drop Area */}
                             <div
-                                onClick={() => document.getElementById('media-file-input')?.click()}
-                                className="border-2 border-dashed border-gray-200 dark:border-gray-700 hover:border-orange-400 dark:hover:border-orange-500 bg-[#FAFAF9] dark:bg-[#0E131F] hover:bg-orange-50/20 dark:hover:bg-orange-950/20 rounded-[2rem] p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3"
+                                onClick={() => document.getElementById('subd-media-file-input')?.click()}
+                                className="border-2 border-dashed border-gray-200 hover:border-orange-400 bg-[#FAFAF9] hover:bg-orange-50/20 rounded-[2rem] p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3"
                             >
-                                <div className="w-14 h-14 rounded-2xl bg-white dark:bg-[#151C2C] shadow-sm flex items-center justify-center text-[#F97316] dark:text-orange-400 border border-gray-100 dark:border-gray-800">
+                                <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center text-[#F97316] border border-gray-100">
                                     <Upload className="w-7 h-7" />
                                 </div>
                                 <div>
-                                    <p className="text-xs font-black text-[#1a1208] dark:text-white uppercase tracking-wider">Drag & drop files here or click to browse</p>
-                                    <p className="text-[10px] font-bold text-gray-400 dark:text-gray-400 mt-1">Supports PNG, JPG, JPEG, MP4 (Max 10MB per file)</p>
+                                    <p className="text-xs font-black text-[#1a1208] uppercase tracking-wider">Drag & drop files here or click to browse</p>
+                                    <p className="text-[10px] font-bold text-gray-400 mt-1">Supports PNG, JPG, JPEG, MP4 (Max 10MB per file)</p>
                                 </div>
                             </div>
 
@@ -667,14 +698,14 @@ export default function ReportStrayPage() {
                                 <button
                                     type="button"
                                     onClick={startCamera}
-                                    className="flex-1 py-3.5 px-4 bg-orange-50 dark:bg-orange-950/40 hover:bg-orange-100 dark:hover:bg-orange-900/50 text-[#F97316] dark:text-orange-400 border border-transparent dark:border-orange-900/50 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-sm active:scale-98"
+                                    className="flex-1 py-3.5 px-4 bg-orange-50 hover:bg-orange-100 text-[#F97316] rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-sm active:scale-98"
                                 >
                                     <Camera className="w-4 h-4" /> Use Camera
                                 </button>
                             </div>
 
                             <input
-                                id="media-file-input"
+                                id="subd-media-file-input"
                                 type="file"
                                 accept="image/*,video/*"
                                 multiple
@@ -682,7 +713,7 @@ export default function ReportStrayPage() {
                                 onChange={(e) => handleFileChange(e.target.files)}
                             />
                             <input
-                                id="camera-file-input"
+                                id="subd-camera-file-input"
                                 type="file"
                                 accept="image/*"
                                 capture="environment"
@@ -692,9 +723,8 @@ export default function ReportStrayPage() {
 
                             {/* Live Device Camera Modal Overlay */}
                             {isCameraOpen && (
-                                <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4">
+                                <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4">
                                     <div className="relative w-full max-w-lg bg-black rounded-3xl overflow-hidden border border-white/20 shadow-2xl flex flex-col items-center">
-                                        {/* Camera Viewfinder Header */}
                                         <div className="w-full flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent absolute top-0 z-10">
                                             <span className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-2">
                                                 <Camera className="w-4 h-4 text-[#F97316]" /> Live Camera
@@ -708,7 +738,6 @@ export default function ReportStrayPage() {
                                             </button>
                                         </div>
 
-                                        {/* Live Video Feed */}
                                         <video
                                             ref={videoRef}
                                             playsInline
@@ -716,7 +745,6 @@ export default function ReportStrayPage() {
                                             className="w-full h-[65vh] object-cover bg-black"
                                         />
 
-                                        {/* Shutter Capture Controls */}
                                         <div className="w-full p-6 bg-gradient-to-t from-black/90 to-transparent flex items-center justify-center">
                                             <button
                                                 type="button"
@@ -745,9 +773,10 @@ export default function ReportStrayPage() {
                                                 {file.type.startsWith('video/') ? (
                                                     <video src={URL.createObjectURL(file)} className="w-full h-full object-cover" />
                                                 ) : (
-                                                    <img src={URL.createObjectURL(file)} className="w-full h-full object-cover" />
+                                                    <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
                                                 )}
                                                 <button
+                                                    type="button"
                                                     onClick={() => handleRemoveFile(idx)}
                                                     className="absolute top-2 right-2 bg-black/60 hover:bg-red-500 text-white rounded-full p-1.5 transition-colors"
                                                 >
@@ -858,14 +887,14 @@ export default function ReportStrayPage() {
                                             <button
                                                 type="button"
                                                 onClick={() => setCurrentStep(1)}
-                                                className="px-6 py-3.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5"
+                                                className="px-6 py-3.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
                                             >
                                                 <ArrowLeft className="w-3.5 h-3.5" /> {isPrimaryVideo ? "Replace Video (Go to Step 1)" : "Replace Photo (Go to Step 1)"}
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => setCurrentStep(4)}
-                                                className="px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-1.5"
+                                                className="px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                                             >
                                                 Continue Manually <ArrowRight className="w-3.5 h-3.5" />
                                             </button>
@@ -968,7 +997,7 @@ export default function ReportStrayPage() {
                                 <div className="flex gap-4">
                                     {['Dog', 'Cat', 'Unknown'].map((t) => (
                                         <label key={t} className={`flex-1 p-3.5 rounded-2xl border-2 text-center cursor-pointer font-black text-xs transition-all ${formData.animalType === t ? 'border-[#F97316] bg-orange-50/40 text-[#F97316]' : 'border-gray-100 bg-[#FAFAF9]'}`}>
-                                            <input type="radio" name="animalType" value={t} checked={formData.animalType === t} onChange={() => setFormData(prev => ({ ...prev, animalType: t }))} className="hidden" />
+                                            <input type="radio" name="subdAnimalType" value={t} checked={formData.animalType === t} onChange={() => setFormData(prev => ({ ...prev, animalType: t }))} className="hidden" />
                                             {t}
                                         </label>
                                     ))}
@@ -993,7 +1022,7 @@ export default function ReportStrayPage() {
                                 <div className="grid grid-cols-4 gap-2">
                                     {['Small', 'Medium', 'Large', 'Unknown'].map((sz) => (
                                         <label key={sz} className={`p-3 rounded-2xl border-2 text-center cursor-pointer font-black text-xs transition-all ${formData.estimatedSize === sz ? 'border-[#F97316] bg-orange-50/40 text-[#F97316]' : 'border-gray-100 bg-[#FAFAF9]'}`}>
-                                            <input type="radio" name="estimatedSize" value={sz} checked={formData.estimatedSize === sz} onChange={() => setFormData(prev => ({ ...prev, estimatedSize: sz }))} className="hidden" />
+                                            <input type="radio" name="subdEstimatedSize" value={sz} checked={formData.estimatedSize === sz} onChange={() => setFormData(prev => ({ ...prev, estimatedSize: sz }))} className="hidden" />
                                             {sz}
                                         </label>
                                     ))}
@@ -1106,7 +1135,7 @@ export default function ReportStrayPage() {
                                         >
                                             <input
                                                 type="radio"
-                                                name="observedCondition"
+                                                name="subdObservedCondition"
                                                 checked={isChecked}
                                                 onChange={() => {
                                                     setFormData(prev => ({ ...prev, observedConditions: [cond] }));
@@ -1132,7 +1161,7 @@ export default function ReportStrayPage() {
                                 <p className="text-xs font-bold text-gray-400 mt-1">Specify whether you only observed the animal or currently have it secured.</p>
                             </div>
 
-                            {/* Option Cards: Option A (Sighting) vs Option B (Secured) */}
+                            {/* Option Cards: Sighting vs Secured */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <button
                                     type="button"
@@ -1195,7 +1224,7 @@ export default function ReportStrayPage() {
                                 </button>
                             </div>
 
-                            {/* Dynamic Location Action Bar based on Option */}
+                            {/* Dynamic Location Action Bar */}
                             {formData.custodyStatus === 'Sighting' ? (
                                 <div className="flex items-center justify-between p-4 bg-orange-50/50 border border-orange-100 rounded-2xl">
                                     <div className="flex items-center gap-3">
@@ -1262,24 +1291,22 @@ export default function ReportStrayPage() {
                                 </div>
                             )}
 
-                            {/* Interactive Map Header Toolbar */}
+                            {/* Map Header Toolbar */}
                             <div className="flex items-center justify-between gap-2 pt-1">
                                 <div className="flex items-center gap-1.5 text-xs text-gray-600 font-black uppercase tracking-wider">
                                     <MapPin className="w-3.5 h-3.5 text-[#F97316]" />
                                     <span>Interactive Pinpoint Map</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    {/* Inline Resize Button */}
                                     <button
                                         type="button"
                                         onClick={() => setIsInlineMapExpanded(prev => !prev)}
-                                        className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-2xs"
+                                        className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer"
                                         title={isInlineMapExpanded ? "Compact map view" : "Taller map view"}
                                     >
                                         {isInlineMapExpanded ? <Minimize2 className="w-3 h-3 text-orange-600" /> : <Maximize2 className="w-3 h-3 text-orange-600" />}
                                         <span>{isInlineMapExpanded ? "Compact" : "Resize"}</span>
                                     </button>
-                                    {/* Fullscreen Expand Button */}
                                     <button
                                         type="button"
                                         onClick={() => setIsMapExpandedModal(true)}
@@ -1294,7 +1321,6 @@ export default function ReportStrayPage() {
 
                             {/* Interactive Map */}
                             <div className={`relative w-full ${isInlineMapExpanded ? 'h-[460px]' : 'h-64'} transition-all duration-300 rounded-3xl overflow-hidden border border-gray-200 shadow-inner`}>
-                                {/* Floating Expand Map Button inside canvas */}
                                 <div className="absolute top-3 right-3 z-[400]">
                                     <button
                                         type="button"
@@ -1328,10 +1354,9 @@ export default function ReportStrayPage() {
                                         pathOptions={{ color: '#F97316', fillColor: '#F97316', fillOpacity: 0.1, weight: 2, dashArray: '5, 10' }}
                                     />
 
-                                    {/* Registered Landmarks on Map (exact style as SubdSettings) */}
                                     {landmarks.map((lm) => (
                                         <Marker
-                                            key={`standalone-lm-${lm.landmark_id}`}
+                                            key={`subd-lm-${lm.landmark_id}`}
                                             position={[lm.latitude, lm.longitude]}
                                             icon={createLandmarkPinIcon(lm.category, lm.is_holding_facility)}
                                             eventHandlers={{
@@ -1358,14 +1383,6 @@ export default function ReportStrayPage() {
                                                         {getLandmarkCategory(lm.category, lm.is_holding_facility).label}
                                                     </p>
                                                     {lm.description && <p className="text-gray-600 text-[11px] mb-1">{lm.description}</p>}
-                                                    {lm.is_holding_facility && (
-                                                        <div className="mt-1 pt-1 border-t border-gray-100 text-emerald-700 font-bold text-[10px]">
-                                                            <p>Type: {lm.facility_type || 'Holding Pen'}</p>
-                                                            <p>Capacity: {lm.capacity || 'N/A'} animals</p>
-                                                            {lm.contact_person && <p>Caretaker: {lm.contact_person}</p>}
-                                                            {lm.contact_number && <p>Phone: {lm.contact_number}</p>}
-                                                        </div>
-                                                    )}
                                                     <div className="mt-2 pt-1 border-t border-gray-100">
                                                         <button
                                                             type="button"
@@ -1391,7 +1408,7 @@ export default function ReportStrayPage() {
                                 </MapContainer>
                             </div>
 
-                            {/* Fields */}
+                            {/* Address & Landmark inputs */}
                             <div>
                                 <label className="text-xs font-black text-[#1a1208] uppercase tracking-wider mb-2 block">Street Address</label>
                                 <input
@@ -1458,13 +1475,13 @@ export default function ReportStrayPage() {
                         <div className="space-y-6">
                             <div>
                                 <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight">Additional Information</h2>
-                                <p className="text-xs font-bold text-gray-400 mt-1">Optional notes to assist field rescuers.</p>
+                                <p className="text-xs font-bold text-gray-400 mt-1">Optional notes to assist field responders.</p>
                             </div>
 
                             <textarea
                                 rows={5}
                                 className="w-full bg-[#FAFAF9] border border-gray-100 rounded-3xl p-5 text-xs font-medium text-[#1a1208] focus:outline-none focus:border-orange-300 shadow-inner"
-                                placeholder="Tell us anything else that may help rescuers..."
+                                placeholder="Tell us anything else that may help field responders..."
                                 value={formData.description}
                                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                             />
@@ -1488,7 +1505,7 @@ export default function ReportStrayPage() {
                                         </div>
                                         <p className="text-[11px] font-semibold text-gray-400 mt-1">Visible to community members in the subdivision feed.</p>
                                     </div>
-                                    <input type="radio" name="visibility" value="Public" checked={formData.visibility === 'Public'} onChange={() => setFormData(prev => ({ ...prev, visibility: 'Public' }))} className="accent-[#F97316] w-4 h-4" />
+                                    <input type="radio" name="subdVisibility" value="Public" checked={formData.visibility === 'Public'} onChange={() => setFormData(prev => ({ ...prev, visibility: 'Public' }))} className="accent-[#F97316] w-4 h-4" />
                                 </label>
 
                                 <label className={`p-5 rounded-3xl border-2 flex items-center justify-between cursor-pointer transition-all ${formData.visibility === 'Private' ? 'border-[#F97316] bg-orange-50/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}>
@@ -1499,7 +1516,7 @@ export default function ReportStrayPage() {
                                         </div>
                                         <p className="text-[11px] font-semibold text-gray-400 mt-1">Visible only to authorized personnel (Leaders, Barangay Staff, Admin).</p>
                                     </div>
-                                    <input type="radio" name="visibility" value="Private" checked={formData.visibility === 'Private'} onChange={() => setFormData(prev => ({ ...prev, visibility: 'Private' }))} className="accent-[#F97316] w-4 h-4" />
+                                    <input type="radio" name="subdVisibility" value="Private" checked={formData.visibility === 'Private'} onChange={() => setFormData(prev => ({ ...prev, visibility: 'Private' }))} className="accent-[#F97316] w-4 h-4" />
                                 </label>
                             </div>
                         </div>
@@ -1515,7 +1532,7 @@ export default function ReportStrayPage() {
                                     </span>
                                 </div>
                                 <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight">Review & Submit Report</h2>
-                                <p className="text-xs font-bold text-gray-400 mt-1">Double check all report details before sending to rescuers.</p>
+                                <p className="text-xs font-bold text-gray-400 mt-1">Double check all report details before dispatching to responders.</p>
                             </div>
 
                             {/* Summary Card */}
@@ -1558,13 +1575,13 @@ export default function ReportStrayPage() {
                                 </div>
                             </div>
 
-                            {/* Community Accountability & Anti-Harassment Notice */}
+                            {/* Community Notice */}
                             <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
                                 <Scale className="w-5 h-5 flex-shrink-0 text-amber-700" />
                                 <div>
-                                    <h4 className="text-xs font-black text-amber-950 uppercase tracking-tight">Community Accountability Notice</h4>
+                                    <h4 className="text-xs font-black text-amber-950 uppercase tracking-tight">Official Community Record</h4>
                                     <p className="text-[11px] text-amber-800 font-semibold mt-0.5 leading-relaxed">
-                                        All bite claims and rabies hazard reports undergo mandatory physical on-site verification and victim interview before dispatch. False reporting, exaggerated claims, or using StraySafe for neighbor disputes violates community bylaws.
+                                        This incident report will be logged directly into the subdivision incident monitoring ledger. Responders will receive real-time updates and notification.
                                     </p>
                                 </div>
                             </div>
@@ -1585,21 +1602,21 @@ export default function ReportStrayPage() {
                     )}
                 </div>
 
-                {/* Footer Navigation Buttons */}
-                <div className="flex items-center justify-between">
+                {/* Modal Footer Controls */}
+                <div className="px-6 sm:px-8 py-5 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between shrink-0">
                     <button
                         type="button"
                         onClick={handleBack}
-                        className="px-6 py-4 bg-white border border-gray-100 hover:bg-gray-50 text-gray-700 font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-sm flex items-center gap-2"
+                        className="px-6 py-3.5 bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-xs flex items-center gap-2 cursor-pointer"
                     >
-                        <ArrowLeft className="w-4 h-4" /> Back
+                        <ArrowLeft className="w-4 h-4" /> {currentStep === 1 ? 'Cancel' : 'Back'}
                     </button>
 
                     {currentStep < 9 ? (
                         <button
                             type="button"
                             onClick={handleNext}
-                            className="px-8 py-4 bg-[#F97316] hover:bg-orange-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-orange-100 transition-all hover:scale-105 flex items-center gap-2"
+                            className="px-8 py-3.5 bg-[#F97316] hover:bg-orange-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-orange-100 transition-all hover:scale-105 flex items-center gap-2 cursor-pointer"
                         >
                             Next <ArrowRight className="w-4 h-4" />
                         </button>
@@ -1608,22 +1625,19 @@ export default function ReportStrayPage() {
                             type="button"
                             disabled={isSubmitting}
                             onClick={handleSubmit}
-                            className={`px-10 py-4 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl transition-all flex items-center gap-2 ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#F97316] hover:scale-105'}`}
+                            className={`px-10 py-3.5 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl transition-all flex items-center gap-2 cursor-pointer ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#F97316] hover:scale-105'}`}
                         >
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                             {isSubmitting ? 'Submitting...' : 'Submit Report'}
                         </button>
                     )}
                 </div>
-            </main>
-
-            <ResiMobileNav feedTab="reports" onFeedTabChange={() => { }} isNavbarMenuOpen={false} isSearchOpen={false} onSearchClick={() => { }} onAddReportClick={() => navigate('/resident/report/new')} />
+            </div>
 
             {/* EXPANDED FULLSCREEN MAP MODAL */}
             {isMapExpandedModal && (
-                <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
                     <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl h-[92vh] max-h-[92vh] flex flex-col p-4 sm:p-6 border border-gray-100 animate-in zoom-in-95 duration-200 overflow-hidden">
-                        {/* Modal Header */}
                         <div className="flex items-start justify-between pb-3 sm:pb-4 border-b border-gray-100 shrink-0 gap-3">
                             <div className="flex items-center gap-2.5">
                                 <div className="p-2 bg-orange-100 text-[#F97316] rounded-2xl">
@@ -1648,7 +1662,6 @@ export default function ReportStrayPage() {
                             </button>
                         </div>
 
-                        {/* Location Details Info Pill Strip */}
                         <div className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 my-2.5 bg-orange-50/60 border border-orange-100 rounded-2xl shrink-0 text-xs">
                             <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Selected Coordinates:</span>
@@ -1674,7 +1687,6 @@ export default function ReportStrayPage() {
                             </div>
                         </div>
 
-                        {/* Expanded Leaflet Map Canvas */}
                         <div className="flex-1 rounded-2xl overflow-hidden relative border border-gray-200 min-h-0 shadow-inner">
                             <MapContainer
                                 center={[formData.latitude, formData.longitude]}
@@ -1697,10 +1709,9 @@ export default function ReportStrayPage() {
                                     pathOptions={{ color: '#F97316', fillColor: '#F97316', fillOpacity: 0.1, weight: 2, dashArray: '5, 10' }}
                                 />
 
-                                {/* Registered Landmarks on Modal Map */}
                                 {landmarks.map((lm) => (
                                     <Marker
-                                        key={`modal-lm-${lm.landmark_id}`}
+                                        key={`subd-expanded-lm-${lm.landmark_id}`}
                                         position={[lm.latitude, lm.longitude]}
                                         icon={createLandmarkPinIcon(lm.category, lm.is_holding_facility)}
                                         eventHandlers={{
@@ -1727,14 +1738,6 @@ export default function ReportStrayPage() {
                                                     {getLandmarkCategory(lm.category, lm.is_holding_facility).label}
                                                 </p>
                                                 {lm.description && <p className="text-gray-600 text-[11px] mb-1">{lm.description}</p>}
-                                                {lm.is_holding_facility && (
-                                                    <div className="mt-1 pt-1 border-t border-gray-100 text-emerald-700 font-bold text-[10px]">
-                                                        <p>Type: {lm.facility_type || 'Holding Pen'}</p>
-                                                        <p>Capacity: {lm.capacity || 'N/A'} animals</p>
-                                                        {lm.contact_person && <p>Caretaker: {lm.contact_person}</p>}
-                                                        {lm.contact_number && <p>Phone: {lm.contact_number}</p>}
-                                                    </div>
-                                                )}
                                                 <div className="mt-2 pt-1 border-t border-gray-100">
                                                     <button
                                                         type="button"
@@ -1760,9 +1763,8 @@ export default function ReportStrayPage() {
                             </MapContainer>
                         </div>
 
-                        {/* Modal Footer Controls */}
                         <div className="flex items-center justify-between pt-3 sm:pt-4 border-t border-gray-100 shrink-0 gap-3">
-                            <span className="text-xs text-gray-400 font-medium hidden sm:inline items-center gap-1 sm:inline-flex">
+                            <span className="text-xs text-gray-400 font-medium hidden sm:inline-flex items-center gap-1">
                                 <Lightbulb className="w-3.5 h-3.5" /> Tip: You can drag, zoom, and click anywhere to reposition the pin accurately.
                             </span>
                             <div className="flex items-center gap-2 ml-auto">
@@ -1788,7 +1790,7 @@ export default function ReportStrayPage() {
                 </div>
             )}
 
-            {/* Dynamic StraySafe Animal Loading Overlay during Report Submission & Media Upload */}
+            {/* Animal Loading Overlay */}
             <AnimalLoadingOverlay
                 isVisible={isSubmitting}
                 animalType={formData.animalType || aiAnalysisResult?.animalType || 'dog'}
@@ -1823,7 +1825,8 @@ export default function ReportStrayPage() {
                 message="Your stray animal report has been received and dispatched to community responders."
                 onClose={() => {
                     setShowSuccessModal(false);
-                    navigate('/resident-home');
+                    onSuccess?.();
+                    onClose();
                 }}
             />
         </div>

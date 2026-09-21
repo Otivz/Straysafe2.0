@@ -25,6 +25,28 @@ interface ResiNavbarProps {
     onNotificationClick?: (notif: any) => void;
 }
 
+const formatRelativeTime = (dateStr?: string) => {
+    if (!dateStr) return '';
+    try {
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffMs = now.getTime() - date.getTime();
+        const diffSecs = Math.max(0, Math.floor(diffMs / 1000));
+        const diffMins = Math.floor(diffSecs / 60);
+        const diffHours = Math.floor(diffMins / 60);
+        const diffDays = Math.floor(diffHours / 24);
+
+        if (diffSecs < 45) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays === 1) return '1 day ago';
+        if (diffDays < 7) return `${diffDays} days ago`;
+        return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    } catch {
+        return '';
+    }
+};
+
 const ResiNavbar = ({ 
     onMenuToggle, 
     onSearch, 
@@ -477,19 +499,12 @@ const ResiNavbar = ({
                                             <Link to="/resident/pets" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
                                                 My Pets
                                             </Link>
-                                            <Link to="/adopt" className="flex items-center gap-2 px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
-                                                <span>🐾</span> Adopt a Pet
+                                            <Link to="/adopt" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
+                                                Adopt a Pet
                                             </Link>
-                                            <Link to="/adopt/applications" className="flex items-center gap-2 px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
-                                                <span>📋</span> My Adoption Requests
+                                            <Link to="/adopt/applications" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
+                                                My Adoption Requests
                                             </Link>
-                                            <button
-                                                type="button"
-                                                onClick={() => { setIsDropdownOpen(false); setIsQRScannerOpen(true); }}
-                                                className="w-full flex items-center gap-2 px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all text-left cursor-pointer"
-                                            >
-                                                <span className="text-sm">📷</span> Scan QR Collar
-                                            </button>
                                             <Link to="/resident/settings" className="flex items-center px-6 py-3 text-xs font-bold text-[#4a3b28] dark:text-gray-200 hover:bg-[#FAFAF9] dark:hover:bg-gray-800 hover:text-[#F97316] dark:hover:text-[#F97316] transition-all">
                                                 Settings
                                             </Link>
@@ -611,19 +626,6 @@ const ResiNavbar = ({
 
                     {/* Menu Items */}
                     <div className="flex-1 px-4 py-6 space-y-2.5">
-                        <button
-                            type="button"
-                            onClick={() => { setIsMobileHamburgerOpen(false); setIsQRScannerOpen(true); }}
-                            className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl hover:bg-orange-50/50 hover:pl-6 text-[#4a3b28] hover:text-[#F97316] transition-all duration-300 ease-out group active:scale-[0.98] cursor-pointer"
-                        >
-                            <div className="w-10 h-10 bg-orange-50 group-hover:bg-orange-100 rounded-xl flex items-center justify-center text-[#F97316] shadow-sm shadow-orange-100/50 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shrink-0">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                                </svg>
-                            </div>
-                            <span className="font-black text-xs uppercase tracking-[0.15em] transition-colors">Scan QR Collar</span>
-                        </button>
-
                         <Link
                             to="/resident/settings"
                             onClick={() => setIsMobileHamburgerOpen(false)}
@@ -966,8 +968,8 @@ const ResiNavbar = ({
                                                         {notif.message}
                                                     </p>
                                                     <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-                                                        <span className="text-[9px] font-bold text-gray-400 dark:text-gray-400 block uppercase tracking-widest">
-                                                            {new Date(notif.created_at).toLocaleDateString()}
+                                                        <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-400 block tracking-wide">
+                                                            {formatRelativeTime(notif.created_at)}
                                                         </span>
                                                         {(isMatch || isMatchInquiry || typeStr.includes('message') || titleStr.includes('message') || titleStr.includes('💬') || titleStr.includes('inquiry') || msgStr.includes('look-alike')) && notif.related_id && (
                                                             <button

@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form, BackgroundTasks
 import os
 import uuid
@@ -448,6 +449,7 @@ def populate_duplicate_and_merge_info(rep_data: ReportResponse, rep: Report, db:
 @router.get("/", response_model=List[ReportResponse])
 def get_reports(
     subdivision_id: Optional[int] = None,
+    barangay_id: Optional[int] = None,
     escalated_only: Optional[bool] = None,
     db: Session = Depends(get_db)
 ):
@@ -455,13 +457,16 @@ def get_reports(
     if subdivision_id is not None:
         query = query.filter(Report.subdivision_id == subdivision_id)
 
+    if barangay_id is not None:
+        query = query.filter(Report.subdivision.has(Subdivision.barangay_id == barangay_id))
+
     if escalated_only:
         query = query.filter(
             or_(
-                Report.current_status_id.in_([4, 5, 6, 7, 8, 9, 10, 13]),
+                Report.current_status_id.in_([4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18]),
                 Report.endorsement_letter.has(),
                 Report.rescues.any(),
-                Report.history.any(StatusHistory.report_status_id == 4)
+                Report.history.any(StatusHistory.report_status_id.in_([4, 5, 6, 7, 8, 13]))
             )
         )
 
@@ -478,7 +483,7 @@ def get_reports(
         selectinload(Report.history).joinedload(StatusHistory.updater),
         selectinload(Report.history).selectinload(StatusHistory.media),
         joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
-    ).all()
+    ).order_by(Report.report_id.desc()).all()
     
     results = []
     

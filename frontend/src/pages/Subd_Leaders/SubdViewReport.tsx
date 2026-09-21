@@ -1865,6 +1865,8 @@ const SubdViewReport = () => {
                                                     center={[report.latitude, report.longitude]}
                                                     zoom={17}
                                                     showHeatmap={false}
+                                                    showPopups={false}
+                                                    showReturnToSelera={false}
                                                     markers={markersList}
                                                     routing={isNavigating ? (() => {
                                                         const repLoc: [number, number] = [report.latitude, report.longitude];
@@ -3075,6 +3077,8 @@ const SubdViewReport = () => {
                                         center={[report.latitude, report.longitude]}
                                         zoom={18}
                                         showHeatmap={false}
+                                        showPopups={false}
+                                        showReturnToSelera={false}
                                         markers={markersList}
                                         routing={isNavigating ? (() => {
                                             const repLoc: [number, number] = [report.latitude, report.longitude];
