@@ -526,16 +526,7 @@ import HeatmapLayer from './HeatmapLayer';
 import RoutingControl from './RoutingControl';
 import ReturnToSeleraButton from './MapControls/ReturnToSeleraButton';
 
-export const PRESET_LANDMARKS = [
-    { id: 'alfamart', name: 'Alfamart', lat: 14.801600, lng: 121.004200, icon: '🏪', type: 'Store' },
-    { id: 'lugawan', name: 'Lugawan ni Bading', lat: 14.800800, lng: 121.003400, icon: '🥣', type: 'Eatery' },
-    { id: 'court', name: 'Basketball Court', lat: 14.801900, lng: 121.003800, icon: '🏀', type: 'Sports' },
-    { id: 'clubhouse', name: 'Selera Clubhouse', lat: 14.801200, lng: 121.002900, icon: '🏛️', type: 'Facility' },
-    { id: 'maingate', name: 'Selera Main Gate', lat: 14.802300, lng: 121.003200, icon: '⛩️', type: 'Gate' },
-    { id: 'daycare', name: 'Daycare Center', lat: 14.800300, lng: 121.002600, icon: '🏫', type: 'School' },
-    { id: 'chapel', name: 'Grotto / Chapel', lat: 14.800500, lng: 121.004500, icon: '💒', type: 'Church' },
-    { id: 'terminal', name: 'Tricycle Terminal', lat: 14.802100, lng: 121.004800, icon: '🛺', type: 'Transport' },
-];
+export const PRESET_LANDMARKS: any[] = [];
 
 export const createLandmarkIcon = (iconEmoji: string, name: string, isSelected: boolean = false, zoom: number = 16) => {
     const m = getLandmarkZoomMetrics(zoom);
@@ -1076,29 +1067,6 @@ const MapComponent = ({
                 })
             )}
 
-            {/* ── Community Landmarks inside Selera Subdivision (Establishments, Gates, Facilities) ── */}
-            {showLandmarks && PRESET_LANDMARKS.filter(pl => {
-                return !deconflictedLandmarks.some((dl: any) =>
-                    (Math.abs(dl.lat - pl.lat) < 0.0004 && Math.abs(dl.lng - pl.lng) < 0.0004) ||
-                    (dl.name && dl.name.toLowerCase().includes(pl.name.toLowerCase()))
-                );
-            }).map(lm => (
-                <Marker
-                    key={`poi-lm-${lm.id}`}
-                    position={[lm.lat, lm.lng]}
-                    icon={createLandmarkIcon(lm.icon, lm.name, false, currentZoom)}
-                    eventHandlers={{
-                        click: () => {
-                            if (onLocationChange) onLocationChange(lm.lat, lm.lng);
-                            if (onMapClick) onMapClick(lm.lat, lm.lng);
-                        }
-                    }}
-                >
-                    <Tooltip direction="top" offset={[0, -Math.round(getLandmarkZoomMetrics(currentZoom).size / 2) - 4]} className="custom-hover-tooltip">
-                        <span>{lm.icon} {lm.name}</span>
-                    </Tooltip>
-                </Marker>
-            ))}
 
 
             {/* Road-following Route Line between markers */}

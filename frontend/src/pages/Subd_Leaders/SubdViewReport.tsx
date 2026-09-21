@@ -861,7 +861,17 @@ const SubdViewReport = () => {
         };
     })();
 
-
+    const isEscalatedToBarangay = Boolean(
+        report && (
+            report.status_id === 4 ||
+            report.status_id === 13 ||
+            (report.status_id === 5 && (report as any).rescue) ||
+            (report.status_id === 6 && (report as any).rescue) ||
+            report.endorsement_letter ||
+            ((report as any).rescue && (report as any).rescue.status_id >= 1) ||
+            (report.facility && report.facility.subdivision_id == null && report.custody_status === 'In Barangay Facility')
+        )
+    );
 
     return (
         <div className="flex h-screen bg-[#F8FAFC]">
@@ -2351,14 +2361,7 @@ const SubdViewReport = () => {
                                             <>
                                                 {/* OPTION: ADD PET RECORD IF UNREGISTERED */}
                                                 {/* STEP 0: ESCALATED TO BARANGAY (Strictly Read-Only / Tracking Mode) */}
-                                                {Boolean(
-                                                    report.status_id === 4 ||
-                                                    report.status_id === 5 ||
-                                                    report.status_id === 6 ||
-                                                    (report.status_id >= 4 && report.status_id <= 10) ||
-                                                    report.endorsement_letter ||
-                                                    ((report as any).rescue && (report as any).rescue.status_id >= 1)
-                                                ) ? (
+                                                {isEscalatedToBarangay ? (
                                                     <div className="w-full p-6 bg-gradient-to-br from-indigo-50/90 via-purple-50/50 to-white border-2 border-indigo-200/80 rounded-3xl shadow-sm flex flex-col gap-4 animate-in fade-in duration-300">
                                                         <div className="flex items-start gap-3.5">
                                                             <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-600/20">
@@ -2462,8 +2465,8 @@ const SubdViewReport = () => {
                                                             </button>
                                                         )}
 
-                                                        {/* STEP 2: ESCALATE (Only when Verified and not yet Escalated) */}
-                                                        {report.status_id === 2 && (
+                                                        {/* STEP 2: ESCALATE (Only when Verified or Under Observation / Secured and not yet Escalated) */}
+                                                        {([2, 7, 8, 16].includes(report.status_id)) && (
                                                             <button
                                                                 onClick={() => {
                                                                     setEscalationTitle('');
@@ -2491,7 +2494,7 @@ const SubdViewReport = () => {
                                                         )}
 
                                                         {/* STEP 3: RESOLVE / UPDATE ANIMAL STATUS */}
-                                                        {(report.status_id === 1 || report.status_id === 2) && (
+                                                        {([1, 2, 7, 8, 15, 16].includes(report.status_id)) && (
                                                             <button
                                                                 onClick={() => {
                                                                     setIsResolveLostModalOpen(true);
@@ -3177,7 +3180,8 @@ const SubdViewReport = () => {
                         species: (report as any).pet_type || report.animal_type || 'Animal'
                     }}
                     reportId={report.report_id}
-                    isEscalated={Boolean(report.endorsement_letter || report.status_id === 4 || report.status_id === 5)}
+                    report={report}
+                    isEscalated={isEscalatedToBarangay}
                     subdivisionName={(report as any).subdivision_name || (report as any).subdivision?.subdivision_name}
                     onClose={() => {
                         setIsResolveLostModalOpen(false);

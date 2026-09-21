@@ -84,11 +84,37 @@ export interface ResolveLostPetModalProps {
     reportId?: number | null;
     isEscalated?: boolean;
     subdivisionName?: string;
+    report?: any;
     onSuccess?: (resolution: { choiceKey: string; petStatus: string; remarks: string }) => void;
 }
 
 type PrimaryChoiceKey = 'pet_found' | 'deceased' | 'not_found' | 'withdrawn';
 type SubChoiceKey = 'returned_to_owner' | 'temporary_care' | 'owner_not_located';
+
+const isSecuredAnimal = (rep: any): boolean => {
+    if (!rep) return false;
+    if ([9, 10, 11, 12, 3, 14, 18].includes(rep.status_id)) return false;
+    return Boolean(
+        rep.status_id === 7 || // Under Observation
+        rep.status_id === 8 || // Impounded
+        rep.facility_id != null ||
+        rep.facility != null ||
+        rep.custody_status === 'In Subdivision Facility' ||
+        rep.custody_status === 'Secured in Facility' ||
+        rep.custody_status === 'In Barangay Facility' ||
+        rep.custody_status === 'Secured' ||
+        rep.custody_status === 'In Custody' ||
+        (typeof rep.custody_status === 'string' && (
+            rep.custody_status.toLowerCase().includes('facility') ||
+            rep.custody_status.toLowerCase().includes('secured') ||
+            rep.custody_status.toLowerCase().includes('custody')
+        )) ||
+        (rep.status?.status_name && (
+            rep.status.status_name.toLowerCase().includes('observation') ||
+            rep.status.status_name.toLowerCase().includes('impound')
+        ))
+    );
+};
 
 export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
     isOpen,
@@ -97,6 +123,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
     reportId,
     isEscalated,
     subdivisionName,
+    report,
     onSuccess
 }) => {
     const hasRegisteredPet = Boolean(pet?.pet_id && pet.pet_id > 0);
@@ -104,23 +131,36 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
         ? pet.pet_name 
         : (pet?.species || pet?.pet_type || 'Animal');
 
+    const [reportDetails, setReportDetails] = useState<any>(report || null);
+    const initiallySecured = isSecuredAnimal(report);
+
     const [primaryChoice, setPrimaryChoice] = useState<PrimaryChoiceKey>('pet_found');
-    const [subChoice, setSubChoice] = useState<SubChoiceKey>('returned_to_owner');
+    const [subChoice, setSubChoice] = useState<SubChoiceKey>(initiallySecured ? 'temporary_care' : 'returned_to_owner');
     const [location, setLocation] = useState<string>('');
     const [remarks, setRemarks] = useState<string>(
-        hasRegisteredPet
-            ? 'The lost pet was located alive and safely returned to the owner.'
-            : 'The animal was located alive and safely reunited with or returned to the owner / caregiver.'
+        initiallySecured
+            ? 'The animal was secured alive and is currently held at the Subdivision holding area / facility while coordinating next steps.'
+            : (hasRegisteredPet
+                ? 'The lost pet was located alive and safely returned to the owner.'
+                : 'The animal was located alive and safely reunited with or returned to the owner / caregiver.')
     );
     const [proofPhoto, setProofPhoto] = useState<File | null>(null);
     const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-    const [activeReportId, setActiveReportId] = useState<number | null>(reportId || null);
-    const [reportDetails, setReportDetails] = useState<any>(null);
+    const [activeReportId, setActiveReportId] = useState<number | null>(reportId || report?.report_id || null);
     const [facilities, setFacilities] = useState<any[]>([]);
-    const [selectedFacilityId, setSelectedFacilityId] = useState<number | null>(null);
+    const [selectedFacilityId, setSelectedFacilityId] = useState<number | null>(report?.facility_id || null);
     const [isLoadingFacilities, setIsLoadingFacilities] = useState<boolean>(false);
     const [isMapExpanded, setIsMapExpanded] = useState<boolean>(false);
+
+    useEffect(() => {
+        if (report) {
+            setReportDetails(report);
+            if (report.facility_id) {
+                setSelectedFacilityId(report.facility_id);
+            }
+        }
+    }, [report]);
 
     // Fetch holding facilities when modal opens
     useEffect(() => {
@@ -128,7 +168,8 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
         const fetchFacilities = async () => {
             setIsLoadingFacilities(true);
             try {
-                const subdId = reportDetails?.subdivision_id || (reportDetails?.subdivision?.subdivision_id) || undefined;
+                const currentRep = report || reportDetails;
+                const subdId = currentRep?.subdivision_id || (currentRep?.subdivision?.subdivision_id) || undefined;
                 const res = await api.get('/landmarks', {
                     params: {
                         is_holding_facility: true,
@@ -137,8 +178,13 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                 });
                 const facList = res.data || [];
                 setFacilities(facList);
-                if (facList.length > 0 && !selectedFacilityId) {
-                    setSelectedFacilityId(facList[0].landmark_id);
+
+                const existingFacId = currentRep?.facility_id;
+                if (existingFacId && facList.some((f: any) => f.landmark_id === existingFacId)) {
+                    setSelectedFacilityId(existingFacId);
+                } else if (facList.length > 0 && !selectedFacilityId) {
+                    const subdFac = facList.find((f: any) => f.subdivision_id != null);
+                    setSelectedFacilityId(subdFac ? subdFac.landmark_id : facList[0].landmark_id);
                 }
             } catch (err) {
                 console.warn("Could not fetch holding facilities:", err);
@@ -147,14 +193,14 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
             }
         };
         fetchFacilities();
-    }, [isOpen, reportDetails?.subdivision_id]);
+    }, [isOpen, report?.subdivision_id, reportDetails?.subdivision_id, report?.facility_id]);
 
     // Look for linked active report if reportId is not supplied
     useEffect(() => {
         if (!isOpen) return;
 
-        if (reportId) {
-            setActiveReportId(reportId);
+        if (reportId || report?.report_id) {
+            setActiveReportId(reportId || report?.report_id);
             return;
         }
 
@@ -177,7 +223,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
         };
 
         fetchPetReport();
-    }, [isOpen, reportId, pet?.pet_id, pet?.pet_name]);
+    }, [isOpen, reportId, report?.report_id, pet?.pet_id, pet?.pet_name]);
 
     // Fetch report details to dynamically know escalation / subdivision context
     useEffect(() => {
@@ -187,6 +233,13 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                 const res = await api.get(`/reports/${activeReportId}`);
                 if (res.data) {
                     setReportDetails(res.data);
+                    if (!report && isSecuredAnimal(res.data)) {
+                        setPrimaryChoice('pet_found');
+                        setSubChoice('temporary_care');
+                        if (res.data.facility_id) {
+                            setSelectedFacilityId(res.data.facility_id);
+                        }
+                    }
                 }
             } catch (err) {
                 console.warn("Could not fetch detailed report for resolution modal:", err);
@@ -195,15 +248,17 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
         fetchDetails();
     }, [isOpen, activeReportId]);
 
+    const targetReport = report || reportDetails;
+
     const isEscalatedEffective = Boolean(
         isEscalated ||
-        reportDetails?.endorsement_letter ||
-        reportDetails?.status_id === 4 ||
-        reportDetails?.status_id === 5 ||
-        (reportDetails?.status?.status_name && reportDetails.status.status_name.toLowerCase().includes('escalat'))
+        targetReport?.endorsement_letter ||
+        targetReport?.status_id === 4 ||
+        targetReport?.status_id === 5 ||
+        (targetReport?.status?.status_name && targetReport.status.status_name.toLowerCase().includes('escalat'))
     );
 
-    const effectiveSubdivisionName = subdivisionName || reportDetails?.subdivision?.subdivision_name || reportDetails?.subdivision_name;
+    const effectiveSubdivisionName = subdivisionName || targetReport?.subdivision?.subdivision_name || targetReport?.subdivision_name;
     const selectedFacility = facilities.find(f => f.landmark_id === selectedFacilityId) || (facilities.length > 0 ? facilities[0] : null);
 
     const isBrgyFacility = selectedFacility 
@@ -212,8 +267,31 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
 
     const facilityTitle = isBrgyFacility
         ? 'Barangay Holding Facility / Shelter'
-        : (effectiveSubdivisionName ? `${effectiveSubdivisionName} Facility / Shelter` : 'Subdivision Facility / Shelter');
+        : 'Subdivision Facility / Shelter';
     const facilityBadge = isBrgyFacility ? 'In Brgy Facility' : 'In Subd Facility';
+
+    // Synchronize initial choices whenever the modal opens or report details change
+    useEffect(() => {
+        if (!isOpen) return;
+        const currentRep = report || reportDetails;
+        if (isSecuredAnimal(currentRep)) {
+            setPrimaryChoice('pet_found');
+            setSubChoice('temporary_care');
+            if (currentRep?.facility_id) {
+                setSelectedFacilityId(currentRep.facility_id);
+            }
+            const facName = currentRep?.facility?.name || (isBrgyFacility ? 'Barangay Holding Facility' : 'Subdivision Holding Facility');
+            setRemarks(`The animal was secured alive and is currently held at ${facName} while coordinating next steps.`);
+        } else {
+            setPrimaryChoice('pet_found');
+            setSubChoice('returned_to_owner');
+            setRemarks(
+                hasRegisteredPet
+                    ? 'The lost pet was located alive and safely returned to the owner.'
+                    : 'The animal was located alive and safely reunited with or returned to the owner / caregiver.'
+            );
+        }
+    }, [isOpen, report?.status_id, report?.custody_status, report?.facility_id]);
 
     // Update remarks automatically when choices change
     const updateRemarks = (primary: PrimaryChoiceKey, sub: SubChoiceKey, facObj: any = selectedFacility) => {
@@ -260,8 +338,14 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
         if (isSubmitting) return;
         setProofPhoto(null);
         setProofPreviewUrl(null);
-        setPrimaryChoice('pet_found');
-        setSubChoice('returned_to_owner');
+        const currentRep = report || reportDetails;
+        if (isSecuredAnimal(currentRep)) {
+            setPrimaryChoice('pet_found');
+            setSubChoice('temporary_care');
+        } else {
+            setPrimaryChoice('pet_found');
+            setSubChoice('returned_to_owner');
+        }
         onClose();
     };
 

@@ -78,6 +78,8 @@ interface Report {
     duplicate_of_report_id?: number | null;
     has_duplicate_flag?: boolean;
     duplicate_match_count?: number;
+    endorsement_letter?: any;
+    rescue?: any;
 }
 
 const formatCooldownTimer = (seconds?: number): string => {
@@ -2035,8 +2037,8 @@ const SubdReports = () => {
                                                             </button>
                                                         )}
 
-                                                        {/* STEP 2: ESCALATE (Only after verification and not yet escalated) */}
-                                                        {viewReport.status_id === 2 && (
+                                                        {/* STEP 2: ESCALATE (When Verified or Under Observation / Secured and not yet Escalated) */}
+                                                        {([2, 7, 8, 16].includes(viewReport.status_id)) && !Boolean(viewReport.status_id === 4 || viewReport.status_id === 13 || viewReport.endorsement_letter || (viewReport as any).rescue) && (
                                                             <button
                                                                 onClick={() => {
                                                                     setEscalatingReportId(viewReport.report_id);
@@ -2053,7 +2055,7 @@ const SubdReports = () => {
                                                         )}
 
                                                         {/* STEP 3: PENDING BARANGAY (After escalation) */}
-                                                        {viewReport.status_id === 4 && (
+                                                        {Boolean(viewReport.status_id === 4 || viewReport.status_id === 13 || viewReport.endorsement_letter || (viewReport as any).rescue) && (
                                                             <div className="w-full py-4 bg-gray-100 text-gray-500 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border border-gray-200">
                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -2062,7 +2064,7 @@ const SubdReports = () => {
                                                             </div>
                                                         )}
 
-                                                        {(viewReport.status_id === 1 || viewReport.status_id === 2) && (
+                                                        {([1, 2, 7, 8, 15, 16].includes(viewReport.status_id)) && !Boolean(viewReport.status_id === 4 || viewReport.status_id === 13 || viewReport.endorsement_letter || (viewReport as any).rescue) && (
                                                             <button
                                                                 onClick={() => {
                                                                     setResolvingReportId(viewReport.report_id);
@@ -2070,7 +2072,7 @@ const SubdReports = () => {
                                                                 }}
                                                                 className="w-full py-3 border border-gray-100 rounded-2xl text-[10px] font-bold text-gray-400 hover:bg-green-50 hover:text-green-600 hover:border-green-100 transition-all uppercase tracking-widest cursor-pointer"
                                                             >
-                                                                Mark as Resolved
+                                                                Update Animal Status / Resolve
                                                             </button>
                                                         )}
 
@@ -2323,6 +2325,7 @@ const SubdReports = () => {
                                 species: (resolvingReport as any).pet_type || resolvingReport.animal_type || 'Animal'
                             }}
                             reportId={resolvingReport.report_id}
+                            report={resolvingReport}
                             isEscalated={Boolean((resolvingReport as any).endorsement_letter || resolvingReport.status_id === 4 || resolvingReport.status_id === 5)}
                             subdivisionName={(resolvingReport as any).subdivision_name || (resolvingReport as any).subdivision?.subdivision_name}
                             onClose={() => {

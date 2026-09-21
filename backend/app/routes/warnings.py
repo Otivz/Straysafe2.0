@@ -31,7 +31,7 @@ def enrich_warning_dict(warning: OwnerWarning, db: Session) -> dict:
         "warning_level": warning.warning_level,
         "violation_type": warning.violation_type,
         "description": warning.description,
-        "fine_amount": float(warning.fine_amount or 0.0),
+        "fine_amount": float(warning.fine_amount) if warning.fine_amount is not None else 0.0,
         "status": warning.status,
         "acknowledged_at": warning.acknowledged_at,
         "created_at": warning.created_at,
@@ -65,10 +65,11 @@ def issue_warning(
         from app.models.report import Report, Rescue
         rep = db.query(Report).filter(Report.report_id == warning_in.report_id).first()
         if rep:
+            rescue_record = db.query(Rescue).filter(Rescue.report_id == warning_in.report_id).first()
             is_escalated = (
-                rep.current_status_id in [4, 5, 6, 7, 8] or
                 rep.endorsement_letter is not None or
-                db.query(Rescue).filter(Rescue.report_id == warning_in.report_id).first() is not None
+                rescue_record is not None or
+                rep.current_status_id in [4, 5, 6, 13]
             )
             if is_escalated:
                 raise HTTPException(
