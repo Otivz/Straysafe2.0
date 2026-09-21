@@ -25,28 +25,28 @@ const DataTable = <T extends { [key: string]: any }>({
     loadingMessage = "Synchronizing data..."
 }: DataTableProps<T>) => {
     return (
-        <div className="bg-white rounded-[2.5rem] shadow-xl shadow-gray-200/40 border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-2xl md:rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
             <div className="overflow-x-auto custom-scrollbar">
                 <table className="w-full border-collapse">
                     <thead>
-                        <tr className="bg-[#1B4340]/5 border-b border-gray-100">
+                        <tr className="bg-slate-50 border-b border-gray-100">
                             {columns.map((col, idx) => (
                                 <th 
                                     key={idx} 
-                                    className={`px-8 py-6 text-left text-[10px] font-bold text-[#1B4340] uppercase tracking-widest ${col.className || ''}`}
+                                    className={`px-6 py-4 text-left text-[11px] font-black text-slate-600 uppercase tracking-wider ${col.className || ''}`}
                                 >
                                     {col.header}
                                 </th>
                             ))}
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-gray-100">
                         {loading ? (
                             <tr>
-                                <td colSpan={columns.length} className="px-8 py-20 text-center">
-                                    <div className="flex flex-col items-center gap-4 animate-pulse">
-                                        <div className="w-12 h-12 rounded-full border-4 border-[#F97316]/20 border-t-[#F97316] animate-spin"></div>
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{loadingMessage}</p>
+                                <td colSpan={columns.length} className="px-6 py-16 text-center">
+                                    <div className="flex flex-col items-center gap-3 animate-pulse">
+                                        <div className="w-10 h-10 rounded-full border-3 border-[#F97316]/20 border-t-[#F97316] animate-spin"></div>
+                                        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">{loadingMessage}</p>
                                     </div>
                                 </td>
                             </tr>
@@ -54,11 +54,11 @@ const DataTable = <T extends { [key: string]: any }>({
                             data.map((item, rowIdx) => (
                                 <tr 
                                     key={item.id || item.report_id || item.rescue_id || rowIdx} 
-                                    className={`group hover:bg-[#F8FAFC] transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
+                                    className={`group hover:bg-orange-50/20 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
                                     onClick={() => onRowClick?.(item)}
                                 >
                                     {columns.map((col, colIdx) => (
-                                        <td key={colIdx} className={`px-8 py-6 ${col.className || ''}`}>
+                                        <td key={colIdx} className={`px-6 py-4 text-sm ${col.className || ''}`}>
                                             {col.render ? col.render(item) : (
                                                 <span className="text-sm font-medium text-gray-700">
                                                     {item[col.key]}
@@ -70,8 +70,8 @@ const DataTable = <T extends { [key: string]: any }>({
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={columns.length} className="px-8 py-20 text-center">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{emptyMessage}</p>
+                                <td colSpan={columns.length} className="px-6 py-16 text-center">
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{emptyMessage}</p>
                                 </td>
                             </tr>
                         )}

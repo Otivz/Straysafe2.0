@@ -49,31 +49,31 @@ const AdminNavbar = ({ leftContent }: AdminNavbarProps) => {
     }, []);
 
     return (
-        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-10 w-full shadow-sm">
+        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-40 w-full shadow-sm">
             {/* Left Content Area */}
-            <div className="flex flex-col justify-center min-w-0">
+            <div className="flex flex-col justify-center min-w-0 [&_h1]:text-slate-900 [&_h1]:font-black [&_h1]:tracking-tight [&_p]:text-slate-500 [&_p]:font-bold [&_p]:text-[11px] [&_p]:tracking-wide">
                 {leftContent}
             </div>
 
             {/* Right Side Actions */}
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3 sm:space-x-4">
                 {/* Messages Dropdown Container */}
-                <div className="relative" ref={messagesRef}>
+                <div className={`relative ${isMessagesOpen ? 'z-50' : ''}`} ref={messagesRef}>
                     <button 
                         onClick={() => setIsMessagesOpen(!isMessagesOpen)}
-                        className={`relative p-2.5 rounded-xl transition-all group cursor-pointer ${
+                        className={`relative p-2.5 rounded-xl transition-all group cursor-pointer border ${
                             isMessagesOpen
-                                ? 'bg-orange-50 text-[#F97316]'
-                                : 'text-gray-400 hover:text-[#F97316] hover:bg-orange-50'
+                                ? 'bg-orange-50 border-orange-200/80 text-[#F97316] shadow-xs'
+                                : 'border-transparent text-slate-500 hover:text-[#F97316] hover:bg-orange-50/70 hover:border-orange-100/70'
                         }`}
                         title="Case Messages & Inquiries"
                         aria-label="Messages"
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5.5 w-5.5 transition-transform group-hover:scale-105" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
                         {unreadMessageCount > 0 && (
-                            <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 bg-[#F97316] text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-xs">
+                            <span className="absolute -top-1 -right-1 min-w-[20px] h-[20px] px-1 bg-[#F97316] text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-xs">
                                 {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
                             </span>
                         )}
@@ -95,31 +95,38 @@ const AdminNavbar = ({ leftContent }: AdminNavbarProps) => {
                 </div>
 
                 {/* Notifications */}
-                <button className="relative p-2.5 text-gray-400 hover:text-[#F97316] hover:bg-orange-50 rounded-xl transition-all group cursor-pointer" title="System Notifications">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                <button 
+                    className="relative p-2.5 text-slate-500 hover:text-[#F97316] hover:bg-orange-50/70 rounded-xl transition-all group cursor-pointer border border-transparent hover:border-orange-100/70" 
+                    title="System Notifications"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5.5 w-5.5 transition-transform group-hover:scale-105" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                     </svg>
                 </button>
 
                 {/* Settings */}
-                <button className="p-2 text-gray-400 hover:text-[#F97316] hover:bg-orange-50 rounded-lg transition-all group">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <button 
+                    onClick={() => navigate('/admin/account-settings')}
+                    className="p-2.5 text-slate-500 hover:text-[#F97316] hover:bg-orange-50/70 rounded-xl transition-all group cursor-pointer border border-transparent hover:border-orange-100/70"
+                    title="Account Settings"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5.5 w-5.5 transition-transform group-hover:scale-105" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                 </button>
 
                 {/* Vertical Divider */}
-                <div className="h-8 w-px bg-gray-100 mx-1"></div>
+                <div className="h-7 w-px bg-slate-200 mx-1"></div>
 
                 {/* Profile Section with Hover Dropdown */}
                 <div className="relative group">
-                    <button className="flex items-center space-x-3 pl-3 pr-1 py-1 hover:bg-gray-50 rounded-2xl transition-all cursor-pointer">
+                    <button className="flex items-center space-x-3 pl-3 pr-1 py-1 hover:bg-slate-50/80 rounded-2xl transition-all cursor-pointer group">
                         <div className="flex flex-col text-right hidden lg:block">
-                            <p className="text-sm font-bold text-gray-900 leading-none">{user.name || 'Admin User'}</p>
-                            <p className="text-[10px] font-medium text-gray-400 mt-1 uppercase tracking-wider">Super Administrator</p>
+                            <p className="text-sm font-black text-slate-900 leading-tight group-hover:text-[#F97316] transition-colors">{user.name || 'Admin User'}</p>
+                            <p className="text-[11px] font-bold text-slate-500 mt-0.5 uppercase tracking-wide">Super Administrator</p>
                         </div>
-                        <div className="w-10 h-10 rounded-full border-2 border-white shadow-sm overflow-hidden bg-gray-200">
+                        <div className="w-10 h-10 rounded-full border-2 border-white shadow-sm ring-1 ring-slate-200/90 group-hover:ring-2 group-hover:ring-[#F97316]/40 overflow-hidden bg-slate-100 flex items-center justify-center transition-all">
                             <img 
                                 src={getProfilePicture(user.profile_picture)} 
                                 alt={user.name || 'Admin'} 
@@ -132,9 +139,9 @@ const AdminNavbar = ({ leftContent }: AdminNavbarProps) => {
                     {/* Dropdown Menu */}
                     <div className="absolute right-0 mt-0 w-56 pt-2 opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-300 z-50">
                         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden py-2">
-                            <div className="px-4 py-3 border-b border-gray-50 bg-gray-50/50">
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Signed in as</p>
-                                <p className="text-xs font-bold text-gray-900 truncate">{user.email}</p>
+                            <div className="px-4 py-3 border-b border-gray-100 bg-slate-50/70">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Signed in as</p>
+                                <p className="text-xs font-bold text-slate-800 truncate mt-0.5">{user.email}</p>
                             </div>
 
                             <div className="p-1">

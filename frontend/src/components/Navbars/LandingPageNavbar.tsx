@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { PawPrint } from 'lucide-react';
 import Button from '../Button';
 
 const LandingPageNavbar = () => {
@@ -59,9 +58,9 @@ const LandingPageNavbar = () => {
                             {link.isInternal ? (
                                 <Link
                                     to={link.href}
-                                    className="relative text-sm font-bold text-[#4a3b28] hover:text-[#F97316] transition-all duration-300 group py-2 flex items-center gap-1.5"
+                                    className="relative text-sm font-bold text-[#4a3b28] hover:text-[#F97316] transition-all duration-300 group py-2"
                                 >
-                                    <PawPrint className="w-3.5 h-3.5" /> {link.name}
+                                    {link.name}
                                     <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-[#F97316] transition-all duration-300 group-hover:w-full rounded-full" />
                                 </Link>
                             ) : (
@@ -111,10 +110,10 @@ const LandingPageNavbar = () => {
                                 key={link.name}
                                 to={link.href}
                                 onClick={() => setIsMobileMenuOpen(false)}
-                                className="text-2xl font-plus-jakarta font-black text-[#1a1208] hover:text-[#F97316] transition-colors flex items-center gap-2"
+                                className="text-2xl font-plus-jakarta font-black text-[#1a1208] hover:text-[#F97316] transition-colors"
                                 style={{ transitionDelay: `${i * 100}ms` }}
                             >
-                                <PawPrint className="w-5 h-5" /> {link.name}
+                                {link.name}
                             </Link>
                         ) : (
                             <a

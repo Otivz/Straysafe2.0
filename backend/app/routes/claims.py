@@ -32,8 +32,11 @@ def get_claims(
         query = query.filter(Pet.owner_id == owner_id)
         
     if subdivision_id is not None:
-        # Avoid ambiguous join by specifying join condition or matching Report table
-        query = query.join(Report, PetClaim.report_id == Report.report_id).filter(Report.subdivision_id == subdivision_id)
+        from app.models.user import User
+        from sqlalchemy import or_
+        query = query.outerjoin(Report, PetClaim.report_id == Report.report_id).outerjoin(User, Pet.owner_id == User.user_id).filter(
+            or_(Report.subdivision_id == subdivision_id, User.subdivision_id == subdivision_id)
+        )
 
     claims = query.order_by(PetClaim.created_at.desc()).all()
     for c in claims:

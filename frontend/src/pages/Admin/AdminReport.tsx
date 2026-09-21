@@ -385,31 +385,36 @@ const AdminReport = () => {
     });
 
     const getPriorityColor = (priority: string) => {
-        switch (priority.toLowerCase()) {
+        switch ((priority || '').toLowerCase()) {
             case 'emergency':
-            case 'high': return 'bg-red-50 text-red-600 border-red-100';
+            case 'high': return 'bg-rose-50 text-rose-700 border-rose-200/80 font-black shadow-2xs';
             case 'regular':
-            case 'medium': return 'bg-amber-50 text-amber-600 border-amber-100';
-            case 'low': return 'bg-blue-50 text-blue-600 border-blue-100';
-            default: return 'bg-gray-50 text-gray-600 border-gray-100';
+            case 'medium': return 'bg-amber-50 text-amber-700 border-amber-200/80 font-black shadow-2xs';
+            case 'low': return 'bg-emerald-50 text-emerald-700 border-emerald-200/80 font-black shadow-2xs';
+            default: return 'bg-slate-50 text-slate-700 border-slate-200/80 font-bold shadow-2xs';
         }
     };
 
     const getStatusColor = (status: string) => {
-        switch (status.toLowerCase()) {
+        switch ((status || '').toLowerCase()) {
             case 'reported':
             case 'pending verification':
-            case 'pending': return 'bg-amber-50 text-amber-600 border-amber-100';
-            case 'verified': return 'bg-cyan-50 text-cyan-600 border-cyan-100';
-            case 'escalated to barangay': return 'bg-purple-50 text-purple-600 border-purple-100';
-            case 'approved': return 'bg-indigo-50 text-indigo-600 border-indigo-100';
+            case 'pending': return 'bg-amber-50 text-amber-700 border-amber-200/80 font-black shadow-2xs';
+            case 'verified': return 'bg-sky-50 text-sky-700 border-sky-200/80 font-black shadow-2xs';
+            case 'escalated to barangay':
+            case 'forwarded to barangay': return 'bg-purple-50 text-purple-700 border-purple-200/80 font-black shadow-2xs';
+            case 'approved': return 'bg-indigo-50 text-indigo-700 border-indigo-200/80 font-black shadow-2xs';
+            case 'team dispatched':
             case 'in action':
             case 'ongoing':
-            case 'rescue in progress': return 'bg-blue-50 text-blue-600 border-blue-100';
-            case 'resolved': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
-            case 'claimed by owner': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-            case 'released': return 'bg-teal-50 text-teal-700 border-teal-200';
-            default: return 'bg-gray-50 text-gray-600 border-gray-100';
+            case 'rescue in progress': return 'bg-blue-50 text-blue-700 border-blue-200/80 font-black shadow-2xs';
+            case 'picked up':
+            case 'impounded': return 'bg-violet-50 text-violet-700 border-violet-200/80 font-black shadow-2xs';
+            case 'resolved':
+            case 'incident resolved': return 'bg-emerald-50 text-emerald-700 border-emerald-200/80 font-black shadow-2xs';
+            case 'claimed by owner': return 'bg-emerald-50 text-emerald-700 border-emerald-200/80 font-black shadow-2xs';
+            case 'released': return 'bg-teal-50 text-teal-700 border-teal-200/80 font-black shadow-2xs';
+            default: return 'bg-slate-50 text-slate-700 border-slate-200/80 font-bold shadow-2xs';
         }
     };
 
@@ -421,8 +426,13 @@ const AdminReport = () => {
                 <AdminNavbar
                     leftContent={
                         <div className="flex flex-col">
-                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Incident Reports</h1>
-                            <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">Monitor and resolve incoming animal incident submissions</p>
+                            <div className="flex items-center gap-2.5">
+                                <h1 className="text-xl font-black text-slate-900 tracking-tight leading-none uppercase">Report Management</h1>
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-orange-50 text-[#F97316] border border-orange-200/80 shadow-2xs">
+                                    {filteredReports.length} {filteredReports.length === 1 ? 'Report' : 'Reports'}
+                                </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1.5 leading-none">Monitor, review, and coordinate animal incident responses across all jurisdictions</p>
                         </div>
                     }
                 />
@@ -515,16 +525,27 @@ const AdminReport = () => {
                                     header: "ID",
                                     key: "report_id",
                                     render: (rep) => (
-                                        <span className="text-xs font-mono text-gray-400">#{rep.report_id.toString().padStart(4, '0')}</span>
+                                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 font-mono text-xs font-black tracking-tight border border-slate-200/80 shadow-2xs">
+                                            #{rep.report_id.toString().padStart(4, '0')}
+                                        </span>
                                     )
                                 },
                                 {
                                     header: "Category",
                                     key: "category",
                                     render: (rep) => (
-                                        <div className="flex items-center space-x-2">
-                                            <span className="w-2 h-2 rounded-full bg-orange-400"></span>
-                                            <span className="text-sm font-bold text-gray-900">{categoryMap[rep.category_id] || 'Other'}</span>
+                                        <div className="flex items-center gap-2.5">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-[#F97316] shadow-2xs shrink-0"></span>
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-black text-slate-900 leading-tight">
+                                                    {categoryMap[rep.category_id] || rep.animal_type || 'Incident'}
+                                                </span>
+                                                {(rep as any).animal_breed && (rep as any).animal_breed.toLowerCase() !== 'unknown' && (
+                                                    <span className="text-[11px] font-medium text-slate-400 mt-0.5">
+                                                        {(rep as any).animal_breed} • {rep.animal_type || 'Stray'}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     )
                                 },
@@ -532,8 +553,12 @@ const AdminReport = () => {
                                     header: "Priority",
                                     key: "priority",
                                     render: (rep) => (
-                                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getPriorityColor(rep.priority_level)}`}>
-                                            {rep.priority_level}
+                                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10.5px] uppercase tracking-wider border ${getPriorityColor(rep.priority_level)}`}>
+                                            <span className={`w-1.5 h-1.5 rounded-full ${
+                                                (rep.priority_level || '').toLowerCase() === 'high' ? 'bg-rose-500' :
+                                                (rep.priority_level || '').toLowerCase() === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
+                                            }`} />
+                                            {rep.priority_level || 'Medium'}
                                         </span>
                                     )
                                 },
@@ -541,12 +566,14 @@ const AdminReport = () => {
                                     header: "Location",
                                     key: "location",
                                     render: (rep) => (
-                                        <div className="flex items-center space-x-1.5 text-gray-500">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <div className="flex items-center gap-2 text-slate-600">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                             </svg>
-                                            <span className="text-xs truncate max-w-[150px]">{rep.landmark || 'No landmark'}</span>
+                                            <span className="text-xs font-semibold text-slate-700 truncate max-w-[200px]" title={rep.landmark || 'No landmark'}>
+                                                {rep.landmark || 'No landmark specified'}
+                                            </span>
                                         </div>
                                     )
                                 },
@@ -556,12 +583,14 @@ const AdminReport = () => {
                                     render: (rep) => (
                                         <div className="flex items-center space-x-2">
                                             {rep.status_id >= 5 ? (
-                                                <>
-                                                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-                                                    <span className="text-xs font-bold text-blue-700">{statusMap[rep.status_id]}</span>
-                                                </>
+                                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200/80 text-[10.5px] font-black uppercase tracking-wider shadow-2xs">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                                                    <span>{statusMap[rep.status_id]}</span>
+                                                </div>
                                             ) : (
-                                                <span className="text-xs text-gray-400 italic">Not started</span>
+                                                <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 border border-slate-200/60 text-[10.5px] font-bold uppercase tracking-wider">
+                                                    Not started
+                                                </span>
                                             )}
                                         </div>
                                     )
@@ -571,17 +600,18 @@ const AdminReport = () => {
                                     key: "status",
                                     render: (rep) => (
                                         <div className="flex items-center gap-1.5 flex-wrap">
-                                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || 'Pending')}`}>
+                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10.5px] uppercase tracking-wider border ${getStatusColor(statusMap[rep.status_id] || 'Pending')}`}>
+                                                <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
                                                 {statusMap[rep.status_id] || 'Pending'}
                                             </span>
                                             {rep.has_duplicate_flag && !RESOLVED_STATUS_IDS.includes(rep.status_id) && !rep.duplicate_of_report_id && (
-                                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1" title="AI detected suspected duplicate sighting">
+                                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1 shadow-2xs" title="AI detected suspected duplicate sighting">
                                                     <span>⚠️</span>
-                                                    <span>Duplicate Report</span>
+                                                    <span>Duplicate</span>
                                                 </span>
                                             )}
                                             {(rep.status_id === 18 || rep.duplicate_of_report_id) && (
-                                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-stone-100 text-stone-700 border border-stone-300 flex items-center gap-1" title={`Merged duplicate into Case #${rep.duplicate_of_report_id}`}>
+                                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-stone-100 text-stone-700 border border-stone-300 flex items-center gap-1 shadow-2xs" title={`Merged duplicate into Case #${rep.duplicate_of_report_id}`}>
                                                     <span>🔗</span>
                                                     <span>Merged</span>
                                                 </span>
@@ -593,15 +623,18 @@ const AdminReport = () => {
                                     header: "Submitted By",
                                     key: "reporter",
                                     render: (rep) => (
-                                        <div className="flex items-center space-x-2">
-                                            <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center border border-gray-200 shrink-0">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-7 h-7 rounded-full overflow-hidden bg-slate-100 flex items-center justify-center border border-slate-200 shrink-0 shadow-2xs">
                                                 {rep.reporter_photo ? (
                                                     <img src={getProfilePicture(rep.reporter_photo)} alt={rep.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
                                                 ) : (
-                                                    <span className="text-[10px] text-gray-500 font-bold">{(rep.reporter_name || 'U').charAt(0).toUpperCase()}</span>
+                                                    <span className="text-[10px] text-slate-600 font-bold">{(rep.reporter_name || 'U').charAt(0).toUpperCase()}</span>
                                                 )}
                                             </div>
-                                            <span className="text-xs font-semibold text-gray-700">{rep.reporter_name || `User ${rep.user_id}`}</span>
+                                            <div className="flex flex-col">
+                                                <span className="text-xs font-bold text-slate-800 leading-tight">{rep.reporter_name || `User ${rep.user_id}`}</span>
+                                                <span className="text-[10px] text-slate-400 font-medium">{rep.created_at ? new Date(rep.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Recent'}</span>
+                                            </div>
                                         </div>
                                     )
                                 },

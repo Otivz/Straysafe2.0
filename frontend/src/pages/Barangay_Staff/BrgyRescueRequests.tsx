@@ -258,7 +258,11 @@ const BrgyRescueRequests = () => {
     const fetchRequests = async () => {
         try {
             setLoading(true);
-            const response = await axios.get('http://localhost:8000/rescue-requests/');
+            const params: any = {};
+            if (currentUser?.barangay_id) {
+                params.barangay_id = currentUser.barangay_id;
+            }
+            const response = await api.get('/rescue-requests/', { params });
             // Sort by rescue_id descending to show new requests at the top
             const sortedData = (response.data || []).sort((a: any, b: any) => b.rescue_id - a.rescue_id);
             // ONLY show reports that are active and escalated (not status 1, 2, 3, 11, or 12)
@@ -291,8 +295,15 @@ const BrgyRescueRequests = () => {
 
     const fetchPersonnel = async () => {
         try {
-            const response = await api.get('/users/?role_id=3');
-            setPersonnel(response.data);
+            const params: any = { role_id: 3 };
+            if (currentUser?.barangay_id) {
+                params.barangay_id = currentUser.barangay_id;
+            }
+            const response = await api.get('/users/', { params });
+            const filtered = (response.data || []).filter((u: any) => 
+                !currentUser?.barangay_id || Number(u.barangay_id) === Number(currentUser.barangay_id)
+            );
+            setPersonnel(filtered);
         } catch (error) {
             console.error('Error fetching personnel:', error);
         }
@@ -354,7 +365,7 @@ const BrgyRescueRequests = () => {
                 remarks: statusUpdateMessage || defaultRemark,
                 animal_condition: conditionToSubmit
             };
-            const rescueResponse = await axios.patch(`http://localhost:8000/rescue-requests/${statusToUpdate.requestId}`, rescuePayload);
+            const rescueResponse = await api.patch(`/rescue-requests/${statusToUpdate.requestId}`, rescuePayload);
 
             // 3. Upload Media if any
             if (statusMediaFiles.length > 0 && (statusToUpdate.statusId === 6 || statusToUpdate.statusId === 11 || statusToUpdate.statusId === 5)) {
@@ -376,7 +387,7 @@ const BrgyRescueRequests = () => {
                     formData.append('status_id', statusToUpdate.statusId.toString());
 
                     try {
-                        await axios.post(`http://localhost:8000/reports/${statusToUpdate.reportId}/media`, formData, {
+                        await api.post(`/reports/${statusToUpdate.reportId}/media`, formData, {
                             headers: { 'Content-Type': 'multipart/form-data' }
                         });
                     } catch (err) {

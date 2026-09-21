@@ -224,7 +224,7 @@ const SubdPetRecords: React.FC = () => {
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
-                                <span>Removed Records</span>
+                                <span>Archived Records</span>
                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
                                     activeTab === 'removed' 
                                         ? 'bg-orange-100 text-[#B35D25]' 
@@ -356,7 +356,7 @@ const SubdPetRecords: React.FC = () => {
                             {/* Stats Row */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in duration-500 shrink-0">
                                 <StatCard
-                                    label="Total Removed Records"
+                                    label="Total Archived Records"
                                     value={totalRemovedCount.toString()}
                                     badge="Archived"
                                     badgeVariant="warning"
@@ -381,7 +381,7 @@ const SubdPetRecords: React.FC = () => {
                                     <div>
                                         <h2 className="text-xl font-black text-gray-900">Archived Pet Records</h2>
                                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">
-                                            Removed animals are safely kept here and can be restored back anytime
+                                            Archived animals are safely kept here and can be restored back anytime
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-4">
@@ -393,7 +393,7 @@ const SubdPetRecords: React.FC = () => {
                                             </div>
                                             <input
                                                 type="text"
-                                                placeholder="🔍 Search removed pets..."
+                                                placeholder="🔍 Search archived pets..."
                                                 value={removedSearchTerm}
                                                 onChange={(e) => setRemovedSearchTerm(e.target.value)}
                                                 className="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B35D25]/20 focus:border-[#B35D25] transition-all w-64 shadow-sm"
@@ -445,9 +445,9 @@ const SubdPetRecords: React.FC = () => {
                                                                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                                     </svg>
                                                                 </div>
-                                                                <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight mt-2">No Removed Records</h4>
+                                                                <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight mt-2">No Archived Records</h4>
                                                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-relaxed">
-                                                                    {removedSearchTerm ? `No archived pets match "${removedSearchTerm}"` : 'There are currently no removed pet records in the archive.'}
+                                                                    {removedSearchTerm ? `No archived pets match "${removedSearchTerm}"` : 'There are currently no archived pet records in the archive.'}
                                                                 </p>
                                                             </div>
                                                         </td>

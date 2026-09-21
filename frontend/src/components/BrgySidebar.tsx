@@ -309,10 +309,10 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                                                     if (isMobileView && handleDrawerClose) handleDrawerClose();
                                                     item.onClick?.();
                                                 }}
-                                                className={`w-full flex items-center py-3 font-bold text-xs uppercase tracking-widest transition-colors text-gray-400 hover:text-[#F97316] hover:bg-orange-50/50 cursor-pointer ${showFullText ? 'px-8' : 'justify-center px-0'}`}
+                                                className={`w-full flex items-center py-3 font-bold text-xs uppercase tracking-wider transition-colors text-gray-400 hover:text-[#F97316] hover:bg-orange-50/50 cursor-pointer ${showFullText ? 'px-6' : 'justify-center px-0'}`}
                                             >
                                                 <span className="shrink-0">{item.icon}</span>
-                                                {showFullText && <span className="ml-4 whitespace-nowrap animate-in fade-in duration-300">{item.label}</span>}
+                                                {showFullText && <span className="ml-3.5 whitespace-nowrap animate-in fade-in duration-300">{item.label}</span>}
                                             </button>
                                         </div>
                                     );
@@ -328,10 +328,10 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                                         <Link
                                             to={item.path}
                                             onClick={isMobileView && handleDrawerClose ? handleDrawerClose : undefined}
-                                            className={`flex items-center py-3 font-bold text-xs uppercase tracking-widest transition-colors ${isActive
+                                            className={`flex items-center py-3 font-bold text-xs uppercase tracking-wider transition-colors ${isActive
                                                 ? 'bg-orange-50 text-[#F97316]'
                                                 : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
-                                                } ${showFullText ? 'px-8' : 'justify-center px-0'}`}
+                                                } ${showFullText ? 'px-6' : 'justify-center px-0'}`}
                                         >
                                             <div className="relative shrink-0">
                                                 {item.icon}
@@ -342,8 +342,8 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                                                 )}
                                             </div>
                                             {showFullText && (
-                                                <div className="ml-4 flex-1 flex items-center justify-between overflow-hidden">
-                                                    <span className={`truncate ${item.label.length > 18 ? 'text-[9.5px]' : ''}`}>
+                                                <div className="ml-3.5 flex-1 flex items-center justify-between overflow-hidden">
+                                                    <span className="whitespace-nowrap font-bold text-xs">
                                                         {item.label}
                                                     </span>
                                                     {hasBadge && (
@@ -367,7 +367,7 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
     return (
         <>
             {/* DESKTOP SIDEBAR */}
-            <aside className={`hidden lg:flex ${isOpen ? 'w-64' : 'w-20'} relative bg-white border-r border-gray-100 flex flex-col justify-between flex-shrink-0 transition-all duration-300 z-50 h-screen sticky top-0`}>
+            <aside className={`hidden lg:flex ${isOpen ? 'w-72' : 'w-20'} relative bg-white border-r border-gray-100 flex flex-col justify-between flex-shrink-0 transition-all duration-300 z-50 h-screen sticky top-0`}>
                 {/* Toggle Button */}
                 <Button
                     onClick={() => setIsOpen(!isOpen)}

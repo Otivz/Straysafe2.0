@@ -282,10 +282,10 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                                                         if (onMobileClose) onMobileClose();
                                                         item.onClick?.();
                                                     }}
-                                                    className={`w-full flex items-center py-3 font-bold text-xs uppercase tracking-widest transition-colors text-gray-400 hover:text-[#F97316] hover:bg-orange-50/50 cursor-pointer ${isOpen || mobileOpen ? 'px-8' : 'justify-center px-0'}`}
+                                                    className={`w-full flex items-center py-3 font-bold text-xs uppercase tracking-wider transition-colors text-gray-400 hover:text-[#F97316] hover:bg-orange-50/50 cursor-pointer ${isOpen || mobileOpen ? 'px-6' : 'justify-center px-0'}`}
                                                 >
                                                     <span className="shrink-0">{item.icon}</span>
-                                                    {(isOpen || mobileOpen) && <span className="ml-4 whitespace-nowrap animate-in fade-in duration-300">{item.label}</span>}
+                                                    {(isOpen || mobileOpen) && <span className="ml-3.5 whitespace-nowrap animate-in fade-in duration-300">{item.label}</span>}
                                                 </button>
                                             </div>
                                         );
@@ -302,10 +302,10 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                                                 onClick={() => {
                                                     if (onMobileClose) onMobileClose();
                                                 }}
-                                                className={`flex items-center py-3 font-bold text-xs uppercase tracking-widest transition-colors ${isActive
+                                                className={`flex items-center py-3 font-bold text-xs uppercase tracking-wider transition-colors ${isActive
                                                     ? 'bg-orange-50 text-[#F97316]'
                                                     : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
-                                                    } ${isOpen || mobileOpen ? 'px-8' : 'justify-center px-0'}`}
+                                                    } ${isOpen || mobileOpen ? 'px-6' : 'justify-center px-0'}`}
                                             >
                                                 <div className="relative shrink-0">
                                                     {item.icon}
@@ -316,8 +316,8 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                                                     )}
                                                 </div>
                                                 {(isOpen || mobileOpen) && (
-                                                    <div className="ml-4 flex-1 flex items-center justify-between overflow-hidden">
-                                                        <span className="truncate">{item.label}</span>
+                                                    <div className="ml-3.5 flex-1 flex items-center justify-between overflow-hidden">
+                                                        <span className="whitespace-nowrap font-bold text-xs">{item.label}</span>
                                                         {hasBadge && (
                                                             <span className="ml-2 shrink-0 bg-[#F97316] text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-sm animate-pulse">
                                                                 {item.badgeCount}
@@ -342,7 +342,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
     return (
         <>
             {/* Desktop Sidebar */}
-            <aside className={`hidden md:flex ${isOpen ? 'w-64' : 'w-20'} relative bg-white border-r border-gray-100 flex-col justify-between flex-shrink-0 transition-all duration-300 z-50 h-screen`}>
+            <aside className={`hidden md:flex ${isOpen ? 'w-72' : 'w-20'} relative bg-white border-r border-gray-100 flex-col justify-between flex-shrink-0 transition-all duration-300 z-50 h-screen`}>
                 {/* Toggle Button */}
                 <Button
                     onClick={() => setIsOpen(!isOpen)}

@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate } from 'react-router-dom';
 import BrgySidebar from '../../components/BrgySidebar';
@@ -9,6 +8,7 @@ import Select from '../../components/Dropdown';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
+import { api } from '../../utils/api';
 
 interface Report {
     report_id: number;
@@ -69,7 +69,11 @@ const BrgyHistoryReports = () => {
     const fetchReports = async () => {
         try {
             setLoading(true);
-            const response = await axios.get('http://localhost:8000/reports/?escalated_only=true');
+            const params: any = { escalated_only: true };
+            if (currentUser?.barangay_id) {
+                params.barangay_id = currentUser.barangay_id;
+            }
+            const response = await api.get('/reports/', { params });
             const sorted = (response.data || []).sort((a: any, b: any) => b.report_id - a.report_id);
             setReports(sorted);
         } catch (error) {
@@ -86,10 +90,10 @@ const BrgyHistoryReports = () => {
 
     const isReportEscalated = (rep: any) => {
         if (!rep) return false;
-        if ([4, 5, 6, 7, 8, 9, 10, 13, 14].includes(rep.status_id)) return true;
+        if ([4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18].includes(rep.status_id)) return true;
         if (rep.endorsement_letter) return true;
         if (rep.rescue_id || (rep.rescues && rep.rescues.length > 0)) return true;
-        if (rep.history?.some((h: any) => h.report_status_id === 4 || h.rescue_id)) return true;
+        if (rep.history?.some((h: any) => [4, 5, 6, 7, 8, 13].includes(h.report_status_id) || h.rescue_id)) return true;
         return false;
     };
 
@@ -100,7 +104,9 @@ const BrgyHistoryReports = () => {
             rep.status_id === 10 ||
             rep.status_id === 12 || 
             rep.status_id === 14 ||
-            (rep.status_id === 3 && rep.history?.some((h: any) => h.report_status_id === 4))
+            rep.status_id === 17 ||
+            rep.status_id === 18 ||
+            (rep.status_id === 3 && rep.history?.some((h: any) => [4, 5, 6, 7, 8, 13].includes(h.report_status_id)))
         )
     );
 
@@ -108,13 +114,31 @@ const BrgyHistoryReports = () => {
         const catName = categoryMap[rep.category_id]?.toLowerCase() || '';
         const land = (rep.landmark || '').toLowerCase();
         const reporter = (rep.reporter_name || '').toLowerCase();
+        const desc = (rep.description || '').toLowerCase();
+        const q = searchTerm.toLowerCase();
         const matchesSearch =
-            catName.includes(searchTerm.toLowerCase()) ||
-            land.includes(searchTerm.toLowerCase()) ||
-            reporter.includes(searchTerm.toLowerCase());
+            catName.includes(q) ||
+            land.includes(q) ||
+            reporter.includes(q) ||
+            desc.includes(q) ||
+            rep.report_id.toString().includes(q);
 
-        const statName = statusMap[rep.status_id] || '';
-        const matchesStatus = statusFilter === 'all' || statName.toLowerCase() === statusFilter.toLowerCase();
+        const statName = (statusMap[rep.status_id] || '').toLowerCase();
+        let matchesStatus = true;
+        if (statusFilter !== 'all') {
+            const sf = statusFilter.toLowerCase();
+            if (sf === 'resolved') {
+                matchesStatus = [11, 9, 10].includes(rep.status_id);
+            } else if (sf === 'dismissed' || sf.includes('dismissed') || sf.includes('false alarm')) {
+                matchesStatus = [14, 17].includes(rep.status_id);
+            } else if (sf === 'deceased') {
+                matchesStatus = rep.status_id === 12;
+            } else if (sf === 'rejected') {
+                matchesStatus = rep.status_id === 3;
+            } else {
+                matchesStatus = statName.includes(sf);
+            }
+        }
 
         return matchesSearch && matchesStatus;
     });
@@ -122,7 +146,7 @@ const BrgyHistoryReports = () => {
     const totalHistory = historyReports.length;
     const resolvedCount = historyReports.filter(r => r.status_id === 11 || r.status_id === 9 || r.status_id === 10).length;
     const deceasedCount = historyReports.filter(r => r.status_id === 12).length;
-    const dismissedCount = historyReports.filter(r => r.status_id === 14).length;
+    const dismissedCount = historyReports.filter(r => r.status_id === 14 || r.status_id === 17).length;
     const rejectedCount = historyReports.filter(r => r.status_id === 3).length;
 
     const getPriorityColor = (priority: string) => {
@@ -137,16 +161,16 @@ const BrgyHistoryReports = () => {
     };
 
     const getStatusColor = (status: string) => {
-        switch ((status || '').toLowerCase()) {
-            case 'resolved': return 'bg-green-50 text-green-600 border-green-100';
-            case 'claimed by owner': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-            case 'released': return 'bg-teal-50 text-teal-700 border-teal-200';
-            case 'deceased': return 'bg-gray-100 text-gray-600 border-gray-200';
-            case 'false alarm / dismissed':
-            case 'dismissed': return 'bg-amber-50 text-amber-700 border-amber-200';
-            case 'rejected': return 'bg-red-50 text-red-600 border-red-100';
-            default: return 'bg-gray-50 text-gray-600 border-gray-100';
-        }
+        const s = (status || '').toLowerCase();
+        if (s.includes('resolved')) return 'bg-green-50 text-green-600 border-green-100';
+        if (s.includes('claimed')) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        if (s.includes('released')) return 'bg-teal-50 text-teal-700 border-teal-200';
+        if (s.includes('deceased')) return 'bg-gray-100 text-gray-600 border-gray-200';
+        if (s.includes('cannot be found')) return 'bg-amber-50 text-amber-800 border-amber-200';
+        if (s.includes('false alarm') || s.includes('dismissed')) return 'bg-amber-50 text-amber-700 border-amber-200';
+        if (s.includes('merged')) return 'bg-stone-100 text-stone-700 border-stone-200';
+        if (s.includes('rejected')) return 'bg-red-50 text-red-600 border-red-100';
+        return 'bg-gray-50 text-gray-600 border-gray-100';
     };
 
     const getStatusIcon = (statusId: number) => {
@@ -160,7 +184,7 @@ const BrgyHistoryReports = () => {
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
             </svg>
         );
-        if (statusId === 14) return (
+        if (statusId === 14 || statusId === 17) return (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524L13.477 14.89zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
             </svg>

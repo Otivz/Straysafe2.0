@@ -18,10 +18,36 @@ const BrgyDashboard = () => {
     const [isMapExpanded, setIsMapExpanded] = useState(false);
     const [selectedDetailReport, setSelectedDetailReport] = useState<any>(null);
     const [selectedReport, setSelectedReport] = useState<any>(null);
+    const [selectedCoordinates, setSelectedCoordinates] = useState<{ lat: number; lng: number } | null>(null);
     const [isNavigating, setIsNavigating] = useState(false);
     const [navSource, setNavSource] = useState<'hq' | 'brgy' | 'current'>('hq');
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
     const [personnelFilter, setPersonnelFilter] = useState<'all' | 'available' | 'on_mission'>('all');
+
+    const [currentUser, setCurrentUser] = useState<any>(() => {
+        try {
+            const rawUser = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
+            return rawUser ? JSON.parse(rawUser) : null;
+        } catch {
+            return null;
+        }
+    });
+    const [barangayHq, setBarangayHq] = useState<any>(null);
+    const [_isLoading, setIsLoading] = useState(true);
+    const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+    // Quick Action Modals
+    const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+    const [assignForm, setAssignForm] = useState<{ rescueId: number; staffId: number; remarks: string }>({ rescueId: 0, staffId: 0, remarks: '' });
+    const [isSubmittingAssign, setIsSubmittingAssign] = useState(false);
+
+    const [isUpdateIncidentModalOpen, setIsUpdateIncidentModalOpen] = useState(false);
+    const [updateForm, setUpdateForm] = useState<{ rescueId: number; statusId: number; remarks: string }>({ rescueId: 0, statusId: 5, remarks: '' });
+    const [isSubmittingUpdate, setIsSubmittingUpdate] = useState(false);
+
+    const [isCommunityAlertModalOpen, setIsCommunityAlertModalOpen] = useState(false);
+    const [alertForm, setAlertForm] = useState({ title: '', category: 'Emergency', content: '', pinned: true, expiration: '' });
+    const [isSubmittingAlert, setIsSubmittingAlert] = useState(false);
 
     useEffect(() => {
         const rawUser = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
@@ -34,7 +60,9 @@ const BrgyDashboard = () => {
             const user = JSON.parse(rawUser);
             if (user.role_id !== 3 && user.role_id !== 5) {
                 navigate('/staff/login');
+                return;
             }
+            setCurrentUser(user);
         } catch {
             navigate('/staff/login');
         }
@@ -51,76 +79,108 @@ const BrgyDashboard = () => {
         }
     }, []);
 
-    useEffect(() => {
-        const fetchDashboardData = async () => {
-            try {
-                const [requestsRes, personnelRes, reportsRes, holdingRes, landmarksRes] = await Promise.allSettled([
-                    api.get('/rescue-requests/'),
-                    api.get('/users/?role_id=3'),
-                    api.get('/reports/?escalated_only=true'),
-                    api.get('/holding/'),
-                    api.get('/landmarks/')
-                ]);
+    const fetchDashboardData = async () => {
+        try {
+            const raw = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
+            const user = raw ? JSON.parse(raw) : currentUser;
+            const bId = user?.barangay_id;
+            const bParam = bId ? `barangay_id=${bId}` : '';
 
-                if (requestsRes.status === 'fulfilled') {
-                    setRequests(requestsRes.value.data || []);
-                }
-                if (personnelRes.status === 'fulfilled') {
-                    setPersonnel(personnelRes.value.data || []);
-                }
-                if (reportsRes.status === 'fulfilled') {
-                    setReports(reportsRes.value.data || []);
-                }
-                if (holdingRes.status === 'fulfilled') {
-                    setFacilityAnimals(holdingRes.value.data || []);
-                }
-                if (landmarksRes.status === 'fulfilled') {
-                    setFacilities(landmarksRes.value.data || []);
-                }
-            } catch (err) {
-                console.error('Error fetching dashboard statistics:', err);
+            const [requestsRes, personnelRes, reportsRes, holdingRes, landmarksRes, hqRes] = await Promise.allSettled([
+                api.get('/rescue-requests/' + (bParam ? `?${bParam}` : '')),
+                api.get('/users/?role_id=3' + (bParam ? `&${bParam}` : '')),
+                api.get('/reports/' + (bParam ? `?${bParam}` : '')),
+                api.get('/holding/' + (bParam ? `?${bParam}` : '')),
+                api.get('/landmarks/' + (bParam ? `?${bParam}` : '')),
+                bId ? api.get(`/landmarks/barangay/${bId}/hq`) : Promise.reject('No barangay')
+            ]);
+
+            if (requestsRes.status === 'fulfilled') {
+                setRequests(requestsRes.value.data || []);
             }
-        };
+            if (personnelRes.status === 'fulfilled') {
+                setPersonnel(personnelRes.value.data || []);
+            }
+            if (reportsRes.status === 'fulfilled') {
+                setReports(reportsRes.value.data || []);
+            }
+            if (holdingRes.status === 'fulfilled') {
+                setFacilityAnimals(holdingRes.value.data || []);
+            }
+            if (landmarksRes.status === 'fulfilled') {
+                setFacilities(landmarksRes.value.data || []);
+            }
+            if (hqRes.status === 'fulfilled') {
+                setBarangayHq(hqRes.value.data || null);
+            }
+        } catch (err) {
+            console.error('Error fetching dashboard statistics:', err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
         fetchDashboardData();
         const interval = setInterval(fetchDashboardData, 10000);
         return () => clearInterval(interval);
     }, []);
 
-    const reportRequestCount = requests.filter(r => r.status_id === 1 || r.status_id === 2 || r.status_id === 4 || r.status_id === 13).length;
-    const ongoingReportCount = requests.filter(r => r.status_id === 4 || r.status_id === 5).length;
+    // Statistics calculated directly from real database records (no artificial fallbacks)
+    const reportRequestCount = requests.filter(r => [1, 2, 4, 13].includes(r.status_id)).length;
+    const ongoingReportCount = requests.filter(r => [4, 5].includes(r.status_id)).length;
 
-    const assignedPersonnelIds = requests.filter(r => (r.status_id === 4 || r.status_id === 5) && r.staff_id).map(r => r.staff_id);
-    const uniqueAssigned = Array.from(new Set(assignedPersonnelIds)).length;
+    const isPersonAssigned = (pId: number) => {
+        return requests.find(r => {
+            if (r.status_id !== 4 && r.status_id !== 5) return false;
+            if (Number(r.staff_id) === Number(pId)) return true;
+            if (Array.isArray(r.assignments)) {
+                return r.assignments.some((a: any) => {
+                    const status = a.assignment_status || a.status;
+                    const matchesId = Number(a.staff_id) === Number(pId) || Number(a.user_id) === Number(pId);
+                    return matchesId && (!status || ['Assigned', 'In Transit', 'On Site'].includes(status));
+                });
+            }
+            return false;
+        }) || null;
+    };
+
+    const activeAssignedPersonnel = personnel.filter(p => !!isPersonAssigned(p.user_id));
+    const uniqueAssigned = activeAssignedPersonnel.length;
     const totalPersonnel = personnel.length;
+    const availablePersonnelCount = Math.max(0, totalPersonnel - uniqueAssigned);
 
-    const displayReportRequest = reportRequestCount || 7;
-    const displayOngoingReport = ongoingReportCount || 1;
-    const availablePersonnelCount = Math.max(0, (totalPersonnel || 5) - uniqueAssigned);
+    const displayReportRequest = reportRequestCount;
+    const displayOngoingReport = ongoingReportCount;
 
     // Holding Facility stats
-    const activeHoldingAnimals = (facilityAnimals || []).filter(a => ![3, 4].includes(a.facility_status));
-    const rawDogsCount = activeHoldingAnimals.filter(a => (a.animal_type || '').toLowerCase().includes('dog')).length;
-    const rawCatsCount = activeHoldingAnimals.filter(a => (a.animal_type || '').toLowerCase().includes('cat')).length;
-    const animalsInFacilityCount = activeHoldingAnimals.length > 0 ? activeHoldingAnimals.length : 2;
-    const dogsCount = activeHoldingAnimals.length > 0 ? rawDogsCount : 2;
-    const catsCount = activeHoldingAnimals.length > 0 ? rawCatsCount : 0;
+    // Status IDs resolved/discharged in HoldingAnimal: 3: Claimed, 4: Deceased, 5: Transferred, 7: Adopted/Released, 8: Impounded
+    const RESOLVED_HOLDING = [3, 4, 5, 7, 8];
+    const activeHoldingAnimals = (facilityAnimals || []).filter(a => !RESOLVED_HOLDING.includes(a.facility_status));
+    const rawDogsCount = activeHoldingAnimals.filter(a => (a.animal_type || a.report?.animal_type || '').toLowerCase().includes('dog')).length;
+    const rawCatsCount = activeHoldingAnimals.filter(a => (a.animal_type || a.report?.animal_type || '').toLowerCase().includes('cat')).length;
+    const animalsInFacilityCount = activeHoldingAnimals.length;
+    const dogsCount = rawDogsCount;
+    const catsCount = rawCatsCount;
 
-    const totalCapacitySlots = facilities.filter(f => f.is_holding_facility).reduce((acc, f) => acc + (f.capacity || 0), 0) || 26;
-    const usedSlots = activeHoldingAnimals.length > 0 ? activeHoldingAnimals.length : 2;
-    const facilityCapacityPct = Math.round((usedSlots / totalCapacitySlots) * 100) || 8;
+    const holdingFacilities = facilities.filter(f => f.is_holding_facility);
+    const totalCapacitySlots = holdingFacilities.reduce((acc, f) => acc + (f.capacity || 0), 0);
+    const usedSlots = activeHoldingAnimals.length;
+    const facilityCapacityPct = totalCapacitySlots > 0 ? Math.min(100, Math.round((usedSlots / totalCapacitySlots) * 100)) : 0;
 
     // Adoption stats
     const adoptionAnimalsList = (facilityAnimals || []).filter(a =>
         a.facility_status === 2 ||
         a.facility_status === 6 ||
         a.is_for_adoption ||
-        (a.status_name || '').toLowerCase().includes('adopt')
+        (a.status_name || '').toLowerCase().includes('adopt') ||
+        (a.facility_status_name || '').toLowerCase().includes('healthy')
     );
-    const adoptionCount = adoptionAnimalsList.length > 0 ? adoptionAnimalsList.length : 3;
-    const rawAdoptionDogs = adoptionAnimalsList.filter(a => (a.animal_type || '').toLowerCase().includes('dog')).length;
-    const rawAdoptionCats = adoptionAnimalsList.filter(a => (a.animal_type || '').toLowerCase().includes('cat')).length;
-    const adoptionDogsCount = adoptionAnimalsList.length > 0 ? rawAdoptionDogs : 2;
-    const adoptionCatsCount = adoptionAnimalsList.length > 0 ? rawAdoptionCats : 1;
+    const adoptionCount = adoptionAnimalsList.length;
+    const rawAdoptionDogs = adoptionAnimalsList.filter(a => (a.animal_type || a.report?.animal_type || '').toLowerCase().includes('dog')).length;
+    const rawAdoptionCats = adoptionAnimalsList.filter(a => (a.animal_type || a.report?.animal_type || '').toLowerCase().includes('cat')).length;
+    const adoptionDogsCount = rawAdoptionDogs;
+    const adoptionCatsCount = rawAdoptionCats;
 
     const getStatusName = (statusId: number) => {
         switch (statusId) {
@@ -178,45 +238,67 @@ const BrgyDashboard = () => {
 
     const isReportEscalated = (rep: any) => {
         if (!rep) return false;
-        if ([4, 5, 6, 7, 8, 9, 10, 13].includes(rep.status_id)) return true;
+        const currentStat = rep.status_id ?? rep.current_status_id;
+        // 1. Official endorsement letter
         if (rep.endorsement_letter) return true;
+        // 2. Has an associated rescue request
         if (rep.rescue_id || (rep.rescues && rep.rescues.length > 0)) return true;
-        if (rep.history?.some((h: any) => h.report_status_id === 4 || h.rescue_id)) return true;
+        // 3. Status history indicates escalation to barangay (status 4) or rescue action
+        if (rep.history?.some((h: any) => [4, 5, 6, 7, 8, 13].includes(h.report_status_id) || h.rescue_id)) return true;
+        // 4. Status is an active Barangay operational phase
+        if ([4, 5, 7, 8, 9, 13].includes(currentStat)) return true;
+        // 5. Terminal statuses if handled by barangay staff or has rescue history
+        if ([3, 6, 10, 11, 12, 14, 17, 18].includes(currentStat)) {
+            if (rep.barangay_staff_id || rep.assigned_staff_id || rep.assigned_staff_name) return true;
+            if (rep.rescues && rep.rescues.length > 0) return true;
+            if (rep.history?.some((h: any) => [4, 5, 6, 7, 8, 13].includes(h.report_status_id) || h.rescue_id)) return true;
+        }
         return false;
     };
 
-    const activeReports = reports.filter(r => isReportEscalated(r) && [4, 5, 7, 8, 9, 13].includes(r.status_id));
+    // Real database stray reports for the interactive map
+    // Deduplicate by report_id to guarantee no duplicate markers
+    const uniqueReportsMap = new Map<number, any>();
+    reports.forEach((r: any) => {
+        if (r && r.report_id && !uniqueReportsMap.has(r.report_id)) {
+            uniqueReportsMap.set(r.report_id, r);
+        }
+    });
+    const uniqueReports = Array.from(uniqueReportsMap.values());
+
+    // Display active reported stray animals officially endorsed/escalated to Barangay
+    const activeReports = uniqueReports.filter(r => {
+        if (!r) return false;
+        const lat = parseFloat(r.latitude);
+        const lng = parseFloat(r.longitude);
+        if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return false;
+        // Only active reports that are endorsed/escalated to the Barangay
+        return isReportEscalated(r) && [4, 5, 7, 8, 9, 13].includes(r.status_id);
+    });
     const assignedReportsCount = requests.filter(req => req.staff_id && [1, 2, 4, 5].includes(req.status_id)).length;
     const inProgressReportsCount = requests.filter(req => req.status_id === 4).length;
     const pickedUpReportsCount = reports.filter(r => isReportEscalated(r) && [7, 8, 9].includes(r.status_id)).length;
     const resolvedReportsCount = reports.filter(r => isReportEscalated(r) && [6, 11].includes(r.status_id)).length;
 
-    const getPositionName = (id: number | null) => {
-        switch (id) {
-            case 1: return 'President';
-            case 2: return 'Secretary';
-            case 3: return 'Barangay Staff';
-            case 4: return 'Tanod';
-            case 5: return 'Animal Rescuer';
-            case 6: return 'Barangay Captain';
-            default: return 'Staff';
-        }
-    };
-
-    const heatmapPoints: [number, number, number][] = reports
-        .filter(r => isReportEscalated(r) && r.latitude && r.longitude)
+    const heatmapPoints: [number, number, number][] = activeReports
         .map((r: any) => [
             parseFloat(r.latitude),
             parseFloat(r.longitude),
             r.priority_level === 'High' ? 1.0 : 0.6
         ]);
 
+    const currentBarangayName = barangayHq?.barangay_name || currentUser?.barangay_name || currentUser?.barangay || 'San Vicente';
+
+    const hqCoords: [number, number] = (barangayHq?.hq_lat && barangayHq?.hq_lng)
+        ? [parseFloat(barangayHq.hq_lat), parseFloat(barangayHq.hq_lng)]
+        : [14.806906, 121.0039297];
+
     const mapMarkers = [
         {
             id: -1,
-            lat: 14.806906,
-            lng: 121.0039297,
-            title: "Barangay Hall HQ",
+            lat: hqCoords[0],
+            lng: hqCoords[1],
+            title: `Barangay ${currentBarangayName} HQ`,
             category: "Barangay Office",
             time: "Base"
         },
@@ -229,7 +311,6 @@ const BrgyDashboard = () => {
             time: "Live"
         }] : []),
         ...activeReports
-            .filter(r => r.latitude && r.longitude)
             .map((r: any) => {
                 const associatedRescue = requests.find(req => req.report_id === r.report_id);
                 const color = getMarkerColor(r, associatedRescue);
@@ -254,67 +335,7 @@ const BrgyDashboard = () => {
             })
     ];
 
-    // Sample fallback personnel if database has fewer than 5
-    const fallbackPersonnel = [
-        { user_id: 101, name: 'Kyla Bianca Frias', position_name: 'Barangay Captain', phone: '+63 928 555 6687', is_head_officer: true, status: 'Active' },
-        { user_id: 102, name: 'Lebron James', position_name: 'Tanod', phone: '+63 977 023 8162', is_head_officer: false, status: 'Active' },
-        { user_id: 103, name: 'Stephen Curry', position_name: 'Janitor', phone: '+63 967 298 7774', is_head_officer: false, status: 'Active' },
-        { user_id: 104, name: 'Zavannah Kate Gomez', position_name: 'Patrol Officer', phone: '+63 977 023 8162', is_head_officer: false, status: 'Active' },
-        { user_id: 105, name: 'Romel Bopiz', position_name: 'Tanod', phone: '+63 977 023 8162', is_head_officer: false, status: 'Active' },
-    ];
-
-    const displayPersonnelList = personnel.length >= 5
-        ? personnel.slice(0, 5)
-        : [...personnel, ...fallbackPersonnel.slice(personnel.length)];
-
-    // Recent incidents data (5 items)
-    const fallbackRecentIncidents = [
-        {
-            report_id: 101,
-            title: 'Stray Dog – Near Purok 5',
-            location: 'Santa Maria, Bulacan',
-            status: 'Pending',
-            statusColor: 'bg-red-50 text-red-500 border-red-200',
-            timeAgo: '2h ago',
-            image: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=150&auto=format&fit=crop&q=80'
-        },
-        {
-            report_id: 102,
-            title: 'Stray Cat – Barangay Hall Area',
-            location: 'Santa Maria, Bulacan',
-            status: 'Assigned',
-            statusColor: 'bg-blue-50 text-blue-600 border-blue-200',
-            timeAgo: '4h ago',
-            image: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=150&auto=format&fit=crop&q=80'
-        },
-        {
-            report_id: 103,
-            title: 'Aggressive Dog – San Vicente',
-            location: 'Santa Maria, Bulacan',
-            status: 'In Progress',
-            statusColor: 'bg-emerald-50 text-emerald-600 border-emerald-200',
-            timeAgo: '6h ago',
-            image: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=150&auto=format&fit=crop&q=80'
-        },
-        {
-            report_id: 104,
-            title: 'Injured Cat – Purok 3',
-            location: 'Santa Maria, Bulacan',
-            status: 'Endorsed',
-            statusColor: 'bg-orange-50 text-orange-600 border-orange-200',
-            timeAgo: '8h ago',
-            image: 'https://images.unsplash.com/photo-1573865526739-10659fec78a5?w=150&auto=format&fit=crop&q=80'
-        },
-        {
-            report_id: 105,
-            title: 'Stray Dog – Near Gulod',
-            location: 'Santa Maria, Bulacan',
-            status: 'Picked Up',
-            statusColor: 'bg-purple-50 text-purple-600 border-purple-200',
-            timeAgo: '12h ago',
-            image: 'https://images.unsplash.com/photo-1537151625747-768eb6cf92b2?w=150&auto=format&fit=crop&q=80'
-        }
-    ];
+    const displayPersonnelList = personnel;
 
     const getStatusBadgeStyle = (statusName: string) => {
         const lower = statusName.toLowerCase();
@@ -334,44 +355,133 @@ const BrgyDashboard = () => {
             if (diffHours <= 0) return 'Just now';
             if (diffHours < 24) return `${diffHours}h ago`;
             const diffDays = Math.floor(diffHours / 24);
-            return `${diffDays}d ago`;
+            if (diffDays === 1) return '1 day ago';
+            return `${diffDays} days ago`;
         } catch {
             return 'Recently';
         }
     };
 
-    const recentIncidents = reports.length >= 3
-        ? reports.slice(0, 4).map((r, idx) => {
-            const rawStatus = r.status?.status_name || getStatusName(r.status_id);
-            const friendlyStatus = (r.status_id === 1 || r.status_id === 2) ? 'Pending'
-                : (r.status_id === 4 || r.status_id === 13) ? 'Endorsed'
-                    : (r.status_id === 5) ? 'In Progress'
-                        : (r.status_id === 7 || r.status_id === 8) ? 'Picked Up'
-                            : rawStatus;
+    // Only show incidents that were officially endorsed/escalated to the Barangay
+    const endorsedReports = reports.filter(r => isReportEscalated(r));
 
-            return {
-                report_id: r.report_id,
-                title: `${r.animal_type || 'Stray'} – ${r.landmark || 'San Vicente'}`,
-                location: r.subdivision_name ? `${r.subdivision_name}, Bulacan` : 'Santa Maria, Bulacan',
-                status: friendlyStatus,
-                statusColor: getStatusBadgeStyle(friendlyStatus),
-                timeAgo: r.created_at ? formatTimeAgo(r.created_at) : `${(idx + 1) * 2}h ago`,
-                image: (r.media && r.media.length > 0 && r.media[0].file_url)
-                    ? getPetPicture(r.media[0].file_url)
-                    : fallbackRecentIncidents[idx % fallbackRecentIncidents.length].image
-            };
-        })
-        : fallbackRecentIncidents.slice(0, 4);
+    const sortedReports = [...endorsedReports].sort((a: any, b: any) => {
+        const timeA = a.created_at ? new Date(a.created_at).getTime() : a.report_id;
+        const timeB = b.created_at ? new Date(b.created_at).getTime() : b.report_id;
+        return timeB - timeA;
+    });
 
-    const rawUser = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
-    let parsedUser: any = null;
-    try {
-        parsedUser = rawUser ? JSON.parse(rawUser) : null;
-    } catch {
-        parsedUser = null;
-    }
+    const recentIncidents = sortedReports.slice(0, 5).map((r) => {
+        const rawStatus = r.status?.status_name || getStatusName(r.status_id);
+        const friendlyStatus = (r.status_id === 4 || r.status_id === 13) ? 'Endorsed'
+            : (r.status_id === 5) ? 'In Progress'
+            : (r.status_id === 7 || r.status_id === 8 || r.status_id === 9) ? 'Picked Up'
+            : (r.status_id === 6 || r.status_id === 11) ? 'Resolved'
+            : (r.status_id === 3) ? 'Rejected'
+            : (r.status_id === 14) ? 'Dismissed'
+            : rawStatus;
+
+        const defaultLocation = barangayHq?.city ? `${currentBarangayName}, ${barangayHq.city}` : `${currentBarangayName}, Bulacan`;
+
+        return {
+            report_id: r.report_id,
+            title: `${r.animal_type || 'Stray'} – ${r.landmark || r.subdivision?.subdivision_name || currentBarangayName}`,
+            location: r.subdivision_name ? `${r.subdivision_name}, Bulacan` : (r.subdivision?.subdivision_name ? `${r.subdivision.subdivision_name}, Bulacan` : defaultLocation),
+            status: friendlyStatus,
+            statusColor: getStatusBadgeStyle(friendlyStatus),
+            timeAgo: r.created_at ? formatTimeAgo(r.created_at) : 'Recently',
+            image: (r.media && r.media.length > 0 && r.media[0].file_url)
+                ? getPetPicture(r.media[0].file_url)
+                : DEFAULT_PET_AVATAR
+        };
+    });
+
+    const parsedUser = currentUser;
     const isHeadOfficer = Boolean(parsedUser?.is_head_officer);
     const staffName = parsedUser?.name || parsedUser?.full_name || (parsedUser?.first_name ? `${parsedUser.first_name} ${parsedUser.last_name || ''}`.trim() : (isHeadOfficer ? 'Head Officer Arriola' : 'Staff Officer'));
+
+    const handleAssignSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!assignForm.rescueId || !assignForm.staffId) {
+            setActionFeedback({ type: 'error', message: 'Please select both an incident and a responder to assign.' });
+            return;
+        }
+        setIsSubmittingAssign(true);
+        try {
+            await api.patch(`/rescue-requests/${assignForm.rescueId}`, {
+                barangay_staff_id: currentUser?.user_id,
+                assigned_personnel_id: Number(assignForm.staffId),
+                assigned_personnel_ids: [Number(assignForm.staffId)],
+                remarks: assignForm.remarks || 'Responder dispatched via Barangay Dashboard',
+                status_id: 5
+            });
+            setActionFeedback({ type: 'success', message: 'Personnel successfully dispatched to rescue mission!' });
+            setIsAssignModalOpen(false);
+            setAssignForm({ rescueId: 0, staffId: 0, remarks: '' });
+            fetchDashboardData();
+        } catch (err: any) {
+            const msg = err.response?.data?.detail || 'Failed to dispatch personnel.';
+            setActionFeedback({ type: 'error', message: msg });
+        } finally {
+            setIsSubmittingAssign(false);
+        }
+    };
+
+    const handleUpdateIncidentSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!updateForm.rescueId) {
+            setActionFeedback({ type: 'error', message: 'Please select an incident to update.' });
+            return;
+        }
+        setIsSubmittingUpdate(true);
+        try {
+            await api.patch(`/rescue-requests/${updateForm.rescueId}`, {
+                barangay_staff_id: currentUser?.user_id,
+                status_id: Number(updateForm.statusId),
+                remarks: updateForm.remarks || 'Status updated from Barangay Operations Dashboard'
+            });
+            setActionFeedback({ type: 'success', message: 'Incident status updated successfully!' });
+            setIsUpdateIncidentModalOpen(false);
+            setUpdateForm({ rescueId: 0, statusId: 5, remarks: '' });
+            fetchDashboardData();
+        } catch (err: any) {
+            const msg = err.response?.data?.detail || 'Failed to update incident.';
+            setActionFeedback({ type: 'error', message: msg });
+        } finally {
+            setIsSubmittingUpdate(false);
+        }
+    };
+
+    const handleCommunityAlertSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!alertForm.title.trim() || !alertForm.content.trim()) {
+            setActionFeedback({ type: 'error', message: 'Alert title and content are required.' });
+            return;
+        }
+        setIsSubmittingAlert(true);
+        try {
+            await api.post('/announcements/', {
+                created_by: currentUser?.user_id,
+                barangay_id: currentUser?.barangay_id,
+                title: alertForm.title.trim(),
+                category: alertForm.category,
+                content: alertForm.content.trim(),
+                pinned: alertForm.pinned,
+                expiration: alertForm.expiration ? new Date(alertForm.expiration).toISOString() : null,
+                visibility: 'Public',
+                status: 'Published'
+            });
+            setActionFeedback({ type: 'success', message: 'Community alert broadcasted successfully!' });
+            setIsCommunityAlertModalOpen(false);
+            setAlertForm({ title: '', category: 'Emergency', content: '', pinned: true, expiration: '' });
+            fetchDashboardData();
+        } catch (err: any) {
+            const msg = err.response?.data?.detail || 'Failed to create community alert.';
+            setActionFeedback({ type: 'error', message: msg });
+        } finally {
+            setIsSubmittingAlert(false);
+        }
+    };
 
     const getGreeting = () => {
         const hour = new Date().getHours();
@@ -407,14 +517,14 @@ const BrgyDashboard = () => {
                                 )}
                             </div>
                             <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">
-                                Command Center & Field Operations for Brgy. San Vicente
+                                Command Center & Field Operations for Brgy. {currentBarangayName}
                             </p>
                         </div>
                     }
                 />
 
                 {/* SCROLLABLE AREA */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6 flex flex-col gap-5 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6 flex flex-col gap-5 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent relative isolate">
 
                     {/* 1. Greeting Hero Banner */}
                     <div className="bg-gradient-to-r from-white via-purple-50/25 to-white rounded-3xl py-7 px-7 sm:px-9 border border-purple-100/80 shadow-[0_4px_24px_rgba(168,85,247,0.04)] flex flex-col sm:flex-row items-center justify-between gap-5 relative overflow-hidden group hover:shadow-[0_8px_30px_rgba(168,85,247,0.12)] hover:border-purple-200 transition-all duration-300 min-h-[110px]">
@@ -423,7 +533,7 @@ const BrgyDashboard = () => {
                         <div className="absolute -left-10 -bottom-10 w-72 h-72 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none group-hover:bg-indigo-500/25 transition-all duration-500" />
                         <div className="absolute right-1/4 top-1/2 -translate-y-1/2 w-64 h-32 bg-purple-400/15 rounded-full blur-2xl pointer-events-none" />
 
-                        <div className="z-10 w-full sm:w-auto">
+                        <div className="relative z-1 w-full sm:w-auto">
                             <div className="flex items-center gap-2.5">
                                 <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
                                     {getGreeting()}, {staffName}!
@@ -441,12 +551,12 @@ const BrgyDashboard = () => {
                                 )}
                             </div>
                             <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
-                                Here's the real-time operational overview for Barangay San Vicente today.
+                                Here's the real-time operational overview for Barangay {currentBarangayName} today.
                             </p>
                         </div>
 
                         {/* Banner Right Motto */}
-                        <div className="hidden lg:flex items-center gap-3 relative z-10 bg-gradient-to-r from-purple-50/90 via-indigo-50/80 to-blue-50/90 px-6 py-3.5 rounded-2xl border border-purple-200/80 shadow-xs hover:scale-[1.02] transition-transform duration-300">
+                        <div className="hidden lg:flex items-center gap-3 relative z-1 bg-gradient-to-r from-purple-50/90 via-indigo-50/80 to-blue-50/90 px-6 py-3.5 rounded-2xl border border-purple-200/80 shadow-xs hover:scale-[1.02] transition-transform duration-300">
                             <div className="text-right">
                                 <span className="text-xs font-serif italic text-purple-950 font-bold block leading-tight">
                                     Safer Neighborhoods
@@ -475,7 +585,7 @@ const BrgyDashboard = () => {
                                 </div>
                                 <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-red-50 to-rose-100/80 text-red-500 flex items-center justify-center shrink-0 border border-red-200/60 shadow-xs group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                                     </svg>
                                 </div>
                             </div>
@@ -504,13 +614,13 @@ const BrgyDashboard = () => {
                                 </div>
                                 <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-100/80 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200/60 shadow-xs group-hover:scale-110 group-hover:-rotate-6 transition-all duration-300">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                        <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                                        <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
                                     </svg>
                                 </div>
                             </div>
                             <div>
                                 <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-blue-600 group-hover:scale-105 origin-left transition-all duration-300">
-                                    {availablePersonnelCount} <span className="text-xl font-normal text-slate-400">/ {totalPersonnel || 5}</span>
+                                    {availablePersonnelCount} <span className="text-xl font-normal text-slate-400">/ {totalPersonnel}</span>
                                 </p>
                                 <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-blue-600">
                                     <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-100 text-blue-700 text-[9px] shrink-0">✓</span>
@@ -554,7 +664,7 @@ const BrgyDashboard = () => {
 
                         {/* 4. Animals in Facility & Capacity */}
                         <div
-                            onClick={() => navigate('/brgy/holding')}
+                            onClick={() => navigate('/brgy/holding-facility')}
                             className="bg-white rounded-3xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between h-[168px] min-h-[168px] transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_16px_36px_-6px_rgba(147,51,234,0.18)] hover:border-purple-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-purple-500 before:to-violet-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
                         >
                             <div className="flex items-start justify-between gap-2">
@@ -565,8 +675,8 @@ const BrgyDashboard = () => {
                                     <p className="text-[11px] text-slate-400 mt-0.5 truncate">{dogsCount} dogs • {catsCount} cats</p>
                                 </div>
                                 <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-50 to-violet-100/80 text-purple-600 flex items-center justify-center shrink-0 border border-purple-200/60 shadow-xs group-hover:scale-110 group-hover:-rotate-6 transition-all duration-300">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M12 21.5c-3.038 0-5.5-2.462-5.5-5.5s2.462-5.5 5.5-5.5s5.5 2.462 5.5 5.5s-2.462 5.5-5.5 5.5zm-5.5-12c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zm11 0c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zM12 8c-1.381 0-2.5-1.119-2.5-2.5S10.619 3 12 3s2.5 1.119 2.5 2.5S13.381 8 12 8z" />
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
                                     </svg>
                                 </div>
                             </div>
@@ -592,7 +702,7 @@ const BrgyDashboard = () => {
 
                         {/* 5. Animals Up for Adoption */}
                         <div
-                            onClick={() => navigate('/brgy/holding')}
+                            onClick={() => navigate('/brgy/adoptions')}
                             className="bg-white rounded-3xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between h-[168px] min-h-[168px] transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_16px_36px_-6px_rgba(245,158,11,0.18)] hover:border-amber-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-amber-500 before:to-orange-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
                         >
                             <div className="flex items-start justify-between gap-2">
@@ -673,20 +783,25 @@ const BrgyDashboard = () => {
                                 {/* Leaflet Map Canvas */}
                                 <div className="w-full flex-1 min-h-[420px] rounded-[22px] overflow-hidden relative border border-slate-200/70 shadow-inner bg-slate-50">
                                     <MapComponent
-                                        center={[14.8093, 121.0028]}
+                                        center={hqCoords}
                                         zoom={15}
+                                        showGeofence={true}
+                                        showLandmarks={true}
+                                        showHQ={true}
+                                        showHoldingFacilities={true}
+                                        onMapClick={(lat, lng) => setSelectedCoordinates({ lat, lng })}
                                         markers={mapMode !== 'heatmap' ? mapMarkers : mapMarkers.filter(m => m.id < 0)}
                                         showHeatmap={mapMode !== 'pins'}
                                         heatmapPoints={heatmapPoints}
                                         onViewDetails={(marker) => setSelectedDetailReport(marker.rawData)}
                                         routing={isNavigating && selectedReport ? {
-                                            start: (navSource === 'hq' || navSource === 'brgy') ? [14.806906, 121.0039297] : (userLocation || [14.806906, 121.0039297]),
+                                            start: (navSource === 'hq' || navSource === 'brgy') ? hqCoords : (userLocation || hqCoords),
                                             end: [parseFloat(selectedReport.latitude || selectedReport.lat), parseFloat(selectedReport.longitude || selectedReport.lng)],
-                                            waypointNames: [(navSource === 'hq' || navSource === 'brgy') ? "Barangay Hall HQ" : "Your Location", selectedReport.landmark || selectedReport.title],
+                                            waypointNames: [(navSource === 'hq' || navSource === 'brgy') ? `Barangay ${currentBarangayName} HQ` : "Your Location", selectedReport.landmark || selectedReport.title],
                                             onClose: () => setIsNavigating(false)
                                         } : undefined}
                                         onMarkerClick={(m) => {
-                                            if (m.id === -1) {
+                                            if (m.id === -1 || m.id === -999) {
                                                 setSelectedReport(null);
                                                 setIsNavigating(false);
                                             } else {
@@ -704,6 +819,34 @@ const BrgyDashboard = () => {
                                             }
                                         }}
                                     />
+
+                                    {/* Floating Clicked Coordinates Display Badge */}
+                                    {selectedCoordinates && (
+                                        <div className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur-md px-4 py-3 rounded-2xl shadow-xl border border-amber-200/90 text-xs text-slate-800 flex items-start gap-3 transition-all animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                                                </svg>
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="flex items-center justify-between gap-4">
+                                                    <p className="text-[10px] font-black uppercase tracking-wider text-amber-700 leading-none">Selected Location</p>
+                                                    <button 
+                                                        onClick={() => setSelectedCoordinates(null)} 
+                                                        className="text-slate-400 hover:text-slate-600 text-xs font-bold leading-none cursor-pointer p-0.5"
+                                                        title="Clear Pin"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                                <div className="space-y-0.5 mt-1.5 font-mono text-[11px] text-slate-700">
+                                                    <p><span className="font-semibold text-slate-900">Latitude:</span> {selectedCoordinates.lat.toFixed(6)}</p>
+                                                    <p><span className="font-semibold text-slate-900">Longitude:</span> {selectedCoordinates.lng.toFixed(6)}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Active Route Floating Banner */}
                                     {isNavigating && selectedReport && (
@@ -801,7 +944,7 @@ const BrgyDashboard = () => {
                                 <div className="flex items-center gap-3.5 mb-5">
                                     <div className="w-11 h-11 rounded-full bg-[#EBF3FE] text-[#2563EB] flex items-center justify-center shrink-0 shadow-xs">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                            <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
                                         </svg>
                                     </div>
                                     <div>
@@ -820,7 +963,7 @@ const BrgyDashboard = () => {
                                         <div className="flex items-center gap-3.5 min-w-0">
                                             <div className="w-12 h-12 rounded-[18px] border border-[#FECACA] bg-[#FEF2F2] text-[#EF4444] flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105">
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                                                 </svg>
                                             </div>
                                             <div className="min-w-0">
@@ -835,13 +978,13 @@ const BrgyDashboard = () => {
 
                                     {/* Action 2: Assign Personnel */}
                                     <button
-                                        onClick={() => navigate('/brgy/personnel')}
+                                        onClick={() => setIsAssignModalOpen(true)}
                                         className="flex items-center justify-between p-3.5 sm:p-4 bg-[#F8FAFC] hover:bg-white rounded-[22px] border border-slate-100/60 hover:border-blue-100 shadow-[0_1px_3px_rgba(0,0,0,0.01)] hover:shadow-[0_8px_20px_rgba(59,130,246,0.08)] hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-200 group text-left cursor-pointer"
                                     >
                                         <div className="flex items-center gap-3.5 min-w-0">
                                             <div className="w-12 h-12 rounded-[18px] border border-[#BFDBFE] bg-[#EFF6FF] text-[#3B82F6] flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105">
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                                                    <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
                                                 </svg>
                                             </div>
                                             <div className="min-w-0">
@@ -856,8 +999,8 @@ const BrgyDashboard = () => {
 
                                     {/* Action 3: Update Incident */}
                                     <button
-                                        onClick={() => navigate('/brgy/rescue-requests')}
-                                        className="flex items-center justify-between p-3.5 sm:p-4 bg-[#F8FAFC] hover:bg-white rounded-[22px] border border-slate-100/60 hover:border-emerald-100 shadow-[0_1px_3px_rgba(0,0,0,0.01)] hover:shadow-[0_8px_20px_rgba(16,185,129,0.08)] hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-200 group text-left cursor-pointer"
+                                        onClick={() => setIsUpdateIncidentModalOpen(true)}
+                                        className="flex items-center justify-between p-3.5 sm:p-4 bg-[#F8FAFC] hover:bg-white rounded-[22px] border border-slate-100/60 hover:border-emerald-100 shadow-[0_1px_3px_rgba(0,0,0,0.01)] hover:shadow-[0_8px_20px_rgba(168,85,247,0.08)] hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-200 group text-left cursor-pointer"
                                     >
                                         <div className="flex items-center gap-3.5 min-w-0">
                                             <div className="w-12 h-12 rounded-[18px] border border-[#A7F3D0] bg-[#ECFDF5] text-[#10B981] flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105">
@@ -877,7 +1020,7 @@ const BrgyDashboard = () => {
 
                                     {/* Action 4: Community Alert */}
                                     <button
-                                        onClick={() => navigate('/brgy/community-alerts')}
+                                        onClick={() => setIsCommunityAlertModalOpen(true)}
                                         className="flex items-center justify-between p-3.5 sm:p-4 bg-[#F8FAFC] hover:bg-white rounded-[22px] border border-slate-100/60 hover:border-purple-100 shadow-[0_1px_3px_rgba(0,0,0,0.01)] hover:shadow-[0_8px_20px_rgba(168,85,247,0.08)] hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-200 group text-left cursor-pointer"
                                     >
                                         <div className="flex items-center gap-3.5 min-w-0">
@@ -934,8 +1077,8 @@ const BrgyDashboard = () => {
                                         <div className="flex-1 min-w-0">
                                             <p className="text-[10px] font-black uppercase tracking-wider text-[#EA580C] leading-none">SYSTEM STATUS</p>
                                             <p className="text-xs font-medium text-slate-700 leading-snug mt-1.5">
-                                                {reports.filter(r => r.urgency === 'High' || r.urgency === 'Critical').length > 0
-                                                    ? `${reports.filter(r => r.urgency === 'High' || r.urgency === 'Critical').length} high-priority active reports monitored in field.`
+                                                {endorsedReports.filter(r => r.urgency === 'High' || r.urgency === 'Critical' || r.priority_level === 'High').length > 0
+                                                    ? `${endorsedReports.filter(r => r.urgency === 'High' || r.urgency === 'Critical' || r.priority_level === 'High').length} high-priority endorsed reports monitored in field.`
                                                     : 'No high-priority active reports. System status normal and clear.'}
                                             </p>
                                         </div>
@@ -954,7 +1097,7 @@ const BrgyDashboard = () => {
                                                 {uniqueAssigned > 0 ? (
                                                     <span>{uniqueAssigned} active dispatches. <strong className="text-[#059669] font-bold">{availablePersonnelCount} officers</strong> on standby.</span>
                                                 ) : (
-                                                    <span>No active dispatches. <strong className="text-[#059669] font-bold">{availablePersonnelCount || 5} officers</strong> on standby.</span>
+                                                    <span>No active dispatches. <strong className="text-[#059669] font-bold">{availablePersonnelCount} officers</strong> on standby.</span>
                                                 )}
                                             </p>
                                         </div>
@@ -970,7 +1113,7 @@ const BrgyDashboard = () => {
                                         <div className="flex-1 min-w-0">
                                             <p className="text-[10px] font-black uppercase tracking-wider text-[#2563EB] leading-none">STAFF CAPACITY</p>
                                             <p className="text-xs font-medium text-slate-700 leading-snug mt-1.5">
-                                                <strong className="text-slate-900 font-bold">{uniqueAssigned || 0} officers</strong> in field • <strong className="text-slate-900 font-bold">{availablePersonnelCount || 5} officers</strong> ready for dispatch.
+                                                <strong className="text-slate-900 font-bold">{uniqueAssigned || 0} officers</strong> in field • <strong className="text-slate-900 font-bold">{availablePersonnelCount} officers</strong> ready for dispatch.
                                             </p>
                                         </div>
                                     </div>
@@ -991,7 +1134,7 @@ const BrgyDashboard = () => {
                                     <div className="flex items-center gap-3">
                                         <div className="w-11 h-11 bg-gradient-to-br from-blue-500/15 via-indigo-500/10 to-blue-500/10 text-blue-600 rounded-[16px] flex items-center justify-center shadow-xs border border-blue-200/60 group-hover/table:scale-105 group-hover/table:rotate-3 transition-all duration-300 shrink-0">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                                                <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
                                             </svg>
                                         </div>
                                         <div>
@@ -1016,7 +1159,7 @@ const BrgyDashboard = () => {
                                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                                             </span>
-                                            <span>{availablePersonnelCount} Available / {totalPersonnel || 5} Total</span>
+                                            <span>{availablePersonnelCount} Available / {totalPersonnel} Total</span>
                                         </span>
                                         <button
                                             onClick={() => navigate('/brgy/personnel')}
@@ -1074,108 +1217,110 @@ const BrgyDashboard = () => {
                                         <tbody className="divide-y divide-slate-50 text-xs">
                                             {displayPersonnelList
                                                 .filter((p) => {
-                                                    const activeRescue = requests.find(r =>
-                                                        (r.status_id === 4 || r.status_id === 5) &&
-                                                        (r.staff_id === p.user_id || r.barangay_staff_id === p.user_id)
-                                                    );
+                                                    const activeRescue = isPersonAssigned(p.user_id);
                                                     if (personnelFilter === 'available') return !activeRescue;
                                                     if (personnelFilter === 'on_mission') return !!activeRescue;
                                                     return true;
-                                                })
-                                                .map((p) => {
-                                                    const activeRescue = requests.find(r =>
-                                                        (r.status_id === 4 || r.status_id === 5) &&
-                                                        (r.staff_id === p.user_id || r.barangay_staff_id === p.user_id)
-                                                    );
-                                                    return (
-                                                        <tr
-                                                            key={p.user_id}
-                                                            className="relative hover:bg-gradient-to-r hover:from-blue-50/60 hover:via-indigo-50/20 hover:to-transparent transition-all duration-300 group/row hover:translate-x-1 cursor-default before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:rounded-r-full before:bg-blue-500 before:opacity-0 group-hover/row:before:opacity-100 before:transition-opacity before:duration-300"
-                                                        >
-                                                            <td className="py-3.5 pl-3 font-bold text-slate-900 flex items-center gap-3">
-                                                                <div className="relative shrink-0">
-                                                                    <img
-                                                                        src={getProfilePicture(p.profile_picture)}
-                                                                        alt={p.name}
-                                                                        className={`w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm ring-2 ${activeRescue ? 'ring-amber-400/80 animate-pulse' : 'ring-emerald-300/80'} group-hover/row:scale-110 group-hover/row:rotate-3 transition-all duration-300`}
-                                                                        onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
-                                                                    />
-                                                                    {activeRescue ? (
-                                                                        <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5">
-                                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                                                            <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-amber-500 border-2 border-white shadow-xs"></span>
-                                                                        </span>
-                                                                    ) : (
-                                                                        <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5">
-                                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
-                                                                            <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 border-2 border-white shadow-xs"></span>
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                                <div className="flex flex-col min-w-0">
-                                                                    <div className="flex items-center gap-1.5">
-                                                                        <span className="font-bold text-slate-900 group-hover/row:text-blue-600 transition-colors truncate">{p.name}</span>
-                                                                        {p.is_head_officer && (
-                                                                            <span className="text-[8px] px-2 py-0.5 bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-700 font-black rounded-full border border-purple-200 uppercase tracking-tighter shadow-3xs animate-pulse">
-                                                                                ★ HEAD
+                                                }).length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={5} className="py-8 text-center text-slate-400">
+                                                            <p className="font-semibold text-xs text-slate-500">No personnel match this filter</p>
+                                                            <p className="text-[11px] text-slate-400 mt-0.5">Officers registered to this barangay will be listed here.</p>
+                                                        </td>
+                                                    </tr>
+                                                ) : (
+                                                    displayPersonnelList
+                                                        .filter((p) => {
+                                                            const activeRescue = isPersonAssigned(p.user_id);
+                                                            if (personnelFilter === 'available') return !activeRescue;
+                                                            if (personnelFilter === 'on_mission') return !!activeRescue;
+                                                            return true;
+                                                        })
+                                                        .map((p) => {
+                                                            const activeRescue = isPersonAssigned(p.user_id);
+                                                            return (
+                                                                <tr
+                                                                    key={p.user_id}
+                                                                    className="relative hover:bg-gradient-to-r hover:from-blue-50/60 hover:via-indigo-50/20 hover:to-transparent transition-all duration-300 group/row hover:translate-x-1 cursor-default before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:rounded-r-full before:bg-blue-500 before:opacity-0 group-hover/row:before:opacity-100 before:transition-opacity before:duration-300"
+                                                                >
+                                                                    <td className="py-3.5 pl-3 font-bold text-slate-900 flex items-center gap-3">
+                                                                        <div className="relative shrink-0">
+                                                                            <img
+                                                                                src={getProfilePicture(p.profile_picture)}
+                                                                                alt={p.name}
+                                                                                className={`w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm ring-2 ${activeRescue ? 'ring-amber-400/80 animate-pulse' : 'ring-emerald-300/80'} group-hover/row:scale-110 group-hover/row:rotate-3 transition-all duration-300`}
+                                                                                onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                                                            />
+                                                                            {activeRescue ? (
+                                                                                <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5">
+                                                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                                                                    <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-amber-500 border-2 border-white"></span>
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5">
+                                                                                    <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 border-2 border-white"></span>
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="min-w-0">
+                                                                            <span className="block truncate group-hover/row:text-blue-600 transition-colors">{p.name}</span>
+                                                                            <span className="text-[10px] text-slate-400 font-normal block truncate">ID #{p.user_id}</span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="py-3.5 text-slate-600 font-medium">
+                                                                        <div className="flex flex-col">
+                                                                            <span className="text-slate-800 font-semibold truncate">{p.position_name || (p.is_head_officer ? 'Barangay Head Officer' : 'Field Rescuer')}</span>
+                                                                            <span className="text-[10px] text-slate-400 font-normal">{p.barangay_name || 'Operations Staff'}</span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="py-3.5 text-slate-600 font-mono text-[11px]">
+                                                                        <div className="flex items-center gap-1.5 text-slate-700 font-medium">
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+                                                                                <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
+                                                                            </svg>
+                                                                            <span>{p.phone || 'No phone'}</span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="py-3.5">
+                                                                        {activeRescue ? (
+                                                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200/80 shadow-3xs">
+                                                                                <span className="relative flex h-1.5 w-1.5">
+                                                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                                                                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
+                                                                                </span>
+                                                                                Dispatched
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-3xs">
+                                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                                                                Available
                                                                             </span>
                                                                         )}
-                                                                    </div>
-                                                                    <span className="text-[10.5px] text-slate-400 font-normal">ID #{p.user_id}</span>
-                                                                </div>
-                                                            </td>
-                                                            <td className="py-3.5 font-medium">
-                                                                <span className="px-2.5 py-1 bg-slate-100/70 group-hover/row:bg-white text-slate-700 border border-slate-200/60 rounded-xl text-[11px] font-semibold inline-block transition-all group-hover/row:shadow-2xs">
-                                                                    {p.position_name || getPositionName(p.position_id)}
-                                                                </span>
-                                                            </td>
-                                                            <td className="py-3.5 text-slate-500 font-mono text-[11px]">
-                                                                <span className="group-hover/row:text-slate-800 transition-colors">
-                                                                    {p.phone || '+63 977 023 8162'}
-                                                                </span>
-                                                            </td>
-                                                            <td className="py-3.5">
-                                                                {activeRescue ? (
-                                                                    <span className="px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200/90 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 shadow-3xs group-hover/row:scale-105 transition-all">
-                                                                        <span className="relative flex h-2 w-2">
-                                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                                                                        </span>
-                                                                        ON MISSION
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200/90 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 shadow-3xs group-hover/row:scale-105 transition-all">
-                                                                        <span className="relative flex h-2 w-2">
-                                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
-                                                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shadow-xs"></span>
-                                                                        </span>
-                                                                        AVAILABLE
-                                                                    </span>
-                                                                )}
-                                                            </td>
-                                                            <td className="py-3.5 font-medium text-slate-700">
-                                                                {activeRescue ? (
-                                                                    <div
-                                                                        onClick={() => navigate('/brgy/rescue-requests')}
-                                                                        className="flex items-center justify-between p-2 rounded-xl bg-blue-50/80 hover:bg-blue-100 border border-blue-200/80 transition-all cursor-pointer group/case hover:scale-[1.02] shadow-3xs"
-                                                                    >
-                                                                        <div className="flex flex-col min-w-0 pr-2">
-                                                                            <span className="font-bold text-blue-700 group-hover/case:text-blue-800 text-[11.5px] leading-tight flex items-center gap-1">
-                                                                                <span className="animate-pulse text-blue-500">●</span> Case #{activeRescue.rescue_id}
+                                                                    </td>
+                                                                    <td className="py-3.5">
+                                                                        {activeRescue ? (
+                                                                            <div
+                                                                                onClick={() => navigate(`/brgy/rescue-requests`)}
+                                                                                className="inline-flex items-center justify-between gap-2 px-3 py-1 rounded-xl bg-blue-50/80 border border-blue-200/60 text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer group/case shadow-2xs"
+                                                                            >
+                                                                                <div className="flex flex-col text-left">
+                                                                                    <span className="font-black text-[11px] flex items-center gap-1.5">
+                                                                                        <span className="animate-pulse text-blue-500">●</span> Case #{activeRescue.rescue_id}
+                                                                                    </span>
+                                                                                    <span className="text-[10px] text-slate-500 truncate max-w-[150px] mt-0.5">{activeRescue.report?.landmark || 'Active Dispatch Area'}</span>
+                                                                                </div>
+                                                                                <span className="text-blue-600 font-bold text-xs group-hover/case:translate-x-1 group-hover/case:-translate-y-0.5 transition-transform shrink-0">↗</span>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <span className="text-slate-400 italic text-[11px] flex items-center gap-1.5 group-hover/row:text-slate-600 transition-colors">
+                                                                                Standby for dispatch
                                                                             </span>
-                                                                            <span className="text-[10px] text-slate-500 truncate max-w-[150px] mt-0.5">{activeRescue.report?.landmark || 'Active Dispatch Area'}</span>
-                                                                        </div>
-                                                                        <span className="text-blue-600 font-bold text-xs group-hover/case:translate-x-1 group-hover/case:-translate-y-0.5 transition-transform shrink-0">↗</span>
-                                                                    </div>
-                                                                ) : (
-                                                                    <span className="text-slate-400 italic text-[11px] flex items-center gap-1.5 group-hover/row:text-slate-600 transition-colors">
-                                                                        Standby for dispatch
-                                                                    </span>
-                                                                )}
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
+                                                                        )}
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })
+                                                )}
                                         </tbody>
                                     </table>
                                 </div>
@@ -1190,8 +1335,7 @@ const BrgyDashboard = () => {
                                         <div className="flex items-center gap-3">
                                             <div className="w-11 h-11 rounded-[16px] bg-gradient-to-br from-rose-50 to-red-100/80 text-red-600 border border-red-200/60 flex items-center justify-center shadow-xs group-hover/incidents:scale-105 transition-transform duration-200 shrink-0">
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                                                    <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+                                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                                                 </svg>
                                             </div>
                                             <div>
@@ -1209,7 +1353,13 @@ const BrgyDashboard = () => {
                                     </div>
 
                                     <div className="space-y-2.5">
-                                        {recentIncidents.map((incident) => (
+                                        {recentIncidents.length === 0 ? (
+                                            <div className="py-10 text-center text-slate-400">
+                                                <p className="font-semibold text-xs text-slate-500">No Recent Incidents</p>
+                                                <p className="text-[11px] text-slate-400 mt-0.5">Escalated community reports will appear here.</p>
+                                            </div>
+                                        ) : (
+                                            recentIncidents.map((incident) => (
                                             <div
                                                 key={incident.report_id}
                                                 onClick={() => navigate(`/brgy/reports/${incident.report_id}`)}
@@ -1245,7 +1395,8 @@ const BrgyDashboard = () => {
                                                     </span>
                                                 </div>
                                             </div>
-                                        ))}
+                                        ))
+                                    )}
                                     </div>
                                 </div>
                             </div>
@@ -1300,7 +1451,7 @@ const BrgyDashboard = () => {
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4 w-full shrink-0">
                             <div className="bg-slate-50 border border-slate-200/70 rounded-[18px] p-3 shadow-2xs flex flex-col justify-between">
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Total Reports</span>
-                                <span className="text-xl font-black text-slate-900 mt-1">{reports.length}</span>
+                                <span className="text-xl font-black text-slate-900 mt-1">{endorsedReports.length}</span>
                             </div>
                             <div className="bg-red-50/80 border border-red-200/70 rounded-[18px] p-3 shadow-2xs flex flex-col justify-between">
                                 <span className="text-[10px] font-black text-red-500 uppercase tracking-wider">Active Reports</span>
@@ -1328,8 +1479,13 @@ const BrgyDashboard = () => {
                         <div className="flex-1 rounded-[22px] overflow-hidden relative border border-slate-200/70 shadow-inner min-h-0 bg-slate-50">
                             <MapComponent
                                 height="100%"
-                                center={[14.8093, 121.0028]}
+                                center={hqCoords}
                                 zoom={15.5}
+                                showGeofence={true}
+                                showLandmarks={true}
+                                showHQ={true}
+                                showHoldingFacilities={true}
+                                onMapClick={(lat, lng) => setSelectedCoordinates({ lat, lng })}
                                 markers={mapMode !== 'heatmap' ? mapMarkers : mapMarkers.filter(m => m.id < 0)}
                                 showHeatmap={mapMode !== 'pins'}
                                 heatmapPoints={heatmapPoints}
@@ -1338,13 +1494,13 @@ const BrgyDashboard = () => {
                                     setSelectedDetailReport(marker.rawData);
                                 }}
                                 routing={isNavigating && selectedReport ? {
-                                    start: (navSource === 'hq' || navSource === 'brgy') ? [14.806906, 121.0039297] : (userLocation || [14.806906, 121.0039297]),
+                                    start: (navSource === 'hq' || navSource === 'brgy') ? hqCoords : (userLocation || hqCoords),
                                     end: [parseFloat(selectedReport.latitude || selectedReport.lat), parseFloat(selectedReport.longitude || selectedReport.lng)],
-                                    waypointNames: [(navSource === 'hq' || navSource === 'brgy') ? "Barangay Hall HQ" : "Your Location", selectedReport.landmark || selectedReport.title],
+                                    waypointNames: [(navSource === 'hq' || navSource === 'brgy') ? `Barangay ${currentBarangayName} HQ` : "Your Location", selectedReport.landmark || selectedReport.title],
                                     onClose: () => setIsNavigating(false)
                                 } : undefined}
                                 onMarkerClick={(m) => {
-                                    if (m.id === -1) {
+                                    if (m.id === -1 || m.id === -999) {
                                         setSelectedReport(null);
                                         setIsNavigating(false);
                                     } else {
@@ -1362,6 +1518,34 @@ const BrgyDashboard = () => {
                                     }
                                 }}
                             />
+
+                            {/* Modal Floating Coordinates Display Badge */}
+                            {selectedCoordinates && (
+                                <div className="absolute top-4 left-4 z-[1000] bg-white/95 backdrop-blur-md px-4 py-3 rounded-2xl shadow-xl border border-amber-200/90 text-xs text-slate-800 flex items-start gap-3 transition-all animate-in fade-in slide-in-from-top-2 duration-300">
+                                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                                        </svg>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="flex items-center justify-between gap-4">
+                                            <p className="text-[10px] font-black uppercase tracking-wider text-amber-700 leading-none">Selected Location</p>
+                                            <button 
+                                                onClick={() => setSelectedCoordinates(null)} 
+                                                className="text-slate-400 hover:text-slate-600 text-xs font-bold leading-none cursor-pointer p-0.5"
+                                                title="Clear Pin"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                        <div className="space-y-0.5 mt-1.5 font-mono text-[11px] text-slate-700">
+                                            <p><span className="font-semibold text-slate-900">Latitude:</span> {selectedCoordinates.lat.toFixed(6)}</p>
+                                            <p><span className="font-semibold text-slate-900">Longitude:</span> {selectedCoordinates.lng.toFixed(6)}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="absolute bottom-4 left-4 z-[1000]">
                                 <div className="bg-white/90 backdrop-blur-md p-3.5 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.08)] border border-white/80 text-[10.5px] font-bold text-slate-700 flex flex-col gap-1.5 min-w-[130px]">
@@ -1491,6 +1675,320 @@ const BrgyDashboard = () => {
                                 Close Details
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ACTION FEEDBACK TOAST */}
+            {actionFeedback && (
+                <div className="fixed bottom-6 right-6 z-[10001] animate-in slide-in-from-bottom-5 duration-300">
+                    <div className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl border backdrop-blur-md ${
+                        actionFeedback.type === 'success' 
+                            ? 'bg-emerald-900/90 text-white border-emerald-700 shadow-emerald-950/20' 
+                            : 'bg-rose-900/90 text-white border-rose-700 shadow-rose-950/20'
+                    }`}>
+                        <span className="text-base">{actionFeedback.type === 'success' ? '✓' : '⚠️'}</span>
+                        <span className="text-xs font-bold">{actionFeedback.message}</span>
+                        <button 
+                            onClick={() => setActionFeedback(null)}
+                            className="ml-2 text-white/70 hover:text-white text-xs font-black cursor-pointer"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* QUICK ACTION MODAL 1: ASSIGN PERSONNEL */}
+            {isAssignModalOpen && (
+                <div className="fixed inset-0 z-[10000] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[28px] shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200">
+                        <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4 shrink-0">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                                    📋
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-black text-slate-900">Dispatch & Assign Personnel</h3>
+                                    <p className="text-[11px] text-slate-400 font-medium">Assign field responder to active rescue request</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsAssignModalOpen(false)}
+                                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-700 cursor-pointer"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleAssignSubmit} className="space-y-4 text-xs">
+                            <div>
+                                <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1">Select Rescue Case *</label>
+                                <select
+                                    value={assignForm.rescueId}
+                                    onChange={(e) => setAssignForm({ ...assignForm, rescueId: Number(e.target.value) })}
+                                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none focus:border-blue-500"
+                                    required
+                                >
+                                    <option value={0}>-- Choose Active Rescue Request --</option>
+                                    {requests
+                                        .filter(r => [1, 2, 4, 5, 13].includes(r.status_id))
+                                        .map((r) => (
+                                            <option key={r.rescue_id || r.report_id} value={r.rescue_id}>
+                                                Case #{r.rescue_id} ({r.report?.animal_type || 'Stray'} at {r.report?.landmark || 'Jurisdiction'}) — {getStatusName(r.status_id)}
+                                            </option>
+                                        ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1">Select Field Officer / Responder *</label>
+                                <select
+                                    value={assignForm.staffId}
+                                    onChange={(e) => setAssignForm({ ...assignForm, staffId: Number(e.target.value) })}
+                                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none focus:border-blue-500"
+                                    required
+                                >
+                                    <option value={0}>-- Choose Personnel --</option>
+                                    {personnel.map((p) => {
+                                        const isAssigned = requests.some(r => 
+                                            (r.status_id === 4 || r.status_id === 5) && 
+                                            (r.staff_id === p.user_id || (r.assignments?.some((a: any) => (a.staff_id === p.user_id || a.user_id === p.user_id) && a.assignment_status === 'Assigned')))
+                                        );
+                                        return (
+                                            <option key={p.user_id} value={p.user_id}>
+                                                {p.name} ({p.position_name || 'Responder'}) — {isAssigned ? '⚠️ On Active Mission' : '✓ Available'}
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1">Dispatch Instructions & Notes</label>
+                                <textarea
+                                    value={assignForm.remarks}
+                                    onChange={(e) => setAssignForm({ ...assignForm, remarks: e.target.value })}
+                                    placeholder="Enter specific instructions or equipment needed for this dispatch..."
+                                    rows={3}
+                                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none focus:border-blue-500"
+                                />
+                            </div>
+
+                            <div className="border-t border-slate-100 pt-4 flex justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsAssignModalOpen(false)}
+                                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmittingAssign}
+                                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-2 cursor-pointer shadow-sm transition-colors disabled:opacity-50"
+                                >
+                                    {isSubmittingAssign ? 'Dispatching...' : 'Dispatch Responder'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* QUICK ACTION MODAL 2: UPDATE INCIDENT */}
+            {isUpdateIncidentModalOpen && (
+                <div className="fixed inset-0 z-[10000] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[28px] shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200">
+                        <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4 shrink-0">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                                    ⚡
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-black text-slate-900">Update Incident Status</h3>
+                                    <p className="text-[11px] text-slate-400 font-medium">Record progress or resolution outcomes for a mission</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsUpdateIncidentModalOpen(false)}
+                                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-700 cursor-pointer"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleUpdateIncidentSubmit} className="space-y-4 text-xs">
+                            <div>
+                                <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1">Select Incident Case *</label>
+                                <select
+                                    value={updateForm.rescueId}
+                                    onChange={(e) => setUpdateForm({ ...updateForm, rescueId: Number(e.target.value) })}
+                                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none focus:border-emerald-500"
+                                    required
+                                >
+                                    <option value={0}>-- Choose Incident Case --</option>
+                                    {requests
+                                        .filter(r => ![6, 11, 12].includes(r.status_id))
+                                        .map((r) => (
+                                            <option key={r.rescue_id || r.report_id} value={r.rescue_id}>
+                                                Case #{r.rescue_id} ({r.report?.animal_type || 'Stray'} at {r.report?.landmark || 'Area'}) — Current: {getStatusName(r.status_id)}
+                                            </option>
+                                        ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1">New Operational Status *</label>
+                                <select
+                                    value={updateForm.statusId}
+                                    onChange={(e) => setUpdateForm({ ...updateForm, statusId: Number(e.target.value) })}
+                                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none focus:border-emerald-500"
+                                    required
+                                >
+                                    <option value={5}>Team Dispatched / In Action</option>
+                                    <option value={7}>Picked Up / Animal Secured</option>
+                                    <option value={8}>Under Observation (Holding Facility)</option>
+                                    <option value={11}>Incident Resolved / Mission Completed</option>
+                                    <option value={17}>Animal Cannot Be Found</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1">Progress Notes & Outcome Details</label>
+                                <textarea
+                                    value={updateForm.remarks}
+                                    onChange={(e) => setUpdateForm({ ...updateForm, remarks: e.target.value })}
+                                    placeholder="Enter outcome, condition of the animal, or resolution notes..."
+                                    rows={3}
+                                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none focus:border-emerald-500"
+                                />
+                            </div>
+
+                            <div className="border-t border-slate-100 pt-4 flex justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsUpdateIncidentModalOpen(false)}
+                                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmittingUpdate}
+                                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-2 cursor-pointer shadow-sm transition-colors disabled:opacity-50"
+                                >
+                                    {isSubmittingUpdate ? 'Saving...' : 'Update Status'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* QUICK ACTION MODAL 3: COMMUNITY ALERT */}
+            {isCommunityAlertModalOpen && (
+                <div className="fixed inset-0 z-[10000] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[28px] shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200">
+                        <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4 shrink-0">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+                                    📢
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-black text-slate-900">Broadcast Community Alert</h3>
+                                    <p className="text-[11px] text-slate-400 font-medium">Publish official notice to residents in your barangay</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsCommunityAlertModalOpen(false)}
+                                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-700 cursor-pointer"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleCommunityAlertSubmit} className="space-y-4 text-xs">
+                            <div>
+                                <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1">Alert Title *</label>
+                                <input
+                                    type="text"
+                                    value={alertForm.title}
+                                    onChange={(e) => setAlertForm({ ...alertForm, title: e.target.value })}
+                                    placeholder="e.g. Stray Pack Sighting Near School Zone"
+                                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none focus:border-purple-500"
+                                    required
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1">Category *</label>
+                                    <select
+                                        value={alertForm.category}
+                                        onChange={(e) => setAlertForm({ ...alertForm, category: e.target.value })}
+                                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none focus:border-purple-500"
+                                    >
+                                        <option value="Emergency">Emergency Alert</option>
+                                        <option value="Animal Advisory">Animal Advisory</option>
+                                        <option value="Vaccination Drive">Vaccination Drive</option>
+                                        <option value="Lost and Found">Lost and Found</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1">Expiration Date (Optional)</label>
+                                    <input
+                                        type="date"
+                                        value={alertForm.expiration}
+                                        onChange={(e) => setAlertForm({ ...alertForm, expiration: e.target.value })}
+                                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none focus:border-purple-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1">Notice Content *</label>
+                                <textarea
+                                    value={alertForm.content}
+                                    onChange={(e) => setAlertForm({ ...alertForm, content: e.target.value })}
+                                    placeholder="Provide detailed information and safety advice for the community..."
+                                    rows={4}
+                                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none focus:border-purple-500"
+                                    required
+                                />
+                            </div>
+
+                            <div className="flex items-center gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                <input
+                                    type="checkbox"
+                                    id="pinnedCheck"
+                                    checked={alertForm.pinned}
+                                    onChange={(e) => setAlertForm({ ...alertForm, pinned: e.target.checked })}
+                                    className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 h-4 w-4"
+                                />
+                                <label htmlFor="pinnedCheck" className="text-xs font-bold text-slate-700 cursor-pointer">
+                                    🚨 Mark as High Priority / Emergency Alert
+                                </label>
+                            </div>
+
+                            <div className="border-t border-slate-100 pt-4 flex justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsCommunityAlertModalOpen(false)}
+                                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmittingAlert}
+                                    className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold flex items-center gap-2 cursor-pointer shadow-sm transition-colors disabled:opacity-50"
+                                >
+                                    {isSubmittingAlert ? 'Publishing...' : 'Broadcast Alert'}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

@@ -18,10 +18,10 @@ const PetRecords = () => {
         try {
             setLoading(true);
             const response = await axios.get('http://localhost:8000/pets/');
-            
+
             // Map backend schema values into PetRecord structure
             const mappedPets: PetRecord[] = response.data.map((pet: any) => mapRawPetToPetRecord(pet));
-            
+
             setPets(mappedPets);
         } catch (error) {
             console.error('Error fetching all pets:', error);
@@ -50,7 +50,7 @@ const PetRecords = () => {
                 <AdminNavbar
                     leftContent={
                         <div className="flex flex-col">
-                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Pet Registry</h1>
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Pet Records</h1>
                             <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">Manage and monitor all registered animals within the PetOps network</p>
                         </div>
                     }
@@ -58,7 +58,7 @@ const PetRecords = () => {
 
                 {/* Content Area */}
                 <div className="flex-1 overflow-y-auto p-10 flex flex-col gap-10 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-                    
+
                     {/* Header */}
                     <div className="flex justify-end items-end shrink-0">
                         <div className="flex items-center gap-4">
@@ -74,8 +74,8 @@ const PetRecords = () => {
                                     className="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#B35D25] focus:border-transparent w-72 shadow-sm transition-all"
                                 />
                             </div>
-                            <Button 
-                                variant="primary" 
+                            <Button
+                                variant="primary"
                                 className="px-6 py-2.5 bg-[#B35D25] hover:bg-[#964E1F] text-white rounded-xl shadow-lg shadow-orange-900/10 flex items-center gap-2 font-black text-sm"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -88,28 +88,28 @@ const PetRecords = () => {
 
                     {/* Stats Row */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 shrink-0">
-                        <StatCard 
-                            label="Total Registered" 
-                            value={totalCount.toLocaleString()} 
-                            badge="Live" 
+                        <StatCard
+                            label="Total Registered"
+                            value={totalCount.toLocaleString()}
+                            badge="Live"
                             badgeVariant="warning"
                         />
-                        <StatCard 
-                            label="Fully Vaccinated" 
-                            value={vaccinatedCount.toLocaleString()} 
-                            badge={`${complianceRate}%`} 
+                        <StatCard
+                            label="Fully Vaccinated"
+                            value={vaccinatedCount.toLocaleString()}
+                            badge={`${complianceRate}%`}
                             badgeVariant="info"
                         />
-                        <StatCard 
-                            label="Medical/Bite Alerts" 
-                            value={medicalAlertsCount.toString()} 
-                            badge="Attention" 
+                        <StatCard
+                            label="Medical/Bite Alerts"
+                            value={medicalAlertsCount.toString()}
+                            badge="Attention"
                             badgeVariant={medicalAlertsCount > 0 ? "error" : "info"}
                         />
-                        <StatCard 
-                            label="Registry Compliance" 
-                            value={`${complianceRate}%`} 
-                            badge="Target 85%" 
+                        <StatCard
+                            label="Registry Compliance"
+                            value={`${complianceRate}%`}
+                            badge="Target 85%"
                             badgeVariant="info"
                         />
                     </div>
@@ -123,10 +123,10 @@ const PetRecords = () => {
                             </p>
                         </div>
                         <div className="flex-1 min-h-0">
-                            <PetTable 
-                                pets={pets} 
-                                onSelectPet={setSelectedPet} 
-                                selectedPetId={selectedPet?.id || null} 
+                            <PetTable
+                                pets={pets}
+                                onSelectPet={setSelectedPet}
+                                selectedPetId={selectedPet?.id || null}
                                 searchTerm={searchTerm}
                                 loading={loading}
                             />

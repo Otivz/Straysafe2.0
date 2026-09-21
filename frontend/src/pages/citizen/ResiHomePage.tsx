@@ -954,20 +954,22 @@ const ResiHomePage = () => {
         const diffSecs = Math.floor(diffMs / 1000);
 
         if (diffSecs < 60) {
-            const secs = Math.max(1, diffSecs);
-            return `${secs}s`;
+            return 'Just now';
         }
         const diffMins = Math.floor(diffSecs / 60);
         if (diffMins < 60) {
-            return `${diffMins}m`;
+            return `${diffMins}m ago`;
         }
         const diffHours = Math.floor(diffMins / 60);
         if (diffHours < 24) {
-            return `${diffHours}h`;
+            return `${diffHours}h ago`;
         }
         const diffDays = Math.floor(diffHours / 24);
+        if (diffDays === 1) {
+            return '1 day ago';
+        }
         if (diffDays < 7) {
-            return `${diffDays}d`;
+            return `${diffDays} days ago`;
         }
 
         // Older than 7 days
@@ -3185,7 +3187,7 @@ const ResiHomePage = () => {
                                                         <div>
                                                             <p className="text-[13px] font-black text-[#1a1208] uppercase tracking-tight leading-none mb-1.5">{report.reporter_name}</p>
                                                             <div className="flex items-center gap-2">
-                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none">{date}</span>
+                                                                <span className="text-[10px] font-semibold text-gray-400 leading-none">{date}</span>
                                                                 <span className="text-gray-300 dark:text-gray-600 font-bold text-[9px] leading-none">•</span>
                                                                 <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[#FAFAF9] dark:bg-[#1A2338] border border-gray-100 dark:border-gray-800 rounded-md w-fit">
                                                                     {report.visibility === 'Private' ? (
@@ -3703,7 +3705,7 @@ const ResiHomePage = () => {
                                                                 {notif.message}
                                                             </p>
                                                             <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                                                <span className="text-[9px] font-bold text-gray-400 dark:text-gray-400 block uppercase tracking-widest">
+                                                                <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-400 block tracking-wide">
                                                                     {formatTimestamp(notif.created_at)}
                                                                 </span>
                                                                 {(isMatch || isMatchInquiry || typeStr.includes('message') || titleStr.includes('message') || titleStr.includes('💬') || titleStr.includes('inquiry') || msgStr.includes('look-alike')) && notif.related_id && (

@@ -280,7 +280,7 @@ const BrgyReportView = () => {
 
             // 1. Try loading directly from /reports/:id
             try {
-                const reportRes = await axios.get(`http://localhost:8000/reports/${id}`);
+                const reportRes = await api.get(`/reports/${id}`);
                 loadedReport = reportRes.data;
             } catch (err) {
                 console.warn(`Could not load report by id ${id}, trying rescue-requests:`, err);
@@ -288,17 +288,47 @@ const BrgyReportView = () => {
 
             // 2. Fetch rescue request info
             try {
-                const rescueRes = await axios.get('http://localhost:8000/rescue-requests/');
-                const allRescues: RescueRequest[] = rescueRes.data || [];
+                // If loadedReport exists, attempt direct lookup by report_id
+                if (loadedReport?.report_id) {
+                    try {
+                        const directRescue = await api.get(`/rescue-requests/report/${loadedReport.report_id}`);
+                        if (directRescue.data) {
+                            loadedRescue = directRescue.data;
+                        }
+                    } catch {
+                        // ignore if not found
+                    }
+                }
 
-                // Match either by report_id or by rescue_id
-                const numericId = parseInt(id);
-                loadedRescue = allRescues.find(
-                    r => r.report_id === numericId || r.rescue_id === numericId || r.report?.report_id === numericId
-                ) || null;
+                // If loadedRescue still not found, check if id is a rescue_id
+                if (!loadedRescue) {
+                    try {
+                        const directRescueById = await api.get(`/rescue-requests/${id}`);
+                        const resData = directRescueById.data as RescueRequest;
+                        if (resData) {
+                            loadedRescue = resData;
+                            if (!loadedReport && resData.report) {
+                                loadedReport = resData.report;
+                            }
+                        }
+                    } catch {
+                        // ignore if not found
+                    }
+                }
 
-                if (!loadedReport && loadedRescue && loadedRescue.report) {
-                    loadedReport = loadedRescue.report;
+                // Fallback: list all rescue requests
+                if (!loadedRescue) {
+                    const rescueRes = await api.get('/rescue-requests/');
+                    const allRescues: RescueRequest[] = rescueRes.data || [];
+
+                    const numericId = parseInt(id);
+                    loadedRescue = allRescues.find(
+                        r => r.report_id === numericId || r.rescue_id === numericId || r.report?.report_id === numericId
+                    ) || null;
+
+                    if (!loadedReport && loadedRescue && loadedRescue.report) {
+                        loadedReport = loadedRescue.report;
+                    }
                 }
             } catch (rescueErr) {
                 console.warn('Could not load rescue requests:', rescueErr);
@@ -345,7 +375,7 @@ const BrgyReportView = () => {
 
                 // Fetch duplicate matches for this report
                 try {
-                    const dupRes = await axios.get(`http://localhost:8000/matches/duplicates/report/${loadedReport.report_id}`);
+                    const dupRes = await api.get(`/matches/duplicates/report/${loadedReport.report_id}`);
                     if (dupRes.data && Array.isArray(dupRes.data)) {
                         setDuplicateMatches(dupRes.data.filter((m: any) => {
                             if (m.status !== 'AI_SUGGESTED') return false;
@@ -372,7 +402,7 @@ const BrgyReportView = () => {
 
     const handleDismissDuplicate = async (matchId: number) => {
         try {
-            await axios.put(`http://localhost:8000/matches/${matchId}/verify`, {
+            await api.put(`/matches/${matchId}/verify`, {
                 status: 'NOT_A_MATCH',
                 verified_by_user_id: currentUserId,
                 verification_notes: 'Staff dismissed duplicate sighting suggestion: Separate animals'
@@ -400,7 +430,7 @@ const BrgyReportView = () => {
         setIsLoadingFacilities(true);
         try {
             const bId = currentUser?.barangay_id || report?.barangay_id || 1;
-            const res = await axios.get(`http://localhost:8000/landmarks?barangay_id=${bId}&is_holding_facility=true&barangay_only=true`);
+            const res = await api.get(`/landmarks?barangay_id=${bId}&is_holding_facility=true&barangay_only=true`);
             const list = (res.data || []).filter((f: any) => f.subdivision_id == null);
             setFacilities(list);
             if (list.length > 0) {
@@ -434,13 +464,13 @@ const BrgyReportView = () => {
         try {
             const rescueId = rescueRequest?.rescue_id;
             if (rescueId) {
-                await axios.patch(`http://localhost:8000/rescue-requests/${rescueId}`, {
+                await api.patch(`/rescue-requests/${rescueId}`, {
                     status_id: 13, // Approved
                     barangay_staff_id: currentUserId,
                     remarks: 'Official rescue request approved by Barangay Operations.'
                 });
             } else {
-                await axios.patch(`http://localhost:8000/reports/${report.report_id}/status`, {
+                await api.patch(`/reports/${report.report_id}/status`, {
                     status_id: 13,
                     user_id: currentUserId,
                     remarks: 'Official rescue request approved by Barangay Operations.'
@@ -470,13 +500,13 @@ const BrgyReportView = () => {
         try {
             const rescueId = rescueRequest?.rescue_id;
             if (rescueId) {
-                await axios.patch(`http://localhost:8000/rescue-requests/${rescueId}`, {
+                await api.patch(`/rescue-requests/${rescueId}`, {
                     status_id: 3, // Rejected
                     barangay_staff_id: currentUserId,
                     remarks: `Request rejected by Barangay: ${reason}`
                 });
             } else {
-                await axios.patch(`http://localhost:8000/reports/${report.report_id}/status`, {
+                await api.patch(`/reports/${report.report_id}/status`, {
                     status_id: 3,
                     user_id: currentUserId,
                     remarks: `Request rejected by Barangay: ${reason}`
@@ -640,7 +670,7 @@ const BrgyReportView = () => {
                     payload.landmark = selectedFac.name;
                     payload.custody_status = selectedFac.subdivision_id == null ? 'In Barangay Facility' : 'In Subdivision Facility';
                 }
-                await axios.patch(`http://localhost:8000/rescue-requests/${rescueId}`, payload);
+                await api.patch(`/rescue-requests/${rescueId}`, payload);
             } else {
                 const reportPayload: any = {
                     status_id: targetStatusId,
@@ -659,11 +689,11 @@ const BrgyReportView = () => {
                     reportPayload.landmark = selectedFac.name;
                     reportPayload.custody_status = selectedFac.subdivision_id == null ? 'In Barangay Facility' : 'In Subdivision Facility';
                 }
-                await axios.patch(`http://localhost:8000/reports/${report.report_id}/status`, reportPayload);
+                await api.patch(`/reports/${report.report_id}/status`, reportPayload);
 
                 if (statusSelectedStaffIds.length > 0) {
                     try {
-                        await axios.post('http://localhost:8000/rescue-requests/assign-team', {
+                        await api.post('/rescue-requests/assign-team', {
                             report_id: report.report_id,
                             assigned_personnel_ids: statusSelectedStaffIds,
                             barangay_staff_id: currentUserId,
@@ -683,7 +713,7 @@ const BrgyReportView = () => {
                     fd.append('is_evidence', 'true');
                     fd.append('status_id', targetStatusId.toString());
                     try {
-                        await axios.post(`http://localhost:8000/reports/${report.report_id}/media`, fd, {
+                        await api.post(`/reports/${report.report_id}/media`, fd, {
                             headers: { 'Content-Type': 'multipart/form-data' }
                         });
                     } catch (uploadErr) {
@@ -754,7 +784,7 @@ const BrgyReportView = () => {
         }
         setIsSubmittingAssign(true);
         try {
-            await axios.post('http://localhost:8000/rescue-requests/assign-team', {
+            await api.post('/rescue-requests/assign-team', {
                 report_id: report.report_id,
                 rescue_id: rescueRequest?.rescue_id,
                 assigned_personnel_ids: selectedStaffIds,
@@ -1098,7 +1128,7 @@ const BrgyReportView = () => {
                                         <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
                                             {report.duplicate_of_report_id && (
                                                 <Link
-                                                    to={`/barangay/reports/${report.duplicate_of_report_id}`}
+                                                    to={`/brgy/reports/${report.duplicate_of_report_id}`}
                                                     className="px-4 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center gap-1.5"
                                                 >
                                                     <span>View Primary Case #{report.duplicate_of_report_id}</span>
@@ -1278,7 +1308,7 @@ const BrgyReportView = () => {
                                                                     </span>
                                                                 </div>
                                                                 <Link
-                                                                    to={`/barangay/reports/${mr.report_id}`}
+                                                                    to={`/brgy/reports/${mr.report_id}`}
                                                                     className="text-[10px] font-black text-[#F97316] hover:underline"
                                                                 >
                                                                     View Report Details →
