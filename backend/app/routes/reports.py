@@ -1829,10 +1829,11 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
                         detail="Only personnel assigned to this report have the ability to update its status."
                     )
         elif updater and updater.role_id == 2:
+            rescue_record = db.query(Rescue).filter(Rescue.report_id == report_id).first()
             is_already_escalated = (
-                report.current_status_id in [4, 5, 6, 7, 8] or
                 report.endorsement_letter is not None or
-                db.query(Rescue).filter(Rescue.report_id == report_id).first() is not None
+                rescue_record is not None or
+                report.current_status_id in [4, 5, 6, 13]
             )
             if is_already_escalated and status_update.status_id != 4:
                 raise HTTPException(
@@ -2659,10 +2660,11 @@ def request_transfer_report(report_id: int, transfer_in: ReportTransferRequest, 
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
+    rescue_record = db.query(Rescue).filter(Rescue.report_id == report_id).first()
     is_already_escalated = (
-        report.current_status_id in [4, 5, 6, 7, 8] or
         report.endorsement_letter is not None or
-        db.query(Rescue).filter(Rescue.report_id == report_id).first() is not None
+        rescue_record is not None or
+        report.current_status_id in [4, 5, 6, 13]
     )
     if is_already_escalated and sender.role_id == 2:
         raise HTTPException(
@@ -3038,10 +3040,11 @@ def verify_incident_report(report_id: int, verify_in: ReportVerifyRequest, req: 
         raise HTTPException(status_code=404, detail="User not found")
 
     if user.role_id == 2:
+        rescue_record = db.query(Rescue).filter(Rescue.report_id == report_id).first()
         is_escalated = (
-            report.current_status_id in [4, 5, 6, 7, 8] or
             report.endorsement_letter is not None or
-            db.query(Rescue).filter(Rescue.report_id == report_id).first() is not None
+            rescue_record is not None or
+            report.current_status_id in [4, 5, 6, 13]
         )
         if is_escalated:
             raise HTTPException(
@@ -3179,10 +3182,11 @@ def mark_report_false_alarm(report_id: int, false_in: ReportFalseAlarmRequest, r
         raise HTTPException(status_code=404, detail="User not found")
 
     if user.role_id == 2:
+        rescue_record = db.query(Rescue).filter(Rescue.report_id == report_id).first()
         is_escalated = (
-            report.current_status_id in [4, 5, 6, 7, 8] or
             report.endorsement_letter is not None or
-            db.query(Rescue).filter(Rescue.report_id == report_id).first() is not None
+            rescue_record is not None or
+            report.current_status_id in [4, 5, 6, 13]
         )
         if is_escalated:
             raise HTTPException(
