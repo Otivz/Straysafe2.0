@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
+import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import StatCard from '../../components/PetRecords/StatCard';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from '../../components/PetRecords/types';
@@ -19,6 +20,7 @@ const SubdRemovedPetRecords: React.FC = () => {
     const [confirmingRestorePet, setConfirmingRestorePet] = useState<PetRecord | null>(null);
     const [isRestoring, setIsRestoring] = useState<boolean>(false);
     const [toastMessage, setToastMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     const showToast = (text: string, isError = false) => {
         setToastMessage({ text, isError });
@@ -114,13 +116,14 @@ const SubdRemovedPetRecords: React.FC = () => {
 
             {/* Sidebar */}
             <div className="z-10 flex shrink-0">
-                <SubdSidebar />
+                <SubdSidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
             </div>
 
             {/* Main Content */}
             <main className="flex-1 flex flex-col h-screen overflow-hidden">
                 {/* Navbar */}
                 <SubdNavbar
+                    onMenuToggle={() => setMobileMenuOpen(true)}
                     leftContent={
                         <div className="flex flex-col">
                             <div className="flex items-center gap-3">
@@ -137,7 +140,7 @@ const SubdRemovedPetRecords: React.FC = () => {
                 />
 
                 {/* Content Area */}
-                <div className="flex-1 overflow-y-auto p-10 flex flex-col gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-10 pb-36 md:pb-10 flex flex-col gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                     {/* Header Action Bar */}
                     <div className="flex flex-wrap justify-between items-center gap-4 shrink-0">
                         <button
@@ -395,6 +398,7 @@ const SubdRemovedPetRecords: React.FC = () => {
                         </div>
                     </div>
                 </div>
+                <SubdBottomNav />
             </main>
 
             {/* Restore Confirmation Modal */}

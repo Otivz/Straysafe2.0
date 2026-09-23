@@ -91,7 +91,7 @@ export default function MessagesDropdown({
     };
 
     return (
-        <div className="absolute right-0 sm:-right-8 md:right-0 mt-3 w-[22rem] sm:w-[25rem] bg-white dark:bg-[#151C2C] rounded-2xl shadow-2xl border border-gray-100/90 dark:border-gray-800 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
+        <div className="absolute right-0 sm:-right-8 md:right-0 mt-3 w-[calc(100vw-24px)] max-w-[22rem] sm:w-[25rem] bg-white dark:bg-[#151C2C] rounded-2xl shadow-2xl border border-gray-100/90 dark:border-gray-800 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
             {/* Panel Header */}
             <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gradient-to-r from-orange-50/40 via-white to-white dark:from-[#1A2338] dark:via-[#151C2C] dark:to-[#151C2C]">
                 <div className="flex items-center gap-2.5">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
@@ -30,13 +30,24 @@ const AdminHeatMap = () => {
     const [navSource, setNavSource] = useState<'hq' | 'brgy' | 'current'>('hq');
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
 
-    // Mock Hotspot Data
-    const hotspots: HotspotArea[] = [
-        { name: 'San Vicente Core', count: 42, risk: 'High', trend: 'up' },
-        { name: 'Clubhouse Perimeter', count: 28, risk: 'Medium', trend: 'down' },
-        { name: 'North Entrance', count: 15, risk: 'Low', trend: 'stable' },
-        { name: 'Park Street', count: 12, risk: 'Low', trend: 'up' },
-    ];
+    // Dynamic Hotspot Data computed from live database reports
+    const hotspots: HotspotArea[] = useMemo(() => {
+        if (!reports || reports.length === 0) return [];
+        const countsByLandmark: Record<string, number> = {};
+        reports.forEach((r: any) => {
+            const loc = r.landmark || r.location_description || 'San Vicente';
+            countsByLandmark[loc] = (countsByLandmark[loc] || 0) + 1;
+        });
+        return Object.entries(countsByLandmark)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([name, count]) => ({
+                name,
+                count,
+                risk: count >= 5 ? 'High' : count >= 2 ? 'Medium' : 'Low',
+                trend: count > 3 ? 'up' : 'stable'
+            }));
+    }, [reports]);
 
     const ADMIN_HQ: [number, number] = [14.806906, 121.0039297]; // San Vicente New Brgy Hall (R243+QH)
 
@@ -310,23 +321,27 @@ const AdminHeatMap = () => {
                             <div className="w-80 bg-slate-900/95 backdrop-blur-2xl border border-slate-800 rounded-[2rem] shadow-3xl p-8 animate-in slide-in-from-top-4 duration-300">
                                 <h3 className="text-[10px] font-black text-orange-500 uppercase tracking-[0.2em] mb-6">Hotspot Analysis</h3>
                                 <div className="space-y-4">
-                                    {hotspots.map((spot, idx) => (
-                                        <div key={idx} className="bg-slate-800/50 border border-slate-700/50 p-4 rounded-2xl">
-                                            <div className="flex justify-between items-start mb-1">
-                                                <span className="text-xs font-black text-white">{spot.name}</span>
-                                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${spot.risk === 'High' ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'
-                                                    }`}>
-                                                    {spot.risk}
-                                                </span>
+                                    {hotspots.length === 0 ? (
+                                        <p className="text-xs font-semibold text-slate-400 py-3 text-center">No report hotspots recorded in database.</p>
+                                    ) : (
+                                        hotspots.map((spot, idx) => (
+                                            <div key={idx} className="bg-slate-800/50 border border-slate-700/50 p-4 rounded-2xl">
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <span className="text-xs font-black text-white">{spot.name}</span>
+                                                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${spot.risk === 'High' ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'
+                                                        }`}>
+                                                        {spot.risk}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between items-center mt-2">
+                                                    <span className="text-xl font-black text-white">{spot.count} <span className="text-[9px] font-bold text-slate-500 uppercase ml-1">Reports</span></span>
+                                                    <span className={`text-[10px] font-black uppercase ${spot.trend === 'up' ? 'text-red-400' : 'text-emerald-400'}`}>
+                                                        {spot.trend}
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <div className="flex justify-between items-center mt-2">
-                                                <span className="text-xl font-black text-white">{spot.count} <span className="text-[9px] font-bold text-slate-500 uppercase ml-1">Reports</span></span>
-                                                <span className={`text-[10px] font-black uppercase ${spot.trend === 'up' ? 'text-red-400' : 'text-emerald-400'}`}>
-                                                    {spot.trend}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        ))
+                                    )}
                                 </div>
                             </div>
                         )}

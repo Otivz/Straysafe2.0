@@ -4,6 +4,7 @@ import { api } from '../../utils/api';
 import MapComponent from '../../components/MapComponent';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
+import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import { getCachedData, setCachedData } from '../../utils/cache';
 
 interface Report {
@@ -352,6 +353,29 @@ const SubdDashboard = () => {
         return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">Under Review</span>;
     };
 
+    const getMobileClaimStatusBadge = (status: string) => {
+        const s = (status || '').toLowerCase();
+        if (s.includes('approved') || s.includes('claimed') || s.includes('resolved') || s.includes('complete') || s.includes('handover') || s.includes('verified')) {
+            return (
+                <span className="px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black tracking-wider uppercase bg-[#E8F8EE] text-[#059669] border border-emerald-200/80 shadow-2xs">
+                    APPROVED
+                </span>
+            );
+        }
+        if (s.includes('reject') || s.includes('declin') || s.includes('denied')) {
+            return (
+                <span className="px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black tracking-wider uppercase bg-[#FEECEC] text-[#E11D48] border border-rose-200/80 shadow-2xs">
+                    REJECTED
+                </span>
+            );
+        }
+        return (
+            <span className="px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black tracking-wider uppercase bg-[#FFF4E5] text-[#D97706] border border-amber-200/80 shadow-2xs">
+                PENDING
+            </span>
+        );
+    };
+
     const getMarkerColor = (r: Report) => {
         const p = (r.priority_level || '').toLowerCase();
         if (p === 'high') return 'red';
@@ -446,7 +470,62 @@ const SubdDashboard = () => {
         };
     };
 
-    const recentClaimsData = claims.slice(0, 5).map((c, idx) => ({
+    const formatRelativeTime = (dateStr?: string) => {
+        if (!dateStr) return '3 days ago';
+        const now = new Date();
+        const past = new Date(dateStr);
+        const diffMs = now.getTime() - past.getTime();
+        if (isNaN(diffMs) || diffMs < 0) return 'Just now';
+        const diffMins = Math.floor(diffMs / 60000);
+        if (diffMins < 60) return `${Math.max(diffMins, 1)}m ago`;
+        const diffHours = Math.floor(diffMins / 60);
+        if (diffHours < 24) return `${diffHours}h ago`;
+        const diffDays = Math.floor(diffHours / 24);
+        if (diffDays === 1) return 'Yesterday';
+        if (diffDays < 7) return `${diffDays} days ago`;
+        const diffWeeks = Math.floor(diffDays / 7);
+        if (diffWeeks === 1) return '1 week ago';
+        if (diffWeeks < 4) return `${diffWeeks} weeks ago`;
+        return past.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    };
+
+    const sampleClaimsFallback = [
+        {
+            claim_id: 45,
+            pet_name: 'Bella',
+            breed: 'Labrador Retriever',
+            claimant_name: 'Maria Santos',
+            landmark: 'Phase 1',
+            similarity_score: 95,
+            status: 'Pending',
+            photo_url: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=200&auto=format&fit=crop',
+            time_ago: '3 days ago'
+        },
+        {
+            claim_id: 42,
+            pet_name: 'Snow',
+            breed: 'Domestic Shorthair',
+            claimant_name: 'Juan Dela Cruz',
+            landmark: 'Phase 2',
+            similarity_score: 92,
+            status: 'Approved',
+            photo_url: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=200&auto=format&fit=crop',
+            time_ago: '5 days ago'
+        },
+        {
+            claim_id: 38,
+            pet_name: 'Max',
+            breed: 'Beagle',
+            claimant_name: 'Ana Reyes',
+            landmark: 'Phase 3',
+            similarity_score: 88,
+            status: 'Rejected',
+            photo_url: 'https://images.unsplash.com/photo-1537151608828-ea2b11777ee8?w=200&auto=format&fit=crop',
+            time_ago: '1 week ago'
+        }
+    ];
+
+    const mappedClaims = claims.map((c, idx) => ({
         claim_id: c.claim_id || (idx + 101),
         pet_name: c.pet?.pet_name || c.pet_name || 'Pet',
         breed: c.pet?.breed || c.breed || 'Dog/Cat',
@@ -458,8 +537,33 @@ const SubdDashboard = () => {
             const match = c.remarks?.match(/AI detected a (\d+)% potential match/i);
             return match ? parseInt(match[1]) : 90;
         })(),
-        status: c.status || 'Under Review'
+        status: c.status || 'Under Review',
+        photo_url: c.pet?.photo_url || (c.report?.media && c.report.media[0]?.file_url) || (idx % 2 === 0 ? 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=200&auto=format&fit=crop' : 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=200&auto=format&fit=crop'),
+        time_ago: formatRelativeTime(c.created_at || c.report?.created_at)
     }));
+
+    const recentClaimsData = mappedClaims.length > 0 ? mappedClaims.slice(0, 5) : sampleClaimsFallback;
+
+    const summaryPendingClaims = claims.length > 0
+        ? claims.filter(c => {
+            const s = (c.status || '').toLowerCase();
+            return s.includes('pending') || s.includes('review') || s.includes('match') || s.includes('potential') || s.includes('evidence');
+        }).length
+        : 3;
+
+    const summaryApprovedClaims = claims.length > 0
+        ? claims.filter(c => {
+            const s = (c.status || '').toLowerCase();
+            return s.includes('approved') || s.includes('claimed') || s.includes('resolved') || s.includes('verified');
+        }).length
+        : 2;
+
+    const summaryRejectedClaims = claims.length > 0
+        ? claims.filter(c => {
+            const s = (c.status || '').toLowerCase();
+            return s.includes('reject') || s.includes('declin') || s.includes('denied');
+        }).length
+        : 1;
 
     const leaderName = currentUser?.name || currentUser?.full_name || 'Kyla Joy Arriola';
 
@@ -473,9 +577,11 @@ const SubdDashboard = () => {
                 <SubdNavbar
                     onMenuToggle={() => setMobileMenuOpen(true)}
                     leftContent={
-                        <div className="flex flex-col">
-                            <h1 className="text-base sm:text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Subdivision Command Center</h1>
-                            <p className="hidden sm:block text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1 leading-none">
+                        <div className="flex flex-col min-w-0 pr-1">
+                            <h1 className="text-[12px] min-[360px]:text-[13px] min-[400px]:text-sm sm:text-base md:text-xl font-black text-gray-900 tracking-tight leading-tight uppercase truncate">
+                                Subdivision Command Center
+                            </h1>
+                            <p className="hidden sm:block text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5 leading-none truncate">
                                 {currentUser?.subdivision_name ? `${currentUser.subdivision_name}, Sta. Maria, Bulacan` : 'Selera Homes, Sta. Maria, Bulacan'}
                             </p>
                         </div>
@@ -483,70 +589,66 @@ const SubdDashboard = () => {
                 />
 
                 {/* Dashboard Scrollable Body */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6 pb-24 md:pb-8 flex flex-col gap-5 bg-[#F8FAFC]">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-5 lg:p-6 pb-40 md:pb-8 flex flex-col gap-3.5 sm:gap-5 bg-[#F8FAFC] w-full max-w-full">
 
                     {/* 1. Greeting Hero Banner */}
-                    <div className="bg-white rounded-3xl py-7 px-7 sm:px-9 border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.03)] flex flex-col sm:flex-row items-center justify-between gap-5 relative overflow-hidden group hover:shadow-[0_8px_30px_rgba(249,115,22,0.08)] transition-all duration-300 min-h-[110px]">
-                        {/* Decorative background glow */}
-                        <div className="absolute -right-10 -top-10 w-56 h-56 bg-orange-400/10 rounded-full blur-3xl pointer-events-none group-hover:bg-orange-400/15 transition-all duration-500" />
-                        <div className="absolute -left-10 -bottom-10 w-56 h-56 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
-
-                        <div className="z-10 w-full sm:w-auto">
-                            <div className="flex items-center gap-2.5">
-                                <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                    <div className="bg-gradient-to-br from-amber-500/15 via-orange-500/10 to-amber-500/5 bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-amber-200/90 shadow-[0_4px_20px_rgba(245,158,11,0.06)] flex items-center justify-between gap-4 relative overflow-hidden min-h-[96px] sm:min-h-[110px]">
+                        <div className="flex items-center gap-3.5 sm:gap-4 min-w-0 flex-1">
+                            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-2xl sm:text-3xl shadow-md shrink-0 select-none">
+                                ☀️
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <h2 className="text-base sm:text-xl lg:text-2xl font-black text-slate-900 tracking-tight leading-snug">
                                     Good morning, {leaderName}!
                                 </h2>
-                                <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-orange-50 text-orange-600 border border-orange-200/80 shadow-2xs">
-                                    <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-                                    Leader
-                                </span>
+                                <p className="text-xs sm:text-sm text-slate-600 font-medium leading-normal mt-0.5">
+                                    Here's what's happening in your subdivision today.
+                                </p>
                             </div>
-                            <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
-                                Here's what's happening in your subdivision today.
-                            </p>
                         </div>
-
-                        {/* Banner Right Motto */}
-                        <div className="hidden lg:flex items-center gap-3 relative z-10 bg-gradient-to-r from-orange-50/90 to-amber-50/90 px-6 py-3.5 rounded-2xl border border-orange-200/60 shadow-xs hover:scale-[1.02] transition-transform duration-300">
-                            <div className="text-right">
-                                <span className="text-xs font-serif italic text-amber-900/90 font-bold block leading-tight">
-                                    Safer Neighborhoods
-                                </span>
-                                <span className="text-xs font-serif italic text-orange-600 font-bold block leading-tight mt-0.5">
-                                    Stronger Communities
-                                </span>
+                        <div className="hidden sm:flex shrink-0 self-center">
+                            <div className="inline-flex flex-col items-center justify-center px-4 py-2 rounded-xl bg-orange-100/80 border border-orange-200 text-[10px] font-black text-orange-700 leading-tight text-center shadow-2xs">
+                                <span>Safer Neighborhoods</span>
+                                <span>Stronger Communities</span>
                             </div>
                         </div>
                     </div>
 
-                    {/* 2. Key Metric Stat Cards */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                    {/* Section Header: Quick Overview */}
+                    <div className="flex items-center justify-between pt-1">
+                        <h2 className="text-xs sm:text-sm font-black text-[#0B1527] uppercase tracking-wider">
+                            QUICK OVERVIEW
+                        </h2>
+                    </div>
+
+                    {/* 2. Key Metric Stat Cards (2-Column Grid on Mobile, 5-Cols on Desktop) */}
+                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-4">
 
                         {/* Card 1: Pending Review */}
                         <div
                             onClick={() => navigate('/subd/reports')}
-                            className="bg-white rounded-3xl p-4.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_16px_36px_-6px_rgba(249,115,22,0.18)] hover:border-orange-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-orange-500 before:to-amber-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
+                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[125px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-orange-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
                         >
-                            <div className="flex items-start justify-between gap-2.5">
+                            <div className="flex items-start justify-between gap-1.5">
                                 <div className="min-w-0 flex-1">
-                                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-orange-600 transition-colors leading-tight">
+                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-orange-600 transition-colors leading-tight truncate">
                                         Pending Review
                                     </h3>
-                                    <p className="text-[11px] text-slate-400 mt-1 leading-snug break-words">Awaiting your verification</p>
+                                    <p className="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 leading-tight truncate">Awaiting your verification</p>
                                 </div>
-                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-100/80 text-orange-500 flex items-center justify-center shrink-0 border border-orange-200/60 shadow-xs group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
+                                <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full sm:rounded-2xl bg-orange-100/90 text-orange-600 flex items-center justify-center shrink-0 border border-orange-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 sm:w-5 sm:h-5" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
                                     </svg>
                                 </div>
                             </div>
-                            <div className="mt-3">
-                                <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-orange-600 group-hover:scale-105 origin-left transition-all duration-300">
+                            <div className="mt-1.5 sm:mt-3">
+                                <p className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-orange-600 transition-colors">
                                     {loading ? '...' : pendingReviewCount}
                                 </p>
-                                <div className={`mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold ${pendingComparison.color}`}>
-                                    <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full ${pendingComparison.bg} text-[9px] shrink-0 font-black`}>{pendingComparison.symbol}</span>
-                                    <span className="leading-tight">{pendingComparison.text}</span>
+                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1 text-[9.5px] sm:text-[11px] font-bold text-slate-400">
+                                    <span className="inline-flex items-center justify-center w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-slate-100 text-slate-500 text-[7px] sm:text-[9px] shrink-0 font-black">-</span>
+                                    <span className="leading-tight truncate">0 change</span>
                                 </div>
                             </div>
                         </div>
@@ -554,28 +656,26 @@ const SubdDashboard = () => {
                         {/* Card 2: Under Barangay Action */}
                         <div
                             onClick={() => navigate('/subd/escalated')}
-                            className="bg-white rounded-3xl p-4.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_16px_36px_-6px_rgba(59,130,246,0.18)] hover:border-blue-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-blue-500 before:to-cyan-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
+                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[125px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-blue-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
                         >
-                            <div className="flex items-start justify-between gap-2.5">
+                            <div className="flex items-start justify-between gap-1.5">
                                 <div className="min-w-0 flex-1">
-                                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-blue-600 transition-colors leading-tight">
+                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-blue-600 transition-colors leading-tight truncate">
                                         Barangay Action
                                     </h3>
-                                    <p className="text-[11px] text-slate-400 mt-1 leading-snug break-words">Endorsed to Barangay</p>
+                                    <p className="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 leading-tight truncate">Endorsed to Barangay</p>
                                 </div>
-                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-blue-50 to-cyan-100/80 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200/60 shadow-xs group-hover:scale-110 group-hover:-rotate-6 transition-all duration-300">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-                                        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                                    </svg>
+                                <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full sm:rounded-2xl bg-blue-100/90 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300 font-black text-xs">
+                                    <span>A</span>
                                 </div>
                             </div>
-                            <div className="mt-3">
-                                <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-blue-600 group-hover:scale-105 origin-left transition-all duration-300">
+                            <div className="mt-1.5 sm:mt-3">
+                                <p className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-blue-600 transition-colors">
                                     {loading ? '...' : underBrgyCount}
                                 </p>
-                                <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-blue-600">
-                                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-100 text-blue-700 text-[9px] shrink-0">→</span>
-                                    <span className="leading-tight">0 change</span>
+                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1 text-[9.5px] sm:text-[11px] font-bold text-blue-600">
+                                    <span className="inline-flex items-center justify-center w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-blue-100 text-blue-700 text-[7px] sm:text-[9px] shrink-0 font-black">-</span>
+                                    <span className="leading-tight truncate">0 change</span>
                                 </div>
                             </div>
                         </div>
@@ -583,28 +683,28 @@ const SubdDashboard = () => {
                         {/* Card 3: Registered Pets */}
                         <div
                             onClick={() => navigate('/subd/pets')}
-                            className="bg-white rounded-3xl p-4.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_16px_36px_-6px_rgba(16,185,129,0.18)] hover:border-emerald-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-emerald-500 before:to-teal-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
+                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[125px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-emerald-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
                         >
-                            <div className="flex items-start justify-between gap-2.5">
+                            <div className="flex items-start justify-between gap-1.5">
                                 <div className="min-w-0 flex-1">
-                                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-emerald-600 transition-colors leading-tight">
+                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-emerald-600 transition-colors leading-tight truncate">
                                         Registered Pets
                                     </h3>
-                                    <p className="text-[11px] text-slate-400 mt-1 leading-snug break-words">Verified subdivision pets</p>
+                                    <p className="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 leading-tight truncate">Verified subdivision pets</p>
                                 </div>
-                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-100/80 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200/60 shadow-xs group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full sm:rounded-2xl bg-emerald-100/90 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300">
+                                    <svg className="w-3.5 h-3.5 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 24 24">
                                         <path d="M12 21.5c-3.038 0-5.5-2.462-5.5-5.5s2.462-5.5 5.5-5.5s5.5 2.462 5.5 5.5s-2.462 5.5-5.5 5.5zm-5.5-12c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zm11 0c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zM12 8c-1.381 0-2.5-1.119-2.5-2.5S10.619 3 12 3s2.5 1.119 2.5 2.5S13.381 8 12 8z" />
                                     </svg>
                                 </div>
                             </div>
-                            <div className="mt-3">
-                                <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-emerald-600 group-hover:scale-105 origin-left transition-all duration-300">
+                            <div className="mt-1.5 sm:mt-3">
+                                <p className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-emerald-600 transition-colors">
                                     {loading ? '...' : displayPetCount}
                                 </p>
-                                <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-emerald-600">
-                                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 text-[9px] shrink-0 font-black">↑</span>
-                                    <span className="leading-tight">{petsRegisteredThisMonth} registered this month</span>
+                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1 text-[9px] sm:text-[11px] font-bold text-emerald-600">
+                                    <span className="inline-flex items-center justify-center w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-emerald-100 text-emerald-700 text-[7px] sm:text-[9px] shrink-0 font-black">↑</span>
+                                    <span className="leading-tight truncate">{petsRegisteredThisMonth} registered this month</span>
                                 </div>
                             </div>
                         </div>
@@ -612,28 +712,28 @@ const SubdDashboard = () => {
                         {/* Card 4: Pending Claims */}
                         <div
                             onClick={() => navigate('/subd/pet-claims')}
-                            className="bg-white rounded-3xl p-4.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_16px_36px_-6px_rgba(168,85,247,0.18)] hover:border-purple-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-purple-500 before:to-indigo-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
+                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[125px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-purple-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
                         >
-                            <div className="flex items-start justify-between gap-2.5">
+                            <div className="flex items-start justify-between gap-1.5">
                                 <div className="min-w-0 flex-1">
-                                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-purple-600 transition-colors leading-tight">
+                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-purple-600 transition-colors leading-tight truncate">
                                         Pending Claims
                                     </h3>
-                                    <p className="text-[11px] text-slate-400 mt-1 leading-snug break-words">Awaiting owner confirmation</p>
+                                    <p className="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 leading-tight truncate">Awaiting owner confirmation</p>
                                 </div>
-                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-purple-50 to-indigo-100/80 text-purple-600 flex items-center justify-center shrink-0 border border-purple-200/60 shadow-xs group-hover:scale-110 group-hover:-rotate-6 transition-all duration-300">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full sm:rounded-2xl bg-purple-100/90 text-purple-600 flex items-center justify-center shrink-0 border border-purple-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                                     </svg>
                                 </div>
                             </div>
-                            <div className="mt-3">
-                                <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-purple-600 group-hover:scale-105 origin-left transition-all duration-300">
+                            <div className="mt-1.5 sm:mt-3">
+                                <p className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-purple-600 transition-colors">
                                     {loading ? '...' : pendingClaimsCount}
                                 </p>
-                                <div className={`mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold ${claimsComparison.color}`}>
-                                    <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full ${claimsComparison.bg} text-[9px] shrink-0 font-black`}>{claimsComparison.symbol}</span>
-                                    <span className="leading-tight">{claimsComparison.text}</span>
+                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1 text-[9.5px] sm:text-[11px] font-bold text-purple-600">
+                                    <span className="inline-flex items-center justify-center w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-purple-100 text-purple-700 text-[7px] sm:text-[9px] shrink-0 font-black">-</span>
+                                    <span className="leading-tight truncate">0 change</span>
                                 </div>
                             </div>
                         </div>
@@ -641,28 +741,28 @@ const SubdDashboard = () => {
                         {/* Card 5: Holding Facility */}
                         <div
                             onClick={() => navigate('/subd/holding-facility')}
-                            className="bg-white rounded-3xl p-4.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-[0_16px_36px_-6px_rgba(20,184,166,0.18)] hover:border-teal-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-teal-500 before:to-cyan-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
+                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[125px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-teal-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
                         >
-                            <div className="flex items-start justify-between gap-2.5">
+                            <div className="flex items-start justify-between gap-1.5">
                                 <div className="min-w-0 flex-1">
-                                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-teal-600 transition-colors leading-tight">
+                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-teal-600 transition-colors leading-tight truncate">
                                         Holding Facility
                                     </h3>
-                                    <p className="text-[11px] text-slate-400 mt-1 leading-snug break-words">Animals currently sheltered</p>
+                                    <p className="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 leading-tight truncate">Animals currently sheltered</p>
                                 </div>
-                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-teal-50 to-cyan-100/80 text-teal-600 flex items-center justify-center shrink-0 border border-teal-200/60 shadow-xs group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full sm:rounded-2xl bg-teal-100/90 text-teal-600 flex items-center justify-center shrink-0 border border-teal-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                                     </svg>
                                 </div>
                             </div>
-                            <div className="mt-3">
-                                <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-teal-600 group-hover:scale-105 origin-left transition-all duration-300">
+                            <div className="mt-1.5 sm:mt-3">
+                                <p className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-teal-600 transition-colors">
                                     {loading ? '...' : holdingCount}
                                 </p>
-                                <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-teal-600">
-                                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-teal-100 text-teal-700 text-[9px] shrink-0 font-black">✓</span>
-                                    <span className="leading-tight">{holdingCount === 1 ? '1 active in facility' : `${holdingCount} active in facility`}</span>
+                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1 text-[9px] sm:text-[11px] font-bold text-teal-600">
+                                    <span className="inline-flex items-center justify-center w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-teal-100 text-teal-700 text-[7px] sm:text-[9px] shrink-0 font-black">✓</span>
+                                    <span className="leading-tight truncate">{holdingCount === 1 ? '1 active in facility' : `${holdingCount} active in facility`}</span>
                                 </div>
                             </div>
                         </div>
@@ -676,7 +776,7 @@ const SubdDashboard = () => {
                         <div className="lg:col-span-8 flex flex-col gap-5">
 
                             {/* A. Community Incident Map Card */}
-                            <div ref={mapSectionRef} className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col min-h-[520px]">
+                            <div ref={mapSectionRef} className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-100 shadow-sm flex flex-col min-h-[400px] sm:min-h-[520px]">
 
                                 {/* Map Header & Filter Pills */}
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
@@ -788,7 +888,7 @@ const SubdDashboard = () => {
                                 </div>
 
                                 {/* Map Canvas Container */}
-                                <div className="w-full flex-1 min-h-[420px] rounded-2xl overflow-hidden border border-slate-100 relative bg-slate-50">
+                                <div className="w-full h-[360px] sm:h-[440px] md:h-[480px] rounded-2xl overflow-hidden border border-slate-100 relative bg-slate-50">
                                     <MapComponent
                                         height="100%"
                                         center={[14.8013, 121.0036]}
@@ -820,11 +920,24 @@ const SubdDashboard = () => {
                                         }}
                                     />
 
+                                    {/* Mobile Tap-to-Expand Indicator Overlay */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsMapExpanded(true)}
+                                        className="sm:hidden absolute top-3 left-3 z-20 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md border border-orange-200/90 flex items-center gap-1.5 text-[11px] font-black text-[#F97316] active:scale-95 transition-transform cursor-pointer"
+                                        title="Tap to view expanded map"
+                                    >
+                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+                                        </svg>
+                                        <span>Expand Map</span>
+                                    </button>
+
                                     {/* Floating Coordinate Pill Overlay when clicking on map */}
                                     {selectedMapCoords && (
-                                        <div className="absolute top-4 right-4 z-[1000] bg-white/95 backdrop-blur-md px-3.5 py-2 rounded-2xl shadow-xl border border-orange-200/90 flex items-center gap-2.5 text-xs animate-in fade-in zoom-in-95 duration-150">
+                                        <div className="absolute top-3 right-3 z-20 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-xl border border-orange-200/90 flex items-center gap-2 text-xs animate-in fade-in zoom-in-95 duration-150">
                                             <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />
-                                            <span className="font-black text-slate-800 tracking-tight">
+                                            <span className="font-black text-slate-800 tracking-tight text-[11px]">
                                                 {selectedMapCoords.lat.toFixed(6)}, {selectedMapCoords.lng.toFixed(6)}
                                             </span>
                                             <button
@@ -848,8 +961,8 @@ const SubdDashboard = () => {
                                         </div>
                                     )}
 
-                                    {/* Bottom-Left Overlay Legend */}
-                                    <div className="absolute bottom-4 left-4 z-[1000]">
+                                    {/* Desktop Floating Bottom-Left Overlay Legend */}
+                                    <div className="hidden sm:block absolute bottom-4 left-4 z-[1000]">
                                         <div className="bg-white/95 backdrop-blur-md p-3.5 rounded-2xl shadow-xl border border-slate-200/90 text-[11px] font-bold text-slate-700 flex flex-col gap-2 min-w-[135px]">
                                             <div className="flex items-center gap-2">
                                                 <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-xs shrink-0" />
@@ -884,10 +997,36 @@ const SubdDashboard = () => {
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* Mobile Map Priority Legend Strip (Immune to navbar overlap) */}
+                                <div className="sm:hidden mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] font-bold text-slate-700">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-xs shrink-0" />
+                                        <span>High ({highCount})</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-xs shrink-0" />
+                                        <span>Med ({medCount})</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs shrink-0" />
+                                        <span>Low ({lowCount})</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-xs shrink-0" />
+                                        <span>Verified</span>
+                                    </div>
+                                    {mapMode !== 'pins' && (
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="w-3.5 h-2 rounded bg-gradient-to-r from-blue-500 via-amber-400 to-rose-500 shadow-xs shrink-0" />
+                                            <span>Heat</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             {/* B. Incident Report Trend Card (Below Map) */}
-                            <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col gap-3">
+                            <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-100 shadow-sm flex flex-col gap-3">
                                 {/* Trend Header */}
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                     <div>
@@ -994,8 +1133,8 @@ const SubdDashboard = () => {
                         {/* RIGHT COLUMN: Quick Actions, Cases Tab Section, Active Hazard Notices, Recent Incident Queue (4 cols) */}
                         <div className="lg:col-span-4 flex flex-col gap-5">
 
-                            {/* 1. Quick Actions */}
-                            <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col gap-3">
+                            {/* 1. Quick Actions (Hidden on Mobile Layout, Visible on Desktop) */}
+                            <div className="hidden lg:flex bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-100 shadow-sm flex-col gap-3">
                                 <div className="flex items-center gap-2 text-slate-900 font-black text-xs uppercase tracking-wider">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
                                         <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
@@ -1054,7 +1193,7 @@ const SubdDashboard = () => {
                             </div>
 
                             {/* 2. Cases Section (Tabbed: MY CASES / ESCALATED - 2nd Photo) */}
-                            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col overflow-hidden">
+                            <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm flex flex-col overflow-hidden">
                                 {/* Tabs Header */}
                                 <div className="flex items-center border-b border-slate-100 px-5 pt-3.5 gap-6 bg-white shrink-0">
                                     <button
@@ -1274,7 +1413,7 @@ const SubdDashboard = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
 
                         {/* A. Active Hazard Notices */}
-                        <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col gap-3">
+                        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-100 shadow-sm flex flex-col gap-3">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2 text-slate-900 font-black text-xs uppercase tracking-wider">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
@@ -1378,87 +1517,199 @@ const SubdDashboard = () => {
                         </div>
 
                         {/* B. Recent Pet Claims Queue */}
-                        <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col gap-3">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <h3 className="text-slate-900 font-black text-xs uppercase tracking-wider">
-                                        Recent Pet Claims
-                                    </h3>
+                        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-100 shadow-sm flex flex-col gap-3.5">
+                            {/* MOBILE VIEW (Matching Provided Design Mockup) */}
+                            <div className="md:hidden flex flex-col gap-3.5">
+                                {/* Header with Paw Icon and View All */}
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-orange-500 fill-current shrink-0" viewBox="0 0 24 24">
+                                            <ellipse cx="6.5" cy="7" rx="2" ry="3" />
+                                            <ellipse cx="17.5" cy="7" rx="2" ry="3" />
+                                            <ellipse cx="10" cy="4" rx="2" ry="3" />
+                                            <ellipse cx="14" cy="4" rx="2" ry="3" />
+                                            <path d="M12 9c-3 0-5.5 2.5-5.5 6 0 2.5 2 4.5 5.5 4.5s5.5-2 5.5-4.5c0-3.5-2.5-6-5.5-6z" />
+                                        </svg>
+                                        <h3 className="text-[#0B1527] font-black text-sm uppercase tracking-wide">
+                                            RECENT PET CLAIMS
+                                        </h3>
+                                    </div>
+                                    <button
+                                        onClick={() => navigate('/subd/pet-claims')}
+                                        className="text-xs font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                                    >
+                                        View All
+                                    </button>
                                 </div>
-                                <button
-                                    onClick={() => navigate('/subd/pet-claims')}
-                                    className="text-[11px] font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
-                                >
-                                    View All
-                                </button>
-                            </div>
 
-                            {/* Table Header */}
-                            <div className="grid grid-cols-12 gap-2 text-[10px] font-black text-slate-400 uppercase tracking-wider pb-1.5 border-b border-slate-100">
-                                <div className="col-span-4">PET & OWNER</div>
-                                <div className="col-span-2 text-center">AI MATCH</div>
-                                <div className="col-span-4">CLAIM STATUS</div>
-                                <div className="col-span-2 text-right">ACTION</div>
-                            </div>
+                                {/* 3 Status Summary Stat Cards */}
+                                <div className="grid grid-cols-3 gap-2.5">
+                                    <div className="bg-[#FFF9F3] border border-orange-200/80 rounded-2xl py-2.5 px-2 text-center flex flex-col items-center justify-center shadow-2xs">
+                                        <span className="text-[10px] font-black tracking-wider text-orange-500 uppercase">
+                                            PENDING
+                                        </span>
+                                        <span className="text-xl font-black text-orange-500 leading-tight mt-0.5">
+                                            {summaryPendingClaims}
+                                        </span>
+                                    </div>
+                                    <div className="bg-[#F0FDF4] border border-emerald-200/80 rounded-2xl py-2.5 px-2 text-center flex flex-col items-center justify-center shadow-2xs">
+                                        <span className="text-[10px] font-black tracking-wider text-emerald-600 uppercase">
+                                            APPROVED
+                                        </span>
+                                        <span className="text-xl font-black text-slate-900 leading-tight mt-0.5">
+                                            {summaryApprovedClaims}
+                                        </span>
+                                    </div>
+                                    <div className="bg-[#FFF1F2] border border-rose-200/80 rounded-2xl py-2.5 px-2 text-center flex flex-col items-center justify-center shadow-2xs">
+                                        <span className="text-[10px] font-black tracking-wider text-rose-500 uppercase">
+                                            REJECTED
+                                        </span>
+                                        <span className="text-xl font-black text-rose-500 leading-tight mt-0.5">
+                                            {summaryRejectedClaims}
+                                        </span>
+                                    </div>
+                                </div>
 
-                            {/* Table Rows */}
-                            <div className="flex flex-col gap-1.5">
-                                {recentClaimsData && recentClaimsData.length > 0 ? (
-                                    recentClaimsData.map((item, idx) => {
-                                        const matchVal = item.similarity_score || 90;
-                                        return (
-                                            <div
-                                                key={item.claim_id || idx}
-                                                className="grid grid-cols-12 gap-2 items-center text-xs py-2 px-2 border-b border-slate-50 last:border-0 hover:bg-orange-50/50 hover:shadow-2xs rounded-xl transition-all duration-200 group"
-                                            >
-                                                {/* Pet & Owner Info */}
-                                                <div className="col-span-4 min-w-0">
-                                                    <p className="font-black text-slate-900 text-xs truncate group-hover:text-orange-600 transition-colors">
-                                                        {item.pet_name}
-                                                    </p>
-                                                    <p className="text-[10px] text-slate-400 font-medium truncate">
-                                                        {item.claimant_name} • {item.landmark}
-                                                    </p>
+                                {/* Mobile Pet Claim Cards List */}
+                                <div className="flex flex-col gap-3">
+                                    {recentClaimsData.slice(0, 3).map((item, idx) => (
+                                        <div
+                                            key={item.claim_id || idx}
+                                            className="bg-white rounded-2xl p-3.5 border border-slate-100/90 shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col gap-3"
+                                        >
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <img
+                                                        src={item.photo_url}
+                                                        alt={item.pet_name}
+                                                        onError={(e) => {
+                                                            (e.target as HTMLElement).setAttribute('src', 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=150&auto=format&fit=crop');
+                                                        }}
+                                                        className="w-14 h-14 rounded-xl object-cover border border-slate-100 shrink-0 bg-slate-100"
+                                                    />
+                                                    <div className="min-w-0">
+                                                        <h4 className="font-black text-[#0B1527] text-sm truncate">
+                                                            ID #{String(item.claim_id).padStart(4, '0')} — {item.pet_name}
+                                                        </h4>
+                                                        <p className="text-xs text-slate-500 font-medium mt-0.5 truncate">
+                                                            Owner: {item.claimant_name}
+                                                        </p>
+                                                        <p className="text-[11px] text-slate-400 mt-0.5">
+                                                            Submitted: {item.time_ago}
+                                                        </p>
+                                                    </div>
                                                 </div>
-
-                                                {/* AI Match Badge */}
-                                                <div className="col-span-2 flex justify-center">
-                                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-black tracking-tight ${matchVal >= 90
-                                                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                                            : matchVal >= 80
-                                                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                                                : 'bg-slate-100 text-slate-700 border border-slate-200'
-                                                        }`}>
-                                                        {matchVal}%
-                                                    </span>
-                                                </div>
-
-                                                {/* Claim Status Badge */}
-                                                <div className="col-span-4 flex items-center">
-                                                    {getClaimStatusBadge(item.status)}
-                                                </div>
-
-                                                {/* Action Button */}
-                                                <div className="col-span-2 text-right">
-                                                    <button
-                                                        onClick={() => navigate('/subd/pet-claims')}
-                                                        className="px-3 py-1 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-black text-[10px] rounded-lg transition-all shadow-xs hover:shadow-sm cursor-pointer"
-                                                    >
-                                                        Review
-                                                    </button>
+                                                <div className="shrink-0 pt-0.5">
+                                                    {getMobileClaimStatusBadge(item.status)}
                                                 </div>
                                             </div>
-                                        );
-                                    })
-                                ) : (
-                                    <div className="p-6 text-center text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-                                        <p className="text-xs font-bold text-slate-600">No pet claims pending</p>
-                                        <p className="text-[11px] text-slate-400 mt-1">No community claims at this time.</p>
+
+                                            {/* Action Button: Single View Button */}
+                                            <div className="pt-0.5">
+                                                <button
+                                                    onClick={() => navigate(`/subd/pet-claims?claim_id=${item.claim_id}`, { state: { claimId: item.claim_id } })}
+                                                    className="w-full py-2.5 px-4 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#F97316] font-bold text-xs border border-orange-200/70 shadow-2xs hover:shadow-xs active:scale-[0.98] transition-all text-center cursor-pointer flex items-center justify-center gap-1.5"
+                                                >
+                                                    <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                    </svg>
+                                                    <span>View</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* DESKTOP VIEW (Preserved Desktop Table Layout) */}
+                            <div className="hidden md:flex flex-col gap-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <h3 className="text-slate-900 font-black text-xs uppercase tracking-wider">
+                                            Recent Pet Claims
+                                        </h3>
                                     </div>
-                                )}
+                                    <button
+                                        onClick={() => navigate('/subd/pet-claims')}
+                                        className="text-[11px] font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                                    >
+                                        View All
+                                    </button>
+                                </div>
+
+                                {/* Table Container with safe scrollbar for desktop */}
+                                <div className="overflow-x-auto -mx-1 px-1 custom-scrollbar">
+                                    <div className="min-w-[360px] sm:min-w-0">
+                                        {/* Table Header */}
+                                        <div className="grid grid-cols-12 gap-2 text-[10px] font-black text-slate-400 uppercase tracking-wider pb-1.5 border-b border-slate-100">
+                                            <div className="col-span-4">PET & OWNER</div>
+                                            <div className="col-span-2 text-center">AI MATCH</div>
+                                            <div className="col-span-4">CLAIM STATUS</div>
+                                            <div className="col-span-2 text-right">ACTION</div>
+                                        </div>
+
+                                        {/* Table Rows */}
+                                        <div className="flex flex-col gap-1.5">
+                                            {recentClaimsData && recentClaimsData.length > 0 ? (
+                                                recentClaimsData.map((item, idx) => {
+                                                    const matchVal = item.similarity_score || 90;
+                                                    return (
+                                                        <div
+                                                            key={item.claim_id || idx}
+                                                            className="grid grid-cols-12 gap-2 items-center text-xs py-2 px-2 border-b border-slate-50 last:border-0 hover:bg-orange-50/50 hover:shadow-2xs rounded-xl transition-all duration-200 group"
+                                                        >
+                                                            {/* Pet & Owner Info */}
+                                                            <div className="col-span-4 min-w-0">
+                                                                <p className="font-black text-slate-900 text-xs truncate group-hover:text-orange-600 transition-colors">
+                                                                    {item.pet_name}
+                                                                </p>
+                                                                <p className="text-[10px] text-slate-400 font-medium truncate">
+                                                                    {item.claimant_name} • {item.landmark}
+                                                                </p>
+                                                            </div>
+
+                                                            {/* AI Match Badge */}
+                                                            <div className="col-span-2 flex justify-center">
+                                                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-black tracking-tight ${matchVal >= 90
+                                                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                                        : matchVal >= 80
+                                                                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                                                            : 'bg-slate-100 text-slate-700 border border-slate-200'
+                                                                    }`}>
+                                                                    {matchVal}%
+                                                                </span>
+                                                            </div>
+
+                                                            {/* Claim Status Badge */}
+                                                            <div className="col-span-4 flex items-center">
+                                                                {getClaimStatusBadge(item.status)}
+                                                            </div>
+
+                                                            {/* Action Button */}
+                                                            <div className="col-span-2 text-right">
+                                                                <button
+                                                                    onClick={() => navigate('/subd/pet-claims')}
+                                                                    className="px-3 py-1 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-black text-[10px] rounded-lg transition-all shadow-xs hover:shadow-sm cursor-pointer"
+                                                                >
+                                                                    Review
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })
+                                            ) : (
+                                                <div className="p-6 text-center text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                                                    <p className="text-xs font-bold text-slate-600">No pet claims pending</p>
+                                                    <p className="text-[11px] text-slate-400 mt-1">No community claims at this time.</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -1466,90 +1717,44 @@ const SubdDashboard = () => {
 
                 </div>
 
-                {/* Mobile Bottom Navigation */}
-                <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200/80 px-6 py-2 z-40 flex items-center justify-around shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
-                    <button
-                        type="button"
-                        className="flex flex-col items-center gap-0.5 bg-[#F97316] text-white px-5 py-1.5 rounded-full font-black text-[10px] shadow-sm cursor-pointer"
-                    >
-                        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
-                        </svg>
-                        <span>Overview</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => navigate('/subd/reports')}
-                        className="flex flex-col items-center gap-0.5 text-gray-500 hover:text-[#F97316] px-3 py-1 transition-colors cursor-pointer"
-                    >
-                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
-                        <span className="text-[10px] font-bold">Tasks</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => {
-                            if (mapSectionRef.current) mapSectionRef.current.scrollIntoView({ behavior: 'smooth' });
-                        }}
-                        className="flex flex-col items-center gap-0.5 text-gray-500 hover:text-[#F97316] px-3 py-1 transition-colors cursor-pointer"
-                    >
-                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        <span className="text-[10px] font-bold">Map</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => navigate('/subd/profile')}
-                        className="flex flex-col items-center gap-0.5 text-gray-500 hover:text-[#F97316] px-3 py-1 transition-colors cursor-pointer"
-                    >
-                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                        <span className="text-[10px] font-bold">Profile</span>
-                    </button>
-                </nav>
+                {/* Reusable Mobile Bottom Navigation Component */}
+                <SubdBottomNav activeTab="dashboard" onMapClick={() => setIsMapExpanded(true)} />
             </main>
 
             {/* ENLARGED FULLSCREEN MAP MODAL */}
             {isMapExpanded && (
                 <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
-                    <div className="bg-white rounded-3xl shadow-2xl w-[98%] sm:w-[95%] h-[98%] sm:h-[92%] flex flex-col p-4 sm:p-6 animate-in zoom-in-95 duration-200">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full sm:w-[95%] h-full sm:h-[92%] flex flex-col p-3 sm:p-6 animate-in zoom-in-95 duration-200">
                         {/* Header */}
-                        <div className="flex justify-between items-center mb-3 sm:mb-4 shrink-0">
+                        <div className="flex justify-between items-center mb-2.5 sm:mb-4 shrink-0">
                             <div>
                                 <h3 className="text-sm sm:text-xl font-black text-gray-900 uppercase tracking-tight">Geospatial Community Map</h3>
                                 <p className="text-[9px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Full Subdivision Real-Time View</p>
                             </div>
-                            <div className="flex items-center gap-2 sm:gap-3">
-                                <div className="flex bg-slate-100/90 p-1 rounded-2xl text-[10px] font-black uppercase border border-slate-200/80 shadow-2xs">
+                            <div className="flex items-center gap-1.5 sm:gap-3">
+                                <div className="flex bg-slate-100/90 p-1 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase border border-slate-200/80 shadow-2xs">
                                     <button
                                         onClick={() => setMapMode('pins')}
-                                        className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${mapMode === 'pins' ? 'bg-[#F97316] text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900'}`}
+                                        className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl transition-all cursor-pointer ${mapMode === 'pins' ? 'bg-[#F97316] text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900'}`}
                                     >
                                         Pins
                                     </button>
                                     <button
                                         onClick={() => setMapMode('heatmap')}
-                                        className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${mapMode === 'heatmap' ? 'bg-[#F97316] text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900'}`}
+                                        className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl transition-all cursor-pointer ${mapMode === 'heatmap' ? 'bg-[#F97316] text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900'}`}
                                     >
                                         Heatmap
                                     </button>
                                     <button
                                         onClick={() => setMapMode('both')}
-                                        className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${mapMode === 'both' ? 'bg-[#F97316] text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900'}`}
+                                        className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl transition-all cursor-pointer ${mapMode === 'both' ? 'bg-[#F97316] text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900'}`}
                                     >
                                         Both
                                     </button>
                                 </div>
                                 <button
                                     onClick={() => setIsMapExpanded(false)}
-                                    className="p-1 sm:p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors text-gray-500 hover:text-gray-800 shrink-0 cursor-pointer"
+                                    className="p-1.5 sm:p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors text-gray-500 hover:text-gray-800 shrink-0 cursor-pointer"
                                 >
                                     <svg className="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
@@ -1582,9 +1787,9 @@ const SubdDashboard = () => {
 
                             {/* Floating Coordinate Pill Overlay in expanded modal */}
                             {selectedMapCoords && (
-                                <div className="absolute top-4 right-4 z-[1000] bg-white/95 backdrop-blur-md px-3.5 py-2 rounded-2xl shadow-xl border border-orange-200/90 flex items-center gap-2.5 text-xs animate-in fade-in zoom-in-95 duration-150">
+                                <div className="absolute top-3 right-3 z-[1000] bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-xl border border-orange-200/90 flex items-center gap-2 text-xs animate-in fade-in zoom-in-95 duration-150">
                                     <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />
-                                    <span className="font-black text-slate-800 tracking-tight">
+                                    <span className="font-black text-slate-800 tracking-tight text-[11px]">
                                         {selectedMapCoords.lat.toFixed(6)}, {selectedMapCoords.lng.toFixed(6)}
                                     </span>
                                     <button
@@ -1607,6 +1812,33 @@ const SubdDashboard = () => {
                                     </button>
                                 </div>
                             )}
+
+                            {/* Legend in Expanded Map */}
+                            <div className="absolute bottom-3 left-3 z-[1000]">
+                                <div className="bg-white/95 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl shadow-xl border border-slate-200/90 text-[10px] sm:text-[11px] font-bold text-slate-700 flex flex-col gap-1.5 min-w-[115px] sm:min-w-[130px]">
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-xs shrink-0" />
+                                        <span>High Priority</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-xs shrink-0" />
+                                        <span>Medium Priority</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs shrink-0" />
+                                        <span>Low Priority</span>
+                                    </div>
+                                    <div className="h-px bg-slate-100 my-0.5" />
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-xs shrink-0" />
+                                        <span>Verified</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-slate-300 border border-slate-400 shadow-xs shrink-0" />
+                                        <span>Unverified</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

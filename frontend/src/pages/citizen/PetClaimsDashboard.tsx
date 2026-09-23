@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import api from '../../utils/api';
+import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import { MapContainer, TileLayer, Marker, Popup, Polygon } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -32,186 +34,12 @@ const SELERA_POLYGON = [
     { lat: 14.802461, lng: 121.003280 }
 ];
 
-// Mock database for citizen matches and claims
-const MOCK_RESIDENT_CLAIMS = [
-    {
-        claim_id: 101,
-        report_id: 2004,
-        pet_id: 1,
-        status: "Pending Review",
-        remarks: "Subdivision staff is reviewing the submitted vaccination files. Please wait for coordinates verification.",
-        similarity_score: 94.5,
-        reported_date: "2026-06-05",
-        sighting_location: "Phase 2, Selera Homes",
-        sighting_lat: 14.8018,
-        sighting_lng: 121.0035,
-        description: "Belgian Shepherd seen drinking water near the basketball court. Friendly, responded to name whistle, wearing no collar.",
-        sighting_photo: "https://images.unsplash.com/photo-1589941013453-ec89f33b5e95?w=600&auto=format&fit=crop",
-        
-        pet: {
-            pet_name: "Bruno",
-            pet_type: "Dog",
-            breed: "Belgian Shepherd",
-            gender: "Male",
-            primary_color: "Brown",
-            secondary_color: "Black",
-            distinctive_markings: "Black muzzle, tan socks, small white patch on chest",
-            registered_address: "Blk 4 Lot 12, Phase 2, Selera Homes",
-            registered_latitude: 14.801496,
-            registered_longitude: 121.003280,
-            photo_url: "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop"
-        },
-        
-        evidence_url: "https://images.unsplash.com/photo-1584036561566-baf241f8022a?w=600&auto=format&fit=crop",
-        previous_photos: [
-            "https://images.unsplash.com/photo-1530281700549-e82e7bf110d6?w=600&auto=format&fit=crop",
-            "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=600&auto=format&fit=crop"
-        ],
-        supporting_docs: ["vaccine_cert.pdf", "owner_license_bruno.png"],
-        owner_notes: "Bruno escaped through the main gate when deliveries were arriving. He's very gentle."
-    },
-    {
-        claim_id: 102,
-        report_id: 2005,
-        pet_id: 2,
-        status: "Evidence Requested",
-        remarks: "Please upload a clearer scan of the official vaccine registration booklet showing the veterinarian stamp.",
-        similarity_score: 89.2,
-        reported_date: "2026-06-04",
-        sighting_location: "Block 4, Selera Homes",
-        sighting_lat: 14.8005,
-        sighting_lng: 121.0042,
-        description: "Siamese cat spotted sitting on top of the brick boundary wall.",
-        sighting_photo: "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600&auto=format&fit=crop",
-        
-        pet: {
-            pet_name: "Luna",
-            pet_type: "Cat",
-            breed: "Siamese",
-            gender: "Female",
-            primary_color: "Cream",
-            secondary_color: "Brown",
-            distinctive_markings: "Dark point markings on tail, ears and face",
-            registered_address: "Blk 12 Lot 3, Selera Homes",
-            registered_latitude: 14.8002,
-            registered_longitude: 121.0040,
-            photo_url: "https://images.unsplash.com/photo-1533738363-b7f9aef128ce?w=600&auto=format&fit=crop"
-        },
-        
-        evidence_url: "",
-        previous_photos: [
-            "https://images.unsplash.com/photo-1573865526739-10659fec78a5?w=600&auto=format&fit=crop"
-        ],
-        supporting_docs: [],
-        owner_notes: "Luna wears a silver collar with a tiny bell."
-    },
-    {
-        claim_id: 103,
-        report_id: 2006,
-        pet_id: 3,
-        status: "Approved",
-        remarks: "Ownership claim verified. Please coordinate with subdivision security center for handoff.",
-        similarity_score: 95.8,
-        reported_date: "2026-06-03",
-        sighting_location: "Phase 3, Selera Homes",
-        sighting_lat: 14.8022,
-        sighting_lng: 121.0028,
-        description: "A fluffy white cat resting near the clubhouse garden.",
-        sighting_photo: "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=600&auto=format&fit=crop",
-        
-        pet: {
-            pet_name: "Bella",
-            pet_type: "Cat",
-            breed: "Mixed Breed",
-            gender: "Female",
-            primary_color: "White",
-            secondary_color: "None",
-            distinctive_markings: "Heterochromia, pink collar, fluffy tail",
-            registered_address: "Blk 8 Lot 5, Phase 3, Selera Homes",
-            registered_latitude: 14.802461,
-            registered_longitude: 121.003280,
-            photo_url: "https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=600&auto=format&fit=crop"
-        },
-        
-        evidence_url: "https://images.unsplash.com/photo-1584036561566-baf241f8022a?w=600&auto=format&fit=crop",
-        previous_photos: [],
-        supporting_docs: ["bellapassport.pdf"],
-        owner_notes: "She is very friendly and vocal when hungry. Thank you so much!"
-    },
-    {
-        claim_id: 104,
-        report_id: 2007,
-        pet_id: 4,
-        status: "Rejected",
-        remarks: "Sighting report details a light brown retriever whereas the registered pet is a black shepherd mix.",
-        similarity_score: 61.3,
-        reported_date: "2026-06-02",
-        sighting_location: "Subdivision Gate 1",
-        sighting_lat: 14.8010,
-        sighting_lng: 121.0048,
-        description: "A large golden retriever sitting quietly near the entrance guardhouse.",
-        sighting_photo: "https://images.unsplash.com/photo-1552053831-71594a27632d?w=600&auto=format&fit=crop",
-        
-        pet: {
-            pet_name: "Rocky",
-            pet_type: "Dog",
-            breed: "German Shepherd",
-            gender: "Male",
-            primary_color: "Black",
-            secondary_color: "Tan",
-            distinctive_markings: "Floppy right ear, white spot on left paw",
-            registered_address: "Blk 1 Lot 9, Selera Homes",
-            registered_latitude: 14.799577,
-            registered_longitude: 121.003911,
-            photo_url: "https://images.unsplash.com/photo-1589941013453-ec89f33b5e95?w=600&auto=format&fit=crop"
-        },
-        
-        evidence_url: "",
-        previous_photos: [],
-        supporting_docs: [],
-        owner_notes: "Rocky was lost near gate 1."
-    },
-    {
-        claim_id: 105,
-        report_id: 2008,
-        pet_id: 5,
-        status: "Possible Match Found",
-        remarks: "",
-        similarity_score: 91.7,
-        reported_date: "2026-06-06",
-        sighting_location: "Selera Park Playground",
-        sighting_lat: 14.8015,
-        sighting_lng: 121.0030,
-        description: "Brown puppy running around the slide. Super playful.",
-        sighting_photo: "https://images.unsplash.com/photo-1530281700549-e82e7bf110d6?w=600&auto=format&fit=crop",
-        
-        pet: {
-            pet_name: "Buddy",
-            pet_type: "Dog",
-            breed: "Aspin",
-            gender: "Male",
-            primary_color: "Brown",
-            secondary_color: "White",
-            distinctive_markings: "White chest patch, white tail tip",
-            registered_address: "Blk 5 Lot 8, Selera Homes",
-            registered_latitude: 14.800634,
-            registered_longitude: 121.002228,
-            photo_url: "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=600&auto=format&fit=crop"
-        },
-        
-        evidence_url: "",
-        previous_photos: [],
-        supporting_docs: [],
-        owner_notes: ""
-    }
-];
-
 const PetClaimsDashboard = () => {
     const navigate = useNavigate();
     
     // Core states
-    const [claims, setClaims] = useState<any[]>(MOCK_RESIDENT_CLAIMS);
-    const [selectedClaim, setSelectedClaim] = useState<any>(MOCK_RESIDENT_CLAIMS[0]);
+    const [claims, setClaims] = useState<any[]>([]);
+    const [selectedClaim, setSelectedClaim] = useState<any>(null);
     const [statusFilter, setStatusFilter] = useState('All Claims');
     const [searchQuery, setSearchQuery] = useState('');
     const [activeDetailTab, setActiveDetailTab] = useState<'compare' | 'evidence' | 'timeline' | 'map'>('compare');
@@ -220,17 +48,13 @@ const PetClaimsDashboard = () => {
     
     // Evidence submission state
     const [evidenceNotes, setEvidenceNotes] = useState('');
-    const [vaccineAttached, setVaccineAttached] = useState<string | null>(null);
-    const [petPhotosAttached, setPetPhotosAttached] = useState<string[]>([]);
-    const [supportingDocsAttached, setSupportingDocsAttached] = useState<string[]>([]);
+    const [vaccineFile, setVaccineFile] = useState<File | null>(null);
+    const [petPhotosFiles, setPetPhotosFiles] = useState<File[]>([]);
+    const [supportingDocsFiles, setSupportingDocsFiles] = useState<File[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Notifications state
-    const [notifications, setNotifications] = useState<any[]>([
-        { id: 1, text: "AI detected a 94.5% potential match for Bruno in Selera Homes", time: "2 hours ago", type: "match" },
-        { id: 2, text: "Evidence requested for Siamese Cat Luna match", time: "1 day ago", type: "action" },
-        { id: 3, text: "Claim for Bella has been approved by Barangay Officials", time: "3 days ago", type: "success" }
-    ]);
+    const [notifications, setNotifications] = useState<any[]>([]);
 
     const userStr = localStorage.getItem('resident_user');
     const residentUser = userStr ? JSON.parse(userStr) : null;
@@ -245,100 +69,118 @@ const PetClaimsDashboard = () => {
 
     const fetchResidentClaims = async () => {
         try {
-            // Attempt fetching claims registered to the user
-            const res = await axios.get(`http://localhost:8000/claims/?owner_id=${residentUser.user_id}`);
-            if (res.data && res.data.length > 0) {
-                // Merge real DB claims with our mockup claims
-                const transformed = res.data.map((c: any) => {
-                    const matchedMock = MOCK_RESIDENT_CLAIMS.find(m => m.report_id === c.report_id);
-                    return {
-                        claim_id: c.claim_id,
-                        report_id: c.report_id,
-                        pet_id: c.pet_id,
-                        status: c.status,
-                        remarks: c.remarks || "",
-                        similarity_score: c.match_score || matchedMock?.similarity_score || 90.0,
-                        reported_date: c.report?.created_at?.slice(0, 10) || "2026-06-06",
-                        sighting_location: c.report?.landmark || "Selera Homes",
-                        sighting_lat: c.report?.latitude ? parseFloat(c.report.latitude) : 14.8018,
-                        sighting_lng: c.report?.longitude ? parseFloat(c.report.longitude) : 121.0035,
-                        description: c.report?.description || "Sighted stray animal",
-                        sighting_photo: c.report?.media?.[0]?.file_url || "https://images.unsplash.com/photo-1530281700549-e82e7bf110d6?w=600&auto=format&fit=crop",
-                        pet: {
-                            pet_name: c.pet?.pet_name || "Unknown",
-                            pet_type: c.pet?.pet_type || "Dog",
-                            breed: c.pet?.breed || "Aspin",
-                            gender: c.pet?.gender || "Male",
-                            primary_color: c.pet?.primary_color || "Brown",
-                            secondary_color: c.pet?.secondary_color || "",
-                            distinctive_markings: c.pet?.distinctive_markings || "",
-                            registered_address: c.pet?.registered_address || c.pet?.owner?.address || "Registered Owner Address",
-                            registered_latitude: c.pet?.registered_latitude ? parseFloat(c.pet.registered_latitude) : 14.801496,
-                            registered_longitude: c.pet?.registered_longitude ? parseFloat(c.pet.registered_longitude) : 121.003280,
-                            photo_url: getPetPicture(c.pet?.photo_url)
-                        },
-                        evidence_url: c.evidence_url || "",
-                        previous_photos: matchedMock?.previous_photos || [],
-                        supporting_docs: matchedMock?.supporting_docs || [],
-                        owner_notes: c.remarks || ""
-                    };
+            const [claimsRes, notifsRes] = await Promise.allSettled([
+                axios.get(`http://localhost:8000/claims/?owner_id=${residentUser.user_id}`),
+                axios.get(`http://localhost:8000/notifications/user/${residentUser.user_id}`)
+            ]);
+
+            if (claimsRes.status === 'fulfilled' && claimsRes.value.data && claimsRes.value.data.length > 0) {
+                const transformed = claimsRes.value.data.map((c: any) => ({
+                    claim_id: c.claim_id,
+                    report_id: c.report_id,
+                    pet_id: c.pet_id,
+                    status: c.status,
+                    remarks: c.remarks || "",
+                    similarity_score: c.match_score || 90.0,
+                    reported_date: c.report?.created_at?.slice(0, 10) || (c.created_at ? c.created_at.slice(0, 10) : ""),
+                    sighting_location: c.report?.landmark || c.report?.location_description || "Selera Homes",
+                    sighting_lat: c.report?.latitude ? parseFloat(c.report.latitude) : 14.8018,
+                    sighting_lng: c.report?.longitude ? parseFloat(c.report.longitude) : 121.0035,
+                    description: c.report?.description || "Sighted stray animal",
+                    sighting_photo: c.report?.media?.[0]?.file_url || DEFAULT_PET_AVATAR,
+                    pet: {
+                        pet_name: c.pet?.pet_name || "Pet",
+                        pet_type: c.pet?.pet_type || "Dog",
+                        breed: c.pet?.breed || "Aspin",
+                        gender: c.pet?.gender || "Unknown",
+                        primary_color: c.pet?.primary_color || "Brown",
+                        secondary_color: c.pet?.secondary_color || "",
+                        distinctive_markings: c.pet?.distinctive_markings || c.distinctive_markings || "",
+                        registered_address: c.pet?.registered_address || c.pet?.owner?.address || "Registered Address",
+                        registered_latitude: c.pet?.registered_latitude ? parseFloat(c.pet.registered_latitude) : 14.801496,
+                        registered_longitude: c.pet?.registered_longitude ? parseFloat(c.pet.registered_longitude) : 121.003280,
+                        photo_url: getPetPicture(c.pet?.photo_url)
+                    },
+                    evidence_url: c.evidence_url || c.vaccine_card_url || "",
+                    vaccine_card_url: c.vaccine_card_url || "",
+                    vet_record_url: c.vet_record_url || "",
+                    registration_record_url: c.registration_record_url || "",
+                    additional_photos_url: c.additional_photos_url || "",
+                    previous_photos: c.additional_photos_url ? [c.additional_photos_url] : [],
+                    supporting_docs: [c.vaccine_card_url, c.vet_record_url, c.registration_record_url].filter(Boolean),
+                    owner_notes: c.remarks || ""
+                }));
+                setClaims(transformed);
+                setSelectedClaim((prev: any) => {
+                    if (!prev) return transformed[0];
+                    const found = transformed.find((t: any) => t.claim_id === prev.claim_id);
+                    return found || transformed[0];
                 });
-                
-                const merged = [...transformed];
-                MOCK_RESIDENT_CLAIMS.forEach(mock => {
-                    if (!merged.some(m => m.report_id === mock.report_id)) {
-                        merged.push(mock);
-                    }
-                });
-                setClaims(merged);
-                setSelectedClaim(merged[0]);
+            } else {
+                setClaims([]);
+                setSelectedClaim(null);
+            }
+
+            if (notifsRes.status === 'fulfilled' && notifsRes.value.data) {
+                setNotifications(notifsRes.value.data.map((n: any) => ({
+                    id: n.notification_id,
+                    text: n.message || n.title,
+                    time: n.created_at ? n.created_at.slice(0, 10) : "Recent",
+                    type: n.type || "action"
+                })));
+            } else {
+                setNotifications([]);
             }
         } catch (err) {
-            console.warn("Unable to fetch resident claims, relying on client simulation", err);
+            console.warn("Unable to fetch resident claims:", err);
+            setClaims([]);
+            setSelectedClaim(null);
         }
     };
 
-    // Simulate Claim Submission / Evidence Upload
-    const handleSimulatedSubmitClaim = (e: React.FormEvent) => {
+    // Real Claim Submission & Evidence Upload to Database / Cloudinary
+    const handleSubmitClaim = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedClaim) return;
         setIsSubmitting(true);
-        
-        setTimeout(() => {
-            const updated = claims.map(c => {
-                if (c.claim_id === selectedClaim.claim_id) {
-                    return {
-                        ...c,
-                        status: c.status === "Possible Match Found" ? "Pending Review" : c.status,
-                        owner_notes: evidenceNotes,
-                        evidence_url: vaccineAttached || "https://images.unsplash.com/photo-1584036561566-baf241f8022a?w=600&auto=format&fit=crop",
-                        previous_photos: petPhotosAttached.length > 0 ? petPhotosAttached : ["https://images.unsplash.com/photo-1530281700549-e82e7bf110d6?w=600&auto=format&fit=crop"],
-                        supporting_docs: supportingDocsAttached.length > 0 ? supportingDocsAttached : ["microchip_record.pdf"]
-                    };
-                }
-                return c;
-            });
-            
-            setClaims(updated);
-            const activeClaim = updated.find(c => c.claim_id === selectedClaim.claim_id);
-            setSelectedClaim(activeClaim);
-            setIsSubmitting(false);
 
-            // Add simulated notification
-            const newNotif = {
-                id: Date.now(),
-                text: `Successfully submitted claim documents for ${activeClaim.pet.pet_name}!`,
-                time: "Just now",
-                type: "success"
-            };
-            setNotifications([newNotif, ...notifications]);
+        try {
+            const uploads: { file: File; documentType: string }[] = [];
+            if (vaccineFile) uploads.push({ file: vaccineFile, documentType: 'vaccine_card' });
+            for (const f of petPhotosFiles) {
+                uploads.push({ file: f, documentType: 'additional_photo' });
+            }
+            for (const f of supportingDocsFiles) {
+                uploads.push({ file: f, documentType: 'vet_record' });
+            }
 
-            alert(`[Simulation Success] Ownership documents filed for ${activeClaim.pet.pet_name}. Status updated.`);
+            for (const item of uploads) {
+                const { url } = await uploadDirectToCloudinary(item.file, 'claims');
+                await api.post(`/claims/${selectedClaim.claim_id}/evidence`, {
+                    file_url: url,
+                    document_type: item.documentType
+                });
+            }
+
+            if (evidenceNotes) {
+                await api.patch(`/claims/${selectedClaim.claim_id}/status`, {
+                    status: selectedClaim.status === "Possible Match Found" ? "Pending Review" : selectedClaim.status,
+                    remarks: evidenceNotes
+                });
+            }
+
+            alert("Claim documents successfully submitted to database.");
             setEvidenceNotes('');
-            setVaccineAttached(null);
-            setPetPhotosAttached([]);
-            setSupportingDocsAttached([]);
-        }, 1000);
+            setVaccineFile(null);
+            setPetPhotosFiles([]);
+            setSupportingDocsFiles([]);
+            await fetchResidentClaims();
+        } catch (err: any) {
+            console.error("Evidence submission error:", err);
+            alert("Error submitting claim evidence: " + (err.response?.data?.detail || err.message));
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     // Filter Logic
@@ -680,8 +522,37 @@ const PetClaimsDashboard = () => {
                                                 </div>
                                             )}
 
+                                            {/* Current DB Evidence display if already submitted */}
+                                            {(selectedClaim.vaccine_card_url || selectedClaim.vet_record_url || selectedClaim.registration_record_url || selectedClaim.evidence_url) && (
+                                                <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-4 space-y-2">
+                                                    <h5 className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">Active Verification Proofs in Database</h5>
+                                                    <div className="flex flex-wrap gap-2 text-xs">
+                                                        {selectedClaim.vaccine_card_url && (
+                                                            <a href={selectedClaim.vaccine_card_url} target="_blank" rel="noreferrer" className="px-3 py-1 bg-white border border-emerald-200 rounded-lg text-emerald-700 font-bold hover:underline shadow-2xs">
+                                                                📄 Vaccination Card
+                                                            </a>
+                                                        )}
+                                                        {selectedClaim.vet_record_url && (
+                                                            <a href={selectedClaim.vet_record_url} target="_blank" rel="noreferrer" className="px-3 py-1 bg-white border border-emerald-200 rounded-lg text-emerald-700 font-bold hover:underline shadow-2xs">
+                                                                🩺 Vet Record
+                                                            </a>
+                                                        )}
+                                                        {selectedClaim.registration_record_url && (
+                                                            <a href={selectedClaim.registration_record_url} target="_blank" rel="noreferrer" className="px-3 py-1 bg-white border border-emerald-200 rounded-lg text-emerald-700 font-bold hover:underline shadow-2xs">
+                                                                📜 Registration Certificate
+                                                            </a>
+                                                        )}
+                                                        {selectedClaim.evidence_url && !selectedClaim.vaccine_card_url && (
+                                                            <a href={selectedClaim.evidence_url} target="_blank" rel="noreferrer" className="px-3 py-1 bg-white border border-emerald-200 rounded-lg text-emerald-700 font-bold hover:underline shadow-2xs">
+                                                                📎 Primary Evidence
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             {/* Evidence submission form */}
-                                            <form onSubmit={handleSimulatedSubmitClaim} className="space-y-5">
+                                            <form onSubmit={handleSubmitClaim} className="space-y-5">
                                                 <div className="bg-gray-50 rounded-2xl p-5 border border-gray-150 space-y-4">
                                                     <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Ownership Verification Submissions</h4>
                                                     <p className="text-[10px] text-gray-400 font-bold uppercase leading-normal">
@@ -689,57 +560,95 @@ const PetClaimsDashboard = () => {
                                                     </p>
 
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                        {/* Vaccine card simulator */}
+                                                        {/* Vaccine card upload */}
                                                         <div className="space-y-2">
                                                             <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Attach Vaccination Card</label>
                                                             <div className="border border-dashed border-gray-200 bg-white rounded-xl p-3 flex items-center justify-between text-xs">
-                                                                <span className="font-semibold text-gray-500">vaccine_record.jpg</span>
+                                                                <span className="font-semibold text-gray-500 truncate max-w-[150px]">
+                                                                    {vaccineFile ? vaccineFile.name : 'No file chosen'}
+                                                                </span>
+                                                                <input 
+                                                                    type="file" 
+                                                                    id="vaccineCardInput"
+                                                                    accept="image/*,application/pdf"
+                                                                    className="hidden"
+                                                                    onChange={(e) => {
+                                                                        if (e.target.files && e.target.files[0]) {
+                                                                            setVaccineFile(e.target.files[0]);
+                                                                        }
+                                                                    }}
+                                                                />
                                                                 <button 
                                                                     type="button" 
-                                                                    onClick={() => setVaccineAttached("https://images.unsplash.com/photo-1584036561566-baf241f8022a?w=600&auto=format&fit=crop")}
+                                                                    onClick={() => document.getElementById('vaccineCardInput')?.click()}
                                                                     className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all ${
-                                                                        vaccineAttached ? 'bg-green-50 text-green-600 border-green-100' : 'bg-orange-50 text-[#F97316] border-orange-100 hover:bg-orange-100'
+                                                                        vaccineFile ? 'bg-green-50 text-green-600 border-green-100' : 'bg-orange-50 text-[#F97316] border-orange-100 hover:bg-orange-100'
                                                                     }`}
                                                                 >
-                                                                    {vaccineAttached ? 'Attached ✓' : 'Upload'}
+                                                                    {vaccineFile ? 'Selected ✓' : 'Upload'}
                                                                 </button>
                                                             </div>
                                                         </div>
 
-                                                        {/* Previous photos simulator */}
+                                                        {/* Previous photos upload */}
                                                         <div className="space-y-2">
                                                             <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Previous Pet Photos</label>
                                                             <div className="border border-dashed border-gray-200 bg-white rounded-xl p-3 flex items-center justify-between text-xs">
-                                                                <span className="font-semibold text-gray-500">
-                                                                    {petPhotosAttached.length > 0 ? `${petPhotosAttached.length} Photo(s) Attached` : 'No Photos'}
+                                                                <span className="font-semibold text-gray-500 truncate max-w-[150px]">
+                                                                    {petPhotosFiles.length > 0 ? `${petPhotosFiles.length} Photo(s) Selected` : 'No Photos'}
                                                                 </span>
+                                                                <input 
+                                                                    type="file" 
+                                                                    id="petPhotosInput"
+                                                                    accept="image/*"
+                                                                    multiple
+                                                                    className="hidden"
+                                                                    onChange={(e) => {
+                                                                        if (e.target.files) {
+                                                                            setPetPhotosFiles(Array.from(e.target.files));
+                                                                        }
+                                                                    }}
+                                                                />
                                                                 <button 
-                                                                    type="button"
-                                                                    onClick={() => setPetPhotosAttached([
-                                                                        "https://images.unsplash.com/photo-1530281700549-e82e7bf110d6?w=600&auto=format&fit=crop",
-                                                                        "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=600&auto=format&fit=crop"
-                                                                    ])}
-                                                                    className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 border border-orange-100 rounded-lg text-[#F97316] text-[9px] font-black uppercase tracking-wider transition-all"
+                                                                    type="button" 
+                                                                    onClick={() => document.getElementById('petPhotosInput')?.click()}
+                                                                    className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all ${
+                                                                        petPhotosFiles.length > 0 ? 'bg-green-50 text-green-600 border-green-100' : 'bg-orange-50 text-[#F97316] border-orange-100 hover:bg-orange-100'
+                                                                    }`}
                                                                 >
-                                                                    Attach Files
+                                                                    {petPhotosFiles.length > 0 ? 'Selected ✓' : 'Attach Photos'}
                                                                 </button>
                                                             </div>
                                                         </div>
                                                     </div>
 
-                                                    {/* Supporting files simulator */}
+                                                    {/* Supporting files upload */}
                                                     <div className="space-y-2">
                                                         <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Other Documents (PDF/License/Clinic receipts)</label>
                                                         <div className="border border-dashed border-gray-200 bg-white rounded-xl p-3.5 flex items-center justify-between text-xs">
-                                                            <span className="font-semibold text-gray-500">
-                                                                {supportingDocsAttached.length > 0 ? supportingDocsAttached.join(', ') : 'No legal license attached'}
+                                                            <span className="font-semibold text-gray-500 truncate max-w-[200px]">
+                                                                {supportingDocsFiles.length > 0 ? `${supportingDocsFiles.length} document(s) chosen` : 'No document selected'}
                                                             </span>
+                                                            <input 
+                                                                type="file" 
+                                                                id="supportingDocsInput"
+                                                                accept="image/*,application/pdf"
+                                                                multiple
+                                                                className="hidden"
+                                                                onChange={(e) => {
+                                                                    if (e.target.files) {
+                                                                        setSupportingDocsFiles(Array.from(e.target.files));
+                                                                    }
+                                                                }}
+                                                            />
                                                             <button 
-                                                                type="button"
-                                                                onClick={() => setSupportingDocsAttached(["microchip_record.pdf", "clinic_receipt.png"])}
-                                                                className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 border border-orange-100 rounded-lg text-[#F97316] text-[9px] font-black uppercase tracking-wider transition-all"
+                                                                type="button" 
+                                                                onClick={() => document.getElementById('supportingDocsInput')?.click()}
+                                                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all ${
+                                                                    supportingDocsFiles.length > 0 ? 'bg-green-50 text-green-600 border-green-100' : 'bg-orange-50 text-[#F97316] border-orange-100 hover:bg-orange-100'
+                                                                }`}
                                                             >
-                                                                Add PDF
+                                                                {supportingDocsFiles.length > 0 ? 'Selected ✓' : 'Add Files'}
                                                             </button>
                                                         </div>
                                                     </div>
@@ -761,7 +670,7 @@ const PetClaimsDashboard = () => {
                                                     disabled={isSubmitting || selectedClaim.status === "Approved"}
                                                     className="w-full h-12 bg-[#F97316] hover:bg-[#EA580C] disabled:bg-gray-200 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-orange-100/50 cursor-pointer"
                                                 >
-                                                    {isSubmitting ? 'Uploading Documents...' : 'Submit Claim Evidence'}
+                                                    {isSubmitting ? 'Uploading Documents to Database...' : 'Submit Claim Evidence'}
                                                 </button>
                                             </form>
                                         </div>

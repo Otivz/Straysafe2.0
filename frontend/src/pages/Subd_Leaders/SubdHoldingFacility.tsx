@@ -9,6 +9,7 @@ import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
+import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -462,6 +463,7 @@ const SubdHoldingFacility = () => {
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 <SubdNavbar
+                    onMenuToggle={() => setMobileMenuOpen(true)}
                     leftContent={
                         <div className="flex flex-col">
                             <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">
@@ -474,7 +476,7 @@ const SubdHoldingFacility = () => {
                     }
                 />
 
-                <main className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
+                <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-36 md:pb-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto space-y-6">
 
                         {/* ── Facility Selector & Management Header ─────────── */}
@@ -995,6 +997,7 @@ const SubdHoldingFacility = () => {
 
                     </div>
                 </main>
+                <SubdBottomNav />
             </div>
 
             {/* ── DETAIL & CARE MODAL ──────────────────────────────────────── */}

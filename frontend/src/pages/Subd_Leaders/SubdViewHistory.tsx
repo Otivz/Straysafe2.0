@@ -4,6 +4,7 @@ import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
+import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import MapComponent from '../../components/MapComponent';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
@@ -100,6 +101,7 @@ const SubdViewHistory = () => {
     const [isNavigating, setIsNavigating] = useState(false);
     const [navSource, setNavSource] = useState<'brgy' | 'current'>('brgy');
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const BRGY_OFFICE: [number, number] = [14.8069, 121.0039]; // Santa Maria, Bulacan
 
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
@@ -432,10 +434,11 @@ const SubdViewHistory = () => {
 
     return (
         <div className="flex h-screen bg-[#F8FAFC]">
-            <SubdSidebar />
+            <SubdSidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 <SubdNavbar
+                    onMenuToggle={() => setMobileMenuOpen(true)}
                     leftContent={
                         <div className="flex items-center gap-4">
                             <Link to="/subd/history" className="w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all shrink-0">
@@ -451,7 +454,7 @@ const SubdViewHistory = () => {
                     }
                 />
 
-                <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-36 md:pb-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto">
                         {loading ? (
                             <div className="py-32 flex flex-col items-center justify-center gap-4">
@@ -930,6 +933,7 @@ const SubdViewHistory = () => {
                         )}
                     </div>
                 </main>
+                <SubdBottomNav />
             </div>
 
             {/* Media Gallery Overlay */}

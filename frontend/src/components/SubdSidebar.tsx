@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import Button from './Button';
@@ -359,16 +360,20 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
             </aside>
 
             {/* Mobile Drawer */}
-            {mobileOpen && (
-                <div className="md:hidden fixed inset-0 z-[999] flex">
+            {mobileOpen && createPortal(
+                <div className="md:hidden fixed inset-0 z-[99999] flex justify-end">
                     <div
-                        className="fixed inset-0 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200"
+                        className="fixed inset-0 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
                         onClick={onMobileClose}
                     />
-                    <aside className="relative w-72 max-w-[80vw] bg-white h-full shadow-2xl flex flex-col justify-between z-10 animate-in slide-in-from-left duration-200">
+                    <aside 
+                        style={{ backgroundColor: '#ffffff' }}
+                        className="relative w-72 max-w-[80vw] !bg-white bg-white h-full shadow-2xl flex flex-col justify-between z-10 animate-in slide-in-from-right duration-200"
+                    >
                         {navContent}
                     </aside>
-                </div>
+                </div>,
+                document.body
             )}
         </>
     );

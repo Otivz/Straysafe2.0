@@ -277,34 +277,34 @@ const PetMatchReview = () => {
                 sighting_lat: parseFloat(report.latitude) || 14.8018,
                 sighting_lng: parseFloat(report.longitude) || 121.0035,
                 description: report.description || "Roaming stray animal Sighting",
-                sighting_photo: report.media?.[0]?.file_url || "https://images.unsplash.com/photo-1530281700549-e82e7bf110d6?w=600&auto=format&fit=crop",
+                sighting_photo: report.media?.[0]?.file_url || "",
                 
                 pet: {
-                    pet_name: matchedPet?.pet_name || "Bruno",
+                    pet_name: matchedPet?.pet_name || "Pet",
                     pet_type: matchedPet?.pet_type || "Dog",
-                    breed: matchedPet?.breed || "Aspin",
-                    gender: matchedPet?.gender || "Male",
-                    primary_color: matchedPet?.primary_color || "Brown",
+                    breed: matchedPet?.breed || "",
+                    gender: matchedPet?.gender || "",
+                    primary_color: matchedPet?.primary_color || "",
                     secondary_color: matchedPet?.secondary_color || "",
-                    distinctive_markings: distinctiveMarkings || matchedPet?.distinctive_markings || "White chest markings",
-                    registered_address: matchedPet?.registered_address || matchedPet?.owner?.address || "Registered Owner Address",
-                    registered_latitude: matchedPet?.registered_latitude || 14.801496,
-                    registered_longitude: matchedPet?.registered_longitude || 121.003280,
-                    photo_url: matchedPet?.photo_url || "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop",
+                    distinctive_markings: distinctiveMarkings || matchedPet?.distinctive_markings || "",
+                    registered_address: matchedPet?.registered_address || matchedPet?.owner?.address || "",
+                    registered_latitude: matchedPet?.registered_latitude || null,
+                    registered_longitude: matchedPet?.registered_longitude || null,
+                    photo_url: matchedPet?.photo_url || "",
                     owner: {
                         name: currentUser?.name || "Citizen Owner",
-                        email: currentUser?.email || "owner@gmail.com",
-                        phone: currentUser?.phone || "09151112223"
+                        email: currentUser?.email || "",
+                        phone: currentUser?.phone || ""
                     }
                 },
                 
-                evidence_url: (vaccineCardName || vetRecordName || petRegRecordName || prevPhotoName) ? "https://images.unsplash.com/photo-1584036561566-baf241f8022a?w=600&auto=format&fit=crop" : "",
+                evidence_url: "",
                 vaccine_card_url: "",
                 vet_record_url: "",
                 registration_record_url: "",
                 additional_photos_url: "",
                 distinctive_markings: distinctiveMarkings || "",
-                previous_photos: prevPhotoName ? ["https://images.unsplash.com/photo-1530281700549-e82e7bf110d6?w=600&auto=format&fit=crop"] : [],
+                previous_photos: [],
                 supporting_docs: [
                     vetRecordName ? `vet_records_${vetRecordName}` : "",
                     petRegRecordName ? `pet_reg_${petRegRecordName}` : ""

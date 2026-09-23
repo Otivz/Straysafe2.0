@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import axios from 'axios';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
+import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import { getCachedData, setCachedData } from '../../utils/cache';
 
 // Announcement type for broadcast module
@@ -53,6 +54,7 @@ const SubdHazardAlert = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
     const [newCommentText, setNewCommentText] = useState('');
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     const [announcements, setAnnouncements] = useState<Announcement[]>(() => getCachedData<Announcement[]>('subd_announcements') || []);
 
@@ -486,20 +488,13 @@ const SubdHazardAlert = () => {
     };
 
     return (
-        <div className="min-h-screen w-full flex bg-[#FDFDFD] font-sans text-gray-800 relative overflow-hidden">
-            {/* Decorative Background Elements */}
-            <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-[#F97316]/5 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2 z-0"></div>
-            <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-orange-50/50 rounded-full blur-[120px] pointer-events-none translate-x-1/3 translate-y-1/3 z-0"></div>
+        <div className="flex h-screen bg-[#F8FAFC]">
+            <SubdSidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
 
-            {/* Sidebar */}
-            <div className="z-10 flex shrink-0">
-                <SubdSidebar />
-            </div>
-
-            {/* Main Content */}
-            <main className="flex-1 flex flex-col h-screen overflow-hidden">
+            <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Navbar */}
                 <SubdNavbar
+                    onMenuToggle={() => setMobileMenuOpen(true)}
                     leftContent={
                         <div className="flex flex-col">
                             <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Announcements</h1>
@@ -509,7 +504,8 @@ const SubdHazardAlert = () => {
                 />
 
                 {/* Scrollable Content Area */}
-                <div className="flex-1 overflow-y-auto p-10 flex flex-col gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent relative z-10">
+                <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-36 md:pb-8 flex flex-col gap-6 sm:gap-8 custom-scrollbar">
+                    <div className="max-w-7xl mx-auto w-full flex flex-col gap-6 sm:gap-8">
 
 
                     {/* Create Announcement Modal */}
@@ -1037,8 +1033,10 @@ const SubdHazardAlert = () => {
                             </div>
                         </div>
                     , document.body)}
-                </div>
-            </main>
+                    </div>
+                </main>
+                <SubdBottomNav />
+            </div>
         </div>
     );
 };

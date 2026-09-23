@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
+import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import Button from '../../components/Button';
 import axios from 'axios';
 import { getCachedData, setCachedData } from '../../utils/cache';
@@ -24,6 +25,7 @@ const EndorsementArch = () => {
     const [loadingMission, setLoadingMission] = useState(false);
     const [docs, setDocs] = useState<EndorsementDocument[]>(() => getCachedData<EndorsementDocument[]>('subd_endorsement_docs') || []);
     const [loadingDocs, setLoadingDocs] = useState<boolean>(() => !getCachedData<EndorsementDocument[]>('subd_endorsement_docs'));
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
 
 
@@ -267,10 +269,11 @@ const EndorsementArch = () => {
 
     return (
         <div className="flex h-screen bg-[#F8FAFC]">
-            <SubdSidebar />
+            <SubdSidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 <SubdNavbar
+                    onMenuToggle={() => setMobileMenuOpen(true)}
                     leftContent={
                         <div className="flex flex-col">
                             <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Endorsement Archive</h1>
@@ -279,7 +282,7 @@ const EndorsementArch = () => {
                     }
                 />
 
-                <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-36 md:pb-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto">
                         
                         {/* Header Section */}
@@ -401,6 +404,7 @@ const EndorsementArch = () => {
 
                     </div>
                 </main>
+                <SubdBottomNav />
             </div>
 
             {/* Endorsement Preview Modal */}
