@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
+import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import DataTable from '../../components/DataTable';
 import axios from 'axios';
 import { getCachedData, setCachedData } from '../../utils/cache';
@@ -42,6 +43,7 @@ const EscelatedMissions = () => {
     // Chat Drawer state
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [selectedChatReport, setSelectedChatReport] = useState<any | null>(null);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -365,10 +367,11 @@ const EscelatedMissions = () => {
 
     return (
         <div className="flex h-screen bg-[#F8FAFC]">
-            <SubdSidebar />
+            <SubdSidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 <SubdNavbar
+                    onMenuToggle={() => setMobileMenuOpen(true)}
                     leftContent={
                         <div className="flex flex-col">
                             <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Escalated Missions</h1>
@@ -377,34 +380,80 @@ const EscelatedMissions = () => {
                     }
                 />
 
-                <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-36 md:pb-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto">
 
                         {/* Stats Overview */}
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-6 md:mb-8">
                             {[
-                                { label: 'Total Escalated', value: totalEscalated.toString(), color: 'bg-orange-500' },
-                                { label: 'Pending Action', value: pendingAction.toString(), color: 'bg-amber-500' },
-                                { label: 'In Progress', value: inProgress.toString(), color: 'bg-blue-500' },
-                                { label: 'Resolved Today', value: resolvedTodayCount.toString(), color: 'bg-green-500' },
+                                { 
+                                    label: 'Total Escalated', 
+                                    value: totalEscalated.toString(), 
+                                    accent: 'border-orange-100/90', 
+                                    dot: 'bg-orange-500', 
+                                    textColor: 'text-slate-900',
+                                    badgeBg: 'bg-orange-50 text-orange-600',
+                                    icon: '🚨' 
+                                },
+                                { 
+                                    label: 'Pending Action', 
+                                    value: pendingAction.toString(), 
+                                    accent: 'border-amber-100/90', 
+                                    dot: 'bg-amber-500', 
+                                    textColor: 'text-amber-500',
+                                    badgeBg: 'bg-amber-50 text-amber-600',
+                                    icon: '⏳' 
+                                },
+                                { 
+                                    label: 'In Progress', 
+                                    value: inProgress.toString(), 
+                                    accent: 'border-sky-100/90', 
+                                    dot: 'bg-sky-500', 
+                                    textColor: 'text-sky-600',
+                                    badgeBg: 'bg-sky-50 text-sky-600',
+                                    icon: '⚡' 
+                                },
+                                { 
+                                    label: 'Resolved Today', 
+                                    value: resolvedTodayCount.toString(), 
+                                    accent: 'border-emerald-100/90', 
+                                    dot: 'bg-emerald-500', 
+                                    textColor: 'text-emerald-600',
+                                    badgeBg: 'bg-emerald-50 text-emerald-600',
+                                    icon: '✅' 
+                                },
                             ].map((stat, i) => (
-                                <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div className={`w-2 h-2 rounded-full ${stat.color}`}></div>
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{stat.label}</span>
+                                <div 
+                                    key={i} 
+                                    className={`bg-white p-4 sm:p-5 md:p-6 rounded-3xl border ${stat.accent} shadow-2xs hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between relative overflow-hidden group cursor-pointer`}
+                                >
+                                    <span className="absolute top-2 right-2 text-2xl opacity-10 select-none pointer-events-none group-hover:opacity-20 transition-opacity">🐾</span>
+                                    <div className="flex items-center justify-between gap-1 mb-2 relative z-10">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            <span className="relative flex h-2 w-2 shrink-0">
+                                                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${stat.dot} opacity-75`}></span>
+                                                <span className={`relative inline-flex rounded-full h-2 w-2 ${stat.dot}`}></span>
+                                            </span>
+                                            <span className="text-[9px] sm:text-[10px] font-black text-slate-500 uppercase tracking-wider truncate">{stat.label}</span>
+                                        </div>
+                                        <span className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-full ${stat.badgeBg} shrink-0`}>
+                                            {stat.icon}
+                                        </span>
                                     </div>
-                                    <div className="text-3xl font-bold text-gray-900">{stat.value}</div>
+                                    <div className={`text-2xl sm:text-3xl font-black ${stat.textColor} leading-none mt-1`}>
+                                        {stat.value}
+                                    </div>
                                 </div>
                             ))}
                         </div>
 
-                        {/* Main Table Section */}
-                        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                        {/* Main Table / Cards Section */}
+                        <div className="bg-white rounded-3xl shadow-sm border border-slate-200/80 overflow-hidden">
                             {/* Toolbar: Search + Status Filter */}
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-6 py-4 border-b border-gray-100">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 sm:px-6 sm:py-4 border-b border-slate-100 bg-[#FAFBFD]">
                                 {/* Search */}
-                                <div className="relative flex-1 min-w-[180px] max-w-sm">
-                                    <svg className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <div className="relative flex-1 min-w-[180px]">
+                                    <svg className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
                                     </svg>
                                     <input
@@ -412,141 +461,254 @@ const EscelatedMissions = () => {
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
                                         placeholder="Quick find by title, mission ID, or reporter..."
-                                        className="w-full pl-8 pr-3 py-2 text-xs font-medium bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/40 placeholder-gray-400 transition-colors"
+                                        className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-2xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316] transition-all shadow-2xs"
                                     />
                                 </div>
 
-                                {/* Status dropdown */}
-                                <div className="relative">
-                                    <select
-                                        value={selectedStatus}
-                                        onChange={(e) => setSelectedStatus(e.target.value)}
-                                        className="appearance-none pl-3 pr-7 py-2 text-xs font-semibold bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/40 text-gray-700 cursor-pointer transition-colors"
-                                    >
-                                        <option value="All">All Status</option>
-                                        <option value="Pending">Pending</option>
-                                        <option value="In Progress">In Progress</option>
-                                        <option value="Picked Up">Picked Up</option>
-                                        <option value="Resolved">Resolved</option>
-                                        <option value="Rejected">Rejected</option>
-                                    </select>
-                                    <svg className="w-3 h-3 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                        <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
-                                    </svg>
-                                </div>
+                                <div className="flex items-center justify-between sm:justify-start gap-2.5">
+                                    {/* Status dropdown */}
+                                    <div className="relative flex-1 sm:flex-none">
+                                        <select
+                                            value={selectedStatus}
+                                            onChange={(e) => setSelectedStatus(e.target.value)}
+                                            className="w-full sm:w-auto appearance-none pl-3.5 pr-8 py-2 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316] cursor-pointer transition-all shadow-2xs"
+                                        >
+                                            <option value="All">All Status</option>
+                                            <option value="Pending">Pending</option>
+                                            <option value="In Progress">In Progress</option>
+                                            <option value="Picked Up">Picked Up</option>
+                                            <option value="Resolved">Resolved</option>
+                                            <option value="Rejected">Rejected</option>
+                                        </select>
+                                        <svg className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                            <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                    </div>
 
-                                {/* Results count */}
-                                <span className="text-xs text-gray-400 font-medium ml-auto shrink-0">
-                                    {filteredMissions.length} of {missions.length} missions
-                                </span>
+                                    {/* Results count */}
+                                    <span className="text-[11px] text-slate-500 font-bold px-3 py-1.5 bg-slate-100/80 rounded-xl border border-slate-200/60 shrink-0">
+                                        {filteredMissions.length} of {missions.length} missions
+                                    </span>
+                                </div>
                             </div>
 
-                            <DataTable
-                                loading={loading}
-                                data={filteredMissions}
-                                emptyMessage="No escalated missions found."
-                                loadingMessage="Fetching mission status..."
-                                columns={[
-                                    {
-                                        header: "Mission ID",
-                                        key: "mission_id",
-                                        render: (m) => (
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-bold text-gray-900">{m.mission_id}</span>
-                                                <span className="text-[10px] font-mono text-gray-400">Report #{m.report_id}</span>
-                                            </div>
-                                        )
-                                    },
-                                    {
-                                        header: "Mission Title",
-                                        key: "title",
-                                        render: (m) => (
-                                            <div className="max-w-[200px]">
-                                                <span className="text-sm font-semibold text-gray-800 truncate block">{m.title}</span>
-                                                <span className="text-xs text-gray-400 truncate block">{m.landmark}</span>
-                                            </div>
-                                        )
-                                    },
-                                    {
-                                        header: "Escalated Date",
-                                        key: "escalated_date",
-                                        render: (m) => (
-                                            <span className="text-xs text-gray-600 font-medium">{m.escalated_date}</span>
-                                        )
-                                    },
-                                    {
-                                        header: "Barangay Status",
-                                        key: "barangay_status",
-                                        render: (m) => (
-                                            <div className="flex items-center space-x-2">
-                                                <ReportChatBadge
-                                                    reportId={m.report_id}
-                                                    currentUserId={currentUser?.user_id}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setSelectedChatReport((m as any).raw_data?.report || { report_id: m.report_id });
-                                                        setIsChatOpen(true);
-                                                    }}
-                                                />
-                                                {m.barangay_status === 'In Progress' && (
-                                                    <span className="relative flex h-2 w-2">
-                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                                                    </span>
-                                                )}
-                                                <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getStatusStyle(m.barangay_status)}`}>
-                                                    {m.barangay_status}
-                                                </span>
-                                            </div>
-                                        )
-                                    },
-                                    {
-                                        header: "Reporter",
-                                        key: "reporter",
-                                        render: (m) => (
-                                            <div className="flex items-center space-x-2">
-                                                <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] text-gray-500 font-bold">
-                                                    {m.reporter.charAt(0)}
+                            {/* Mobile Card List (Eye-Pleasing & Animated) */}
+                            <div className="md:hidden">
+                                {loading ? (
+                                    <div className="p-8 text-center text-slate-400 text-xs font-bold animate-pulse">
+                                        Fetching mission status...
+                                    </div>
+                                ) : filteredMissions.length === 0 ? (
+                                    <div className="p-8 text-center text-slate-400 text-xs font-bold">
+                                        No escalated missions found.
+                                    </div>
+                                ) : (
+                                    <div className="p-3 sm:p-4 space-y-3">
+                                        {filteredMissions.map((m) => {
+                                            const report = (m as any).raw_data?.report;
+                                            const petPhoto = report?.media_url || report?.reporter_photo || DEFAULT_AVATAR;
+                                            const animalType = report?.animal_type || 'Animal';
+                                            const animalCount = report?.animal_count || 1;
+
+                                            const statusAccentColor = 
+                                                m.barangay_status === 'Pending' ? 'bg-amber-500' :
+                                                m.barangay_status === 'In Progress' ? 'bg-sky-500' :
+                                                m.barangay_status === 'Picked Up' ? 'bg-purple-500' :
+                                                m.barangay_status === 'Resolved' ? 'bg-emerald-500' :
+                                                'bg-rose-500';
+
+                                            return (
+                                                <div
+                                                    key={m.mission_id}
+                                                    onClick={() => handleViewTracker(m)}
+                                                    className="bg-white rounded-3xl border border-slate-200/80 p-3.5 shadow-2xs hover:shadow-md hover:border-orange-200 transition-all cursor-pointer flex items-center justify-between gap-2.5 active:scale-[0.99] animate-in fade-in slide-in-from-bottom-2 duration-200 overflow-hidden"
+                                                >
+                                                    {/* Left: Colored Bar + Thumbnail + Details */}
+                                                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                                        {/* Status Accent Bar */}
+                                                        <div className={`w-1 self-stretch rounded-full my-0.5 shrink-0 ${statusAccentColor}`}></div>
+
+                                                        {/* Avatar Thumbnail */}
+                                                        <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl overflow-hidden bg-slate-50 shrink-0 border border-slate-100 shadow-2xs">
+                                                            <img
+                                                                src={petPhoto}
+                                                                alt="Animal thumbnail"
+                                                                className="w-full h-full object-cover"
+                                                                onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
+                                                            />
+                                                        </div>
+
+                                                        {/* Details Column */}
+                                                        <div className="min-w-0 space-y-0.5 flex-1">
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <h3 className="text-xs sm:text-sm font-black text-slate-900 tracking-tight leading-none">
+                                                                    {m.mission_id}
+                                                                </h3>
+                                                                <span className="text-[9px] font-mono text-slate-400 font-bold">
+                                                                    #{m.report_id}
+                                                                </span>
+                                                            </div>
+
+                                                            <p className="text-xs font-bold text-slate-700 truncate leading-tight mt-0.5">
+                                                                Rescue: {animalType}
+                                                            </p>
+
+                                                            <p className="text-[10px] text-slate-500 font-semibold flex items-center gap-1 truncate">
+                                                                <span className="text-rose-500">📍</span>
+                                                                <span className="truncate">{m.landmark}</span>
+                                                            </p>
+
+                                                            <p className="text-[9px] text-slate-400 font-medium truncate flex items-center gap-1">
+                                                                <span>🕒</span>
+                                                                <span>{m.escalated_date}</span>
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Right: Chat Badge + Status + Count + Arrow */}
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <ReportChatBadge
+                                                            reportId={m.report_id}
+                                                            currentUserId={currentUser?.user_id}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedChatReport((m as any).raw_data?.report || { report_id: m.report_id });
+                                                                setIsChatOpen(true);
+                                                            }}
+                                                        />
+
+                                                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black border leading-tight ${getStatusStyle(m.barangay_status)}`}>
+                                                            {m.barangay_status}
+                                                        </span>
+
+                                                        <span className="w-5 h-5 rounded-full bg-orange-100 text-[#F97316] text-[9px] font-black flex items-center justify-center shrink-0">
+                                                            {animalCount}
+                                                        </span>
+
+                                                        <div className="w-6 h-6 rounded-full bg-orange-50 text-[#F97316] flex items-center justify-center shrink-0 border border-orange-100/60">
+                                                            <svg className="w-3 h-3 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                                            </svg>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <span className="text-xs font-semibold text-gray-700">{m.reporter}</span>
-                                            </div>
-                                        )
-                                    },
-                                    {
-                                        header: "Action",
-                                        key: "action",
-                                        render: (m) => (
-                                            <button 
-                                                onClick={() => handleViewTracker(m)}
-                                                className="text-xs font-bold text-[#F97316] hover:text-[#EA580C] uppercase tracking-widest transition-colors"
-                                            >
-                                                View Tracker
-                                            </button>
-                                        )
-                                    }
-                                ]}
-                            />
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Desktop Table View */}
+                            <div className="hidden md:block">
+                                <DataTable
+                                    loading={loading}
+                                    data={filteredMissions}
+                                    emptyMessage="No escalated missions found."
+                                    loadingMessage="Fetching mission status..."
+                                    columns={[
+                                        {
+                                            header: "Mission ID",
+                                            key: "mission_id",
+                                            render: (m) => (
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-bold text-gray-900">{m.mission_id}</span>
+                                                    <span className="text-[10px] font-mono text-gray-400">Report #{m.report_id}</span>
+                                                </div>
+                                            )
+                                        },
+                                        {
+                                            header: "Mission Title",
+                                            key: "title",
+                                            render: (m) => (
+                                                <div className="max-w-[200px]">
+                                                    <span className="text-sm font-semibold text-gray-800 truncate block">{m.title}</span>
+                                                    <span className="text-xs text-gray-400 truncate block">{m.landmark}</span>
+                                                </div>
+                                            )
+                                        },
+                                        {
+                                            header: "Escalated Date",
+                                            key: "escalated_date",
+                                            render: (m) => (
+                                                <span className="text-xs text-gray-600 font-medium">{m.escalated_date}</span>
+                                            )
+                                        },
+                                        {
+                                            header: "Barangay Status",
+                                            key: "barangay_status",
+                                            render: (m) => (
+                                                <div className="flex items-center space-x-2">
+                                                    {m.barangay_status === 'In Progress' && (
+                                                        <span className="relative flex h-2 w-2">
+                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                                                        </span>
+                                                    )}
+                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getStatusStyle(m.barangay_status)}`}>
+                                                        {m.barangay_status}
+                                                    </span>
+                                                </div>
+                                            )
+                                        },
+                                        {
+                                            header: "Reporter",
+                                            key: "reporter",
+                                            render: (m) => (
+                                                <div className="flex items-center space-x-2">
+                                                    <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] text-gray-500 font-bold">
+                                                        {m.reporter.charAt(0)}
+                                                    </div>
+                                                    <span className="text-xs font-semibold text-gray-700">{m.reporter}</span>
+                                                </div>
+                                            )
+                                        },
+                                        {
+                                            header: "Action",
+                                            key: "action",
+                                            render: (m) => (
+                                                <div className="flex items-center space-x-3">
+                                                    <button 
+                                                        onClick={() => handleViewTracker(m)}
+                                                        className="text-xs font-bold text-[#F97316] hover:text-[#EA580C] uppercase tracking-widest transition-colors cursor-pointer"
+                                                    >
+                                                        View Tracker
+                                                    </button>
+                                                    <ReportChatBadge
+                                                        reportId={m.report_id}
+                                                        currentUserId={currentUser?.user_id}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedChatReport((m as any).raw_data?.report || { report_id: m.report_id });
+                                                            setIsChatOpen(true);
+                                                        }}
+                                                    />
+                                                </div>
+                                            )
+                                        }
+                                    ]}
+                                />
+                            </div>
                         </div>
 
-                        {/* Info Tip */}
-                        <div className="mt-8 bg-blue-50/50 border border-blue-100 rounded-2xl p-6 flex items-start space-x-4">
-                            <div className="bg-blue-500 p-2 rounded-lg text-white">
+                        {/* Info Tip Banner */}
+                        <div className="mt-6 sm:mt-8 bg-gradient-to-r from-blue-50/70 to-indigo-50/60 border border-blue-100/90 rounded-3xl p-5 sm:p-6 flex items-start space-x-4 shadow-2xs">
+                            <div className="bg-blue-600 p-2.5 rounded-2xl text-white shadow-xs shrink-0">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                             </div>
                             <div>
-                                <h4 className="text-sm font-bold text-blue-900">Mission Tracking Note</h4>
-                                <p className="text-xs text-blue-700 mt-1 leading-relaxed">
-                                    Missions in this list have been officially endorsed to the Barangay. 
-                                    Status updates are synchronized live from the Barangay's Operations Hub. 
-                                    If a mission is "Rejected", please check your endorsement letter for missing details.
+                                <h4 className="text-sm font-black text-blue-950 uppercase tracking-tight">Mission Tracking Note</h4>
+                                <p className="text-xs text-blue-700 font-medium mt-1 leading-relaxed">
+                                    Missions in this list have been officially endorsed to the Barangay operations team. 
+                                    Status updates and rescue stages are synchronized live in real-time from the Barangay Operations Hub.
                                 </p>
                             </div>
                         </div>
 
                     </div>
                 </main>
+                <SubdBottomNav />
             </div>
 
             {/* Case Chat Drawer */}

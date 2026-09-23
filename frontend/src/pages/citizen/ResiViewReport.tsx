@@ -5,7 +5,7 @@ import {
     Siren, MapPin, PawPrint, Palette, Tag, User, Gift, FileText, Megaphone,
     Crosshair, Search, MessageCircle, Scale, Link2, Shield, AlertTriangle, Phone,
     Hourglass, Compass, Home, Landmark, Ruler, Timer, Flag, X, Lightbulb, Check,
-    Syringe, Camera, Info, Map as MapIcon
+    Syringe, Camera, Info, Map as MapIcon, ScrollText
 } from 'lucide-react';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import MapComponent from '../../components/MapComponent';
@@ -17,7 +17,7 @@ import RescueTimeline from '../../components/RescueTimeline';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import { useReportChatCount } from '../../utils/chatUtils';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
-import { getProfilePicture, DEFAULT_AVATAR } from '../../utils/avatar';
+import { getProfilePicture, DEFAULT_AVATAR, DEFAULT_PET_AVATAR } from '../../utils/avatar';
 
 const reportStatusMap = REPORT_STATUS_MAP;
 
@@ -571,7 +571,7 @@ const ResiViewReport = () => {
     }
 
     const originalMedia = report.media?.filter((m: any) => !m.is_evidence) || [];
-    const mainImage = originalMedia[0]?.file_url || 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?q=80&w=2069&auto=format&fit=crop';
+    const mainImage = originalMedia[0]?.file_url || DEFAULT_PET_AVATAR;
 
     return (
         <div className="min-h-screen bg-[#F7F7F7] font-sans pb-24">
@@ -1193,15 +1193,37 @@ const ResiViewReport = () => {
 
                     {/* Right Column: Rescue Timeline Card (5/12) */}
                     <div className="lg:col-span-5 relative">
-                        <div className="bg-white dark:bg-[#151C2C] p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col h-full lg:h-auto min-h-[350px] lg:min-h-0 lg:absolute lg:inset-0">
-                            <div className="flex items-end justify-between border-b border-gray-50 dark:border-gray-800 pb-4 shrink-0 mb-6">
-                                <div>
-                                    <h3 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tight">Rescue Timeline</h3>
-                                    <p className="text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-1">Live sync updates from responders</p>
+                        <div className="bg-white dark:bg-[#151C2C] p-6 sm:p-7 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col h-full lg:h-auto min-h-[350px] lg:min-h-0 lg:absolute lg:inset-0 space-y-4">
+                            {/* Header matching Barangay format */}
+                            <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-gray-800 shrink-0">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-2xl bg-orange-50 dark:bg-orange-950/40 text-[#F97316] flex items-center justify-center shadow-xs shrink-0">
+                                        <ScrollText className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide">
+                                            Report Activity & Handover Timeline
+                                        </h4>
+                                        <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mt-0.5">
+                                            Official Audit Trail & Officer Activity Log
+                                        </p>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-950/40 rounded-full border border-green-100 dark:border-green-900/40">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                                    <span className="text-[8px] font-black text-green-600 dark:text-green-400 uppercase tracking-widest">Live Sync</span>
+                                <div className="flex items-center gap-2">
+                                    {(() => {
+                                        const validHistory = (report.history || []).filter((h: any) => (h.remarks || '').trim() !== 'Initial report submitted by resident.');
+                                        const holdingCount = (holdingAnimal && holdingAnimal.timeline) ? holdingAnimal.timeline.length : 0;
+                                        const totalEvents = validHistory.length + holdingCount + 1;
+                                        return (
+                                            <span className="text-[10px] font-black text-gray-600 dark:text-gray-300 bg-gray-100/90 dark:bg-gray-800 px-2.5 py-1 rounded-full border border-gray-200/60 dark:border-gray-700 shadow-2xs whitespace-nowrap">
+                                                {totalEvents} {totalEvents === 1 ? 'Event' : 'Events'}
+                                            </span>
+                                        );
+                                    })()}
+                                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 dark:bg-green-950/40 rounded-full border border-green-100 dark:border-green-900/40">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                                        <span className="text-[8px] font-black text-green-600 dark:text-green-400 uppercase tracking-widest">Live</span>
+                                    </div>
                                 </div>
                             </div>
                             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
@@ -1251,6 +1273,9 @@ const ResiViewReport = () => {
                                     currentStatusId={report.status_id}
                                     assignedLeaderName={report.assigned_leader_name}
                                     reporterName={report.reporter_name}
+                                    reportCreatedAt={report.created_at}
+                                    animalType={report.animal_type}
+                                    landmark={report.landmark}
                                     endorsementLetter={report.endorsement_letter}
                                 />
                             </div>

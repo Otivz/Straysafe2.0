@@ -6,6 +6,7 @@ import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate } from 'react-router-dom';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
+import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import Button from '../../components/Button';
 import SuccessModal from '../../components/Modals/SuccessModal';
 import Select from '../../components/Dropdown';
@@ -101,6 +102,7 @@ const SubdReports = () => {
 
     const [reports, setReports] = useState<Report[]>(() => getCachedData<Report[]>('subd_reports_list') || []);
     const [loading, setLoading] = useState<boolean>(() => !getCachedData<Report[]>('subd_reports_list'));
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [reportQueue, setReportQueue] = useState<'all' | 'unassigned' | 'my_reports'>('my_reports');
@@ -682,11 +684,12 @@ const SubdReports = () => {
 
     return (
         <div className="flex h-screen bg-[#F8FAFC]">
-            <SubdSidebar />
+            <SubdSidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* TOP NAVIGATION */}
                 <SubdNavbar
+                    onMenuToggle={() => setMobileMenuOpen(true)}
                     leftContent={
                         <div className="flex flex-col">
                             <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Incident Reports</h1>
@@ -695,7 +698,7 @@ const SubdReports = () => {
                     }
                 />
 
-                <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                <main className="flex-1 overflow-y-auto p-4 sm:p-8 pb-36 md:pb-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto">
                         {viewingReportId === null ? (
                             <>
@@ -717,66 +720,66 @@ const SubdReports = () => {
                                     </div>
                                 </div>
 
-                                {/* Workflow Queues Segmented Tabs */}
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                                {/* Workflow Queues Segmented Tabs (3 Box Columns beside each other) */}
+                                <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6">
                                     <button
                                         type="button"
                                         onClick={() => setReportQueue('all')}
-                                        className={`p-4 rounded-2xl border transition-all text-left flex flex-col justify-between cursor-pointer ${
+                                        className={`p-2.5 sm:p-4 rounded-2xl border transition-all text-center sm:text-left flex flex-col justify-between cursor-pointer min-h-[76px] sm:min-h-[96px] ${
                                             reportQueue === 'all'
-                                                ? 'bg-white border-[#F97316] ring-2 ring-orange-500/20 shadow-sm'
+                                                ? 'bg-white border-[#F97316] ring-2 ring-orange-500/20 shadow-xs'
                                                 : 'bg-white/80 border-gray-100 hover:bg-white hover:border-gray-200'
                                         }`}
                                     >
-                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">All Active Reports</span>
-                                        <div className="flex items-baseline justify-between mt-2">
-                                            <span className="text-2xl font-black text-gray-900">{allActiveCount}</span>
-                                            <span className="text-xs text-gray-400 font-bold">Total</span>
+                                        <span className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wider truncate">All Active</span>
+                                        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mt-1 sm:mt-2">
+                                            <span className="text-xl sm:text-2xl font-black text-gray-900 leading-tight">{allActiveCount}</span>
+                                            <span className="text-[9px] sm:text-xs text-gray-400 font-bold mt-0.5 sm:mt-0">Total</span>
                                         </div>
                                     </button>
 
                                     <button
                                         type="button"
                                         onClick={() => setReportQueue('unassigned')}
-                                        className={`p-4 rounded-2xl border transition-all text-left flex flex-col justify-between relative overflow-hidden cursor-pointer ${
+                                        className={`p-2.5 sm:p-4 rounded-2xl border transition-all text-center sm:text-left flex flex-col justify-between relative overflow-hidden cursor-pointer min-h-[76px] sm:min-h-[96px] ${
                                             reportQueue === 'unassigned'
-                                                ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/20 shadow-sm'
+                                                ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/20 shadow-xs'
                                                 : 'bg-white border-gray-100 hover:bg-amber-50/50 hover:border-amber-200'
                                         }`}
                                     >
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[10px] font-black text-amber-800 uppercase tracking-widest flex items-center gap-1.5">
-                                                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                                                Unassigned
+                                        <div className="flex items-center justify-center sm:justify-between w-full">
+                                            <span className="text-[9px] sm:text-[10px] font-black text-amber-800 uppercase tracking-wider flex items-center justify-center sm:justify-start gap-1 truncate">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0"></span>
+                                                <span className="truncate">Unassigned</span>
                                             </span>
                                             {unassignedCount > 0 && (
-                                                <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black">
+                                                <span className="hidden sm:inline-block px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black">
                                                     Claim Now
                                                 </span>
                                             )}
                                         </div>
-                                        <div className="flex items-baseline justify-between mt-2">
-                                            <span className="text-2xl font-black text-amber-950">{unassignedCount}</span>
-                                            <span className="text-xs text-amber-700 font-bold">Unclaimed</span>
+                                        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mt-1 sm:mt-2">
+                                            <span className="text-xl sm:text-2xl font-black text-amber-950 leading-tight">{unassignedCount}</span>
+                                            <span className="text-[9px] sm:text-xs text-amber-700 font-bold mt-0.5 sm:mt-0">Unclaimed</span>
                                         </div>
                                     </button>
 
                                     <button
                                         type="button"
                                         onClick={() => setReportQueue('my_reports')}
-                                        className={`p-4 rounded-2xl border transition-all text-left flex flex-col justify-between cursor-pointer ${
+                                        className={`p-2.5 sm:p-4 rounded-2xl border transition-all text-center sm:text-left flex flex-col justify-between cursor-pointer min-h-[76px] sm:min-h-[96px] ${
                                             reportQueue === 'my_reports'
-                                                ? 'bg-emerald-500/10 border-emerald-500 ring-2 ring-emerald-500/20 shadow-sm'
+                                                ? 'bg-emerald-500/10 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
                                                 : 'bg-white border-gray-100 hover:bg-emerald-50/50 hover:border-emerald-200'
                                         }`}
                                     >
-                                        <span className="text-[10px] font-black text-emerald-800 uppercase tracking-widest flex items-center gap-1.5">
-                                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                            My Reports
+                                        <span className="text-[9px] sm:text-[10px] font-black text-emerald-800 uppercase tracking-wider flex items-center justify-center sm:justify-start gap-1 truncate">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                                            <span className="truncate">My Reports</span>
                                         </span>
-                                        <div className="flex items-baseline justify-between mt-2">
-                                            <span className="text-2xl font-black text-emerald-950">{myReportsCount}</span>
-                                            <span className="text-xs text-emerald-700 font-bold">Your Cases</span>
+                                        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mt-1 sm:mt-2">
+                                            <span className="text-xl sm:text-2xl font-black text-emerald-950 leading-tight">{myReportsCount}</span>
+                                            <span className="text-[9px] sm:text-xs text-emerald-700 font-bold mt-0.5 sm:mt-0">Your Cases</span>
                                         </div>
                                     </button>
 
@@ -2491,6 +2494,9 @@ const SubdReports = () => {
                     }}
                 />
             )}
+
+            {/* Reusable Mobile Bottom Navigation */}
+            <SubdBottomNav activeTab="reports" />
         </div>
     );
 };

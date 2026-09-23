@@ -4,6 +4,7 @@ import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate } from 'react-router-dom';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
+import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import DataTable from '../../components/DataTable';
 import Select from '../../components/Dropdown';
 import { getCachedData, setCachedData } from '../../utils/cache';
@@ -55,6 +56,7 @@ const SubdHistoryReport = () => {
     // Chat Drawer state
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [selectedChatReport, setSelectedChatReport] = useState<Report | null>(null);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -246,11 +248,12 @@ const SubdHistoryReport = () => {
 
     return (
         <div className="flex h-screen bg-[#F8FAFC]">
-            <SubdSidebar />
+            <SubdSidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* TOP NAVIGATION */}
                 <SubdNavbar
+                    onMenuToggle={() => setMobileMenuOpen(true)}
                     leftContent={
                         <div className="flex flex-col">
                             <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">History Reports</h1>
@@ -259,7 +262,7 @@ const SubdHistoryReport = () => {
                     }
                 />
 
-                <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-36 md:pb-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto space-y-8">
 
                         {/* Metrics Row */}
@@ -457,6 +460,7 @@ const SubdHistoryReport = () => {
 
                     </div>
                 </main>
+                <SubdBottomNav />
             </div>
 
             {/* Case Chat Drawer */}

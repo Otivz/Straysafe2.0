@@ -10,35 +10,41 @@ interface StatCardProps {
 
 const StatCard = ({ label, value, badge, badgeVariant = 'info', icon, trend, trendPositive }: StatCardProps) => {
     const badgeColors = {
-        success: 'bg-green-50 text-green-600',
-        warning: 'bg-orange-50 text-orange-600',
-        error: 'bg-red-50 text-red-600',
-        info: 'bg-blue-50 text-blue-600',
+        success: 'bg-green-50 text-green-600 border border-green-100',
+        warning: 'bg-orange-50 text-orange-600 border border-orange-100',
+        error: 'bg-red-50 text-red-600 border border-red-100',
+        info: 'bg-sky-50 text-sky-600 border border-sky-100',
     };
 
     return (
-        <div className="group relative bg-white rounded-2xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between h-36 transition-all duration-300 hover:shadow-xl hover:shadow-[#B35D25]/10 hover:border-[#B35D25]/30 hover:-translate-y-1 overflow-hidden cursor-pointer">
-            <div className="absolute inset-0 bg-gradient-to-br from-[#B35D25]/0 to-transparent group-hover:from-[#B35D25]/5 transition-colors duration-300 pointer-events-none"></div>
-            <div className="flex justify-between items-start relative z-10">
-                <div className="flex flex-col">
-                    <p className="text-[11px] font-extrabold text-gray-400 tracking-wider uppercase mb-1">{label}</p>
-                    <p className="text-3xl font-black text-gray-900 leading-none">{value}</p>
-                </div>
+        <div className="group relative bg-white rounded-3xl p-3 sm:p-5 md:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-slate-200/80 flex flex-col justify-between min-h-[90px] sm:min-h-[110px] md:h-36 transition-all duration-300 hover:shadow-lg hover:border-orange-200 overflow-hidden cursor-pointer">
+            <div className="flex flex-col gap-1 relative z-10 min-w-0">
+                {icon && (
+                    <div className="flex items-center text-base sm:text-lg mb-0.5 shrink-0">
+                        {icon}
+                    </div>
+                )}
+                <p className="text-[8px] sm:text-[10px] md:text-[11px] font-black text-slate-600 tracking-wider uppercase truncate leading-tight">
+                    {label}
+                </p>
+            </div>
+            
+            <div className="flex items-end justify-between relative z-10 gap-1 mt-1 sm:mt-2">
+                <p className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 leading-none">
+                    {value}
+                </p>
                 {badge && (
-                    <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${badgeColors[badgeVariant]}`}>
+                    <span className={`text-[8px] sm:text-[10px] font-black px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full shrink-0 leading-tight ${badgeColors[badgeVariant]}`}>
                         {badge}
                     </span>
                 )}
             </div>
-            
-            <div className="flex items-center justify-between mt-4">
-                {trend && (
-                    <div className={`flex items-center text-[10px] font-bold ${trendPositive ? 'text-green-600' : 'text-red-600'}`}>
-                        {trendPositive ? '+' : '-'}{trend}
-                    </div>
-                )}
-                {icon && <div className="text-gray-300">{icon}</div>}
-            </div>
+
+            {trend && (
+                <div className={`hidden sm:flex items-center text-[10px] font-bold mt-2 ${trendPositive ? 'text-green-600' : 'text-red-600'}`}>
+                    {trendPositive ? '+' : '-'}{trend}
+                </div>
+            )}
         </div>
     );
 };

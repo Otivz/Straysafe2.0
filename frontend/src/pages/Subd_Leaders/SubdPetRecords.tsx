@@ -3,6 +3,7 @@ import axios from 'axios';
 import { getPetPicture, DEFAULT_PET_AVATAR } from '../../utils/avatar';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
+import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import StatCard from '../../components/PetRecords/StatCard';
 import PetTable from '../../components/PetRecords/PetTable';
 import { type PetRecord, mapRawPetToPetRecord } from '../../components/PetRecords/types';
@@ -11,6 +12,75 @@ import AddPetModal from '../../components/PetRecords/AddPetModal';
 import Button from '../../components/Button';
 import { api } from '../../utils/api';
 import { getCachedData, setCachedData, invalidateCache } from '../../utils/cache';
+
+// Cute Dog and Cat Peek Banner Illustration for Mobile
+const PetsIllustration = () => (
+    <div className="relative w-36 h-20 sm:w-44 sm:h-24 shrink-0 flex items-end justify-end select-none pointer-events-none">
+        {/* Floating background elements */}
+        <span className="absolute top-1 left-2 text-xs opacity-60 text-amber-400">🐾</span>
+        <span className="absolute top-3 left-7 text-[10px] opacity-70 text-rose-400">❤️</span>
+        <span className="absolute top-0 right-1 text-xs opacity-60 text-amber-400">🐾</span>
+        <span className="absolute top-4 right-8 text-[9px] opacity-70 text-rose-400">❤️</span>
+        
+        {/* SVG Illustration of Dog & Cat */}
+        <svg viewBox="0 0 200 120" className="w-full h-full object-contain overflow-visible" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {/* Dog Body */}
+            <path d="M40 120 C40 85, 60 70, 95 70 C130 70, 150 85, 150 120 Z" fill="#E6A15C" />
+            <path d="M70 120 C70 95, 80 85, 95 85 C110 85, 120 95, 120 120 Z" fill="#FDF3E7" />
+            
+            {/* Dog Head */}
+            <ellipse cx="95" cy="55" rx="36" ry="32" fill="#E6A15C" />
+            {/* Dog Snout */}
+            <ellipse cx="95" cy="62" rx="20" ry="16" fill="#FDF3E7" />
+            <ellipse cx="95" cy="54" rx="7" ry="5" fill="#2D2424" />
+            {/* Dog Mouth & Tongue */}
+            <path d="M95 59 L95 67" stroke="#2D2424" strokeWidth="2" strokeLinecap="round" />
+            <path d="M88 65 Q95 72 102 65" stroke="#2D2424" strokeWidth="2" fill="none" strokeLinecap="round" />
+            <path d="M92 68 C92 74, 98 74, 98 68 Z" fill="#FF758F" />
+            
+            {/* Dog Eyes */}
+            <circle cx="82" cy="46" r="4.5" fill="#2D2424" />
+            <circle cx="80.5" cy="44.5" r="1.5" fill="#FFFFFF" />
+            <circle cx="108" cy="46" r="4.5" fill="#2D2424" />
+            <circle cx="106.5" cy="44.5" r="1.5" fill="#FFFFFF" />
+            
+            {/* Dog Ears */}
+            <path d="M62 40 C52 45, 45 68, 55 78 C62 82, 68 70, 68 55 Z" fill="#B36829" />
+            <path d="M128 40 C138 45, 145 68, 135 78 C128 82, 122 70, 122 55 Z" fill="#B36829" />
+            
+            {/* Cat Body */}
+            <path d="M135 120 C135 95, 150 85, 175 85 C200 85, 210 95, 210 120 Z" fill="#CBD5E1" />
+            
+            {/* Cat Head */}
+            <circle cx="165" cy="70" r="24" fill="#E2E8F0" />
+            {/* Cat Ears */}
+            <path d="M145 60 L142 42 L158 52 Z" fill="#94A3B8" />
+            <path d="M146 58 L144 46 L155 53 Z" fill="#FDA4AF" />
+            <path d="M185 60 L188 42 L172 52 Z" fill="#94A3B8" />
+            <path d="M184 58 L186 46 L175 53 Z" fill="#FDA4AF" />
+            
+            {/* Cat Stripes */}
+            <path d="M165 48 L165 54" stroke="#64748B" strokeWidth="2.5" strokeLinecap="round" />
+            <path d="M160 50 L158 55" stroke="#64748B" strokeWidth="2" strokeLinecap="round" />
+            <path d="M170 50 L172 55" stroke="#64748B" strokeWidth="2" strokeLinecap="round" />
+            
+            {/* Cat Eyes */}
+            <ellipse cx="155" cy="68" rx="3.5" ry="4" fill="#10B981" />
+            <ellipse cx="155" cy="68" rx="1.5" ry="3.5" fill="#0F172A" />
+            <ellipse cx="175" cy="68" rx="3.5" ry="4" fill="#10B981" />
+            <ellipse cx="175" cy="68" rx="1.5" ry="3.5" fill="#0F172A" />
+            
+            {/* Cat Nose & Mouth */}
+            <polygon points="165,74 162,72 168,72" fill="#F472B6" />
+            <path d="M160 76 Q165 79 170 76" stroke="#475569" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+            {/* Whiskers */}
+            <line x1="144" y1="73" x2="152" y2="74" stroke="#64748B" strokeWidth="1.2" strokeLinecap="round" />
+            <line x1="143" y1="77" x2="151" y2="76" stroke="#64748B" strokeWidth="1.2" strokeLinecap="round" />
+            <line x1="178" y1="74" x2="186" y2="73" stroke="#64748B" strokeWidth="1.2" strokeLinecap="round" />
+            <line x1="179" y1="76" x2="187" y2="77" stroke="#64748B" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+    </div>
+);
 
 const SubdPetRecords: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'active' | 'removed'>('active');
@@ -34,6 +104,7 @@ const SubdPetRecords: React.FC = () => {
 
     // Toast Notifications
     const [toastMessage, setToastMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     const showToast = (text: string, isError = false) => {
         setToastMessage({ text, isError });
@@ -144,12 +215,7 @@ const SubdPetRecords: React.FC = () => {
     });
 
     return (
-        <div className="min-h-screen w-full flex bg-[#FDFDFD] font-sans text-gray-800 relative overflow-hidden">
-            {/* Decorative Background Elements */}
-            <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-[#B35D25]/5 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2 z-0"></div>
-            <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-orange-50/50 rounded-full blur-[120px] pointer-events-none translate-x-1/3 translate-y-1/3 z-0"></div>
-            <div className="absolute top-1/2 left-1/2 w-[500px] h-[500px] bg-gray-100/50 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2 z-0"></div>
-
+        <div className="flex h-screen bg-[#F8FAFC]">
             {/* Toast Notification */}
             {toastMessage && (
                 <div className="fixed bottom-6 right-6 z-[100] animate-in fade-in slide-in-from-bottom-5 duration-300">
@@ -165,14 +231,13 @@ const SubdPetRecords: React.FC = () => {
             )}
 
             {/* Sidebar */}
-            <div className="z-10 flex shrink-0">
-                <SubdSidebar />
-            </div>
+            <SubdSidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
 
             {/* Main Content */}
-            <main className="flex-1 flex flex-col h-screen overflow-hidden">
+            <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Navbar */}
                 <SubdNavbar
+                    onMenuToggle={() => setMobileMenuOpen(true)}
                     leftContent={
                         <div className="flex flex-col">
                             <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Pet Records</h1>
@@ -184,29 +249,28 @@ const SubdPetRecords: React.FC = () => {
                 />
 
                 {/* Content Area */}
-                <div className="flex-1 overflow-y-auto p-10 flex flex-col gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-36 md:pb-8 flex flex-col gap-6 custom-scrollbar">
+                    <div className="max-w-7xl mx-auto w-full flex flex-col gap-6">
                     
                     {/* Header Action Bar with Tab Switcher */}
-                    <div className="flex flex-wrap justify-between items-center gap-4 shrink-0">
+                    <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 shrink-0">
                         {/* Tab Switcher */}
-                        <div className="inline-flex bg-gray-100/90 p-1.5 rounded-2xl border border-gray-200/80 shadow-inner">
+                        <div className="inline-flex bg-slate-100/90 p-1 rounded-2xl border border-slate-200/80 shadow-2xs self-start w-full sm:w-auto">
                             <button
                                 type="button"
                                 onClick={() => setActiveTab('active')}
-                                className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 flex items-center gap-2.5 cursor-pointer ${
+                                className={`flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer ${
                                     activeTab === 'active'
-                                        ? 'bg-white text-[#B35D25] shadow-md shadow-orange-950/5'
-                                        : 'text-gray-500 hover:text-gray-900'
+                                        ? 'bg-white text-[#F97316] shadow-sm'
+                                        : 'text-slate-500 hover:text-slate-800'
                                 }`}
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M12 21.5c-3.038 0-5.5-2.462-5.5-5.5s2.462-5.5 5.5-5.5s5.5 2.462 5.5 5.5s-2.462 5.5-5.5 5.5zm-5.5-12c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zm11 0c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zM12 8c-1.381 0-2.5-1.119-2.5-2.5S10.619 3 12 3s2.5 1.119 2.5 2.5S13.381 8 12 8z" />
-                                </svg>
+                                <span className="text-sm text-[#F97316]">🐾</span>
                                 <span>Active Records</span>
                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
                                     activeTab === 'active' 
-                                        ? 'bg-orange-100 text-[#B35D25]' 
-                                        : 'bg-gray-200 text-gray-600'
+                                        ? 'bg-[#F97316] text-white' 
+                                        : 'bg-slate-200 text-slate-600'
                                 }`}>
                                     {totalCount}
                                 </span>
@@ -215,10 +279,10 @@ const SubdPetRecords: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={() => setActiveTab('removed')}
-                                className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 flex items-center gap-2.5 cursor-pointer ${
+                                className={`flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer ${
                                     activeTab === 'removed'
-                                        ? 'bg-white text-[#B35D25] shadow-md shadow-orange-950/5'
-                                        : 'text-gray-500 hover:text-gray-900'
+                                        ? 'bg-white text-[#F97316] shadow-sm'
+                                        : 'text-slate-500 hover:text-slate-800'
                                 }`}
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -227,26 +291,32 @@ const SubdPetRecords: React.FC = () => {
                                 <span>Archived Records</span>
                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
                                     activeTab === 'removed' 
-                                        ? 'bg-orange-100 text-[#B35D25]' 
-                                        : 'bg-gray-200 text-gray-600'
+                                        ? 'bg-[#F97316] text-white' 
+                                        : 'bg-slate-200 text-slate-600'
                                 }`}>
                                     {totalRemovedCount}
                                 </span>
                             </button>
                         </div>
 
-                        {/* Top Actions */}
+                        {/* Top Actions & Illustration Banner (Mobile + Desktop) */}
                         {activeTab === 'active' ? (
-                            <Button 
-                                variant="primary" 
-                                onClick={() => setIsAddModalOpen(true)}
-                                className="px-6 py-2.5 bg-[#B35D25] hover:bg-[#964E1F] text-white rounded-xl shadow-lg shadow-orange-900/10 flex items-center gap-2 font-black text-sm cursor-pointer"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-                                </svg>
-                                Add New Pet
-                            </Button>
+                            <div className="flex items-center justify-between gap-3 w-full md:w-auto">
+                                <button 
+                                    onClick={() => setIsAddModalOpen(true)}
+                                    className="px-5 sm:px-6 py-3 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-2xl shadow-sm flex items-center gap-2 font-black text-xs sm:text-sm cursor-pointer transition-all active:scale-[0.98]"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                                    </svg>
+                                    Add New Pet
+                                </button>
+                                
+                                {/* Cute Dog & Cat Illustration Banner on Right */}
+                                <div className="block md:hidden">
+                                    <PetsIllustration />
+                                </div>
+                            </div>
                         ) : (
                             <div className="flex items-center gap-3">
                                 <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Filter:</span>
@@ -289,33 +359,36 @@ const SubdPetRecords: React.FC = () => {
                     {/* Active Records View */}
                     {activeTab === 'active' && (
                         <>
-                            {/* Stats Row */}
+                            {/* Stats Row (3 Columns matching photo) */}
                             {!selectedPet && (
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in duration-500 shrink-0">
+                                <div className="grid grid-cols-3 gap-2 sm:gap-4 md:gap-6 animate-in fade-in duration-500 shrink-0">
                                     <StatCard 
                                         label="Total Registered" 
                                         value={totalCount.toString()} 
                                         badge="Live" 
                                         badgeVariant="warning"
+                                        icon={<span className="text-base text-orange-500">🐾</span>}
                                     />
                                     <StatCard 
                                         label="Fully Vaccinated" 
                                         value={vaccinatedCount.toString()} 
                                         badge={`${complianceRate}%`} 
                                         badgeVariant="info"
+                                        icon={<span className="text-base text-sky-500">💉</span>}
                                     />
                                     <StatCard 
                                         label="Lost / Found Cases" 
                                         value={pendingCount.toString()} 
                                         badge={pendingCount > 0 ? "Alert" : "Clear"} 
                                         badgeVariant={pendingCount > 0 ? "error" : "info"}
+                                        icon={<span className="text-base text-slate-700">🔍</span>}
                                     />
                                 </div>
                             )}
 
                             {/* Active Records Content Area */}
-                            <div className="flex flex-col gap-6 flex-1 min-h-0">
-                                <div className="flex justify-between items-center shrink-0">
+                            <div className="flex flex-col gap-4 sm:gap-6 flex-1 min-h-0">
+                                <div className="hidden md:flex justify-between items-center shrink-0">
                                     <h2 className="text-xl font-black text-gray-900">Active Records</h2>
                                     <div className="flex items-center gap-6">
                                         <div className="relative">
@@ -343,6 +416,7 @@ const SubdPetRecords: React.FC = () => {
                                         onSelectPet={handleSelectPet} 
                                         selectedPetId={selectedPet?.id || null} 
                                         searchTerm={searchTerm} 
+                                        onSearchChange={setSearchTerm}
                                         loading={loading}
                                     />
                                 </div>
@@ -354,7 +428,7 @@ const SubdPetRecords: React.FC = () => {
                     {activeTab === 'removed' && (
                         <>
                             {/* Stats Row */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in duration-500 shrink-0">
+                            <div className="grid grid-cols-3 gap-2 sm:gap-4 md:gap-6 animate-in fade-in duration-500 shrink-0">
                                 <StatCard
                                     label="Total Archived Records"
                                     value={totalRemovedCount.toString()}
@@ -658,8 +732,10 @@ const SubdPetRecords: React.FC = () => {
                         </div>
                     )}
 
-                </div>
-            </main>
+                    </div>
+                </main>
+                <SubdBottomNav />
+            </div>
         </div>
     );
 };

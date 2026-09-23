@@ -1,9 +1,10 @@
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, Polyline, useMapEvents, Tooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import axios from 'axios';
-import { getProfilePicture, DEFAULT_AVATAR } from '../utils/avatar';
+import { getProfilePicture, DEFAULT_AVATAR, DEFAULT_PET_AVATAR } from '../utils/avatar';
 import { createBarangayHQIcon, createHoldingFacilityPinIcon, createLandmarkPinIcon, getLandmarkCategory, getLandmarkZoomMetrics } from '../utils/landmarkIcons';
 
 
@@ -844,6 +845,8 @@ const MapComponent = ({
     showPopups = true,
     showReturnToSelera = true
 }: MapComponentProps) => {
+    const navigate = useNavigate();
+    const [selectedReportMarker, setSelectedReportMarker] = useState<any>(null);
     const SELERA_BOUNDS: [number, number][] = [
         [14.801496, 121.005174],
         [14.799577, 121.003911],
@@ -944,464 +947,426 @@ const MapComponent = ({
         },
     };
     return (
-        <MapContainer
-            center={center}
-            zoom={zoom}
-            scrollWheelZoom={false}
-            style={{ height: height || '100%', width: '100%', minHeight: '340px', position: 'relative', zIndex: 1 }}
-            className="w-full h-full"
-        >
-            <MapResizeHandler />
-            <ChangeView center={center} zoom={zoom} />
-            <MapEventsHandler onLocationChange={onLocationChange} onMapClick={onMapClick} onZoomChange={setCurrentZoom} />
-            <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-
-            {showGeofence && (
-                <Polygon
-                    positions={SELERA_BOUNDS}
-                    pathOptions={{
-                        color: '#F97316',
-                        fillColor: '#F97316',
-                        fillOpacity: 0.12,
-                        weight: 2.5,
-                        dashArray: '6, 8',
-                        className: 'outline-none focus:outline-none'
-                    }}
-                    eventHandlers={{
-                        click: (e) => {
-                            if (e.originalEvent?.target && typeof (e.originalEvent.target as any).blur === 'function') {
-                                (e.originalEvent.target as any).blur();
-                            }
-                            if (onMapClick) onMapClick(e.latlng.lat, e.latlng.lng);
-                            if (onLocationChange) onLocationChange(e.latlng.lat, e.latlng.lng);
-                        }
-                    }}
-                >
-                    <Tooltip sticky direction="top" className="custom-hover-tooltip">
-                        <span>Selera Homes Reporting Zone</span>
-                    </Tooltip>
-                </Polygon>
-            )}
-
-            {/* ── Official Barangay Headquarters Marker (Admin Configured) ── */}
-            {showHQ && barangayHQ && barangayHQ.hq_lat && barangayHQ.hq_lng && (
-                <Marker
-                    position={[parseFloat(barangayHQ.hq_lat), parseFloat(barangayHQ.hq_lng)]}
-                    icon={createBarangayHQIcon(currentZoom)}
-                >
-                    <Tooltip direction="top" offset={[0, -Math.round(getLandmarkZoomMetrics(currentZoom).size / 2) - 4]} className="custom-hover-tooltip">
-                        <span>🏛️ Barangay {barangayHQ.barangay_name || 'San Vicente'} Operations HQ</span>
-                    </Tooltip>
-                    {showPopups && (
-                        <Popup className="custom-popup">
-                            <div className="p-3 w-[220px] text-gray-800 flex flex-col gap-1.5">
-                                <div className="flex items-center gap-2 pb-1.5 border-b border-blue-100">
-                                    <span className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center text-base shadow-xs">
-                                        🏛️
-                                    </span>
-                                    <div>
-                                        <p className="text-[11px] font-black text-blue-950 uppercase tracking-tight">Barangay {barangayHQ.barangay_name || 'San Vicente'} HQ</p>
-                                        <p className="text-[8px] font-bold text-blue-600 uppercase tracking-wider">Operations & Dispatch Center</p>
-                                    </div>
-                                </div>
-                                <div className="text-[10px] space-y-1 text-gray-600">
-                                    <p><span className="font-bold text-gray-800">City:</span> {barangayHQ.city || 'Santa Maria, Bulacan'}</p>
-                                    {barangayHQ.contact_no && <p><span className="font-bold text-gray-800">Contact:</span> {barangayHQ.contact_no}</p>}
-                                    {barangayHQ.hq_plus_code && <p><span className="font-bold text-gray-800">Plus Code:</span> {barangayHQ.hq_plus_code}</p>}
-                                </div>
-                                <div className="mt-1 pt-1.5 border-t border-gray-100 flex items-center justify-between text-[8px] text-gray-400 font-bold uppercase">
-                                    <span>Official Station</span>
-                                    <span className="text-blue-600">Active</span>
-                                </div>
-                            </div>
-                        </Popup>
-                    )}
-                </Marker>
-            )}
-
-            {/* ── Registered Holding Facilities & Community Landmarks (Database) ── */}
-            {deconflictedLandmarks && deconflictedLandmarks.length > 0 && (
-                deconflictedLandmarks.map((lm: any) => {
-                    const lmLat = lm.lat;
-                    const lmLng = lm.lng;
-                    const isHolding = Boolean(lm.is_holding_facility);
-
-                    // If an active report/incident marker is already placed at this exact facility location,
-                    // suppress the static background landmark pin so they do not overlap!
-                    const hasOverlappingReportMarker = markers.some(m =>
-                        (Math.abs(m.lat - lmLat) < 0.0006 && Math.abs(m.lng - lmLng) < 0.0006) ||
-                        (m.rawData?.facility_id && m.rawData.facility_id === lm.landmark_id) ||
-                        (m.category === 'Holding Facility' && isHolding)
-                    );
-                    if (hasOverlappingReportMarker) {
-                        return null;
-                    }
-
-                    if (isHolding && !showHoldingFacilities) return null;
-                    if (!isHolding && !showLandmarks) return null;
-
-                    const iconToUse = isHolding
-                        ? createHoldingFacilityPinIcon(lm.name, currentZoom)
-                        : createLandmarkPinIcon(lm.category, false, currentZoom);
-
-                    return (
-                        <Marker
-                            key={`db-lm-${lm.landmark_id}`}
-                            position={[lmLat, lmLng]}
-                            icon={iconToUse}
-                            eventHandlers={{
-                                click: () => {
-                                    if (onLocationChange) onLocationChange(lmLat, lmLng);
-                                    if (onMapClick) onMapClick(lmLat, lmLng);
-                                }
-                            }}
-                        >
-                            <Tooltip direction="top" offset={[0, -Math.round(getLandmarkZoomMetrics(currentZoom).size / 2) - 4]} className="custom-hover-tooltip">
-                                <span>{isHolding ? '🐾' : '📍'} {lm.name}</span>
-                            </Tooltip>
-                        </Marker>
-                    );
-                })
-            )}
-
-
-
-            {/* Road-following Route Line between markers */}
-            {showConnectingLine && markers.length >= 2 && markers[0].lat && markers[1].lat && (
-                <RoadRouteOverlay
-                    start={[markers[0].lat, markers[0].lng]}
-                    end={[markers[1].lat, markers[1].lng]}
-                    color="#F97316"
-                    weight={4}
-                    dashArray="6, 8"
-                    onRouteCalculated={onRouteCalculated}
+        <div style={{ position: 'relative', width: '100%', height: height || '100%', minHeight: '340px' }} className="w-full h-full min-h-[340px] overflow-hidden">
+            <MapContainer
+                center={center}
+                zoom={zoom}
+                scrollWheelZoom={false}
+                style={{ height: '100%', width: '100%', minHeight: '340px', position: 'relative', zIndex: 1 }}
+                className="w-full h-full min-h-[340px]"
+            >
+                <MapResizeHandler />
+                <ChangeView center={center} zoom={zoom} />
+                <MapEventsHandler 
+                    onLocationChange={onLocationChange} 
+                    onMapClick={(lat, lng) => {
+                        setSelectedReportMarker(null);
+                        if (onMapClick) onMapClick(lat, lng);
+                    }} 
+                    onZoomChange={setCurrentZoom} 
                 />
-            )}
-
-            {polylines && polylines.map((line, idx) => (
-                <Polyline
-                    key={`custom-line-${idx}`}
-                    positions={line.positions}
-                    pathOptions={{
-                        color: line.color || '#F97316',
-                        weight: line.weight || 3.5,
-                        dashArray: line.dashArray || '6, 8',
-                        opacity: line.opacity || 0.9
-                    }}
+                <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
-            ))}
 
-            {markers.map((marker) => {
-                const isUserLoc = marker.category === 'User Location' || marker.category === 'Operator';
-                const isHoldingFacility = marker.category === 'Holding Facility' || marker.category === 'Facility Holding' || marker.category === 'Secured Facility';
-                const isInitialSighting = marker.category === 'Initial Sighting' || marker.category === 'Found Location' || marker.category === 'Original Sighting';
-
-                // Prevent overlapping "FOUND SPOT" pin if it is at the exact same location as a Holding Facility or main marker
-                if (isInitialSighting) {
-                    const overlapsOtherMarker = markers.some(m =>
-                        m !== marker &&
-                        m.category !== 'Initial Sighting' &&
-                        m.category !== 'Found Location' &&
-                        Math.abs(m.lat - marker.lat) < 0.0001 &&
-                        Math.abs(m.lng - marker.lng) < 0.0001
-                    );
-                    if (overlapsOtherMarker) return null;
-                }
-
-                const animalTypeStr = marker.rawData?.animal_type || marker.rawData?.animalType || marker.rawData?.pet_type || marker.rawData?.report?.animal_type || marker.category || '';
-                const facilityNameStr = marker.rawData?.facility?.name || marker.rawData?.facility_name || (marker.title ? marker.title.replace(/^Secured:\s*/i, '') : 'HOLDING FACILITY');
-                const petImage = marker.rawData?.media?.[0]?.file_url || marker.rawData?.image_url || marker.rawData?.media?.[0]?.url;
-
-                // Resolve the landmark's actual icon/emoji (e.g. 🏀 for Basketball Court, 🏢 for Office, 🐾 for Pen, etc.)
-                let lmIcon = '🐾';
-                if (marker.rawData?.facility?.category) {
-                    const cat = getLandmarkCategory(marker.rawData.facility.category, true);
-                    lmIcon = cat.emoji || '🐾';
-                } else if (marker.rawData?.facility?.icon) {
-                    lmIcon = marker.rawData.facility.icon;
-                } else {
-                    const targetName = (marker.rawData?.facility?.name || marker.rawData?.landmark || marker.title || '').toLowerCase();
-                    const foundLm = dbLandmarks.find((l: any) =>
-                        (l.name && targetName.includes(l.name.toLowerCase())) ||
-                        (l.name && l.name.toLowerCase().includes(targetName)) ||
-                        (marker.rawData?.facility_id && l.landmark_id === marker.rawData.facility_id)
-                    );
-                    if (foundLm) {
-                        const cat = getLandmarkCategory(foundLm.category, Boolean(foundLm.is_holding_facility));
-                        lmIcon = cat.emoji || '🐾';
-                    } else {
-                        const preset = PRESET_LANDMARKS.find(p => targetName.includes(p.name.toLowerCase()) || targetName.includes(p.id.toLowerCase()));
-                        if (preset) {
-                            lmIcon = preset.icon;
-                        }
-                    }
-                }
-
-                return (
-                    <Marker
-                        key={marker.id}
-                        position={[marker.lat, marker.lng]}
-                        draggable={Boolean(marker.draggable)}
-                        icon={
-                            marker.category === 'Selected Location' ? createSelectedPinIcon() :
-                            (marker.category === 'Barangay Office' || marker.category === 'HQ') ? createBarangayHQIcon(currentZoom) :
-                                isUserLoc ? createUserLocationIcon() :
-                                    isHoldingFacility ? createFacilityHoldingIcon(animalTypeStr, facilityNameStr, petImage, lmIcon, currentZoom) :
-                                        isInitialSighting ? InitialSightingIcon :
-                                            marker.color ? createColoredIncidentIcon(marker.color, animalTypeStr || marker.category) : IncidentIcon
-                        }
+                {showGeofence && (
+                    <Polygon
+                        positions={SELERA_BOUNDS}
+                        pathOptions={{
+                            color: '#F97316',
+                            fillColor: '#F97316',
+                            fillOpacity: 0.12,
+                            weight: 2.5,
+                            dashArray: '6, 8',
+                            className: 'outline-none focus:outline-none'
+                        }}
                         eventHandlers={{
-                            click: () => onMarkerClick && onMarkerClick(marker),
-                            popupopen: () => onMarkerClick && onMarkerClick(marker),
-                            dragend: (e: any) => {
-                                if (marker.onDragEnd) {
-                                    const coords = e.target.getLatLng();
-                                    marker.onDragEnd(coords.lat, coords.lng);
+                            click: (e) => {
+                                if (e.originalEvent?.target && typeof (e.originalEvent.target as any).blur === 'function') {
+                                    (e.originalEvent.target as any).blur();
                                 }
+                                if (onMapClick) onMapClick(e.latlng.lat, e.latlng.lng);
+                                if (onLocationChange) onLocationChange(e.latlng.lat, e.latlng.lng);
                             }
                         }}
                     >
-                        {marker.title && !isHoldingFacility && (
-                            <Tooltip 
-                                direction="top" 
-                                offset={[0, isUserLoc ? -12 : -32]} 
-                                opacity={1}
-                                className="custom-hover-tooltip"
-                            >
-                                <div className="flex items-center gap-1.5 font-black text-[9px] uppercase tracking-wider">
-                                    <span>📍</span>
-                                    <span>{marker.title}</span>
-                                </div>
-                            </Tooltip>
-                        )}
-                        {!isUserLoc && !isHoldingFacility && showPopups && (
+                        <Tooltip sticky direction="top" className="custom-hover-tooltip">
+                            <span>Selera Homes Reporting Zone</span>
+                        </Tooltip>
+                    </Polygon>
+                )}
+
+                {/* ── Official Barangay Headquarters Marker (Admin Configured) ── */}
+                {showHQ && barangayHQ && barangayHQ.hq_lat && barangayHQ.hq_lng && (
+                    <Marker
+                        position={[parseFloat(barangayHQ.hq_lat), parseFloat(barangayHQ.hq_lng)]}
+                        icon={createBarangayHQIcon(currentZoom)}
+                    >
+                        <Tooltip direction="top" offset={[0, -Math.round(getLandmarkZoomMetrics(currentZoom).size / 2) - 4]} className="custom-hover-tooltip">
+                            <span>🏛️ Barangay {barangayHQ.barangay_name || 'San Vicente'} Operations HQ</span>
+                        </Tooltip>
+                        {showPopups && (
                             <Popup className="custom-popup">
-                                <div className="p-3.5 w-[285px] max-w-[310px] text-gray-800 flex flex-col gap-2 select-none">
-                                    {marker.category === 'Selected Location' ? (
-                                        <div className="flex flex-col gap-2">
-                                            <div className="flex items-center gap-2 pb-1.5 border-b border-orange-100">
-                                                <div className="w-7 h-7 rounded-xl bg-orange-500 text-white flex items-center justify-center text-sm shadow-xs shrink-0">
-                                                    📍
-                                                </div>
-                                                <div>
-                                                    <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-tight">Selected Location</h4>
-                                                    <p className="text-[8.5px] font-bold text-orange-600 uppercase tracking-wider">Map Coordinates</p>
-                                                </div>
-                                            </div>
-                                            <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100 font-mono text-[10.5px] space-y-1 text-slate-700">
-                                                <p><span className="font-bold text-slate-900">Latitude:</span> {marker.lat.toFixed(6)}</p>
-                                                <p><span className="font-bold text-slate-900">Longitude:</span> {marker.lng.toFixed(6)}</p>
-                                            </div>
-                                            <p className="text-[8.5px] text-slate-400 italic">Click anywhere on the map to re-pinpoint coordinates.</p>
-                                        </div>
-                                    ) : marker.rawData ? (
-                                        <>
-                                            {/* Header */}
-                                            {isHoldingFacility ? (
-                                                <div className="pb-1.5 border-b border-gray-100 pr-7">
-                                                    <div className="flex items-center justify-between gap-1.5">
-                                                        <div className="flex items-center gap-1.5 min-w-0">
-                                                            <span className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center text-sm border border-emerald-200 shrink-0">
-                                                                {lmIcon || '🐾'}
-                                                            </span>
-                                                            <div className="min-w-0">
-                                                                <h4 className="text-[10.5px] font-black text-gray-950 uppercase tracking-tight truncate leading-tight">
-                                                                    HOLDING FACILITY INTAKE
-                                                                </h4>
-                                                            </div>
-                                                        </div>
-                                                        <span className="shrink-0 px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-wider bg-emerald-600 text-white shadow-2xs">
-                                                            SECURED
-                                                        </span>
-                                                    </div>
-                                                    <p className="text-[8.5px] font-bold text-gray-500 mt-0.5 truncate pl-7">
-                                                        Transferred & Safe • {facilityNameStr || marker.rawData.landmark || 'Basketball Court'}
-                                                    </p>
-                                                </div>
-                                            ) : (
-                                                <div className="flex items-center justify-between gap-1.5 pb-1 border-b border-gray-100 pr-6">
-                                                    <div className="flex items-center gap-1.5 min-w-0">
-                                                        <img
-                                                            src={getProfilePicture(marker.rawData.reporter_photo || marker.rawData.user?.profile_picture)}
-                                                            alt={marker.rawData.reporterName || 'Citizen'}
-                                                            className="w-5 h-5 rounded-full object-cover shrink-0 border border-gray-200 shadow-2xs"
-                                                            onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
-                                                        />
-                                                        <div className="min-w-0">
-                                                            <p className="text-[10px] font-black text-gray-900 truncate leading-none">
-                                                                {marker.rawData.reporterName || 'Citizen'}
-                                                            </p>
-                                                            <p className="text-[7.5px] font-bold text-gray-400 mt-0.5 leading-none">
-                                                                {marker.time}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <span className={`shrink-0 px-1.5 py-0.2 rounded-full text-[7px] font-black uppercase tracking-wider border shadow-2xs ${marker.rawData.status_id === 2 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                                            marker.rawData.status_id === 4 ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                                                                marker.rawData.status_id === 5 ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                                                    'bg-gray-100 text-gray-700 border-gray-200'
-                                                        }`}>
-                                                        {marker.rawData.statusName || 'Active'}
-                                                    </span>
-                                                </div>
-                                            )}
-
-                                            {/* Pet Photo Section */}
-                                            {(marker.rawData?.media?.[0]?.file_url || marker.rawData?.image_url || marker.rawData?.media?.[0]?.url || petImage) ? (
-                                                <div className="w-full h-28 rounded-xl overflow-hidden border border-gray-100 bg-gray-50 shrink-0 shadow-2xs relative group">
-                                                    <img
-                                                        src={marker.rawData?.media?.[0]?.file_url || marker.rawData?.image_url || marker.rawData?.media?.[0]?.url || petImage}
-                                                        alt={`Report #${marker.id}`}
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                    <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-white text-[8px] font-black tracking-tight">
-                                                        #{marker.id.toString().padStart(4, '0')}
-                                                    </div>
-                                                    
-                                                    {isHoldingFacility ? (
-                                                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-1.5 pt-3">
-                                                            <div className="flex items-center gap-1.5 text-[8px] font-black text-white">
-                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                                                <span className="truncate">Sheltered at Temporary Holding Area</span>
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="absolute top-1.5 right-1.5">
-                                                            <span className={`text-[7px] font-black uppercase px-1.5 py-0.5 rounded shadow-xs ${marker.priority === 'High' ? 'bg-red-500 text-white' :
-                                                                    (marker.priority === 'Medium' || marker.priority === 'Regular') ? 'bg-amber-500 text-white' : 'bg-blue-500 text-white'
-                                                                }`}>
-                                                                {marker.priority || 'Medium'}
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <div className="flex items-center justify-between px-0.5">
-                                                    <span className="font-black text-gray-900 text-[10px]">#{marker.id.toString().padStart(4, '0')}</span>
-                                                    <span className={`text-[7px] font-black uppercase px-1 py-0.2 rounded ${marker.priority === 'High' ? 'bg-red-50 text-red-500 border border-red-200' :
-                                                            (marker.priority === 'Medium' || marker.priority === 'Regular') ? 'bg-amber-50 text-amber-500 border border-amber-200' : 'bg-blue-50 text-blue-500 border border-blue-200'
-                                                        }`}>
-                                                        {marker.priority || 'Medium'}
-                                                    </span>
-                                                </div>
-                                            )}
-
-                                            {/* Attribute Pills */}
-                                            <div className="flex flex-wrap items-center gap-1.5">
-                                                <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-stone-100 border border-stone-200/80 rounded-md text-stone-800 text-[8px] font-bold">
-                                                    <span>{animalTypeStr.toLowerCase().includes('cat') ? '🐱' : '🐶'}</span>
-                                                    <span className="font-extrabold">{animalTypeStr || 'Pet'}</span>
-                                                    {marker.rawData.animal_breed && marker.rawData.animal_breed.toLowerCase() !== 'unknown' && (
-                                                        <>
-                                                            <span className="text-stone-400">•</span>
-                                                            <span className="truncate max-w-[80px]">{marker.rawData.animal_breed}</span>
-                                                        </>
-                                                    )}
-                                                </div>
-
-                                                {marker.rawData.animal_color && marker.rawData.animal_color.toLowerCase() !== 'unknown' && (
-                                                    <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-stone-50 border border-stone-200/60 rounded-md text-stone-700 text-[8px] font-bold">
-                                                        <span>🎨</span>
-                                                        <span className="truncate max-w-[85px]">{marker.rawData.animal_color}</span>
-                                                    </div>
-                                                )}
-
-                                                <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-md text-[8px] font-bold max-w-full">
-                                                    <span>📍</span>
-                                                    <span className="truncate max-w-[190px]">
-                                                        {facilityNameStr ? `${facilityNameStr} Holding Station` : (marker.rawData.landmark || 'Basketball Court Holding Station')}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            {/* Action Buttons */}
-                                            <div className="pt-1.5 border-t border-gray-100 flex flex-col gap-1.5">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        if (onViewDetails) onViewDetails(marker);
-                                                    }}
-                                                    className="w-full py-2 bg-[#0D3B3A] hover:bg-[#082625] text-white text-[9px] font-black uppercase rounded-xl transition-all shadow-xs tracking-wider flex items-center justify-center gap-1.5 cursor-pointer"
-                                                >
-                                                    <span>VIEW RESCUE & INTAKE DETAILS</span>
-                                                </button>
-                                            </div>
-                                        </>
-                                    ) : (
-                                <>
-                                    <div className="flex justify-between items-start mb-2">
-                                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${marker.priority === 'High' ? 'bg-red-50 text-red-500' :
-                                                (marker.priority === 'Medium' || marker.priority === 'Regular') ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-500'
-                                            }`}>
-                                            {marker.priority || 'Medium'}
+                                <div className="p-3 w-[220px] text-gray-800 flex flex-col gap-1.5">
+                                    <div className="flex items-center gap-2 pb-1.5 border-b border-blue-100">
+                                        <span className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center text-base shadow-xs">
+                                            🏛️
                                         </span>
-                                        <span className="text-[8px] font-bold text-gray-400 uppercase">{marker.time}</span>
-                                    </div>
-                                    <h3 className="font-black text-xs uppercase text-[#1a1208] mb-1">{marker.category || 'Stray Animal'}</h3>
-                                    <p className="text-[10px] text-gray-500 leading-tight mb-2 italic">"{marker.title}"</p>
-                                    <div className="pt-1.5 border-t border-gray-100 flex flex-col gap-1">
-                                        <div className="grid grid-cols-2 gap-1">
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (onMarkerClick) onMarkerClick({ ...marker, source: 'brgy' });
-                                                }}
-                                                className="py-1 px-1 bg-[#F97316] text-white text-[8px] font-black uppercase rounded-lg hover:bg-[#EA580C] transition-colors text-center"
-                                            >
-                                                From HQ
-                                            </button>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (onMarkerClick) onMarkerClick({ ...marker, source: 'current' });
-                                                }}
-                                                className="py-1 px-1 bg-blue-600 text-white text-[8px] font-black uppercase rounded-lg hover:bg-blue-700 transition-colors text-center"
-                                            >
-                                                From Me
-                                            </button>
+                                        <div>
+                                            <p className="text-[11px] font-black text-blue-950 uppercase tracking-tight">Barangay {barangayHQ.barangay_name || 'San Vicente'} HQ</p>
+                                            <p className="text-[8px] font-bold text-blue-600 uppercase tracking-wider">Operations & Dispatch Center</p>
                                         </div>
                                     </div>
-                                </>
-                            )}
-                        </div>
-                    </Popup>
+                                    <div className="text-[10px] space-y-1 text-gray-600">
+                                        <p><span className="font-bold text-gray-800">City:</span> {barangayHQ.city || 'Santa Maria, Bulacan'}</p>
+                                        {barangayHQ.contact_no && <p><span className="font-bold text-gray-800">Contact:</span> {barangayHQ.contact_no}</p>}
+                                        {barangayHQ.hq_plus_code && <p><span className="font-bold text-gray-800">Plus Code:</span> {barangayHQ.hq_plus_code}</p>}
+                                    </div>
+                                    <div className="mt-1 pt-1.5 border-t border-gray-100 flex items-center justify-between text-[8px] text-gray-400 font-bold uppercase">
+                                        <span>Official Station</span>
+                                        <span className="text-blue-600">Active</span>
+                                    </div>
+                                </div>
+                            </Popup>
                         )}
                     </Marker>
-                );
-            })}
+                )}
 
-            {routing && (
-                <RoutingControl
-                    key={`${routing.start[0]}-${routing.start[1]}-${routing.end[0]}-${routing.end[1]}`}
-                    start={routing.start}
-                    end={routing.end}
-                    waypointNames={routing.waypointNames}
-                    onRoutingUpdate={routing.onRoutingUpdate}
-                    onClose={routing.onClose}
-                />
+                {/* ── Registered Holding Facilities & Community Landmarks (Database) ── */}
+                {deconflictedLandmarks && deconflictedLandmarks.length > 0 && (
+                    deconflictedLandmarks.map((lm: any) => {
+                        const lmLat = lm.lat;
+                        const lmLng = lm.lng;
+                        const isHolding = Boolean(lm.is_holding_facility);
+
+                        const hasOverlappingReportMarker = markers.some(m =>
+                            (Math.abs(m.lat - lmLat) < 0.0006 && Math.abs(m.lng - lmLng) < 0.0006) ||
+                            (m.rawData?.facility_id && m.rawData.facility_id === lm.landmark_id) ||
+                            (m.category === 'Holding Facility' && isHolding)
+                        );
+                        if (hasOverlappingReportMarker) {
+                            return null;
+                        }
+
+                        if (isHolding && !showHoldingFacilities) return null;
+                        if (!isHolding && !showLandmarks) return null;
+
+                        const iconToUse = isHolding
+                            ? createHoldingFacilityPinIcon(lm.name, currentZoom)
+                            : createLandmarkPinIcon(lm.category, false, currentZoom);
+
+                        return (
+                            <Marker
+                                key={`db-lm-${lm.landmark_id}`}
+                                position={[lmLat, lmLng]}
+                                icon={iconToUse}
+                                eventHandlers={{
+                                    click: () => {
+                                        if (onLocationChange) onLocationChange(lmLat, lmLng);
+                                        if (onMapClick) onMapClick(lmLat, lmLng);
+                                    }
+                                }}
+                            >
+                                <Tooltip direction="top" offset={[0, -Math.round(getLandmarkZoomMetrics(currentZoom).size / 2) - 4]} className="custom-hover-tooltip">
+                                    <span>{isHolding ? '🐾' : '📍'} {lm.name}</span>
+                                </Tooltip>
+                            </Marker>
+                        );
+                    })
+                )}
+
+                {/* Road-following Route Line between markers */}
+                {showConnectingLine && markers.length >= 2 && markers[0].lat && markers[1].lat && (
+                    <RoadRouteOverlay
+                        start={[markers[0].lat, markers[0].lng]}
+                        end={[markers[1].lat, markers[1].lng]}
+                        color="#F97316"
+                        weight={4}
+                        dashArray="6, 8"
+                        onRouteCalculated={onRouteCalculated}
+                    />
+                )}
+
+                {polylines && polylines.map((line, idx) => (
+                    <Polyline
+                        key={`custom-line-${idx}`}
+                        positions={line.positions}
+                        pathOptions={{
+                            color: line.color || '#F97316',
+                            weight: line.weight || 3.5,
+                            dashArray: line.dashArray || '6, 8',
+                            opacity: line.opacity || 0.9
+                        }}
+                    />
+                ))}
+
+                {markers.map((marker) => {
+                    const isUserLoc = marker.category === 'User Location' || marker.category === 'Operator';
+                    const isHoldingFacility = marker.category === 'Holding Facility' || marker.category === 'Facility Holding' || marker.category === 'Secured Facility';
+                    const isInitialSighting = marker.category === 'Initial Sighting' || marker.category === 'Found Location' || marker.category === 'Original Sighting';
+
+                    if (isInitialSighting) {
+                        const overlapsOtherMarker = markers.some(m =>
+                            m !== marker &&
+                            m.category !== 'Initial Sighting' &&
+                            m.category !== 'Found Location' &&
+                            Math.abs(m.lat - marker.lat) < 0.0001 &&
+                            Math.abs(m.lng - marker.lng) < 0.0001
+                        );
+                        if (overlapsOtherMarker) return null;
+                    }
+
+                    const animalTypeStr = marker.rawData?.animal_type || marker.rawData?.animalType || marker.rawData?.pet_type || marker.rawData?.report?.animal_type || marker.category || '';
+                    const facilityNameStr = marker.rawData?.facility?.name || marker.rawData?.facility_name || (marker.title ? marker.title.replace(/^Secured:\s*/i, '') : 'HOLDING FACILITY');
+                    const petImage = marker.rawData?.media?.[0]?.file_url || marker.rawData?.image_url || marker.rawData?.media?.[0]?.url;
+
+                    let lmIcon = '🐾';
+                    if (marker.rawData?.facility?.category) {
+                        const cat = getLandmarkCategory(marker.rawData.facility.category, true);
+                        lmIcon = cat.emoji || '🐾';
+                    } else if (marker.rawData?.facility?.icon) {
+                        lmIcon = marker.rawData.facility.icon;
+                    } else {
+                        const targetName = (marker.rawData?.facility?.name || marker.rawData?.landmark || marker.title || '').toLowerCase();
+                        const foundLm = dbLandmarks.find((l: any) =>
+                            (l.name && targetName.includes(l.name.toLowerCase())) ||
+                            (l.name && l.name.toLowerCase().includes(targetName)) ||
+                            (marker.rawData?.facility_id && l.landmark_id === marker.rawData.facility_id)
+                        );
+                        if (foundLm) {
+                            const cat = getLandmarkCategory(foundLm.category, Boolean(foundLm.is_holding_facility));
+                            lmIcon = cat.emoji || '🐾';
+                        } else {
+                            const preset = PRESET_LANDMARKS.find(p => targetName.includes(p.name.toLowerCase()) || targetName.includes(p.id.toLowerCase()));
+                            if (preset) {
+                                lmIcon = preset.icon;
+                            }
+                        }
+                    }
+
+                    return (
+                        <Marker
+                            key={marker.id}
+                            position={[marker.lat, marker.lng]}
+                            draggable={Boolean(marker.draggable)}
+                            icon={
+                                marker.category === 'Selected Location' ? createSelectedPinIcon() :
+                                (marker.category === 'Barangay Office' || marker.category === 'HQ') ? createBarangayHQIcon(currentZoom) :
+                                    isUserLoc ? createUserLocationIcon() :
+                                        isHoldingFacility ? createFacilityHoldingIcon(animalTypeStr, facilityNameStr, petImage, lmIcon, currentZoom) :
+                                            isInitialSighting ? InitialSightingIcon :
+                                                marker.color ? createColoredIncidentIcon(marker.color, animalTypeStr || marker.category) : IncidentIcon
+                            }
+                            eventHandlers={{
+                                click: () => {
+                                    setSelectedReportMarker(marker);
+                                    if (onMarkerClick) onMarkerClick(marker);
+                                },
+                                popupopen: () => {
+                                    setSelectedReportMarker(marker);
+                                    if (onMarkerClick) onMarkerClick(marker);
+                                },
+                                dragend: (e: any) => {
+                                    if (marker.onDragEnd) {
+                                        const coords = e.target.getLatLng();
+                                        marker.onDragEnd(coords.lat, coords.lng);
+                                    }
+                                }
+                            }}
+                        >
+                            {marker.title && !isHoldingFacility && (
+                                <Tooltip 
+                                    direction="top" 
+                                    offset={[0, isUserLoc ? -12 : -32]} 
+                                    opacity={1}
+                                    className="custom-hover-tooltip"
+                                >
+                                    <div className="flex items-center gap-1.5 font-black text-[9px] uppercase tracking-wider">
+                                        <span>📍</span>
+                                        <span>{marker.title}</span>
+                                    </div>
+                                </Tooltip>
+                            )}
+                            {!isUserLoc && !isHoldingFacility && showPopups && (
+                                <Popup className="custom-popup">
+                                    <div className="p-3 w-[250px] text-gray-800 flex flex-col gap-2 select-none">
+                                        <div className="flex items-center justify-between gap-1.5 pb-1 border-b border-gray-100">
+                                            <span className="font-black text-gray-900 text-xs">#{marker.id.toString().padStart(4, '0')}</span>
+                                            <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${marker.priority === 'High' ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-amber-50 text-amber-600 border border-amber-200'}`}>
+                                                {marker.priority || 'Medium'}
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] font-bold text-gray-800 line-clamp-2">{marker.title}</p>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (onViewDetails) {
+                                                    onViewDetails(marker);
+                                                } else {
+                                                    const rId = marker.rawData?.report_id || (marker.id > 0 ? marker.id : null);
+                                                    if (rId) navigate(`/subd/reports/${rId}`);
+                                                }
+                                            }}
+                                            className="w-full py-1.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-[9px] font-black uppercase rounded-xl transition-all text-center cursor-pointer"
+                                        >
+                                            View Report Card
+                                        </button>
+                                    </div>
+                                </Popup>
+                            )}
+                        </Marker>
+                    );
+                })}
+
+                {routing && (
+                    <RoutingControl
+                        key={`${routing.start[0]}-${routing.start[1]}-${routing.end[0]}-${routing.end[1]}`}
+                        start={routing.start}
+                        end={routing.end}
+                        waypointNames={routing.waypointNames}
+                        onRoutingUpdate={routing.onRoutingUpdate}
+                        onClose={routing.onClose}
+                    />
+                )}
+
+                {onLocationChange && (
+                    <Marker
+                        position={center}
+                        draggable={true}
+                        eventHandlers={eventHandlers}
+                    >
+                        <Popup>
+                            Location: {center[0].toFixed(4)}, {center[1].toFixed(4)}
+                        </Popup>
+                    </Marker>
+                )}
+
+                {showHeatmap && heatmapPoints && heatmapPoints.length > 0 && (
+                    <HeatmapLayer points={heatmapPoints} />
+                )}
+
+                {showReturnToSelera && <ReturnToSeleraButton />}
+            </MapContainer>
+
+            {/* ─── FLOATING REPORT INFO CARD OVERLAY (Appears when clicking any report pin) ─── */}
+            {selectedReportMarker && (selectedReportMarker.rawData || selectedReportMarker.id > 0) && (
+                <div className="absolute bottom-3 left-3 right-3 sm:left-auto sm:right-4 sm:bottom-4 sm:w-[380px] z-[1000] bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl border border-slate-200/90 p-3.5 sm:p-4.5 flex flex-col gap-2.5 animate-in fade-in slide-in-from-bottom-4 duration-200">
+                    {/* Header Row */}
+                    <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-7 h-7 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center text-sm font-black shrink-0 border border-orange-100">
+                                {(selectedReportMarker.rawData?.animal_type || selectedReportMarker.category || '').toLowerCase().includes('cat') ? '🐱' : '🐶'}
+                            </span>
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-xs font-black text-slate-900 leading-none">
+                                        Report #{selectedReportMarker.id.toString().padStart(4, '0')}
+                                    </span>
+                                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${
+                                        (selectedReportMarker.priority || selectedReportMarker.rawData?.priority_level || '').toLowerCase() === 'high'
+                                            ? 'bg-rose-50 text-rose-600 border border-rose-200'
+                                            : 'bg-amber-50 text-amber-600 border border-amber-200'
+                                    }`}>
+                                        {selectedReportMarker.priority || selectedReportMarker.rawData?.priority_level || 'Medium'} Priority
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                            <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${
+                                selectedReportMarker.rawData?.status_id === 2 || selectedReportMarker.rawData?.is_verified
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-200'
+                            }`}>
+                                {selectedReportMarker.rawData?.statusName || selectedReportMarker.rawData?.status?.status_name || 'Under Review'}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedReportMarker(null)}
+                                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-xs font-bold transition-colors cursor-pointer"
+                                title="Close"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Body: Thumbnail & Details */}
+                    <div className="flex items-start gap-3">
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 shrink-0 shadow-2xs">
+                            <img
+                                src={selectedReportMarker.rawData?.media?.[0]?.file_url || selectedReportMarker.rawData?.image_url || selectedReportMarker.rawData?.sighting_photo || selectedReportMarker.rawData?.pet?.photo_url || DEFAULT_PET_AVATAR}
+                                alt="Report Sighting"
+                                className="w-full h-full object-cover"
+                                onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                            />
+                        </div>
+
+                        <div className="flex-1 min-w-0 flex flex-col gap-1">
+                            <h4 className="text-xs sm:text-sm font-black text-slate-900 truncate leading-tight">
+                                {selectedReportMarker.rawData?.category_name || selectedReportMarker.rawData?.category || selectedReportMarker.title || 'Stray Animal Sighting'}
+                            </h4>
+                            
+                            <p className="text-[10px] font-bold text-slate-600 truncate flex items-center gap-1">
+                                <span>🐾</span>
+                                <span>{(selectedReportMarker.rawData?.animal_type || selectedReportMarker.category || 'Dog').toUpperCase()}</span>
+                                {selectedReportMarker.rawData?.animal_breed && selectedReportMarker.rawData.animal_breed.toLowerCase() !== 'unknown' && (
+                                    <span>• {selectedReportMarker.rawData.animal_breed}</span>
+                                )}
+                                {selectedReportMarker.rawData?.animal_color && selectedReportMarker.rawData.animal_color.toLowerCase() !== 'unknown' && (
+                                    <span>• {selectedReportMarker.rawData.animal_color}</span>
+                                )}
+                            </p>
+
+                            <p className="text-[10px] font-semibold text-slate-500 truncate flex items-center gap-1">
+                                <span className="text-rose-500">📍</span>
+                                <span>{selectedReportMarker.rawData?.landmark || selectedReportMarker.rawData?.location_address || selectedReportMarker.title || 'Selera Homes'}</span>
+                            </p>
+
+                            <p className="text-[9px] text-slate-400 font-medium truncate flex items-center gap-1">
+                                <span>🕒 {selectedReportMarker.time || 'Recently'}</span>
+                                <span>• 👤 {selectedReportMarker.rawData?.reporterName || selectedReportMarker.rawData?.reporter_name || 'Citizen'}</span>
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Observed Conditions / Tags */}
+                    {selectedReportMarker.rawData?.observed_conditions && (
+                        <div className="flex flex-wrap gap-1">
+                            {(Array.isArray(selectedReportMarker.rawData.observed_conditions) 
+                                ? selectedReportMarker.rawData.observed_conditions 
+                                : [selectedReportMarker.rawData.observed_conditions]
+                            ).map((cond: string, idx: number) => (
+                                <span key={idx} className="px-2 py-0.5 rounded-md bg-orange-50 text-[#F97316] text-[8px] font-bold border border-orange-100">
+                                    {cond}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Action Button */}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            if (onViewDetails) {
+                                onViewDetails(selectedReportMarker);
+                            } else {
+                                const rId = selectedReportMarker.rawData?.report_id || (selectedReportMarker.id > 0 ? selectedReportMarker.id : null);
+                                if (rId) navigate(`/subd/reports/${rId}`);
+                            }
+                        }}
+                        className="w-full py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-2xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
+                    >
+                        <span>View Full Report Details</span>
+                        <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                        </svg>
+                    </button>
+                </div>
             )}
-
-            {onLocationChange && (
-                <Marker
-                    position={center}
-                    draggable={true}
-                    eventHandlers={eventHandlers}
-                >
-                    <Popup>
-                        Location: {center[0].toFixed(4)}, {center[1].toFixed(4)}
-                    </Popup>
-                </Marker>
-            )}
-
-            {showHeatmap && heatmapPoints && heatmapPoints.length > 0 && (
-                <HeatmapLayer points={heatmapPoints} />
-            )}
-
-            {showReturnToSelera && <ReturnToSeleraButton />}
-        </MapContainer>
+        </div>
     );
 };
 

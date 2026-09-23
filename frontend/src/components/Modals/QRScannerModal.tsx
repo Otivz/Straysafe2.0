@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '../../utils/api';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -375,34 +376,34 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
 
     if (!isOpen) return null;
 
-    return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300 font-sans">
+    const modalContent = (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300 font-sans">
 
             {/* Temporary container hidden in viewport for handling static image scans */}
             <div id="qr-upload-temp-container" className="hidden" style={{ width: '1px', height: '1px' }}></div>
 
-            <div className="bg-white rounded-[2.5rem] shadow-2xl overflow-hidden max-w-xl w-full max-h-[90vh] flex flex-col border border-gray-100 animate-in zoom-in-95 duration-300">
+            <div className="bg-white rounded-3xl sm:rounded-[2.5rem] shadow-2xl overflow-hidden max-w-xl w-full max-h-[88vh] sm:max-h-[90vh] flex flex-col border border-gray-100 animate-in zoom-in-95 duration-300 my-auto">
 
                 {/* Header */}
-                <div className="bg-gradient-to-r from-orange-500 to-[#F97316] text-white px-8 py-6 flex justify-between items-center relative overflow-hidden shrink-0">
+                <div className="bg-gradient-to-r from-orange-500 to-[#F97316] text-white px-5 py-4 sm:px-8 sm:py-6 flex justify-between items-center relative overflow-hidden shrink-0">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-xl translate-x-8 -translate-y-8"></div>
 
-                    <div className="flex items-center space-x-3.5 z-10">
-                        <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center text-white backdrop-blur-sm">
+                    <div className="flex items-center space-x-3 sm:space-x-3.5 z-10 min-w-0">
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 bg-white/20 rounded-xl sm:rounded-2xl flex items-center justify-center text-white backdrop-blur-sm shrink-0">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" />
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M19.125 13.5h.008v.008h-.008V13.5zM16.875 15.75h.008v.008h-.008v-.008zM14.625 18h.008v.008h-.008V18zM13.5 15.75h.008v.008H13.5v-.008zM15.75 13.5h.008v.008h-.008V13.5zM18 15.75h.008v.008H18v-.008zM18 18h.008v.008H18V18zM15.75 18h.008v.008h-.008V18zM13.5 13.5h.008v.008H13.5V13.5zM20.25 15.75h.008v.008h-.008v-.008zM20.25 18h.008v.008h-.008V18z" />
                             </svg>
                         </div>
-                        <div>
-                            <h3 className="text-xl font-extrabold tracking-tight">QR Collar Scanner</h3>
-                            <p className="text-orange-100 text-xs font-medium">Verify registered pets & identify owners instantly</p>
+                        <div className="min-w-0">
+                            <h3 className="text-lg sm:text-xl font-extrabold tracking-tight truncate">QR Collar Scanner</h3>
+                            <p className="text-orange-100 text-[11px] sm:text-xs font-medium truncate">Verify registered pets & identify owners instantly</p>
                         </div>
                     </div>
 
                     <button
                         onClick={onClose}
-                        className="bg-white/10 hover:bg-white/20 text-white rounded-full p-2.5 transition-all z-10 cursor-pointer"
+                        className="bg-white/10 hover:bg-white/20 text-white rounded-full p-2 sm:p-2.5 transition-all z-10 cursor-pointer shrink-0 ml-2"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -411,26 +412,26 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-6">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-8 flex flex-col gap-4 sm:gap-6">
 
                     {/* Active Scanning Mode tabs */}
                     {!pet && !loading && (
                         <div className="flex bg-gray-100 rounded-2xl p-1.5 shrink-0">
                             <button
                                 onClick={() => setActiveTab('camera')}
-                                className={`flex-1 py-3 text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer ${activeTab === 'camera' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                className={`flex-1 py-2.5 sm:py-3 text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer ${activeTab === 'camera' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                             >
                                 Live Camera
                             </button>
                             <button
                                 onClick={() => setActiveTab('upload')}
-                                className={`flex-1 py-3 text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer ${activeTab === 'upload' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                className={`flex-1 py-2.5 sm:py-3 text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer ${activeTab === 'upload' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                             >
                                 Upload Image
                             </button>
                             <button
                                 onClick={() => setActiveTab('manual')}
-                                className={`flex-1 py-3 text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer ${activeTab === 'manual' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                className={`flex-1 py-2.5 sm:py-3 text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer ${activeTab === 'manual' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                             >
                                 Manual ID
                             </button>
@@ -449,11 +450,11 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
 
                     {/* SCANNING MODES PANELS */}
                     {!pet && !loading && (
-                        <div className="flex-1 flex flex-col justify-center min-h-[300px]">
+                        <div className="flex-1 flex flex-col justify-center min-h-[260px] sm:min-h-[300px]">
                             {/* CAMERA TAB */}
                             {activeTab === 'camera' && (
-                                <div className="flex flex-col items-center justify-center space-y-4">
-                                    <div className="w-full h-[320px] rounded-3xl bg-gray-50 border border-gray-100 shadow-inner overflow-hidden relative flex items-center justify-center">
+                                <div className="flex flex-col items-center justify-center space-y-3 sm:space-y-4">
+                                    <div className="w-full h-[260px] sm:h-[320px] rounded-2xl sm:rounded-3xl bg-gray-50 border border-gray-100 shadow-inner overflow-hidden relative flex items-center justify-center">
 
                                         {/* Scanner Viewport Element */}
                                         <div id={scannerId} className="w-full h-full object-cover"></div>
@@ -462,11 +463,11 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                         {cameraActive && (
                                             <>
                                                 {/* Corner markers */}
-                                                <div className="absolute inset-0 m-12 border-2 border-white/20 pointer-events-none rounded-2xl">
-                                                    <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-[#F97316] rounded-tl-xl"></div>
-                                                    <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-[#F97316] rounded-tr-xl"></div>
-                                                    <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-[#F97316] rounded-bl-xl"></div>
-                                                    <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-[#F97316] rounded-br-xl"></div>
+                                                <div className="absolute inset-0 m-8 sm:m-12 border-2 border-white/20 pointer-events-none rounded-2xl">
+                                                    <div className="absolute -top-1 -left-1 w-6 h-6 sm:w-8 sm:h-8 border-t-4 border-l-4 border-[#F97316] rounded-tl-xl"></div>
+                                                    <div className="absolute -top-1 -right-1 w-6 h-6 sm:w-8 sm:h-8 border-t-4 border-r-4 border-[#F97316] rounded-tr-xl"></div>
+                                                    <div className="absolute -bottom-1 -left-1 w-6 h-6 sm:w-8 sm:h-8 border-b-4 border-l-4 border-[#F97316] rounded-bl-xl"></div>
+                                                    <div className="absolute -bottom-1 -right-1 w-6 h-6 sm:w-8 sm:h-8 border-b-4 border-r-4 border-[#F97316] rounded-br-xl"></div>
                                                 </div>
                                                 {/* Laser animation */}
                                                 <div className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500 to-transparent shadow-[0_0_15px_#F97316] animate-[scan_2.5s_infinite_ease-in-out]"></div>
@@ -475,7 +476,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
 
                                         {!cameraActive && !error && (
                                             <div className="flex flex-col items-center space-y-3 z-10 text-gray-400">
-                                                <svg className="w-12 h-12 animate-spin text-orange-500" fill="none" viewBox="0 0 24 24">
+                                                <svg className="w-10 h-10 sm:w-12 sm:h-12 animate-spin text-orange-500" fill="none" viewBox="0 0 24 24">
                                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                                 </svg>
@@ -490,15 +491,15 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                             {/* UPLOAD TAB */}
                             {activeTab === 'upload' && (
                                 <div className="flex flex-col items-center justify-center">
-                                    <label className="w-full h-64 border-2 border-dashed border-gray-200 rounded-[2rem] flex flex-col items-center justify-center gap-4 cursor-pointer bg-gray-50 hover:bg-orange-50/20 hover:border-orange-300 transition-all group p-6">
+                                    <label className="w-full h-56 sm:h-64 border-2 border-dashed border-gray-200 rounded-2xl sm:rounded-[2rem] flex flex-col items-center justify-center gap-3 sm:gap-4 cursor-pointer bg-gray-50 hover:bg-orange-50/20 hover:border-orange-300 transition-all group p-4 sm:p-6">
                                         <input
                                             type="file"
                                             accept="image/*"
                                             className="hidden"
                                             onChange={handleImageUpload}
                                         />
-                                        <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center text-gray-400 group-hover:text-orange-600 shadow-md transition-colors">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white flex items-center justify-center text-gray-400 group-hover:text-orange-600 shadow-md transition-colors">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 sm:h-7 sm:w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                                             </svg>
                                         </div>
@@ -512,7 +513,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
 
                             {/* MANUAL INPUT TAB */}
                             {activeTab === 'manual' && (
-                                <form onSubmit={handleManualSubmit} className="space-y-5 px-4">
+                                <form onSubmit={handleManualSubmit} className="space-y-4 sm:space-y-5 px-2 sm:px-4">
                                     <div className="space-y-2">
                                         <label className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Manually Enter Pet ID</label>
                                         <input
@@ -520,12 +521,12 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                             value={petIdInput}
                                             onChange={(e) => setPetIdInput(e.target.value)}
                                             placeholder="Enter Pet Record ID (e.g. 1)"
-                                            className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent focus:bg-white shadow-sm font-semibold transition-all"
+                                            className="w-full px-4 sm:px-5 py-3.5 sm:py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent focus:bg-white shadow-sm font-semibold transition-all"
                                         />
                                     </div>
                                     <button
                                         type="submit"
-                                        className="w-full py-4 bg-[#F97316] text-white rounded-2xl text-sm font-extrabold shadow-md hover:bg-[#EA580C] hover:shadow-lg transition-all flex items-center justify-center space-x-2.5 cursor-pointer"
+                                        className="w-full py-3.5 sm:py-4 bg-[#F97316] text-white rounded-2xl text-sm font-extrabold shadow-md hover:bg-[#EA580C] hover:shadow-lg transition-all flex items-center justify-center space-x-2.5 cursor-pointer"
                                     >
                                         <span>Retrieve Pet Details</span>
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -539,8 +540,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
 
                     {/* LOADING STATE */}
                     {loading && (
-                        <div className="flex-1 min-h-[300px] flex flex-col items-center justify-center space-y-4">
-                            <svg className="w-14 h-14 animate-spin text-orange-500" fill="none" viewBox="0 0 24 24">
+                        <div className="flex-1 min-h-[260px] sm:min-h-[300px] flex flex-col items-center justify-center space-y-4">
+                            <svg className="w-12 h-12 sm:w-14 sm:h-14 animate-spin text-orange-500" fill="none" viewBox="0 0 24 24">
                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
@@ -553,13 +554,13 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
 
                     {/* RESULTS MODE PANEL */}
                     {pet && !loading && (
-                        <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
+                        <div className="space-y-5 sm:space-y-6 animate-in fade-in zoom-in-95 duration-300">
 
                             {/* Pet Core Detail Card */}
-                            <div className="bg-gray-50 rounded-[2rem] p-6 border border-gray-100 flex flex-col sm:flex-row gap-6">
+                            <div className="bg-gray-50 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 border border-gray-100 flex flex-col sm:flex-row gap-4 sm:gap-6">
 
                                 {/* Photo */}
-                                <div className="w-32 h-32 rounded-3xl bg-white border border-gray-200 shadow-sm overflow-hidden shrink-0 self-center flex items-center justify-center">
+                                <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl sm:rounded-3xl bg-white border border-gray-200 shadow-sm overflow-hidden shrink-0 self-center flex items-center justify-center">
                                     <img 
                                         src={getPetPicture(pet.photo_url)} 
                                         alt={pet.pet_name} 
@@ -572,14 +573,14 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                 <div className="flex-1 flex flex-col justify-between">
                                     <div>
                                         <div className="flex items-center space-x-2">
-                                            <h4 className="text-xl font-black text-gray-900">{pet.pet_name}</h4>
+                                            <h4 className="text-lg sm:text-xl font-black text-gray-900">{pet.pet_name}</h4>
                                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase ${pet.pet_type.toLowerCase() === 'dog' ? 'bg-orange-50 text-orange-600' : 'bg-purple-50 text-purple-600'}`}>
                                                 {pet.pet_type}
                                             </span>
                                         </div>
                                         <p className="text-xs text-gray-400 font-extrabold uppercase tracking-wider mt-1">{pet.breed || 'Unknown Breed'}</p>
 
-                                        <div className="grid grid-cols-2 gap-3 mt-4 text-xs font-semibold text-gray-600">
+                                        <div className="grid grid-cols-2 gap-2.5 sm:gap-3 mt-3 sm:mt-4 text-xs font-semibold text-gray-600">
                                             <div>
                                                 <span className="text-[10px] font-extrabold text-gray-400 uppercase block tracking-wider">Gender</span>
                                                 <span className="text-gray-800">{pet.gender || 'Unknown'}</span>
@@ -606,7 +607,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                             </div>
 
                             {/* Health Alerts / Notes */}
-                            <div className="bg-orange-50/50 rounded-2xl p-5 border border-orange-100/50 text-xs flex flex-col gap-2">
+                            <div className="bg-orange-50/50 rounded-2xl p-4 sm:p-5 border border-orange-100/50 text-xs flex flex-col gap-2">
                                 <div className="flex justify-between items-center">
                                     <div className="flex items-center space-x-1.5 font-bold text-orange-800 uppercase tracking-widest text-[10px]">
                                         <span>Medical Status</span>
@@ -626,7 +627,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                             </div>
 
                             {/* Linked Owner Card - HIGHEST VISUAL HIERARCHY */}
-                            <div className="bg-[#1A4543] rounded-[2rem] p-6 text-white shadow-lg relative overflow-hidden">
+                            <div className="bg-[#1A4543] rounded-2xl sm:rounded-[2rem] p-5 sm:p-6 text-white shadow-lg relative overflow-hidden">
                                 <div className="absolute bottom-0 right-0 w-40 h-40 bg-white/5 rounded-full blur-2xl translate-x-12 translate-y-12"></div>
                                 <div className="absolute top-0 left-0 w-24 h-24 bg-white/5 rounded-full blur-xl -translate-x-6 -translate-y-6"></div>
 
@@ -635,11 +636,11 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                         <span className="text-[9px] font-black text-teal-300 uppercase tracking-widest">Registered Owner Details</span>
                                         {owner ? (
                                             <>
-                                                <h4 className="text-2xl font-black tracking-tight mt-1.5">{owner.name}</h4>
+                                                <h4 className="text-xl sm:text-2xl font-black tracking-tight mt-1.5">{owner.name}</h4>
                                                 <p className="text-teal-100/70 text-xs font-semibold mt-1">{owner.address || 'Subdivision Resident'}</p>
                                             </>
                                         ) : (
-                                            <h4 className="text-xl font-black text-teal-100/60 tracking-tight mt-2">No Linked Owner Found</h4>
+                                            <h4 className="text-lg sm:text-xl font-black text-teal-100/60 tracking-tight mt-2">No Linked Owner Found</h4>
                                         )}
                                     </div>
 
@@ -651,7 +652,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                 </div>
 
                                 {owner && (
-                                    <div className="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-white/10 z-10 relative text-xs">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-5 sm:mt-6 pt-5 sm:pt-6 border-t border-white/10 z-10 relative text-xs">
                                         {owner.phone && (
                                             <a
                                                 href={`tel:${owner.phone}`}
@@ -691,11 +692,11 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                 </div>
 
                 {/* Footer / Buttons */}
-                <div className="px-8 py-6 bg-gray-50 border-t border-gray-100 flex gap-4 shrink-0 justify-end">
+                <div className="px-5 py-4 sm:px-8 sm:py-6 bg-gray-50 border-t border-gray-100 flex gap-2.5 sm:gap-4 shrink-0 justify-end flex-wrap">
                     {pet ? (
                         <button
                             onClick={resetStates}
-                            className="px-6 py-3.5 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-2xl text-xs font-extrabold tracking-wider uppercase transition-all flex items-center space-x-2 cursor-pointer"
+                            className="px-4 sm:px-6 py-2.5 sm:py-3.5 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-xl sm:rounded-2xl text-xs font-extrabold tracking-wider uppercase transition-all flex items-center space-x-2 cursor-pointer"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 6H16" />
@@ -704,21 +705,21 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                         </button>
                     ) : (
                         activeTab === 'camera' && cameraActive && (
-                            <div className="flex gap-3">
+                            <div className="flex gap-2 sm:gap-3">
                                 {cameras.length > 1 && (
                                     <button
                                         onClick={handleSwitchCamera}
-                                        className="px-6 py-3.5 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-2xl text-xs font-extrabold tracking-wider uppercase transition-all flex items-center space-x-2 cursor-pointer"
+                                        className="px-3 sm:px-6 py-2.5 sm:py-3.5 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-xl sm:rounded-2xl text-[11px] sm:text-xs font-extrabold tracking-wider uppercase transition-all flex items-center space-x-1.5 sm:space-x-2 cursor-pointer"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
                                         </svg>
-                                        <span>Switch Camera</span>
+                                        <span>Switch</span>
                                     </button>
                                 )}
                                 <button
                                     onClick={stopCamera}
-                                    className="px-6 py-3.5 bg-gray-200 hover:bg-gray-300 text-gray-600 rounded-2xl text-xs font-extrabold tracking-wider uppercase transition-all cursor-pointer"
+                                    className="px-3 sm:px-6 py-2.5 sm:py-3.5 bg-gray-200 hover:bg-gray-300 text-gray-600 rounded-xl sm:rounded-2xl text-[11px] sm:text-xs font-extrabold tracking-wider uppercase transition-all cursor-pointer"
                                 >
                                     Stop Camera
                                 </button>
@@ -727,7 +728,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                     )}
                     <button
                         onClick={onClose}
-                        className="px-6 py-3.5 bg-[#F97316] hover:bg-[#EA580C] text-[#FAFAF9] rounded-2xl text-xs font-extrabold tracking-wider uppercase shadow-md transition-all cursor-pointer border border-orange-500/20"
+                        className="px-5 sm:px-6 py-2.5 sm:py-3.5 bg-[#F97316] hover:bg-[#EA580C] text-[#FAFAF9] rounded-xl sm:rounded-2xl text-xs font-extrabold tracking-wider uppercase shadow-md transition-all cursor-pointer border border-orange-500/20"
                     >
                         Close
                     </button>
@@ -749,7 +750,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                     height: 100% !important;
                     position: relative !important;
                     overflow: hidden !important;
-                    border-radius: 1.5rem !important;
+                    border-radius: 1.25rem !important;
                 }
 
                 #qr-reader-viewport video {
@@ -757,7 +758,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                     height: 100% !important;
                     object-fit: cover !important;
                     object-position: center !important;
-                    border-radius: 1.5rem !important;
+                    border-radius: 1.25rem !important;
                 }
 
                 /* Hide any unwanted default controls injected by html5-qrcode */
@@ -780,6 +781,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
             `}</style>
         </div>
     );
+
+    return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 };
 
 export default QRScannerModal;

@@ -1,7 +1,9 @@
+/* eslint-disable react-hooks/exhaustive-deps, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
+import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import { api } from '../../utils/api';
 import { DEFAULT_AVATAR } from '../../utils/avatar';
 import { generateMemorableTitle } from '../../utils/chatUtils';
@@ -84,6 +86,39 @@ interface MessageItem {
 
 const HISTORY_STATUS_IDS = [3, 9, 10, 11, 12, 14]; // 3: Rejected, 9: Claimed by Owner, 10: Released, 11: Incident Resolved, 12: Deceased, 14: False Alarm / Dismissed
 
+const formatThreadTime = (dateStr?: string) => {
+    if (!dateStr) return '';
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return '';
+        const now = new Date();
+        const diffMs = now.getTime() - d.getTime();
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        if (diffDays === 0) {
+            return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        } else if (diffDays === 1) {
+            return 'Yesterday';
+        } else if (diffDays < 7) {
+            return `${diffDays} days ago`;
+        } else {
+            return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        }
+    } catch {
+        return '';
+    }
+};
+
+const formatMessageTime = (dateStr?: string) => {
+    if (!dateStr) return '';
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return '';
+        return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    } catch {
+        return '';
+    }
+};
+
 const SubdMessages: React.FC = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
@@ -101,6 +136,8 @@ const SubdMessages: React.FC = () => {
     const [isClaiming, setIsClaiming] = useState(false);
     const [selectedPetDetail, setSelectedPetDetail] = useState<PetRecord | null>(null);
     const [isLoadingPetDetail, setIsLoadingPetDetail] = useState(false);
+    const [showChatOptions, setShowChatOptions] = useState(false);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     const handleOpenPetDetail = async (petData: any) => {
         if (!petData) return;
@@ -343,28 +380,43 @@ const SubdMessages: React.FC = () => {
 
     return (
         <div className="flex h-screen bg-[#FDFBF7] font-sans antialiased overflow-hidden text-gray-900">
-            <SubdSidebar />
+            <SubdSidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-                <SubdNavbar />
-                <div className="flex-1 flex overflow-hidden p-6 gap-6 max-w-7xl w-full mx-auto">
-                    <div className="w-80 md:w-96 flex flex-col bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden shrink-0">
-                        <div className="p-4 border-b border-gray-100 space-y-3">
+                {/* On mobile: Hide top navbar when full-screen conversation view is active */}
+                <div className={`${selectedThread ? 'hidden md:block' : 'block'}`}>
+                    <SubdNavbar onMenuToggle={() => setMobileMenuOpen(true)} />
+                </div>
+
+                {/* Content Container */}
+                <div className="flex-1 flex overflow-hidden p-0 md:p-6 pb-0 md:pb-6 gap-6 max-w-7xl w-full mx-auto">
+                    
+                    {/* ─── 1. CONVERSATION / THREAD LIST PANEL ─── */}
+                    {/* Mobile: 100% width, hidden when selectedThread is open. Desktop: always 96 width */}
+                    <div className={`w-full md:w-96 flex flex-col bg-white md:rounded-3xl md:border md:border-gray-100 md:shadow-sm overflow-hidden shrink-0 ${
+                        selectedThread ? 'hidden md:flex' : 'flex'
+                    }`}>
+                        {/* Messages Header Banner */}
+                        <div className="p-4 sm:p-5 border-b border-gray-100 space-y-3.5 bg-white">
                             <div className="flex items-center justify-between">
-                                <h1 className="text-base font-black text-gray-900 flex items-center gap-2">
-                                    <span className="text-xl">💬</span>
-                                    <span>Case Messages</span>
-                                </h1>
-                                <span className="px-2 py-0.5 bg-orange-100 text-[#F97316] rounded-full text-[10px] font-black">
+                                <div>
+                                    <h1 className="text-lg font-black text-gray-900 flex items-center gap-2">
+                                        <span className="text-2xl">💬</span>
+                                        <span>Messages</span>
+                                    </h1>
+                                    <p className="text-[11px] text-gray-400 font-bold mt-0.5">Stay connected with your community</p>
+                                </div>
+                                <span className="px-2.5 py-1 bg-orange-50 text-[#F97316] border border-orange-100/80 rounded-full text-[10px] font-black">
                                     {threads.length} Total
                                 </span>
                             </div>
 
+                            {/* Case Tabs Switcher */}
                             <div className="flex bg-gray-100/80 p-1 rounded-2xl gap-1">
                                 <button
                                     onClick={() => setActiveTab('my')}
-                                    className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                                    className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                                         activeTab === 'my' 
-                                            ? 'bg-white text-gray-900 shadow-2xs font-extrabold' 
+                                            ? 'bg-white text-[#F97316] shadow-sm font-black' 
                                             : 'text-gray-500 hover:text-gray-900'
                                     }`}
                                 >
@@ -381,9 +433,9 @@ const SubdMessages: React.FC = () => {
 
                                 <button
                                     onClick={() => setActiveTab('unassigned')}
-                                    className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                                    className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                                         activeTab === 'unassigned' 
-                                            ? 'bg-white text-gray-900 shadow-2xs font-extrabold' 
+                                            ? 'bg-white text-[#F97316] shadow-sm font-black' 
                                             : 'text-gray-500 hover:text-gray-900'
                                     }`}
                                 >
@@ -400,9 +452,9 @@ const SubdMessages: React.FC = () => {
 
                                 <button
                                     onClick={() => setActiveTab('past')}
-                                    className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                                    className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                                         activeTab === 'past' 
-                                            ? 'bg-white text-gray-900 shadow-2xs font-extrabold' 
+                                            ? 'bg-white text-[#F97316] shadow-sm font-black' 
                                             : 'text-gray-500 hover:text-gray-900'
                                     }`}
                                 >
@@ -422,21 +474,21 @@ const SubdMessages: React.FC = () => {
                             <div className="relative">
                                 <input
                                     type="text"
-                                    placeholder="Search by Report #, status, resident..."
+                                    placeholder="Search by report #, status, resident..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]"
+                                    className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]"
                                 />
-                                <svg className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg className="w-4 h-4 text-gray-400 absolute left-3 top-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                 </svg>
                             </div>
                         </div>
 
-                        {/* Thread List */}
-                        <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
+                        {/* Thread Cards List */}
+                        <div className="flex-1 overflow-y-auto divide-y divide-gray-100 pb-36 md:pb-0 custom-scrollbar">
                             {loading ? (
-                                <div className="p-6 text-center text-gray-400 text-xs font-medium animate-pulse">
+                                <div className="p-8 text-center text-gray-400 text-xs font-medium animate-pulse">
                                     Loading conversations...
                                 </div>
                             ) : filteredThreads.length === 0 ? (
@@ -449,128 +501,318 @@ const SubdMessages: React.FC = () => {
                                                 ? 'No unassigned conversations' 
                                                 : 'No past or archived reports'}
                                     </p>
-                                    <p className="text-[11px]">
+                                    <p className="text-[11px] max-w-xs mx-auto">
                                         {activeTab === 'my' 
-                                            ? 'Claim reports in the Unassigned tab to manage them here.' 
+                                            ? 'Claim reports in the Unassigned tab to coordinate with reporters.' 
                                             : activeTab === 'unassigned' 
-                                                ? 'Incoming resident inquiries will appear here.' 
+                                                ? 'Incoming resident inquiries and reported strays will appear here.' 
                                                 : 'Completed, resolved, or dismissed report messages will appear here.'}
                                     </p>
                                 </div>
                             ) : (
                                 filteredThreads.map(thread => {
-                                const isSelected = selectedThread?.thread_id === thread.thread_id;
-                                const isMyHandled = thread.report?.assigned_leader_id === currentUser.user_id;
-                                const isMatchThread = thread.thread_mode === 'match' || !!thread.matched_pet;
-                                const isPast = isPastReport(thread);
+                                    const isSelected = selectedThread?.thread_id === thread.thread_id;
+                                    const isMyHandled = thread.report?.assigned_leader_id === currentUser.user_id;
+                                    const isMatchThread = thread.thread_mode === 'match' || !!thread.matched_pet;
+                                    const isPast = isPastReport(thread);
 
-                                return (
-                                    <button
-                                        key={thread.thread_id}
-                                        onClick={() => setSelectedThread(thread)}
-                                        className={`w-full text-left p-3.5 flex items-start gap-3 transition-colors ${
-                                            isSelected ? 'bg-orange-50/80 border-r-4 border-[#F97316]' : 'hover:bg-gray-50'
-                                        }`}
-                                    >
-                                        <div className="relative w-11 h-11 rounded-xl overflow-hidden bg-gray-100 shrink-0 border border-gray-200 shadow-2xs">
-                                            <img
-                                                src={isMatchThread ? (thread.matched_pet?.photo_url || DEFAULT_AVATAR) : (thread.report?.media_url || thread.report?.reporter_photo || DEFAULT_AVATAR)}
-                                                alt="Thumbnail"
-                                                className="w-full h-full object-cover"
-                                                onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
-                                            />
-                                            {isMatchThread && (
-                                                <span className="absolute bottom-0 inset-x-0 bg-[#F97316] text-white text-[7px] font-black text-center py-0.2 uppercase">
-                                                    Match
-                                                </span>
-                                            )}
-                                        </div>
+                                    const itemTitle = generateMemorableTitle({
+                                        isMatch: isMatchThread,
+                                        reportId: thread.report_id,
+                                        categoryName: thread.report?.category_name,
+                                        categoryId: thread.report?.category_id,
+                                        animalType: thread.report?.animal_type,
+                                        animalBreed: thread.report?.animal_breed,
+                                        animalColor: thread.report?.animal_color,
+                                        streetAddress: thread.report?.street_address,
+                                        landmark: thread.report?.landmark,
+                                        subdivisionName: thread.report?.subdivision_name,
+                                        matchedPetName: thread.matched_pet?.pet_name,
+                                        matchedPetBreed: thread.matched_pet?.breed,
+                                        serverTitle: thread.title
+                                    });
 
-                                        <div className="flex-1 min-w-0">
-                                            {(() => {
-                                                const itemTitle = generateMemorableTitle({
-                                                    isMatch: isMatchThread,
-                                                    reportId: thread.report_id,
-                                                    categoryName: thread.report?.category_name,
-                                                    categoryId: thread.report?.category_id,
-                                                    animalType: thread.report?.animal_type,
-                                                    animalBreed: thread.report?.animal_breed,
-                                                    animalColor: thread.report?.animal_color,
-                                                    streetAddress: thread.report?.street_address,
-                                                    landmark: thread.report?.landmark,
-                                                    subdivisionName: thread.report?.subdivision_name,
-                                                    matchedPetName: thread.matched_pet?.pet_name,
-                                                    matchedPetBreed: thread.matched_pet?.breed,
-                                                    serverTitle: thread.title
-                                                });
-
-                                                return (
-                                                    <div className="flex items-center justify-between gap-1">
-                                                        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                                                            <h3 className="text-xs font-bold text-gray-900 truncate" title={itemTitle}>
-                                                                {itemTitle}
-                                                            </h3>
-                                                            {thread.report?.status_id ? (
-                                                                <span className={`px-1.5 py-0.2 rounded text-[8px] font-black shrink-0 border ${getReportStatusBadgeStyle(thread.report.status_id)}`}>
-                                                                    {getReportStatusLabel(thread.report.status_id)}
-                                                                </span>
-                                                            ) : isPast ? (
-                                                                <span className="px-1.5 py-0.2 bg-gray-100 text-gray-700 rounded text-[8px] font-black shrink-0 border border-gray-200">
-                                                                    Closed
-                                                                </span>
-                                                            ) : isMyHandled ? (
-                                                                <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded text-[8px] font-black shrink-0">
-                                                                    Handled
-                                                                </span>
-                                                            ) : (
-                                                                <span className="px-1.5 py-0.2 bg-amber-100 text-amber-900 rounded text-[8px] font-black shrink-0">
-                                                                    Unassigned
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        {thread.unread_count > 0 && (
-                                                            <span className="px-1.5 py-0.2 bg-[#F97316] text-white rounded-full text-[9px] font-black shrink-0">
-                                                                {thread.unread_count}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })()}
-
-                                            <div className="flex items-center gap-1 mt-0.5">
-                                                {isMatchThread ? (
-                                                    <span className="px-1 py-0.2 bg-orange-100 text-[#F97316] rounded text-[8px] font-extrabold shrink-0">
-                                                        🐾 Owner Match
-                                                    </span>
-                                                ) : (
-                                                    <span className="px-1 py-0.2 bg-blue-100 text-blue-800 rounded text-[8px] font-extrabold shrink-0">
-                                                        📋 Case Chat
+                                    return (
+                                        <button
+                                            key={thread.thread_id}
+                                            onClick={() => setSelectedThread(thread)}
+                                            className={`w-full text-left p-3.5 sm:p-4 flex items-start gap-3.5 transition-colors cursor-pointer ${
+                                                isSelected 
+                                                    ? 'bg-orange-50/90 md:border-r-4 md:border-[#F97316]' 
+                                                    : 'hover:bg-gray-50/80 bg-white'
+                                            }`}
+                                        >
+                                            {/* Pet / Case Thumbnail */}
+                                            <div className="relative w-12 h-12 rounded-2xl overflow-hidden bg-gray-100 shrink-0 border border-gray-200 shadow-2xs">
+                                                <img
+                                                    src={isMatchThread ? (thread.matched_pet?.photo_url || DEFAULT_AVATAR) : (thread.report?.media_url || thread.report?.reporter_photo || DEFAULT_AVATAR)}
+                                                    alt="Thumbnail"
+                                                    className="w-full h-full object-cover"
+                                                    onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
+                                                />
+                                                {isMatchThread && (
+                                                    <span className="absolute bottom-0 inset-x-0 bg-[#F97316] text-white text-[7px] font-black text-center py-0.2 uppercase">
+                                                        Match
                                                     </span>
                                                 )}
-                                                <p className="text-[11px] text-gray-500 font-medium truncate">
-                                                    {isMatchThread 
-                                                        ? `Owner: ${thread.matched_pet?.owner_name || 'Resident'}`
-                                                        : `Reporter: ${thread.report?.reporter_name || 'Resident'}`
-                                                    }
-                                                </p>
                                             </div>
 
-                                            {thread.last_message && (
-                                                <p className="text-[10px] text-gray-400 truncate mt-1">
-                                                    <span className="font-semibold text-gray-600">{thread.last_message.sender_name}: </span>
-                                                    {thread.last_message.text}
+                                            {/* Details & Latest Message Preview */}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between gap-1">
+                                                    <h3 className="text-xs font-black text-gray-900 truncate" title={itemTitle}>
+                                                        {itemTitle}
+                                                    </h3>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <span className="text-[10px] text-gray-400 font-semibold">
+                                                            {formatThreadTime(thread.last_message?.sent_at || thread.updated_at || thread.created_at)}
+                                                        </span>
+                                                        {thread.unread_count > 0 ? (
+                                                            <span className="w-4 h-4 rounded-full bg-[#F97316] text-white text-[9px] font-black flex items-center justify-center shadow-xs">
+                                                                {thread.unread_count}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-gray-300 text-xs font-bold">›</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-1.5 mt-1">
+                                                    {thread.report?.status_id ? (
+                                                        <span className={`px-2 py-0.5 rounded-md text-[8px] font-black shrink-0 border ${getReportStatusBadgeStyle(thread.report.status_id)}`}>
+                                                            {getReportStatusLabel(thread.report.status_id)}
+                                                        </span>
+                                                    ) : isPast ? (
+                                                        <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md text-[8px] font-black shrink-0 border border-gray-200">
+                                                            Closed
+                                                        </span>
+                                                    ) : isMyHandled ? (
+                                                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md text-[8px] font-black shrink-0">
+                                                            Handled
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-md text-[8px] font-black shrink-0">
+                                                            Unassigned
+                                                        </span>
+                                                    )}
+
+                                                    {isMatchThread ? (
+                                                        <span className="px-1.5 py-0.5 bg-orange-50 text-[#F97316] rounded-md text-[8px] font-extrabold shrink-0 border border-orange-200/60">
+                                                            🐾 Owner Match
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-1.5 py-0.5 bg-blue-50 text-blue-800 rounded-md text-[8px] font-extrabold shrink-0 border border-blue-200/60">
+                                                            📋 Case Chat
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <p className="text-[11px] text-gray-500 font-medium truncate mt-1">
+                                                    Reporter: {isMatchThread ? (thread.matched_pet?.owner_name || 'Resident') : (thread.report?.reporter_name || 'Resident')}
                                                 </p>
-                                            )}
-                                        </div>
-                                    </button>
-                                );
-                            }))}
+
+                                                {thread.last_message && (
+                                                    <p className="text-[11px] text-gray-500 truncate mt-0.5">
+                                                        <span className="font-semibold text-gray-700">{thread.last_message.sender_name}: </span>
+                                                        {thread.last_message.text}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </button>
+                                    );
+                                })
+                            )}
                         </div>
                     </div>
 
-                    <div className="flex-1 flex flex-col min-w-0 bg-slate-50/50 rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                    {/* ─── 2. CONVERSATION / CHAT PANEL ─── */}
+                    {/* Mobile: Fullscreen when selectedThread !== null. Desktop: flex-1 */}
+                    <div className={`flex-1 flex flex-col min-w-0 bg-[#F8FAFC] md:rounded-3xl md:border md:border-gray-100 md:shadow-sm overflow-hidden h-full ${
+                        selectedThread ? 'flex' : 'hidden md:flex'
+                    }`}>
                         {selectedThread ? (
                             <>
+                                {/* TOP CHAT HEADER */}
+                                <div className="p-3 sm:p-4 bg-white border-b border-gray-100 flex items-center justify-between shrink-0 shadow-xs relative z-20">
+                                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                                        {/* Mobile Back Button: returns to conversation list */}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedThread(null);
+                                                setShowChatOptions(false);
+                                            }}
+                                            className="md:hidden w-8 h-8 rounded-full bg-orange-50 hover:bg-orange-100 border border-orange-200 text-[#F97316] flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition-all"
+                                            title="Back to Messages List"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                                            </svg>
+                                        </button>
+
+                                        {/* Animal Avatar on Desktop */}
+                                        <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 shrink-0 border border-gray-200 hidden sm:block">
+                                            <img
+                                                src={selectedThread.matched_pet?.photo_url || selectedThread.report?.media_url || DEFAULT_AVATAR}
+                                                alt="Report"
+                                                className="w-full h-full object-cover"
+                                                onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
+                                            />
+                                        </div>
+
+                                        <div className="min-w-0">
+                                            {(() => {
+                                                const headerTitle = generateMemorableTitle({
+                                                    isMatch: selectedThread.thread_mode === 'match' || !!selectedThread.matched_pet,
+                                                    reportId: selectedThread.report_id,
+                                                    categoryName: selectedThread.report?.category_name,
+                                                    categoryId: selectedThread.report?.category_id,
+                                                    animalType: selectedThread.report?.animal_type,
+                                                    animalBreed: selectedThread.report?.animal_breed,
+                                                    animalColor: selectedThread.report?.animal_color,
+                                                    streetAddress: selectedThread.report?.street_address,
+                                                    landmark: selectedThread.report?.landmark,
+                                                    subdivisionName: selectedThread.report?.subdivision_name,
+                                                    matchedPetName: selectedThread.matched_pet?.pet_name,
+                                                    matchedPetBreed: selectedThread.matched_pet?.breed,
+                                                    serverTitle: selectedThread.title
+                                                });
+
+                                                return (
+                                                    <>
+                                                        <h2 className="text-xs sm:text-sm font-black text-gray-900 truncate" title={headerTitle}>
+                                                            {headerTitle}
+                                                        </h2>
+                                                        <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                                                            {selectedThread.report?.status_id ? (
+                                                                <span className={`px-2 py-0.2 rounded text-[8px] font-black border shrink-0 ${getReportStatusBadgeStyle(selectedThread.report.status_id)}`}>
+                                                                    {getReportStatusLabel(selectedThread.report.status_id)}
+                                                                </span>
+                                                            ) : isPastReport(selectedThread) ? (
+                                                                <span className="px-2 py-0.2 rounded text-[8px] font-black border bg-gray-100 text-gray-700 border-gray-200 shrink-0">
+                                                                    Resolved
+                                                                </span>
+                                                            ) : (
+                                                                <span className="px-2 py-0.2 rounded text-[8px] font-black border bg-emerald-50 text-emerald-700 border-emerald-200 shrink-0">
+                                                                    Active Case
+                                                                </span>
+                                                            )}
+                                                            <span className="px-2 py-0.2 rounded text-[8px] font-bold bg-blue-50 text-blue-700 border border-blue-100 shrink-0">
+                                                                Case #SR-{String(selectedThread.report_id).padStart(4, '0')}
+                                                            </span>
+                                                        </div>
+                                                    </>
+                                                );
+                                            })()}
+                                        </div>
+                                    </div>
+
+                                    {/* Right Actions: Desktop Buttons + Mobile 3-Dots Menu */}
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <div className="hidden sm:flex items-center gap-2">
+                                            <button
+                                                onClick={() => navigate(`/subd/reports/${selectedThread.report_id}`)}
+                                                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                                            >
+                                                <span>📋 View Report</span>
+                                            </button>
+                                            {selectedThread.matched_pet && (
+                                                <button
+                                                    onClick={() => navigate(`/resident/reports/${selectedThread.report_id}/match-review`)}
+                                                    className="px-3 py-1.5 bg-[#F97316] hover:bg-[#EA580C] text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                                >
+                                                    <span>🔍 Review Match</span>
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Mobile 3-dots Menu */}
+                                        <div className="relative">
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowChatOptions(!showChatOptions)}
+                                                className="p-1.5 rounded-full hover:bg-gray-100 text-gray-600 transition-colors cursor-pointer"
+                                                title="Options"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                                                </svg>
+                                            </button>
+
+                                            {showChatOptions && (
+                                                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150">
+                                                    <button
+                                                        onClick={() => {
+                                                            setShowChatOptions(false);
+                                                            navigate(`/subd/reports/${selectedThread.report_id}`);
+                                                        }}
+                                                        className="w-full px-4 py-2.5 text-left text-xs font-bold text-gray-700 hover:bg-orange-50 hover:text-[#F97316] flex items-center gap-2 cursor-pointer"
+                                                    >
+                                                        <span>📋</span>
+                                                        <span>View Case Details</span>
+                                                    </button>
+                                                    {selectedThread.matched_pet && (
+                                                        <button
+                                                            onClick={() => {
+                                                                setShowChatOptions(false);
+                                                                navigate(`/resident/reports/${selectedThread.report_id}/match-review`);
+                                                            }}
+                                                            className="w-full px-4 py-2.5 text-left text-xs font-bold text-gray-700 hover:bg-orange-50 hover:text-[#F97316] flex items-center gap-2 cursor-pointer"
+                                                        >
+                                                            <span>🔍</span>
+                                                            <span>Review AI Match</span>
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        onClick={() => {
+                                                            setShowChatOptions(false);
+                                                            fetchMessagesForThread(selectedThread);
+                                                        }}
+                                                        className="w-full px-4 py-2.5 text-left text-xs font-bold text-gray-700 hover:bg-orange-50 hover:text-[#F97316] flex items-center gap-2 cursor-pointer"
+                                                    >
+                                                        <span>🔄</span>
+                                                        <span>Refresh Chat</span>
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* RESIDENT CONTACT BANNER (Under Header) */}
+                                <div className="bg-white border-b border-gray-100 px-4 py-2.5 flex items-center justify-between gap-3 shadow-2xs">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <div className="w-10 h-10 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 shadow-2xs shrink-0">
+                                            <img
+                                                src={selectedThread.report?.reporter_photo || selectedThread.counterpart?.avatar || DEFAULT_AVATAR}
+                                                alt="Resident Avatar"
+                                                className="w-full h-full object-cover"
+                                                onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
+                                            />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-xs font-black text-gray-900 truncate">
+                                                {selectedThread.matched_pet?.owner_name || selectedThread.report?.reporter_name || 'Resident'}
+                                            </p>
+                                            <p className="text-[10px] text-gray-400 font-bold truncate">
+                                                Resident • {selectedThread.report?.subdivision_name || 'Selera Homes'}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate(`/subd/reports/${selectedThread.report_id}`)}
+                                        className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100 flex items-center justify-center shrink-0 cursor-pointer transition-all"
+                                        title="Resident Details"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                        </svg>
+                                    </button>
+                                </div>
+
+                                {/* UNASSIGNED BANNER IF APPLICABLE */}
                                 {!selectedThread.report?.assigned_leader_id ? (
                                     <div className="bg-amber-500/10 border-b border-amber-300 px-4 py-3 flex items-center justify-between gap-3 shrink-0">
                                         <div className="flex items-center gap-2.5 text-xs text-amber-950 font-bold min-w-0">
@@ -600,103 +842,16 @@ const SubdMessages: React.FC = () => {
                                     </div>
                                 )}
 
-                                {(selectedThread.thread_mode === 'match' || !!selectedThread.matched_pet) && 
-                                 ((selectedThread.report?.status_id === 9) || (selectedThread.report?.current_status_id === 9)) && !isPastReport(selectedThread) && (
-                                    <div className="bg-green-500/10 border-b border-green-200 px-4 py-2.5 flex items-center justify-between gap-3 shrink-0">
-                                        <div className="flex items-center gap-2 text-xs text-green-950 font-bold min-w-0">
-                                            <span>🐾</span>
-                                            <p className="text-[11px] text-green-900 truncate">
-                                                <strong>Claim Approved:</strong> Coordinate meeting location and pet handover here with the resident.
-                                            </p>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => navigate('/subd-claims')}
-                                            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-[10px] font-black rounded-lg shadow-2xs transition-all uppercase tracking-wider shrink-0 cursor-pointer"
-                                        >
-                                            🤝 Claims & Handover
-                                        </button>
-                                    </div>
-                                )}
-
-                                <div className="p-4 bg-white border-b border-gray-100 flex items-center justify-between shrink-0 shadow-2xs">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 shrink-0 border border-gray-200">
-                                            <img
-                                                src={selectedThread.matched_pet?.photo_url || selectedThread.report?.media_url || DEFAULT_AVATAR}
-                                                alt="Report"
-                                                className="w-full h-full object-cover"
-                                                onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
-                                            />
-                                        </div>
-                                        <div className="min-w-0">
-                                            {(() => {
-                                                const headerTitle = generateMemorableTitle({
-                                                    isMatch: selectedThread.thread_mode === 'match' || !!selectedThread.matched_pet,
-                                                    reportId: selectedThread.report_id,
-                                                    categoryName: selectedThread.report?.category_name,
-                                                    categoryId: selectedThread.report?.category_id,
-                                                    animalType: selectedThread.report?.animal_type,
-                                                    animalBreed: selectedThread.report?.animal_breed,
-                                                    animalColor: selectedThread.report?.animal_color,
-                                                    streetAddress: selectedThread.report?.street_address,
-                                                    landmark: selectedThread.report?.landmark,
-                                                    subdivisionName: selectedThread.report?.subdivision_name,
-                                                    matchedPetName: selectedThread.matched_pet?.pet_name,
-                                                    matchedPetBreed: selectedThread.matched_pet?.breed,
-                                                    serverTitle: selectedThread.title
-                                                });
-
-                                                return (
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <h2 className="text-sm font-extrabold text-gray-900 truncate" title={headerTitle}>
-                                                            {headerTitle}
-                                                        </h2>
-                                                        {selectedThread.report?.status_id ? (
-                                                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black border shrink-0 ${getReportStatusBadgeStyle(selectedThread.report.status_id)}`}>
-                                                                {getReportStatusLabel(selectedThread.report.status_id)}
-                                                            </span>
-                                                        ) : isPastReport(selectedThread) && (
-                                                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black border bg-gray-100 text-gray-700 border-gray-200 shrink-0">
-                                                                Archived Case
-                                                            </span>
-                                                        )}
-                                                        {selectedThread.matched_pet && (
-                                                            <span className="px-2 py-0.5 bg-orange-100 text-[#F97316] rounded-full text-[10px] font-black">
-                                                                {selectedThread.matched_pet.similarity_score || 95}% Match
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })()}
-                                            <p className="text-xs text-gray-500 font-medium truncate">
-                                                {selectedThread.thread_mode === 'match' || selectedThread.matched_pet
-                                                    ? `🐾 Direct Verification with Pet Owner: ${selectedThread.matched_pet?.owner_name || 'Resident'}`
-                                                    : `📍 ${selectedThread.report?.landmark || 'Subdivision Area'} • Reporter: ${selectedThread.report?.reporter_name || 'Resident'}`
-                                                }
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <button
-                                            onClick={() => navigate(`/subd/reports/${selectedThread.report_id}`)}
-                                            className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-                                        >
-                                            <span>📋 View Report</span>
-                                        </button>
-                                        {selectedThread.matched_pet && (
-                                            <button
-                                                onClick={() => navigate(`/resident/reports/${selectedThread.report_id}/match-review`)}
-                                                className="px-3 py-1.5 bg-[#F97316] hover:bg-[#EA580C] text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                                            >
-                                                <span>🔍 Review Match</span>
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-
+                                {/* CHAT MESSAGES BODY */}
                                 <div className="flex-1 overflow-y-auto p-4 space-y-3.5 custom-scrollbar">
+                                    {/* Date Separator Pill */}
+                                    <div className="flex justify-center my-2">
+                                        <span className="px-3 py-1 rounded-full bg-gray-200/70 text-gray-600 text-[10px] font-black uppercase tracking-wider">
+                                            Today: {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </span>
+                                    </div>
+
+                                    {/* AI Look-Alike Match Banner Card */}
                                     {selectedThread.matched_pet && (
                                         <div className="bg-gradient-to-b from-orange-50/95 via-amber-50/40 to-white text-gray-900 border border-orange-200 rounded-2xl p-4 space-y-3 shadow-sm mb-4">
                                             <div className="flex items-center justify-between gap-2 border-b border-orange-100 pb-2">
@@ -837,44 +992,42 @@ const SubdMessages: React.FC = () => {
                                         <div className="p-10 text-center text-gray-400 space-y-2">
                                             <span className="text-3xl">💬</span>
                                             <p className="text-xs font-bold text-gray-600">No messages sent yet</p>
+                                            <p className="text-[11px]">Type below to coordinate with the reporter.</p>
                                         </div>
                                     ) : (
                                         messages.map(msg => {
                                             if (msg.is_system) {
                                                 return (
-                                                    <div key={msg.message_id} className="flex justify-center my-2">
-                                                        <div className="px-3.5 py-1 rounded-full bg-orange-100/70 border border-orange-200/80 text-[10px] font-bold text-orange-900">{msg.message_text}</div>
+                                                    <div key={msg.message_id} className="my-3 p-3 bg-white border border-gray-100 rounded-2xl flex items-start gap-2.5 shadow-2xs max-w-md mx-auto">
+                                                        <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs font-black shrink-0">✓</span>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-xs font-black text-gray-900">Case Updated</p>
+                                                            <p className="text-[11px] text-gray-600 mt-0.5">{msg.message_text}</p>
+                                                            <span className="text-[9px] text-gray-400 mt-1 block">{formatMessageTime(msg.sent_at)}</span>
+                                                        </div>
                                                     </div>
                                                 );
                                             }
                                             const isMe = msg.sender_id === currentUser.user_id;
-                                            const isLookAlikeMsg = (
-                                                msg.message_text.toLowerCase().includes('look-alike') || 
-                                                msg.message_text.toLowerCase().includes('look-alik') || 
-                                                msg.message_text.toLowerCase().includes('similarity') || 
-                                                msg.message_text.toLowerCase().includes('detected a') ||
-                                                msg.message_text.toLowerCase().includes('match for your registered pet') ||
-                                                msg.message_text.toLowerCase().includes('side-by-side comparison')
-                                            ) && !!selectedThread.matched_pet;
 
                                             return (
-                                                <div key={msg.message_id} className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                                <div key={msg.message_id} className={`flex items-end gap-2.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
                                                     {!isMe && (
-                                                        <div className="w-7 h-7 rounded-full overflow-hidden bg-gray-200 shrink-0 border border-white shadow-2xs">
-                                                            <img src={msg.sender_avatar || DEFAULT_AVATAR} alt={msg.sender_name} className="w-full h-full object-cover" onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }} />
+                                                        <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 shrink-0 border border-white shadow-2xs mb-1">
+                                                            <img 
+                                                                src={msg.sender_avatar || selectedThread.report?.reporter_photo || DEFAULT_AVATAR} 
+                                                                alt={msg.sender_name} 
+                                                                className="w-full h-full object-cover" 
+                                                                onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }} 
+                                                            />
                                                         </div>
                                                     )}
-                                                    <div className={`${isLookAlikeMsg ? 'max-w-[85%] md:max-w-[75%]' : 'max-w-[70%]'} space-y-1 ${isMe ? 'items-end' : 'items-start'}`}>
-                                                        <div className={`flex items-center gap-1.5 text-[10px] text-gray-400 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                                                            <span className="font-bold text-gray-700">{isMe ? 'You' : msg.sender_name}</span>
-                                                            <span>•</span>
-                                                            <span>{msg.sender_role}</span>
-                                                        </div>
 
+                                                    <div className={`max-w-[78%] sm:max-w-[70%] space-y-1 ${isMe ? 'items-end' : 'items-start'}`}>
                                                         <div className={`p-3.5 rounded-2xl text-xs leading-relaxed shadow-2xs ${
                                                             isMe 
-                                                                ? 'bg-gradient-to-r from-[#F97316] to-[#EA580C] text-white rounded-br-none' 
-                                                                : 'bg-white text-gray-900 rounded-bl-none border border-gray-100'
+                                                                ? 'bg-gradient-to-r from-[#F97316] to-[#EA580C] text-white rounded-br-xs' 
+                                                                : 'bg-white text-gray-900 rounded-bl-xs border border-gray-100'
                                                         }`}>
                                                             {msg.media_url && (
                                                                 <div className="mb-2 rounded-xl overflow-hidden border border-black/10 max-h-48">
@@ -882,141 +1035,27 @@ const SubdMessages: React.FC = () => {
                                                                 </div>
                                                             )}
                                                             <p className="whitespace-pre-wrap font-medium">{msg.message_text}</p>
+                                                        </div>
 
-                                                            {/* Embedded Look-Alike Sighting Comparison Card */}
-                                                            {isLookAlikeMsg && selectedThread.matched_pet && (
-                                                                <div 
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        navigate(`/resident/reports/${selectedThread.report_id}/match-review`);
-                                                                    }}
-                                                                    className="mt-3 bg-gradient-to-b from-orange-50/95 via-amber-50/40 to-white text-gray-900 border border-orange-200 rounded-2xl p-3.5 space-y-2.5 shadow-xs cursor-pointer hover:border-orange-400 hover:shadow-md transition-all text-left"
-                                                                >
-                                                                    <div className="flex items-center justify-between gap-2 border-b border-orange-100 pb-2">
-                                                                        <div className="flex items-center gap-1.5">
-                                                                            <span className="w-2.5 h-2.5 rounded-full bg-[#F97316] animate-pulse"></span>
-                                                                            <span className="text-[11px] font-black uppercase tracking-wider text-orange-950">
-                                                                                LOOK-ALIKE SIGHTING COMPARISON
-                                                                            </span>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-1.5">
-                                                                            <span className="px-2.5 py-0.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-full text-[10px] font-black shadow-2xs">
-                                                                                {selectedThread.matched_pet.similarity_score || 95}% Match
-                                                                            </span>
-                                                                            <span className="text-[10px] font-extrabold text-[#F97316] hover:underline">Review ↗</span>
-                                                                        </div>
-                                                                    </div>
-
-                                                                    {/* Side-by-Side Comparison Boxes */}
-                                                                    <div className="grid grid-cols-2 gap-2.5">
-                                                                        {/* Sighting Box */}
-                                                                        <div className="bg-white rounded-xl border border-gray-200/80 p-2.5 space-y-1.5 shadow-2xs">
-                                                                            <div className="flex items-center justify-between text-[9px] font-bold text-gray-500">
-                                                                                <span className="px-1.5 py-0.2 bg-orange-100 text-[#F97316] rounded font-black">
-                                                                                    Report #{selectedThread.report_id}
-                                                                                </span>
-                                                                                <span>Sighting</span>
-                                                                            </div>
-                                                                            <div className="h-28 rounded-lg overflow-hidden relative bg-gray-100 border border-gray-100">
-                                                                                <img
-                                                                                    src={selectedThread.report?.media_url || selectedThread.report?.reporter_photo || DEFAULT_AVATAR}
-                                                                                    alt="Sighting"
-                                                                                    className="w-full h-full object-cover"
-                                                                                    onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
-                                                                                />
-                                                                                <span className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/65 text-white text-[8px] font-black rounded">
-                                                                                    Original Photo
-                                                                                </span>
-                                                                            </div>
-                                                                            <div className="grid grid-cols-2 gap-1 text-[9px]">
-                                                                                <div className="bg-gray-50 p-1 rounded">
-                                                                                    <span className="text-gray-400 block text-[7px]">SPECIES</span>
-                                                                                    <span className="font-bold text-gray-800 truncate block">{selectedThread.report?.animal_type || 'Dog'}</span>
-                                                                                </div>
-                                                                                <div className="bg-gray-50 p-1 rounded">
-                                                                                    <span className="text-gray-400 block text-[7px]">BREED</span>
-                                                                                    <span className="font-bold text-gray-800 truncate block">{selectedThread.report?.animal_breed || 'Reported Breed'}</span>
-                                                                                </div>
-                                                                                <div className="bg-gray-50 p-1 rounded">
-                                                                                    <span className="text-gray-400 block text-[7px]">COLOR</span>
-                                                                                    <span className="font-bold text-gray-800 truncate block">{selectedThread.report?.animal_color || 'Reported Color'}</span>
-                                                                                </div>
-                                                                                <div className="bg-gray-50 p-1 rounded">
-                                                                                    <span className="text-gray-400 block text-[7px]">SIZE</span>
-                                                                                    <span className="font-bold text-gray-800 truncate block">Medium</span>
-                                                                                </div>
-                                                                            </div>
-                                                                            <div className="bg-gray-50 p-1 rounded text-[9px]">
-                                                                                <span className="text-gray-400 block text-[7px]">LOCATION</span>
-                                                                                <p className="font-bold text-gray-800 truncate">{selectedThread.report?.landmark || 'Subdivision Area'}</p>
-                                                                            </div>
-                                                                        </div>
-
-                                                                        {/* Registered Pet Box */}
-                                                                        <div className="bg-white rounded-xl border border-amber-200 p-2.5 space-y-1.5 shadow-2xs">
-                                                                            <div className="flex items-center justify-between text-[9px] font-bold text-amber-900">
-                                                                                <span className="px-1.5 py-0.2 bg-amber-100 text-amber-900 rounded font-black truncate">
-                                                                                    Pet: {selectedThread.matched_pet.pet_name || 'Candidate'}
-                                                                                </span>
-                                                                                <span className="text-gray-400 font-bold truncate max-w-[80px]">Owner: {selectedThread.matched_pet.owner_name || 'Resident'}</span>
-                                                                            </div>
-                                                                            <div className="h-28 rounded-lg overflow-hidden relative bg-gray-100 border border-amber-100">
-                                                                                <img
-                                                                                    src={selectedThread.matched_pet.photo_url || DEFAULT_AVATAR}
-                                                                                    alt="Candidate"
-                                                                                    className="w-full h-full object-cover"
-                                                                                    onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
-                                                                                />
-                                                                                <span className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-amber-600/90 text-white text-[8px] font-black rounded">
-                                                                                    Candidate Profile
-                                                                                </span>
-                                                                            </div>
-                                                                            <div className="grid grid-cols-2 gap-1 text-[9px]">
-                                                                                <div className="bg-gray-50 p-1 rounded">
-                                                                                    <span className="text-gray-400 block text-[7px]">SPECIES</span>
-                                                                                    <span className="font-bold text-gray-800 truncate block">Dog</span>
-                                                                                </div>
-                                                                                <div className="bg-gray-50 p-1 rounded">
-                                                                                    <span className="text-gray-400 block text-[7px]">BREED</span>
-                                                                                    <span className="font-bold text-gray-800 truncate block">{selectedThread.matched_pet.breed || 'Registered Breed'}</span>
-                                                                                </div>
-                                                                                <div className="bg-gray-50 p-1 rounded">
-                                                                                    <span className="text-gray-400 block text-[7px]">COLOR</span>
-                                                                                    <span className="font-bold text-gray-800 truncate block">{selectedThread.matched_pet.color || 'Registered Color'}</span>
-                                                                                </div>
-                                                                                <div className="bg-gray-50 p-1 rounded">
-                                                                                    <span className="text-gray-400 block text-[7px]">SIZE</span>
-                                                                                    <span className="font-bold text-gray-800 truncate block">{selectedThread.matched_pet.size || 'Medium'}</span>
-                                                                                </div>
-                                                                            </div>
-                                                                            <div className="bg-gray-50 p-1 rounded text-[9px]">
-                                                                                <span className="text-gray-400 block text-[7px]">REGISTERED TO</span>
-                                                                                <p className="font-bold text-gray-800 truncate">{selectedThread.matched_pet.owner_name ? `Owned by ${selectedThread.matched_pet.owner_name}` : 'Registered Pet'}</p>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-
-                                                                    {/* Feature Match Score Summary */}
-                                                                    <div className="flex items-center gap-1.5 bg-orange-100/60 border border-orange-200/70 px-2.5 py-1 rounded-lg text-[9px] font-bold text-orange-950">
-                                                                        <span>✓ High visual and feature match score</span>
-                                                                    </div>
-
-                                                                    {/* Action Button */}
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            navigate(`/resident/reports/${selectedThread.report_id}/match-review`);
-                                                                        }}
-                                                                        className="w-full py-2.5 px-4 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-2xs transition-all cursor-pointer"
-                                                                    >
-                                                                        <span>🔍 REVIEW POTENTIAL MATCH</span>
-                                                                        <span>→</span>
-                                                                    </button>
-                                                                </div>
+                                                        {/* Timestamp & Read Checkmark */}
+                                                        <div className={`flex items-center gap-1 text-[10px] text-gray-400 ${isMe ? 'justify-end pr-1' : 'justify-start pl-1'}`}>
+                                                            <span>{formatMessageTime(msg.sent_at)}</span>
+                                                            {isMe && (
+                                                                <span className="text-[#F97316] font-bold">✓✓</span>
                                                             )}
                                                         </div>
                                                     </div>
+
+                                                    {isMe && (
+                                                        <div className="w-8 h-8 rounded-full overflow-hidden bg-orange-100 shrink-0 border border-white shadow-2xs mb-1">
+                                                            <img 
+                                                                src={currentUser.avatar || DEFAULT_AVATAR} 
+                                                                alt="Officer Avatar" 
+                                                                className="w-full h-full object-cover" 
+                                                                onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }} 
+                                                            />
+                                                        </div>
+                                                    )}
                                                 </div>
                                             );
                                         })
@@ -1024,6 +1063,7 @@ const SubdMessages: React.FC = () => {
                                     <div ref={messagesEndRef} />
                                 </div>
 
+                                {/* FIXED BOTTOM COMPOSER */}
                                 {isPastReport(selectedThread) ? (
                                     <div className="p-4 bg-gray-50 border-t border-gray-200 text-center shrink-0 flex items-center justify-center gap-3">
                                         <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-sm font-bold shrink-0">
@@ -1031,11 +1071,11 @@ const SubdMessages: React.FC = () => {
                                         </div>
                                         <div className="text-left">
                                             <p className="text-xs font-bold text-gray-700">Case Resolved & Archived</p>
-                                            <p className="text-[11px] text-gray-500">This report has been resolved and direct messaging is in read-only mode for both officers and residents.</p>
+                                            <p className="text-[11px] text-gray-500">This report has been resolved and direct messaging is in read-only mode.</p>
                                         </div>
                                     </div>
                                 ) : (
-                                    <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-gray-100 flex flex-col gap-2 shrink-0">
+                                    <form onSubmit={handleSendMessage} className="p-3 sm:p-4 bg-white border-t border-gray-100 flex flex-col gap-2 shrink-0 shadow-lg relative z-20">
                                         {selectedImagePreview && (
                                             <div className="relative inline-block w-20 h-20 rounded-xl overflow-hidden border border-gray-200 mb-1">
                                                 <img src={selectedImagePreview} alt="Preview" className="w-full h-full object-cover" />
@@ -1043,14 +1083,38 @@ const SubdMessages: React.FC = () => {
                                             </div>
                                         )}
                                         <div className="flex items-center gap-2">
-                                            <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer shrink-0">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                            {/* Attachment paperclip button */}
+                                            <button 
+                                                type="button" 
+                                                onClick={() => fileInputRef.current?.click()} 
+                                                className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                                                title="Attach image"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                                </svg>
                                             </button>
                                             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
-                                            <input type="text" placeholder="Type coordination message..." value={inputText} onChange={(e) => setInputText(e.target.value)} className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]" />
-                                            <button type="submit" disabled={(!inputText.trim() && !selectedImageFile) || isSending} className="px-4 py-2.5 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-xs font-black rounded-2xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
-                                                <span>Send</span>
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                                            
+                                            {/* Input text */}
+                                            <input 
+                                                type="text" 
+                                                placeholder="Type a message..." 
+                                                value={inputText} 
+                                                onChange={(e) => setInputText(e.target.value)} 
+                                                className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-full text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]" 
+                                            />
+
+                                            {/* Circular Orange Send button */}
+                                            <button 
+                                                type="submit" 
+                                                disabled={(!inputText.trim() && !selectedImageFile) || isSending} 
+                                                className="w-10 h-10 rounded-full bg-[#F97316] hover:bg-[#EA580C] active:scale-95 text-white flex items-center justify-center shadow-md shadow-orange-500/25 transition-all cursor-pointer disabled:opacity-40 shrink-0"
+                                                title="Send Message"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 transform rotate-90 translate-x-0.5" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                                                </svg>
                                             </button>
                                         </div>
                                     </form>
@@ -1065,6 +1129,13 @@ const SubdMessages: React.FC = () => {
                         )}
                     </div>
                 </div>
+
+                {/* Bottom Navigation on Mobile: Only shown when in thread list screen */}
+                {!selectedThread && (
+                    <div className="md:hidden">
+                        <SubdBottomNav />
+                    </div>
+                )}
             </div>
 
             {/* Nested Pet Details Modal */}

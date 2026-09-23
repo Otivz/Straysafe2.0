@@ -4,6 +4,7 @@ import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
+import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import Button from '../../components/Button';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -87,6 +88,7 @@ const SubdProfile = () => {
     const [saving, setSaving] = useState(false);
     const [uploadingPic, setUploadingPic] = useState(false);
     const [gettingLocation, setGettingLocation] = useState(false);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [successMsg, setSuccessMsg] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
 
@@ -305,13 +307,14 @@ const SubdProfile = () => {
 
             {/* Sidebar */}
             <div className="z-10 flex shrink-0">
-                <SubdSidebar />
+                <SubdSidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
             </div>
 
             {/* Main Content */}
             <main className="flex-1 flex flex-col h-screen overflow-hidden">
                 {/* Navbar */}
                 <SubdNavbar
+                    onMenuToggle={() => setMobileMenuOpen(true)}
                     leftContent={
                         <div className="flex flex-col">
                             <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Account Profile</h1>
@@ -321,7 +324,7 @@ const SubdProfile = () => {
                 />
 
                 {/* Main Content Container */}
-                <div className="flex-1 overflow-y-auto p-8 lg:p-10 flex flex-col items-center justify-start scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-8 lg:p-10 pb-36 md:pb-16 flex flex-col items-center justify-start scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                     <div className="w-full max-w-5xl space-y-8 animate-in fade-in duration-500 pb-16">
                         {loading ? (
                             <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -632,6 +635,9 @@ const SubdProfile = () => {
                         )}
                     </div>
                 </div>
+
+                {/* Reusable Mobile Bottom Navigation */}
+                <SubdBottomNav activeTab="profile" />
             </main>
         </div>
     );

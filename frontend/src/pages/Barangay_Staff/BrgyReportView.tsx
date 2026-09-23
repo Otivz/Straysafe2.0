@@ -3,7 +3,8 @@ import {
     AlertTriangle, Check, MessageCircle, FileText, Link2, Zap, Search, MapPin,
     User, PawPrint, Home, Flag, Building2, Phone, Mail, Lock, Users, Landmark,
     X, Rocket, Hospital, Settings, ScrollText, Pin, RefreshCw, Shield,
-    CheckCircle2, Ban, Ambulance, Heart, Lightbulb, Download, Camera
+    CheckCircle2, Ban, Ambulance, Heart, Lightbulb, Download, Camera,
+    ShieldCheck, ArrowRightCircle, GitMerge, Cpu, Clock
 } from 'lucide-react';
 import axios from 'axios';
 import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
@@ -1975,166 +1976,303 @@ const BrgyReportView = () => {
                                         </div>
 
                                         {/* RIGHT COLUMN: Report Activity & Handover Timeline */}
-                                        <div className="bg-white border border-gray-100 rounded-[2.5rem] p-6 sm:p-8 shadow-sm space-y-6">
+                                        <div className="bg-white border border-gray-100 rounded-[2.5rem] p-6 sm:p-7 shadow-sm space-y-5">
+                                            {/* Header */}
                                             <div className="flex items-center justify-between pb-4 border-b border-gray-100">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] flex items-center justify-center shadow-xs">
+                                                    <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] flex items-center justify-center shadow-xs shrink-0">
                                                         <ScrollText className="w-5 h-5" />
                                                     </div>
                                                     <div>
                                                         <h4 className="text-sm font-black text-gray-900 uppercase tracking-wide">
                                                             Report Activity & Handover Timeline
                                                         </h4>
-                                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
                                                             Official Audit Trail & Officer Activity Log
                                                         </p>
                                                     </div>
                                                 </div>
-                                                <span className="text-[10px] font-black text-gray-500 bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
-                                                    {(() => {
-                                                        const validHistoryCount = report.history 
-                                                            ? report.history.filter((h: any) => h.remarks !== 'Initial report submitted by resident.').length 
-                                                            : 0;
-                                                        const totalEvents = validHistoryCount + 1;
-                                                        return `${totalEvents} Event${totalEvents > 1 ? 's' : ''}`;
-                                                    })()}
-                                                </span>
+                                                {(() => {
+                                                    const validHistory = (report.history || []).filter((h: any) => (h.remarks || '').trim() !== 'Initial report submitted by resident.');
+                                                    const totalEvents = validHistory.length + 1;
+                                                    return (
+                                                        <span className="text-[10px] font-black text-gray-600 bg-gray-100/90 px-2.5 py-1 rounded-full border border-gray-200/60 shadow-2xs whitespace-nowrap">
+                                                            {totalEvents} {totalEvents === 1 ? 'Event' : 'Events'}
+                                                        </span>
+                                                    );
+                                                })()}
                                             </div>
 
-                                            <div className="relative pl-6 space-y-5 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-gray-100 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                                                {/* Initial Report Submission */}
-                                                <div className="relative flex items-start gap-4 group">
-                                                    <div className="absolute -left-6 mt-1 w-5 h-5 rounded-full bg-blue-500 border-4 border-white shadow-xs flex items-center justify-center text-white">
-                                                        <FileText className="w-2.5 h-2.5" />
-                                                    </div>
-                                                    <div className="flex-1 bg-gray-50/70 hover:bg-gray-50 rounded-2xl p-4 border border-gray-100 transition-all">
-                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                                                            <span className="text-xs font-black text-gray-900 uppercase tracking-wide">
-                                                                Report Submitted by {report.reporter_name || 'Resident'}
-                                                            </span>
-                                                            <span className="text-[10px] font-bold text-gray-400">
-                                                                <RelativeTimestamp date={report.created_at} />
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-xs text-gray-600 font-medium mt-1">
-                                                            Incident filed for <strong className="text-gray-900 font-bold">{report.animal_type}</strong> ({report.landmark || 'No landmark specified'}).
-                                                        </p>
-                                                    </div>
-                                                </div>
+                                            {/* Scrollable Timeline Container */}
+                                            <div className="relative pl-7 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                                                {/* Crisp continuous vertical line connecting all event nodes */}
+                                                <div className="absolute left-[11px] top-3.5 bottom-3.5 w-[2px] bg-slate-200/90 rounded-full" />
 
-                                                {/* History / Transfer / Status entries */}
-                                                {report.history && report.history.filter((h: any) => h.remarks !== 'Initial report submitted by resident.').map((hist: any, index: number) => {
-                                                    const remarksLower = (hist.remarks || '').toLowerCase();
-                                                    const isFacilityRelocation = (remarksLower.startsWith('transferred to') || remarksLower.startsWith('relocated to') || remarksLower.startsWith('animal relocated') || hist.report_status_id === 8);
-                                                    const isTransfer = remarksLower.includes('transfer');
-                                                    const isClaim = remarksLower.includes('claim') || hist.report_status_id === 9;
-                                                    const isWarning = remarksLower.includes('warning') || remarksLower.includes('notice');
-                                                    const isResolved = remarksLower.includes('resolved') || hist.report_status_id === 11 || hist.report_status_id === 12;
-                                                    const isVerified = remarksLower.includes('verified') || hist.report_status_id === 2;
-                                                    const isFalseAlarm = remarksLower.includes('false alarm') || remarksLower.includes('dismiss') || hist.report_status_id === 14;
-                                                    const isEscalated = remarksLower.includes('escalat') || hist.report_status_id === 4;
-                                                    const isApproved = remarksLower.includes('approv') || hist.report_status_id === 13;
-                                                    const isDispatched = remarksLower.includes('dispatch') || hist.report_status_id === 5;
-                                                    const isPickedUp = remarksLower.includes('picked up') || remarksLower.includes('secure') || hist.report_status_id === 6;
-                                                    const isHolding = remarksLower.includes('holding') || hist.report_status_id === 7;
-                                                    const isImpounded = remarksLower.includes('impound') || hist.report_status_id === 8;
-                                                    const isAdopted = remarksLower.includes('adopt') || hist.report_status_id === 10;
-                                                    const isRejected = remarksLower.includes('reject') || hist.report_status_id === 3;
+                                                <div className="space-y-3 relative">
+                                                    {(() => {
+                                                        // Subtle accent & badge styles per event category
+                                                        const typeStyles: Record<string, {
+                                                            nodeBg: string;
+                                                            nodeRing: string;
+                                                            cardBg: string;
+                                                            cardBorder: string;
+                                                        }> = {
+                                                            blue: {
+                                                                nodeBg: 'bg-blue-600 text-white',
+                                                                nodeRing: 'ring-4 ring-blue-50/90',
+                                                                cardBg: 'bg-white hover:bg-blue-50/20',
+                                                                cardBorder: 'border-gray-100 hover:border-blue-200/80',
+                                                            },
+                                                            green: {
+                                                                nodeBg: 'bg-emerald-600 text-white',
+                                                                nodeRing: 'ring-4 ring-emerald-50/90',
+                                                                cardBg: 'bg-white hover:bg-emerald-50/20',
+                                                                cardBorder: 'border-gray-100 hover:border-emerald-200/80',
+                                                            },
+                                                            orange: {
+                                                                nodeBg: 'bg-[#F97316] text-white',
+                                                                nodeRing: 'ring-4 ring-orange-50/90',
+                                                                cardBg: 'bg-white hover:bg-orange-50/20',
+                                                                cardBorder: 'border-gray-100 hover:border-orange-200/80',
+                                                            },
+                                                            red: {
+                                                                nodeBg: 'bg-rose-600 text-white',
+                                                                nodeRing: 'ring-4 ring-rose-50/90',
+                                                                cardBg: 'bg-white hover:bg-rose-50/20',
+                                                                cardBorder: 'border-gray-100 hover:border-rose-200/80',
+                                                            },
+                                                            gray: {
+                                                                nodeBg: 'bg-slate-500 text-white',
+                                                                nodeRing: 'ring-4 ring-slate-100',
+                                                                cardBg: 'bg-white hover:bg-gray-50/60',
+                                                                cardBorder: 'border-gray-100 hover:border-gray-200',
+                                                            }
+                                                        };
 
-                                                    let Icon: typeof Pin = Pin;
-                                                    let dotColor = 'bg-orange-500';
-                                                    let cardBg = 'bg-gray-50/70';
-                                                    let borderColor = 'border-gray-100';
+                                                        interface TimelineItem {
+                                                            id: string | number;
+                                                            actionTitle: string;
+                                                            author: string;
+                                                            timestamp: string | Date | undefined;
+                                                            description: string;
+                                                            type: 'blue' | 'green' | 'orange' | 'red' | 'gray';
+                                                            IconComponent: any;
+                                                        }
 
-                                                    if (isFacilityRelocation) {
-                                                        Icon = PawPrint;
-                                                        dotColor = 'bg-amber-600';
-                                                        cardBg = 'bg-gradient-to-br from-amber-50/90 to-orange-50/60';
-                                                        borderColor = 'border-amber-300';
-                                                    } else if (isTransfer) {
-                                                        Icon = RefreshCw;
-                                                        dotColor = 'bg-purple-500';
-                                                        cardBg = 'bg-purple-50/40';
-                                                        borderColor = 'border-purple-100';
-                                                    } else if (isClaim) {
-                                                        Icon = Shield;
-                                                        dotColor = 'bg-emerald-500';
-                                                        cardBg = 'bg-emerald-50/40';
-                                                        borderColor = 'border-emerald-100';
-                                                    } else if (isWarning) {
-                                                        Icon = AlertTriangle;
-                                                        dotColor = 'bg-amber-500';
-                                                        cardBg = 'bg-amber-50/40';
-                                                        borderColor = 'border-amber-100';
-                                                    } else if (isResolved) {
-                                                        Icon = CheckCircle2;
-                                                        dotColor = 'bg-green-600';
-                                                        cardBg = 'bg-green-50/40';
-                                                        borderColor = 'border-green-100';
-                                                    } else if (isVerified) {
-                                                        Icon = Search;
-                                                        dotColor = 'bg-blue-500';
-                                                        cardBg = 'bg-blue-50/40';
-                                                        borderColor = 'border-blue-100';
-                                                    } else if (isFalseAlarm || isRejected) {
-                                                        Icon = Ban;
-                                                        dotColor = 'bg-rose-500';
-                                                        cardBg = 'bg-rose-50/40';
-                                                        borderColor = 'border-rose-100';
-                                                    } else if (isEscalated) {
-                                                        Icon = Rocket;
-                                                        dotColor = 'bg-orange-600';
-                                                        cardBg = 'bg-orange-50/40';
-                                                        borderColor = 'border-orange-100';
-                                                    } else if (isApproved) {
-                                                        Icon = Pin;
-                                                        dotColor = 'bg-orange-600';
-                                                        cardBg = 'bg-orange-50/40';
-                                                        borderColor = 'border-orange-100';
-                                                    } else if (isDispatched) {
-                                                        Icon = Ambulance;
-                                                        dotColor = 'bg-blue-600';
-                                                        cardBg = 'bg-blue-50/40';
-                                                        borderColor = 'border-blue-100';
-                                                    } else if (isPickedUp) {
-                                                        Icon = PawPrint;
-                                                        dotColor = 'bg-amber-600';
-                                                        cardBg = 'bg-amber-50/40';
-                                                        borderColor = 'border-amber-100';
-                                                    } else if (isHolding || isImpounded) {
-                                                        Icon = Hospital;
-                                                        dotColor = 'bg-indigo-600';
-                                                        cardBg = 'bg-indigo-50/40';
-                                                        borderColor = 'border-indigo-100';
-                                                    } else if (isAdopted) {
-                                                        Icon = Heart;
-                                                        dotColor = 'bg-pink-500';
-                                                        cardBg = 'bg-pink-50/40';
-                                                        borderColor = 'border-pink-100';
-                                                    }
+                                                        // Initial Report Entry
+                                                        const initialEntry: TimelineItem = {
+                                                            id: 'initial',
+                                                            actionTitle: 'REPORT SUBMITTED',
+                                                            author: report.reporter_name ? `by ${report.reporter_name}` : 'by Resident',
+                                                            timestamp: report.created_at,
+                                                            description: `Incident filed for ${report.animal_type || 'animal'}${report.landmark ? ` at ${report.landmark}` : ''}.`,
+                                                            type: 'blue',
+                                                            IconComponent: FileText
+                                                        };
 
-                                                    return (
-                                                        <div key={hist.history_id || index} className="relative flex items-start gap-4 group animate-in fade-in duration-300">
-                                                            <div className={`absolute -left-6 mt-1 w-5 h-5 rounded-full ${dotColor} border-4 border-white shadow-xs flex items-center justify-center text-white`}>
-                                                                <Icon className="w-2.5 h-2.5" />
-                                                            </div>
-                                                            <div className={`flex-1 ${cardBg} hover:bg-gray-50 rounded-2xl p-4 border ${borderColor} transition-all`}>
-                                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                                                                    <span className="text-xs font-black text-gray-900 flex items-center gap-1.5">
-                                                                        <Icon className="w-3.5 h-3.5 shrink-0" />
-                                                                        <span>{hist.updater_name || hist.user_name || hist.staff_name || 'Barangay Officer'}</span>
-                                                                    </span>
-                                                                    <span className="text-[10px] font-bold text-gray-400">
-                                                                        <RelativeTimestamp date={hist.created_at || hist.timestamp} />
-                                                                    </span>
+                                                        const rawHistory = (report.history || []).filter((h: any) => (h.remarks || '').trim() !== 'Initial report submitted by resident.');
+
+                                                        const parsedHistory: TimelineItem[] = rawHistory.map((hist: any, index: number) => {
+                                                            const rawRemarks = (hist.remarks || '').trim();
+                                                            const remarksLower = rawRemarks.toLowerCase();
+                                                            const statusId = hist.report_status_id;
+
+                                                            let actionTitle = 'INCIDENT UPDATE';
+                                                            let author = hist.updater_name || hist.user_name || hist.staff_name || '';
+                                                            let description = rawRemarks;
+                                                            let type: 'blue' | 'green' | 'orange' | 'red' | 'gray' = 'gray';
+                                                            let IconComponent: any = Clock;
+
+                                                            // Extract author if mentioned in remarks e.g. "by Emmanuel Vito Cruz"
+                                                            const byMatch = rawRemarks.match(/\bby\s+([A-Z][a-zA-Z\s]+?)(?:\.|\s+Reason|\s+Linked|\s+and|$)/);
+
+                                                            // 1. Report Claimed
+                                                            if (remarksLower.includes('claimed the report') || remarksLower.includes('report claimed') || remarksLower.startsWith('claimed by')) {
+                                                                actionTitle = 'REPORT CLAIMED';
+                                                                type = 'green';
+                                                                IconComponent = ShieldCheck;
+                                                                description = 'Officer claimed the report and is now handling the case.';
+                                                                if (byMatch && (!author || author === 'Barangay Officer')) {
+                                                                    author = byMatch[1].trim();
+                                                                }
+                                                            }
+                                                            // 2. Forwarded to Barangay
+                                                            else if (remarksLower.includes('forwarded to barangay') || remarksLower.includes('forwarded for official review')) {
+                                                                actionTitle = 'FORWARDED TO BARANGAY';
+                                                                type = 'orange';
+                                                                IconComponent = ArrowRightCircle;
+                                                                description = 'Report forwarded for official review and approval.';
+                                                                if (byMatch && (!author || author === 'Barangay Officer')) {
+                                                                    author = byMatch[1].trim();
+                                                                }
+                                                            }
+                                                            // 3. Escalated
+                                                            else if (remarksLower.includes('escalat') || statusId === 4) {
+                                                                actionTitle = 'ESCALATED TO BARANGAY';
+                                                                type = 'orange';
+                                                                IconComponent = Rocket;
+                                                                description = 'Incident escalated for priority barangay intervention.';
+                                                            }
+                                                            // 4. Duplicate Confirmed
+                                                            else if (remarksLower.includes('duplicate of case') || remarksLower.includes('confirmed as duplicate') || remarksLower.includes('duplicate confirmed')) {
+                                                                actionTitle = 'DUPLICATE CONFIRMED';
+                                                                type = 'green';
+                                                                IconComponent = CheckCircle2;
+
+                                                                const caseMatch = rawRemarks.match(/Case\s*#?(\d+)/i);
+                                                                const matchPctMatch = rawRemarks.match(/(\d+)%\s*(?:match|visual)/i);
+                                                                const caseNum = caseMatch ? caseMatch[1] : null;
+                                                                const matchPct = matchPctMatch ? matchPctMatch[1] : null;
+
+                                                                if (caseNum && matchPct) {
+                                                                    description = `Confirmed as duplicate of Case #${caseNum}. AI confirmed a ${matchPct}% visual/attribute match.`;
+                                                                } else if (caseNum) {
+                                                                    description = `Confirmed as duplicate of Case #${caseNum} based on verified incident attributes.`;
+                                                                } else {
+                                                                    description = 'Confirmed as duplicate sighting of an existing incident report.';
+                                                                }
+
+                                                                if (byMatch && (!author || author === 'Barangay Officer')) {
+                                                                    author = byMatch[1].trim();
+                                                                }
+                                                            }
+                                                            // 5. Case Consolidated / Merged
+                                                            else if (remarksLower.includes('merged reports') || remarksLower.includes('case consolidated') || remarksLower.includes('consolidated reports') || remarksLower.includes('consolidated for unified')) {
+                                                                actionTitle = 'CASE CONSOLIDATED';
+                                                                type = 'green';
+                                                                IconComponent = GitMerge;
+                                                                description = 'Merged reports for unified processing.';
+                                                            }
+                                                            // 6. System Update
+                                                            else if (remarksLower.startsWith('status changed to') || remarksLower.includes('system update') || remarksLower.includes('status updated')) {
+                                                                actionTitle = 'SYSTEM UPDATE';
+                                                                type = 'gray';
+                                                                IconComponent = Cpu;
+                                                                if (!author) author = 'System';
+                                                                const statusMatch = rawRemarks.match(/status changed to\s*["']?([^"'.]+)["']?/i);
+                                                                if (statusMatch) {
+                                                                    description = `Status changed to “${statusMatch[1].trim()}”.`;
+                                                                }
+                                                            }
+                                                            // 7. Incident Verified
+                                                            else if (remarksLower.includes('verified') || statusId === 2) {
+                                                                actionTitle = 'INCIDENT VERIFIED';
+                                                                type = 'green';
+                                                                IconComponent = CheckCircle2;
+                                                                description = 'Incident verified on-site by responding personnel.';
+                                                            }
+                                                            // 8. Rescue Team Dispatched
+                                                            else if (remarksLower.includes('dispatch') || remarksLower.includes('assign-team') || remarksLower.includes('team assigned') || statusId === 5) {
+                                                                actionTitle = 'RESCUE TEAM DISPATCHED';
+                                                                type = 'orange';
+                                                                IconComponent = Ambulance;
+                                                                description = 'Response team deployed to secure and contain the animal.';
+                                                            }
+                                                            // 9. Animal Picked Up / Secured
+                                                            else if (remarksLower.includes('picked up') || remarksLower.includes('animal secured') || statusId === 6) {
+                                                                actionTitle = 'ANIMAL SECURED';
+                                                                type = 'green';
+                                                                IconComponent = PawPrint;
+                                                                description = 'Animal successfully captured and secured in transit.';
+                                                            }
+                                                            // 10. Relocation / Holding
+                                                            else if (remarksLower.includes('relocated to') || remarksLower.includes('transferred to') || remarksLower.includes('holding') || statusId === 7 || statusId === 8) {
+                                                                actionTitle = 'MOVED TO HOLDING FACILITY';
+                                                                type = 'orange';
+                                                                IconComponent = Hospital;
+                                                                description = rawRemarks || 'Animal safely admitted to temporary holding pen.';
+                                                            }
+                                                            // 11. Claim Approved / Pet Claimed
+                                                            else if (remarksLower.includes('claim') || statusId === 9) {
+                                                                actionTitle = remarksLower.includes('approved') ? 'CLAIM APPROVED' : 'OWNERSHIP CLAIM FILED';
+                                                                type = 'green';
+                                                                IconComponent = Shield;
+                                                                description = rawRemarks || 'Pet ownership claim processed for custody handover.';
+                                                            }
+                                                            // 12. False Alarm / Dismissed / Rejected
+                                                            else if (remarksLower.includes('false alarm') || remarksLower.includes('reject') || statusId === 3 || statusId === 14) {
+                                                                actionTitle = remarksLower.includes('false alarm') ? 'FALSE ALARM RECORDED' : 'REPORT REJECTED';
+                                                                type = 'red';
+                                                                IconComponent = Ban;
+                                                                description = rawRemarks || 'Incident reviewed and dismissed.';
+                                                            }
+                                                            // 13. Incident Resolved
+                                                            else if (remarksLower.includes('resolved') || statusId === 11 || statusId === 12) {
+                                                                actionTitle = 'INCIDENT RESOLVED';
+                                                                type = 'green';
+                                                                IconComponent = CheckCircle2;
+                                                                description = rawRemarks || 'All response actions complete. Incident closed.';
+                                                            }
+                                                            // 14. Default fallback
+                                                            else {
+                                                                actionTitle = 'OFFICIAL ACTION LOGGED';
+                                                                type = 'blue';
+                                                                IconComponent = FileText;
+                                                                description = rawRemarks || 'Activity logged in incident audit trail.';
+                                                            }
+
+                                                            if (!author) {
+                                                                author = 'Barangay Officer';
+                                                            }
+                                                            if (author.toLowerCase().startsWith('by ')) {
+                                                                author = author.substring(3).trim();
+                                                            }
+
+                                                            return {
+                                                                id: hist.history_id || `hist-${index}`,
+                                                                actionTitle,
+                                                                author: `by ${author}`,
+                                                                timestamp: hist.created_at || hist.timestamp,
+                                                                description,
+                                                                type,
+                                                                IconComponent
+                                                            };
+                                                        });
+
+                                                        const allEvents = [initialEntry, ...parsedHistory];
+
+                                                        return allEvents.map((evt) => {
+                                                            const style = typeStyles[evt.type] || typeStyles.gray;
+                                                            const Icon = evt.IconComponent;
+
+                                                            return (
+                                                                <div key={evt.id} className="relative group">
+                                                                    {/* Circular Icon Node centered on vertical line */}
+                                                                    <div
+                                                                        className={`absolute -left-7 top-2.5 w-6 h-6 rounded-full ${style.nodeBg} ${style.nodeRing} flex items-center justify-center shadow-xs z-10 transition-transform duration-200 group-hover:scale-110`}
+                                                                    >
+                                                                        <Icon className="w-3 h-3" />
+                                                                    </div>
+
+                                                                    {/* Compact Event Card */}
+                                                                    <div
+                                                                        className={`p-3.5 rounded-2xl ${style.cardBg} border ${style.cardBorder} shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-200`}
+                                                                    >
+                                                                        {/* Top Row: Action Title (Most prominent) & Timestamp */}
+                                                                        <div className="flex items-start justify-between gap-2">
+                                                                            <h5 className="text-xs font-black uppercase tracking-wider text-gray-900 leading-tight">
+                                                                                {evt.actionTitle}
+                                                                            </h5>
+                                                                            <span className="text-[10px] font-semibold text-gray-400 whitespace-nowrap shrink-0 pt-0.5">
+                                                                                <RelativeTimestamp date={evt.timestamp} />
+                                                                            </span>
+                                                                        </div>
+
+                                                                        {/* Second Row: Person Responsible */}
+                                                                        <p className="text-[11px] font-semibold text-gray-500 mt-0.5">
+                                                                            {evt.author}
+                                                                        </p>
+
+                                                                        {/* Third Row: Short, Readable Description */}
+                                                                        <p className="text-xs text-gray-600 font-medium mt-1 leading-snug">
+                                                                            {evt.description}
+                                                                        </p>
+                                                                    </div>
                                                                 </div>
-                                                                <p className="text-xs text-gray-700 font-semibold mt-1.5 leading-relaxed">
-                                                                    {hist.remarks || 'Status updated'}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                                            );
+                                                        });
+                                                    })()}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

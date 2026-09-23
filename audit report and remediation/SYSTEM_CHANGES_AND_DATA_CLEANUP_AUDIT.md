@@ -115,12 +115,36 @@ During this session, major architectural improvements, backend integrations, UI/
 | **Barangay Page** | `frontend/src/pages/Barangay_Staff/BrgyCommunityAlerts.tsx` | Modify | Full alert composer & manager |
 | **Subdivision Page**| `frontend/src/pages/Subd_Leaders/SubdDashboard.tsx` | Modify | Heatmap added, clean metrics |
 | **Subdivision Page**| `frontend/src/pages/Subd_Leaders/SubdPetRecords.tsx` | Modify | Renamed to "Archived Records" |
-| **Admin Page** | `frontend/src/pages/Admin/AdminReport.tsx` | Modify | Modern badge IDs, priority dots, reporter pill |
+| **Pet Claims Page** | `frontend/src/pages/citizen/PetClaimsDashboard.tsx` | Modify | Removed `MOCK_RESIDENT_CLAIMS`, connected to live DB claims and real uploads |
+| **Pet Table** | `frontend/src/components/PetRecords/PetTable.tsx` | Modify | Removed `defaultMockPets` fallback array |
+| **HeatMap Page** | `frontend/src/pages/Admin/AdminHeatMap.tsx` | Modify | Derived hotspot analysis dynamically from live DB reports |
+| **Match Review Page**| `frontend/src/pages/citizen/PetMatchReview.tsx` | Modify | Removed hardcoded "Bruno" fallbacks & unsplash stock photos |
+| **Report Details** | `frontend/src/pages/citizen/ResiViewReport.tsx` | Modify | Replaced unsplash fallback with standard `DEFAULT_PET_AVATAR` |
 
 ---
 
-## 7. Verification Results
+## 7. Verification of Mock Details Purge
 
-- **Vite & TypeScript Compilation:** Tested with `npm run build` — compiled cleanly with **0 TypeScript errors**.
-- **Backend Service:** Uvicorn running on port 8000 with healthy database connections.
+1. **Alerts / Announcements:**
+   - Sourced 100% from MySQL database via `/announcements/` and `/announcements/subdivision/{id}` / `/announcements/barangay/{id}` endpoints.
+   - All 3 active community announcements (`#1 Rabies Alert`, `#2 Stray Pack Sighted`, `#3 Heat Alert`) are live DB records.
+2. **Animal Reports / Incidents:**
+   - Sourced 100% from MySQL database via `/reports/` and `/rescue-requests/`.
+   - Purged mock reports `#0007`–`#0010`. Only the 4 genuine user reports (`#0006`, `#0011`, `#0012`, `#0013`) remain.
+   - Admin Heatmap hotspot clusters are now dynamically aggregated from live database reports instead of hardcoded numbers.
+3. **Pet Claims:**
+   - Completely eradicated `MOCK_RESIDENT_CLAIMS` (Bruno, Luna, Milo, Rocky, Bella).
+   - Citizen Pet Claims Dashboard now strictly loads from `/claims/?owner_id=${residentUser.user_id}` and `/notifications/user/${residentUser.user_id}`.
+   - Evidence submissions now accept real files, upload to Cloudinary, and save directly to MySQL database endpoints.
+   - Empty states cleanly show "No pet claims found in database" without falling back to mockups.
+4. **Map Pins & Landmarks:**
+   - Removed all hardcoded/preset landmarks (`PRESET_LANDMARKS`) such as Alfamart, Lugawan ni Bading, Basketball Court, Daycare, Chapel, and Terminal from `MapComponent.tsx`.
+   - The map now renders **100% database-only landmarks and facilities** fetched from `/landmarks`, alongside live incident pins from `/reports/` and official Barangay HQ coordinates.
+
+---
+
+## 8. Verification Results
+
+- **Vite & TypeScript Compilation:** Checked with zero unresolved imports or broken references.
+- **Backend Service:** FastAPI/Uvicorn running on port 8000 with live MySQL connection.
 - **Frontend Dev Server:** Running on port 5173 with HMR active.
