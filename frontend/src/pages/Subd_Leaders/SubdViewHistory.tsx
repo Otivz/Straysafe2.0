@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import api from '../../utils/api';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import SubdSidebar from '../../components/SubdSidebar';
@@ -126,14 +127,14 @@ const SubdViewHistory = () => {
         try {
             setLoading(true);
             // 1. Fetch report details
-            const reportResponse = await axios.get(`http://localhost:8000/reports/${id}`);
+            const reportResponse = await api.get(`/reports/${id}`);
             if (reportResponse.data) {
                 setReport(reportResponse.data);
             }
 
             // 2. Fetch rescue request details
             try {
-                const rescueResponse = await axios.get(`http://localhost:8000/rescue-requests/report/${id}`);
+                const rescueResponse = await api.get(`/rescue-requests/report/${id}`);
                 if (rescueResponse.data) {
                     setRescue(rescueResponse.data);
                 }

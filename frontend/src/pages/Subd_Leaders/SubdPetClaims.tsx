@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
+import api from '../../utils/api';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
@@ -263,9 +264,9 @@ const SubdPetClaims = () => {
     const fetchBackendClaims = async () => {
         try {
             const url = staffUser?.subdivision_id
-                ? `http://localhost:8000/claims/?subdivision_id=${staffUser.subdivision_id}`
-                : 'http://localhost:8000/claims/';
-            const res = await axios.get(url);
+                ? `/claims/?subdivision_id=${staffUser.subdivision_id}`
+                : '/claims/';
+            const res = await api.get(url);
             if (res.data?.length > 0) {
                 const transformed = res.data.map((bc: any) => transformClaim(bc));
                 setClaims(transformed);
@@ -305,7 +306,7 @@ const SubdPetClaims = () => {
         if (!selectedClaim) return;
         setIsSubmitting(true);
         try {
-            const res = await axios.patch(`http://localhost:8000/claims/${selectedClaim.claim_id}/status`, {
+            const res = await api.patch(`/claims/${selectedClaim.claim_id}/status`, {
                 status,
                 remarks
             });

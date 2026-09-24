@@ -422,7 +422,7 @@ const SubdReports = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const API_URL = 'http://localhost:8000/reports';
+    const API_URL = '/reports';
 
     const fetchReports = async (forceLoading = false) => {
         try {
@@ -431,7 +431,7 @@ const SubdReports = () => {
             }
             const subId = currentUser?.subdivision_id;
             const url = subId ? `${API_URL}/?subdivision_id=${subId}` : `${API_URL}/`;
-            const response = await axios.get(url);
+            const response = await api.get(url);
             // Sort by report_id descending to show new reports at the top
             const sortedData = (response.data || []).sort((a: any, b: any) => b.report_id - a.report_id);
             // Ensure unique reports by ID to prevent doubling
@@ -471,7 +471,7 @@ const SubdReports = () => {
 
         try {
             const parentId = replyingTo[reportId]?.commentId || null;
-            await axios.post(`${API_URL}/${reportId}/comments`, {
+            await api.post(`${API_URL}/${reportId}/comments`, {
                 comment: text.trim(),
                 user_id: currentUserId,
                 parent_comment_id: parentId
@@ -488,7 +488,7 @@ const SubdReports = () => {
 
     const handleUpdateStatus = async (id: number, newStatusId: number) => {
         try {
-            await axios.patch(`${API_URL}/${id}/status`, {
+            await api.patch(`${API_URL}/${id}/status`, {
                 status_id: newStatusId,
                 user_id: currentUserId,
                 remarks: newStatusId === 2 ? "Incident report has been officially verified by the Subdivision Leader." : undefined
@@ -513,7 +513,7 @@ const SubdReports = () => {
             const formData = new FormData();
             formData.append('file', endorsementFile);
             formData.append('is_evidence', 'true'); // Mark as evidence so it does NOT appear in the public feed
-            await axios.post(`${API_URL}/${escalatingReportId}/media`, formData, {
+            await api.post(`${API_URL}/${escalatingReportId}/media`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
@@ -526,7 +526,7 @@ const SubdReports = () => {
             const preservedCondition = targetRep?.condition ? targetRep.condition : (isInjured ? 'Injured' : undefined);
 
             // 2. Update status to Forwarded (4)
-            await axios.patch(`${API_URL}/${escalatingReportId}/status`, {
+            await api.patch(`${API_URL}/${escalatingReportId}/status`, {
                 status_id: 4,
                 user_id: currentUserId,
                 remarks: "Report forwarded to Barangay Operations for official review and approval.",
@@ -534,7 +534,7 @@ const SubdReports = () => {
             });
 
             // 3. Create official Rescue Request record
-            await axios.post('http://localhost:8000/rescue-requests/', {
+            await api.post('/rescue-requests/', {
                 report_id: escalatingReportId,
                 leader_id: currentUserId,
                 title: escalationTitle,
@@ -562,7 +562,7 @@ const SubdReports = () => {
     const handleDelete = async (id: number) => {
         if (window.confirm('Are you sure you want to delete this incident report?')) {
             try {
-                await axios.delete(`${API_URL}/${id}`);
+                await api.delete(`${API_URL}/${id}`);
                 fetchReports();
             } catch (error) {
                 console.error('Error deleting report:', error);
@@ -574,7 +574,7 @@ const SubdReports = () => {
         if (e) e.stopPropagation();
         try {
             setClaimingReportId(reportId);
-            await axios.post(`http://localhost:8000/reports/${reportId}/claim`, {
+            await api.post(`/reports/${reportId}/claim`, {
                 user_id: currentUserId
             });
             setShowSuccess(true);

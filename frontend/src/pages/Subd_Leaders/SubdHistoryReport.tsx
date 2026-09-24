@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../../utils/api';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate } from 'react-router-dom';
 import SubdSidebar from '../../components/SubdSidebar';
@@ -81,8 +81,8 @@ const SubdHistoryReport = () => {
                 setLoading(true);
             }
             const subId = currentUser?.subdivision_id;
-            const url = subId ? `http://localhost:8000/reports/?subdivision_id=${subId}` : 'http://localhost:8000/reports/';
-            const response = await axios.get(url);
+            const url = subId ? `/reports/?subdivision_id=${subId}` : '/reports/';
+            const response = await api.get(url);
             const sortedData = (response.data || []).sort((a: any, b: any) => b.report_id - a.report_id);
             const uniqueReports = sortedData.filter((report: any, index: number, self: any[]) =>
                 index === self.findIndex((t: any) => t.report_id === report.report_id)

@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
+import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import Button from '../../components/Button';
 import MapComponent from '../../components/MapComponent';
 import DataTable from '../../components/DataTable';
@@ -14,6 +15,7 @@ import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import { api } from '../../utils/api';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
+import { Sparkles, Shield, Clock, Flame, CheckCircle2, AlertTriangle, RefreshCw, Plus, Search, MapPin, Eye, Filter } from 'lucide-react';
 
 interface RescueRequest {
     rescue_id: number;
@@ -544,10 +546,79 @@ const BrgyRescueRequests = () => {
                     }
                 />
 
-                <div className="flex-1 overflow-y-auto p-4 sm:p-8 flex flex-col gap-6 sm:gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-8 pb-32 lg:pb-8 flex flex-col gap-6 sm:gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                     <div className="max-w-7xl mx-auto w-full space-y-6 sm:space-y-8">
-                        {/* Header Actions & Stat Summary Cards */}
-                        <div className="flex flex-col gap-6">
+                        {/* Mobile Hero Banner (block md:hidden) */}
+                        <div className="block md:hidden relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#FF6B2B] via-[#F97316] to-[#FB923C] p-5 shadow-lg shadow-orange-500/20 text-white animate-in fade-in slide-in-from-top-3 duration-300">
+                            {/* Decorative glowing backdrops */}
+                            <div className="absolute -right-8 -top-8 w-36 h-36 bg-white/15 rounded-full blur-2xl pointer-events-none" />
+                            <div className="absolute right-12 -bottom-10 w-32 h-32 bg-amber-300/20 rounded-full blur-xl pointer-events-none" />
+                            <div className="absolute right-4 top-3 text-2xl opacity-90 select-none animate-bounce duration-1000">
+                                🚨
+                            </div>
+
+                            <div className="relative z-10 space-y-3.5">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white shadow-xs">
+                                            <Shield className="w-5 h-5 animate-pulse" />
+                                        </div>
+                                        <div>
+                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-black uppercase tracking-wider text-orange-100 border border-white/25 shadow-2xs mb-1">
+                                                <Sparkles className="w-2.5 h-2.5 text-amber-200" /> Operations Command
+                                            </div>
+                                            <h1 className="text-lg font-black tracking-tight leading-none text-white">
+                                                Rescue Requests
+                                            </h1>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        onClick={fetchRequests}
+                                        className="p-2 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white transition-transform active:scale-95 cursor-pointer shadow-xs"
+                                        title="Refresh Requests"
+                                    >
+                                        <RefreshCw className="w-4 h-4" />
+                                    </button>
+                                </div>
+
+                                {/* Mobile 3-Column Glassmorphism Stats */}
+                                <div className="grid grid-cols-3 gap-2 pt-0.5">
+                                    <div className="bg-white/15 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex flex-col justify-between shadow-2xs active:scale-95 transition-transform">
+                                        <div className="flex items-center gap-1.5">
+                                            <div className="w-2 h-2 rounded-full bg-purple-300 animate-ping shrink-0" />
+                                            <span className="text-[9px] font-extrabold text-orange-100 uppercase tracking-wider truncate">Pending</span>
+                                        </div>
+                                        <div className="text-base font-black text-white leading-tight mt-1">
+                                            {requests.filter(r => r.report?.status_id === 4 || r.status_id === 1).length}
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white/15 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex flex-col justify-between shadow-2xs active:scale-95 transition-transform">
+                                        <div className="flex items-center gap-1.5">
+                                            <div className="w-2 h-2 rounded-full bg-amber-300 shrink-0" />
+                                            <span className="text-[9px] font-extrabold text-orange-100 uppercase tracking-wider truncate">In Action</span>
+                                        </div>
+                                        <div className="text-base font-black text-white leading-tight mt-1">
+                                            {requests.filter(r => [5, 6, 7, 8, 13].includes(r.report?.status_id || 0)).length}
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white/15 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex flex-col justify-between shadow-2xs active:scale-95 transition-transform">
+                                        <div className="flex items-center gap-1.5">
+                                            <div className="w-2 h-2 rounded-full bg-emerald-300 shrink-0" />
+                                            <span className="text-[9px] font-extrabold text-orange-100 uppercase tracking-wider truncate">Total</span>
+                                        </div>
+                                        <div className="text-base font-black text-white leading-tight mt-1">
+                                            {requests.length}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Desktop Header Actions & Stat Summary Cards (hidden md:flex) */}
+                        <div className="hidden md:flex flex-col gap-6">
                             <div className="flex justify-between items-center">
                                 <div className="flex items-center gap-3">
                                     <span className="px-3 py-1 bg-orange-100/80 text-orange-700 rounded-full text-xs font-black uppercase tracking-wider">
@@ -555,10 +626,8 @@ const BrgyRescueRequests = () => {
                                     </span>
                                 </div>
                                 <Button variant="light" onClick={fetchRequests} className="flex items-center gap-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                    </svg>
-                                    Refresh
+                                    <RefreshCw className="w-4 h-4" />
+                                    <span>Refresh</span>
                                 </Button>
                             </div>
 
@@ -1167,6 +1236,7 @@ const BrgyRescueRequests = () => {
                         )}
                     </div>
                 </div>
+                <BrgyBottomNav activeTab="requests" />
             </main>
 
             {/* Case Chat Drawer */}

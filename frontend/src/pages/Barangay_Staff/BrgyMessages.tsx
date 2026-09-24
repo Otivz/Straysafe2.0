@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
+import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import { api } from '../../utils/api';
 import { DEFAULT_AVATAR } from '../../utils/avatar';
 import { generateMemorableTitle } from '../../utils/chatUtils';
@@ -96,7 +97,7 @@ const BrgyMessages: React.FC = () => {
 
     const [threads, setThreads] = useState<ThreadItem[]>(() => getCachedData<ThreadItem[]>('brgy_chat_threads') || []);
     const [loading, setLoading] = useState<boolean>(() => !getCachedData<ThreadItem[]>('brgy_chat_threads'));
-    const [activeTab, setActiveTab] = useState<'my' | 'all' | 'past'>(isHeadOfficer ? 'all' : 'my');
+    const [activeTab, setActiveTab] = useState<'my' | 'all' | 'matches' | 'reports' | 'past'>('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedThread, setSelectedThread] = useState<ThreadItem | null>(null);
     const [messages, setMessages] = useState<MessageItem[]>([]);
@@ -274,6 +275,27 @@ const BrgyMessages: React.FC = () => {
         }
     };
 
+    const formatTime = (dateStr?: string) => {
+        if (!dateStr) return '';
+        try {
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diffMs = now.getTime() - date.getTime();
+            const diffMins = Math.floor(diffMs / (1000 * 60));
+            const diffHours = Math.floor(diffMins / 60);
+            const diffDays = Math.floor(diffHours / 24);
+
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            if (diffDays === 1) return '1 day ago';
+            if (diffDays < 7) return `${diffDays} days ago`;
+            return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        } catch {
+            return '';
+        }
+    };
+
     const isPastReport = (t: ThreadItem) => {
         if (t.is_closed) return true;
         const isMatch = t.thread_mode === 'match' || !!t.matched_pet;
@@ -286,33 +308,44 @@ const BrgyMessages: React.FC = () => {
         return HISTORY_STATUS_IDS.includes(Number(sId));
     };
 
+    const matchesCases = threads.filter(t => (t.thread_mode === 'match' || !!t.matched_pet) && !isPastReport(t));
+    const reportsCases = threads.filter(t => t.thread_mode !== 'match' && !t.matched_pet && !isPastReport(t));
     const myCases = threads.filter(t => (t.is_assigned || (!isHeadOfficer && t.can_interact)) && !isPastReport(t));
     const allCases = threads.filter(t => !isPastReport(t));
     const pastCases = threads.filter(t => isPastReport(t));
 
+    const totalUnreadCount = threads.reduce((acc, t) => acc + (t.unread_count || 0), 0);
     const myUnreadCount = myCases.reduce((acc, t) => acc + t.unread_count, 0);
     const allUnreadCount = allCases.reduce((acc, t) => acc + t.unread_count, 0);
+    const matchesUnreadCount = matchesCases.reduce((acc, t) => acc + t.unread_count, 0);
+    const reportsUnreadCount = reportsCases.reduce((acc, t) => acc + t.unread_count, 0);
     const pastUnreadCount = pastCases.reduce((acc, t) => acc + t.unread_count, 0);
 
     const filteredThreads = threads.filter(thread => {
+        const isMatch = thread.thread_mode === 'match' || !!thread.matched_pet;
         const matchesSearch = 
+            !searchTerm.trim() ||
             `report #${thread.report_id}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (thread.report?.reporter_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
             (thread.matched_pet?.pet_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
             (thread.matched_pet?.owner_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
             (thread.last_message?.text || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (thread.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (thread.report?.landmark || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
             (thread.report?.status_id ? getReportStatusLabel(thread.report.status_id).toLowerCase().includes(searchTerm.toLowerCase()) : false);
 
         if (!matchesSearch) return false;
 
-        if (activeTab === 'my') {
+        if (activeTab === 'matches') {
+            return isMatch && !isPastReport(thread);
+        } else if (activeTab === 'reports') {
+            return !isMatch && !isPastReport(thread);
+        } else if (activeTab === 'my') {
             return (thread.is_assigned || (!isHeadOfficer && thread.can_interact)) && !isPastReport(thread);
-        } else if (activeTab === 'all') {
-            return !isPastReport(thread);
         } else if (activeTab === 'past') {
             return isPastReport(thread);
         }
-        return true;
+        return !isPastReport(thread);
     }).sort((a, b) => {
         const timeA = new Date(a.last_message?.sent_at || a.updated_at || a.created_at).getTime();
         const timeB = new Date(b.last_message?.sent_at || b.updated_at || b.created_at).getTime();
@@ -347,264 +380,283 @@ const BrgyMessages: React.FC = () => {
                     }
                 />
 
-                <div className="flex-1 flex overflow-hidden p-4 sm:p-6 gap-6 max-w-7xl w-full mx-auto">
+                <div className="flex-1 flex overflow-hidden p-2 sm:p-4 md:p-6 pb-24 lg:pb-6 gap-4 lg:gap-6 max-w-7xl w-full mx-auto">
                     {/* LEFT PANEL: THREAD LIST */}
-                    <div className="w-80 md:w-96 flex flex-col bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden shrink-0">
-                        <div className="p-4 border-b border-gray-100 space-y-3">
-                            <div className="flex items-center justify-between">
-                                <h1 className="text-base font-black text-gray-900 flex items-center gap-2">
-                                    <span className="text-xl">💬</span>
-                                    <span>Incident Chats</span>
-                                </h1>
-                                <span className="px-2 py-0.5 bg-orange-100 text-[#F97316] rounded-full text-[10px] font-black">
-                                    {threads.length} Total
-                                </span>
+                    <div className={`flex flex-col bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden shrink-0 ${
+                        selectedThread ? 'hidden md:flex md:w-80 lg:w-96' : 'w-full md:w-80 lg:w-96 flex'
+                    }`}>
+                        {/* Panel Header */}
+                        <div className="px-4 sm:px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-orange-50/40 via-white to-white shrink-0">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-lg bg-orange-100/80 text-[#F97316] flex items-center justify-center font-bold">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-black text-gray-900 tracking-tight leading-none">Case Messages</h3>
+                                    <p className="text-[11px] font-semibold text-gray-400 mt-1">
+                                        {totalUnreadCount > 0 ? `${totalUnreadCount} unread message${totalUnreadCount > 1 ? 's' : ''}` : 'All caught up!'}
+                                    </p>
+                                </div>
                             </div>
 
-                            {/* Tabs */}
-                            <div className="flex bg-gray-100/80 p-1 rounded-2xl gap-1">
-                                {isHeadOfficer ? (
-                                    <>
-                                        <button
-                                            onClick={() => setActiveTab('all')}
-                                            className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                                                activeTab === 'all' 
-                                                    ? 'bg-white text-gray-900 shadow-2xs font-extrabold' 
-                                                    : 'text-gray-500 hover:text-gray-900'
-                                            }`}
-                                        >
-                                            <span>All Reports</span>
-                                            <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
-                                                activeTab === 'all' ? 'bg-orange-100 text-[#F97316]' : 'bg-gray-200 text-gray-600'
-                                            }`}>
-                                                {allCases.length}
-                                            </span>
-                                            {allUnreadCount > 0 && (
-                                                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                                            )}
-                                        </button>
+                            <button
+                                onClick={fetchThreads}
+                                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                                title="Refresh messages"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                            </button>
+                        </div>
 
-                                        <button
-                                            onClick={() => setActiveTab('my')}
-                                            className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                                                activeTab === 'my' 
-                                                    ? 'bg-white text-gray-900 shadow-2xs font-extrabold' 
-                                                    : 'text-gray-500 hover:text-gray-900'
-                                            }`}
-                                        >
-                                            <span>My Handled</span>
-                                            <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
-                                                activeTab === 'my' ? 'bg-orange-100 text-[#F97316]' : 'bg-gray-200 text-gray-600'
-                                            }`}>
-                                                {myCases.length}
-                                            </span>
-                                            {myUnreadCount > 0 && (
-                                                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                                            )}
-                                        </button>
-                                    </>
-                                ) : (
+                        {/* Filter Tabs & Search Bar */}
+                        <div className="px-3.5 py-2.5 border-b border-gray-100 bg-gray-50/70 flex flex-col gap-2 shrink-0">
+                            <div className="flex items-center justify-between gap-1.5 overflow-x-auto custom-scrollbar pb-0.5">
+                                <div className="flex items-center gap-1 shrink-0">
                                     <button
-                                        onClick={() => setActiveTab('my')}
-                                        className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                                            activeTab === 'my' 
-                                                ? 'bg-white text-gray-900 shadow-2xs font-extrabold' 
-                                                : 'text-gray-500 hover:text-gray-900'
+                                        type="button"
+                                        onClick={() => setActiveTab('all')}
+                                        className={`px-2.5 py-1 text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                                            activeTab === 'all'
+                                                ? 'bg-white text-[#F97316] shadow-xs border border-orange-100/80 font-black'
+                                                : 'text-gray-500 hover:text-gray-800 font-bold'
                                         }`}
                                     >
-                                        <span>Assigned Reports</span>
-                                        <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
-                                            activeTab === 'my' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-600'
-                                        }`}>
-                                            {myCases.length}
-                                        </span>
-                                        {myUnreadCount > 0 && (
-                                            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                                        )}
+                                        All ({allCases.length})
                                     </button>
-                                )}
-
-                                <button
-                                    onClick={() => setActiveTab('past')}
-                                    className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                                        activeTab === 'past' 
-                                            ? 'bg-white text-gray-900 shadow-2xs font-extrabold' 
-                                            : 'text-gray-500 hover:text-gray-900'
-                                    }`}
-                                >
-                                    <span>Past</span>
-                                    <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
-                                        activeTab === 'past' ? 'bg-orange-100 text-[#F97316]' : 'bg-gray-200 text-gray-600'
-                                    }`}>
-                                        {pastCases.length}
-                                    </span>
-                                    {pastUnreadCount > 0 && (
-                                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                                    )}
-                                </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab('matches')}
+                                        className={`px-2.5 py-1 text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                                            activeTab === 'matches'
+                                                ? 'bg-white text-[#F97316] shadow-xs border border-orange-100/80 font-black'
+                                                : 'text-gray-500 hover:text-gray-800 font-bold'
+                                        }`}
+                                    >
+                                        Matches ({matchesCases.length})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab('reports')}
+                                        className={`px-2.5 py-1 text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                                            activeTab === 'reports'
+                                                ? 'bg-white text-blue-600 shadow-xs border border-blue-100/80 font-black'
+                                                : 'text-gray-500 hover:text-gray-800 font-bold'
+                                        }`}
+                                    >
+                                        Reports ({reportsCases.length})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab('my')}
+                                        className={`px-2.5 py-1 text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                                            activeTab === 'my'
+                                                ? 'bg-white text-emerald-700 shadow-xs border border-emerald-100/80 font-black'
+                                                : 'text-gray-500 hover:text-gray-800 font-bold'
+                                        }`}
+                                    >
+                                        {isHeadOfficer ? 'My Handled' : 'Assigned'} ({myCases.length})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab('past')}
+                                        className={`px-2.5 py-1 text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                                            activeTab === 'past'
+                                                ? 'bg-white text-gray-900 shadow-xs border border-gray-200 font-black'
+                                                : 'text-gray-500 hover:text-gray-800 font-bold'
+                                        }`}
+                                    >
+                                        Past ({pastCases.length})
+                                    </button>
+                                </div>
                             </div>
 
-                            {/* Search */}
+                            {/* Search Input */}
                             <div className="relative">
                                 <input
                                     type="text"
-                                    placeholder="Search Report #, animal, resident..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]"
+                                    placeholder="Search report #, resident, pet, keywords..."
+                                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-gray-200 text-gray-800 placeholder-gray-400 rounded-xl focus:outline-none focus:border-[#F97316] font-medium"
                                 />
-                                <svg className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                 </svg>
                             </div>
                         </div>
 
                         {/* Thread List */}
-                        <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
+                        <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
                             {loading ? (
-                                <div className="p-6 text-center text-gray-400 text-xs font-medium animate-pulse">
-                                    Loading conversations...
+                                <div className="py-12 flex flex-col items-center justify-center text-gray-400">
+                                    <div className="w-7 h-7 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin"></div>
+                                    <p className="text-xs font-medium mt-3 text-gray-500">Loading messages...</p>
                                 </div>
                             ) : filteredThreads.length === 0 ? (
-                                <div className="p-8 text-center text-gray-400 space-y-2">
-                                    <span className="text-3xl">📭</span>
-                                    <p className="text-xs font-bold text-gray-600">
-                                        {activeTab === 'my' 
-                                            ? 'No assigned incident cases currently' 
-                                            : activeTab === 'all' 
-                                                ? 'No active incident reports in barangay' 
-                                                : 'No past or archived reports'}
-                                    </p>
-                                    <p className="text-[11px]">
-                                        {activeTab === 'my' 
-                                            ? 'Reports where you are dispatched or assigned will appear here.' 
-                                            : activeTab === 'all' 
-                                                ? 'Active incidents in this barangay will be listed here.' 
-                                                : 'Completed or resolved case messages appear here.'}
+                                <div className="py-12 px-6 text-center">
+                                    <div className="w-12 h-12 rounded-2xl bg-orange-50 text-[#F97316] flex items-center justify-center mx-auto mb-3">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                        </svg>
+                                    </div>
+                                    <p className="text-xs font-bold text-gray-800">No messages found</p>
+                                    <p className="text-[11px] text-gray-400 mt-0.5">
+                                        {searchTerm ? 'Try another search keyword.' : 'Case chats and match inquiries will appear here.'}
                                     </p>
                                 </div>
                             ) : (
                                 filteredThreads.map(thread => {
                                     const isSelected = selectedThread?.thread_id === thread.thread_id;
-                                    const isMatchThread = thread.thread_mode === 'match' || !!thread.matched_pet;
+                                    const isMatch = thread.thread_mode === 'match' || !!thread.matched_pet;
                                     const isPast = isPastReport(thread);
-                                    const threadCanSend = thread.can_interact ?? (isHeadOfficer || thread.is_assigned);
+
+                                    const rawThumbnail = isMatch 
+                                        ? (thread.matched_pet?.photo_url || thread.report?.media_url) 
+                                        : (thread.report?.media_url || thread.report?.reporter_photo);
+
+                                    const thumbnail = rawThumbnail 
+                                        ? (rawThumbnail.startsWith('http') || rawThumbnail.startsWith('data:') ? rawThumbnail : getProfilePicture(rawThumbnail))
+                                        : null;
+
+                                    const counterpartName = isMatch 
+                                        ? (thread.matched_pet?.owner_name || 'Pet Owner') 
+                                        : (thread.report?.reporter_name || 'Resident');
+
+                                    const roleBadge = isMatch ? 'PET OWNER' : 'INCIDENT REPORTER';
+
+                                    const displayTitle = generateMemorableTitle({
+                                        isMatch,
+                                        reportId: thread.report_id,
+                                        categoryName: thread.report?.category_name,
+                                        categoryId: thread.report?.category_id,
+                                        animalType: thread.report?.animal_type,
+                                        animalBreed: thread.report?.animal_breed,
+                                        animalColor: thread.report?.animal_color,
+                                        streetAddress: thread.report?.street_address,
+                                        landmark: thread.report?.landmark,
+                                        subdivisionName: thread.report?.subdivision_name,
+                                        matchedPetName: thread.matched_pet?.pet_name,
+                                        matchedPetBreed: thread.matched_pet?.breed,
+                                        serverTitle: thread.title
+                                    });
+
+                                    const timeStr = formatTime(thread.last_message?.sent_at || thread.updated_at || thread.created_at);
 
                                     return (
                                         <button
                                             key={thread.thread_id}
+                                            type="button"
                                             onClick={() => setSelectedThread(thread)}
-                                            className={`w-full text-left p-3.5 flex items-start gap-3 transition-colors ${
-                                                isSelected ? 'bg-orange-50/80 border-r-4 border-[#F97316]' : 'hover:bg-gray-50'
+                                            className={`w-full text-left p-3.5 sm:p-4 flex items-start gap-3.5 cursor-pointer transition-all duration-200 group relative border-b border-gray-50 ${
+                                                isSelected
+                                                    ? 'bg-orange-50/70 border-r-4 border-r-[#F97316]'
+                                                    : thread.unread_count > 0
+                                                        ? 'bg-orange-50/30 hover:bg-orange-50/60'
+                                                        : 'bg-white hover:bg-gray-50/80'
                                             }`}
                                         >
-                                            <div className="relative w-11 h-11 rounded-xl overflow-hidden bg-gray-100 shrink-0 border border-gray-200 shadow-2xs">
-                                                <img
-                                                    src={isMatchThread ? (thread.matched_pet?.photo_url || DEFAULT_AVATAR) : (thread.report?.media_url || thread.report?.reporter_photo || DEFAULT_AVATAR)}
-                                                    alt="Thumbnail"
-                                                    className="w-full h-full object-cover"
-                                                    onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
-                                                />
-                                                {isMatchThread && (
-                                                    <span className="absolute bottom-0 inset-x-0 bg-[#F97316] text-white text-[7px] font-black text-center py-0.2 uppercase">
-                                                        Match
-                                                    </span>
-                                                )}
-                                            </div>
+                                            {/* Unread indicator bar */}
+                                            {thread.unread_count > 0 && (
+                                                <div className="absolute left-0 top-3 bottom-3 w-1 bg-[#F97316] rounded-r-full shadow-xs"></div>
+                                            )}
 
-                                            <div className="flex-1 min-w-0">
-                                                {(() => {
-                                                    const itemTitle = generateMemorableTitle({
-                                                        isMatch: isMatchThread,
-                                                        reportId: thread.report_id,
-                                                        categoryName: thread.report?.category_name,
-                                                        categoryId: thread.report?.category_id,
-                                                        animalType: thread.report?.animal_type,
-                                                        animalBreed: thread.report?.animal_breed,
-                                                        animalColor: thread.report?.animal_color,
-                                                        streetAddress: thread.report?.street_address,
-                                                        landmark: thread.report?.landmark,
-                                                        subdivisionName: thread.report?.subdivision_name,
-                                                        matchedPetName: thread.matched_pet?.pet_name,
-                                                        matchedPetBreed: thread.matched_pet?.breed,
-                                                        serverTitle: thread.title
-                                                    });
-
-                                                    return (
-                                                        <div className="flex items-center justify-between gap-1">
-                                                            <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                                                                <h3 className="text-xs font-bold text-gray-900 truncate" title={itemTitle}>
-                                                                    {itemTitle}
-                                                                </h3>
-                                                                {thread.report?.status_id ? (
-                                                                    <span className={`px-1.5 py-0.2 rounded text-[8px] font-black shrink-0 border ${getReportStatusBadgeStyle(thread.report.status_id)}`}>
-                                                                        {getReportStatusLabel(thread.report.status_id)}
-                                                                    </span>
-                                                                ) : isPast ? (
-                                                                    <span className="px-1.5 py-0.2 bg-gray-100 text-gray-700 rounded text-[8px] font-black shrink-0 border border-gray-200">
-                                                                        Closed
-                                                                    </span>
-                                                                ) : null}
-
-                                                                {/* Role / Assignment Badge */}
-                                                                {thread.is_assigned ? (
-                                                                    <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded text-[8px] font-black shrink-0">
-                                                                        ✓ Assigned
-                                                                    </span>
-                                                                ) : isHeadOfficer ? (
-                                                                    <span className="px-1.5 py-0.2 bg-purple-100 text-purple-800 rounded text-[8px] font-black shrink-0">
-                                                                        👑 Oversight
-                                                                    </span>
-                                                                ) : !threadCanSend ? (
-                                                                    <span className="px-1.5 py-0.2 bg-gray-100 text-gray-600 rounded text-[8px] font-bold shrink-0">
-                                                                        👀 View Only
-                                                                    </span>
-                                                                ) : null}
-                                                            </div>
-
-                                                            {thread.unread_count > 0 && (
-                                                                <span className="px-1.5 py-0.2 bg-[#F97316] text-white rounded-full text-[9px] font-black shrink-0">
-                                                                    {thread.unread_count}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })()}
-
-                                                <div className="flex items-center gap-1 mt-0.5">
-                                                    {isMatchThread ? (
-                                                        <span className="px-1 py-0.2 bg-orange-100 text-[#F97316] rounded text-[8px] font-extrabold shrink-0">
-                                                            🐾 Match
-                                                        </span>
+                                            {/* Thumbnail / Avatar */}
+                                            <div className="relative shrink-0 mt-0.5">
+                                                <div className="w-10 h-10 rounded-xl bg-gray-100 border border-gray-200 overflow-hidden flex items-center justify-center shadow-2xs">
+                                                    {thumbnail ? (
+                                                        <img
+                                                            src={thumbnail}
+                                                            alt="Thumbnail"
+                                                            className="w-full h-full object-cover"
+                                                            onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
+                                                        />
                                                     ) : (
-                                                        <span className="px-1 py-0.2 bg-blue-100 text-blue-800 rounded text-[8px] font-extrabold shrink-0">
-                                                            📋 Case
+                                                        <span className="text-base">
+                                                            {isMatch ? '🐾' : '📋'}
                                                         </span>
                                                     )}
-                                                    <p className="text-[11px] text-gray-500 font-medium truncate">
-                                                        {isMatchThread 
-                                                            ? `Owner: ${thread.matched_pet?.owner_name || 'Resident'}`
-                                                            : `Reporter: ${thread.report?.reporter_name || 'Resident'}`
-                                                        }
-                                                    </p>
+                                                </div>
+                                                <span className={`absolute -bottom-1 -right-1 px-1 py-0.2 rounded text-[7px] font-black uppercase tracking-wider text-white shadow-2xs ${
+                                                    isMatch ? 'bg-[#F97316]' : 'bg-blue-600'
+                                                }`}>
+                                                    {isMatch ? 'Match' : 'Report'}
+                                                </span>
+                                            </div>
+
+                                            {/* Thread Details */}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between gap-1 mb-0.5">
+                                                    <h4
+                                                        className={`text-xs truncate ${thread.unread_count > 0 ? 'font-black text-gray-900' : 'font-bold text-gray-800'}`}
+                                                        title={displayTitle}
+                                                    >
+                                                        {displayTitle}
+                                                    </h4>
+                                                    <span className="text-[10px] text-gray-400 font-medium shrink-0">
+                                                        {timeStr}
+                                                    </span>
                                                 </div>
 
-                                                {thread.last_message && (
-                                                    <p className="text-[10px] text-gray-400 truncate mt-1">
-                                                        <span className="font-semibold text-gray-600">{thread.last_message.sender_name}: </span>
-                                                        {thread.last_message.text}
+                                                <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                                                    <span className="text-[11px] font-semibold text-gray-600 truncate">
+                                                        {counterpartName}
+                                                    </span>
+                                                    <span className="text-[8px] font-extrabold px-1.5 py-0.2 rounded bg-gray-100 text-gray-500 border border-gray-200/50 uppercase tracking-wider">
+                                                        {roleBadge}
+                                                    </span>
+                                                    {thread.is_assigned && (
+                                                        <span className="text-[8px] font-extrabold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-200/50 uppercase tracking-wider">
+                                                            ✓ Assigned
+                                                        </span>
+                                                    )}
+                                                    {isHeadOfficer && !thread.is_assigned && (
+                                                        <span className="text-[8px] font-extrabold px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 border border-purple-200/50 uppercase tracking-wider">
+                                                            👑 Oversight
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <p className={`text-xs truncate ${thread.unread_count > 0 ? 'font-bold text-gray-900' : 'text-gray-500'}`}>
+                                                        {thread.last_message?.text ? (
+                                                            <span>
+                                                                {thread.last_message.sender_name ? `${thread.last_message.sender_name}: ` : ''}
+                                                                {thread.last_message.text}
+                                                            </span>
+                                                        ) : 'Official coordination channel established.'}
                                                     </p>
-                                                )}
+                                                    {thread.unread_count > 0 && (
+                                                        <span className="min-w-[16px] h-[16px] px-1 rounded-full bg-[#F97316] text-white text-[9px] font-black flex items-center justify-center shrink-0 shadow-2xs">
+                                                            {thread.unread_count}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </button>
                                     );
                                 })
                             )}
                         </div>
+
+                        {/* Panel Footer */}
+                        <div className="p-3 border-t border-gray-100 bg-gray-50/80 flex items-center justify-between shrink-0">
+                            <span className="text-[11px] font-semibold text-gray-400">
+                                Barangay Operations Inbox
+                            </span>
+                            <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-100">
+                                {threads.length} Channels
+                            </span>
+                        </div>
                     </div>
 
                     {/* RIGHT PANEL: CHAT VIEW */}
-                    <div className="flex-1 flex flex-col min-w-0 bg-slate-50/50 rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div className={`flex-1 flex flex-col min-w-0 bg-slate-50/50 rounded-3xl border border-gray-100 shadow-sm overflow-hidden ${
+                        selectedThread ? 'flex w-full' : 'hidden md:flex'
+                    }`}>
                         {selectedThread ? (
                             <>
                                 {/* Case Interaction Status Bar */}
@@ -638,9 +690,22 @@ const BrgyMessages: React.FC = () => {
                                 ) : null}
 
                                 {/* Header */}
-                                <div className="p-4 bg-white border-b border-gray-100 flex items-center justify-between shrink-0 shadow-2xs">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 shrink-0 border border-gray-200">
+                                <div className="p-3 sm:p-4 bg-white border-b border-gray-100 flex items-center justify-between shrink-0 shadow-2xs gap-2">
+                                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                                        {/* Mobile Back to Conversation List Button */}
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedThread(null)}
+                                            className="md:hidden p-2 -ml-1 rounded-xl bg-orange-50 text-[#F97316] hover:bg-orange-100 transition-colors flex items-center gap-1 shrink-0 font-black text-xs cursor-pointer"
+                                            title="Back to conversation list"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                                            </svg>
+                                            <span className="text-[11px]">Chats</span>
+                                        </button>
+
+                                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl overflow-hidden bg-gray-100 shrink-0 border border-gray-200">
                                             <img
                                                 src={selectedThread.matched_pet?.photo_url || selectedThread.report?.media_url || DEFAULT_AVATAR}
                                                 alt="Report"
@@ -853,6 +918,8 @@ const BrgyMessages: React.FC = () => {
                         )}
                     </div>
                 </div>
+
+                <BrgyBottomNav />
             </main>
 
             {/* Nested Pet Details Modal */}

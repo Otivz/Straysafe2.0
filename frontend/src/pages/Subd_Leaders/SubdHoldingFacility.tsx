@@ -5,8 +5,8 @@ import {
     CheckCircle2, Cat, Dog, AlertTriangle, ScrollText, PartyPopper, Tag,
     Building2, Settings, BarChart3, User, Phone, Info, Timer, X, Hourglass, Home
 } from 'lucide-react';
-import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
+import api, { API_BASE_URL } from '../../utils/api';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
@@ -234,8 +234,8 @@ const SubdHoldingFacility = () => {
         const fetchFacilities = async () => {
             try {
                 const targetSubdId = subdivisionId || 1;
-                const url = `http://localhost:8000/landmarks?subdivision_id=${targetSubdId}&is_holding_facility=true`;
-                const res = await axios.get(url);
+                const url = `/landmarks?subdivision_id=${targetSubdId}&is_holding_facility=true`;
+                const res = await api.get(url);
                 if (Array.isArray(res.data)) {
                     setFacilities(res.data.filter((f: any) => f.subdivision_id === targetSubdId));
                 }
@@ -254,7 +254,7 @@ const SubdHoldingFacility = () => {
             if (subdivisionId) params.subdivision_id = subdivisionId;
             if (selectedFacilityId !== 'all') params.facility_id = selectedFacilityId;
 
-            const res = await axios.get('http://localhost:8000/holding/', { params });
+            const res = await api.get('/holding/', { params });
             setAnimals(res.data || []);
         } catch (err) {
             console.error('Error fetching subdivision holding facility data:', err);
@@ -350,11 +350,11 @@ const SubdHoldingFacility = () => {
                 update_notes: updateForm.update_notes || undefined,
             };
 
-            await axios.patch(`http://localhost:8000/holding/${selected.holding_id}`, payload);
+            await api.patch(`/holding/${selected.holding_id}`, payload);
             setIsUpdating(false);
             fetchAll();
             // Refresh selected record
-            const res = await axios.get(`http://localhost:8000/holding/${selected.holding_id}`);
+            const res = await api.get(`/holding/${selected.holding_id}`);
             setSelected(res.data);
         } catch (e) {
             console.error('Error updating holding record:', e);
@@ -366,7 +366,7 @@ const SubdHoldingFacility = () => {
     const handleAddTimeline = async () => {
         if (!selected || !timelineForm.title.trim()) return;
         try {
-            await axios.post(`http://localhost:8000/holding/${selected.holding_id}/timeline`, {
+            await api.post(`/holding/${selected.holding_id}/timeline`, {
                 event_type: timelineForm.event_type,
                 title: timelineForm.title.trim(),
                 notes: timelineForm.notes?.trim() || null,
@@ -374,7 +374,7 @@ const SubdHoldingFacility = () => {
             });
             setTimelineForm({ event_type: 'observation', title: '', notes: '' });
             setIsAddingTimeline(false);
-            const res = await axios.get(`http://localhost:8000/holding/${selected.holding_id}`);
+            const res = await api.get(`/holding/${selected.holding_id}`);
             setSelected(res.data);
             fetchAll();
         } catch (e) {
@@ -645,7 +645,7 @@ const SubdHoldingFacility = () => {
                                                 <div className="flex items-start gap-3">
                                                     <div className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 shrink-0 border border-gray-200 relative">
                                                         {thumbImg ? (
-                                                            <img src={thumbImg.startsWith('http') ? thumbImg : `http://localhost:8000${thumbImg}`} alt={animal.animal_name || 'Animal'} className="w-full h-full object-cover" />
+                                                            <img src={thumbImg.startsWith('http') ? thumbImg : `${API_BASE_URL}${thumbImg}`} alt={animal.animal_name || 'Animal'} className="w-full h-full object-cover" />
                                                         ) : (
                                                             <div className="w-full h-full flex items-center justify-center">
                                                                 {animalIcon(animal.animal_type)}
@@ -877,7 +877,7 @@ const SubdHoldingFacility = () => {
                                             <div className="h-44 bg-gray-100 relative overflow-hidden flex items-center justify-center">
                                                 {photo ? (
                                                     <img
-                                                        src={photo.startsWith('http') ? photo : `http://localhost:8000${photo}`}
+                                                        src={photo.startsWith('http') ? photo : `${API_BASE_URL}${photo}`}
                                                         alt={animal.animal_name || animal.breed || 'Held animal'}
                                                         className="w-full h-full object-cover"
                                                         onError={(e) => {

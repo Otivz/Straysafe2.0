@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate } from 'react-router-dom';
+import { Sparkles, MapPin, Search, ArrowRight, ShieldCheck, FileText, CheckCircle2 } from 'lucide-react';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
+import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import DataTable from '../../components/DataTable';
 import Select from '../../components/Dropdown';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
@@ -272,41 +274,123 @@ const BrgyHistoryReports = () => {
                     }
                 />
 
-                <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-8 pb-32 lg:pb-8 flex flex-col gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                     <div className="max-w-7xl mx-auto w-full space-y-8">
 
-                        {/* Metrics Row */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                        {/* ─── MOBILE HERO BANNER (block md:hidden) ─── */}
+                        <div className="block md:hidden relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1E293B] via-[#334155] to-[#475569] p-5 shadow-lg shadow-slate-900/10 text-white animate-in fade-in slide-in-from-top-3 duration-300">
+                            {/* Glowing decorative backdrops */}
+                            <div className="absolute -right-8 -top-8 w-36 h-36 bg-orange-500/20 rounded-full blur-2xl pointer-events-none" />
+                            <div className="absolute right-10 -bottom-8 w-32 h-32 bg-amber-400/15 rounded-full blur-xl pointer-events-none" />
+                            <div className="absolute right-3 top-3 text-3xl opacity-85 select-none animate-bounce duration-1000">
+                                📜
+                            </div>
+
+                            <div className="relative z-10 space-y-3.5">
+                                <div>
+                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 backdrop-blur-md text-[10px] font-black uppercase tracking-wider text-slate-200 border border-white/20 shadow-2xs mb-1.5">
+                                        <Sparkles className="w-2.5 h-2.5 text-amber-300" />
+                                        Official Records
+                                    </div>
+                                    <h1 className="text-xl font-black tracking-tight leading-tight text-white">
+                                        Archived Reports
+                                    </h1>
+                                    <p className="text-xs font-semibold text-slate-300 mt-1 leading-relaxed max-w-[260px]">
+                                        Review resolved, closed, and finalized barangay animal incident logs.
+                                    </p>
+                                </div>
+
+                                {/* Quick stat counters pill grid */}
+                                <div className="grid grid-cols-3 gap-2 pt-1 border-t border-white/15">
+                                    <div className="bg-white/10 backdrop-blur-md p-2.5 rounded-2xl border border-white/20 text-center">
+                                        <div className="text-[9px] font-extrabold text-slate-300 uppercase tracking-wider">Total</div>
+                                        <div className="text-base font-black text-white mt-0.5 leading-tight">{totalHistory}</div>
+                                    </div>
+                                    <div className="bg-white/10 backdrop-blur-md p-2.5 rounded-2xl border border-white/20 text-center">
+                                        <div className="text-[9px] font-extrabold text-emerald-300 uppercase tracking-wider">Resolved</div>
+                                        <div className="text-base font-black text-emerald-200 mt-0.5 leading-tight">{resolvedCount}</div>
+                                    </div>
+                                    <div className="bg-white/10 backdrop-blur-md p-2.5 rounded-2xl border border-white/20 text-center">
+                                        <div className="text-[9px] font-extrabold text-amber-300 uppercase tracking-wider">Closed</div>
+                                        <div className="text-base font-black text-amber-200 mt-0.5 leading-tight">{dismissedCount + deceasedCount}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Metrics Row (Desktop: hidden on mobile since hero banner displays it) */}
+                        <div className="hidden md:grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-4">
                             {metrics.map((metric, i) => (
-                                <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4 hover:shadow-md transition-all">
-                                    <div className={`w-11 h-11 rounded-xl ${metric.lightColor} ${metric.textColor} flex items-center justify-center shrink-0`}>
+                                <div key={i} className={`bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-5 flex items-center gap-3 sm:gap-4 hover:shadow-xs transition-all ${i === metrics.length - 1 && metrics.length % 2 !== 0 ? 'col-span-2 sm:col-span-1' : ''}`}>
+                                    <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl ${metric.lightColor} ${metric.textColor} flex items-center justify-center shrink-0`}>
                                         {metric.icon}
                                     </div>
-                                    <div>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none">{metric.label}</p>
-                                        <p className="text-2xl font-black text-gray-900 mt-1 leading-none">{metric.value}</p>
+                                    <div className="min-w-0">
+                                        <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-wider truncate leading-tight">{metric.label}</p>
+                                        <p className="text-xl sm:text-2xl font-black text-slate-900 mt-0.5 leading-none">{metric.value}</p>
                                     </div>
                                 </div>
                             ))}
                         </div>
 
+                        {/* ─── MOBILE QUICK FILTER CHIPS (block md:hidden) ─── */}
+                        <div className="block md:hidden overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+                            <div className="flex items-center gap-1.5 min-w-max">
+                                {[
+                                    { id: 'all', label: 'All Cases', count: totalHistory, icon: '📋' },
+                                    { id: 'Resolved', label: 'Resolved', count: resolvedCount, icon: '✅' },
+                                    { id: 'False Alarm / Dismissed', label: 'Dismissed', count: dismissedCount, icon: '🛡️' },
+                                    { id: 'Deceased', label: 'Deceased', count: deceasedCount, icon: '🕊️' },
+                                    { id: 'Rejected', label: 'Rejected', count: rejectedCount, icon: '✕' },
+                                ].map((tab) => {
+                                    const isActive = statusFilter === tab.id;
+                                    return (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => setStatusFilter(tab.id)}
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs ${
+                                                isActive
+                                                    ? 'bg-[#F97316] text-white shadow-orange-500/25 scale-[1.02]'
+                                                    : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            <span className="text-xs">{tab.icon}</span>
+                                            <span>{tab.label}</span>
+                                            <span className={`px-1.5 py-0.2 text-[9.5px] rounded-full font-black ${
+                                                isActive ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-600'
+                                            }`}>
+                                                {tab.count}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
                         {/* Search & Filters */}
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div className="relative flex-1 max-w-md">
-                                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                    </svg>
+                        <div className="bg-white rounded-2xl shadow-2xs border border-slate-200/90 p-3.5 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                            <div className="relative flex-1 max-w-md w-full">
+                                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                                    <Search className="h-4 w-4" />
                                 </span>
                                 <input
                                     type="text"
-                                    placeholder="Search by category, landmark or reporter..."
-                                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-200 outline-none transition-all"
+                                    placeholder="Search category, landmark, or reporter..."
+                                    className="w-full pl-10 pr-8 py-2 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all shadow-xs"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                 />
+                                {searchTerm && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSearchTerm('')}
+                                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                                    >
+                                        ✕
+                                    </button>
+                                )}
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 sm:gap-3 justify-between md:justify-end">
                                 <Select
                                     value={statusFilter}
                                     onChange={(e) => setStatusFilter(e.target.value)}
@@ -317,133 +401,295 @@ const BrgyHistoryReports = () => {
                                         { value: 'Deceased', label: 'Deceased' },
                                         { value: 'Rejected', label: 'Rejected' },
                                     ]}
-                                    className="w-[140px]"
+                                    className="flex-1 sm:flex-initial sm:w-[150px]"
                                 />
                                 <button
+                                    type="button"
                                     onClick={fetchReports}
-                                    className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-all"
+                                    className="flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-2xs shrink-0 cursor-pointer"
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                     </svg>
                                     Refresh
                                 </button>
                             </div>
                         </div>
 
-                        {/* Data Table */}
-                        <DataTable
-                            loading={loading}
-                            data={filteredReports}
-                            emptyMessage="No history reports found."
-                            loadingMessage="Loading history reports..."
-                            onRowClick={(rep) => navigate(`/brgy/history/${rep.report_id}`)}
-                            columns={[
-                                {
-                                    header: "ID",
-                                    key: "report_id",
-                                    render: (rep) => (
-                                        <span className="text-xs font-mono text-gray-400">#{rep.report_id.toString().padStart(4, '0')}</span>
-                                    )
-                                },
-                                {
-                                    header: "Category",
-                                    key: "category",
-                                    render: (rep) => (
-                                        <div className="flex items-center space-x-2">
-                                            <span className="w-2 h-2 rounded-full bg-orange-400"></span>
-                                            <span className="text-sm font-bold text-gray-900">{categoryMap[rep.category_id] || 'Other'}</span>
+                        {/* ─── MOBILE CARD VIEW ─── */}
+                        <div className="block md:hidden space-y-3.5">
+                            {loading ? (
+                                Array.from({ length: 3 }).map((_, i) => (
+                                    <div key={i} className="bg-white rounded-3xl p-4 border border-slate-200 shadow-xs animate-pulse space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="h-4 w-24 bg-slate-100 rounded-lg" />
+                                            <div className="h-5 w-16 bg-slate-100 rounded-full" />
                                         </div>
-                                    )
-                                },
-                                {
-                                    header: "Priority",
-                                    key: "priority",
-                                    render: (rep) => (
-                                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getPriorityColor(rep.priority_level)}`}>
-                                            {rep.priority_level}
-                                        </span>
-                                    )
-                                },
-                                {
-                                    header: "Location",
-                                    key: "location",
-                                    render: (rep) => (
-                                        <div className="flex items-center space-x-1.5 text-gray-500">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                            </svg>
-                                            <span className="text-xs truncate max-w-[150px]">{rep.landmark || 'No landmark'}</span>
+                                        <div className="h-32 w-full bg-slate-100 rounded-2xl" />
+                                        <div className="h-4 w-3/4 bg-slate-100 rounded" />
+                                        <div className="h-3 w-1/2 bg-slate-50 rounded" />
+                                    </div>
+                                ))
+                            ) : filteredReports.length === 0 ? (
+                                <div className="bg-white rounded-3xl p-8 border border-slate-200 text-center shadow-xs space-y-2">
+                                    <div className="w-14 h-14 mx-auto bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 text-2xl shadow-2xs">
+                                        📜
+                                    </div>
+                                    <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">No History Reports Found</h4>
+                                    <p className="text-xs text-slate-500 font-semibold">Try adjusting your search keyword or quick status filter</p>
+                                </div>
+                            ) : (
+                                filteredReports.map((rep) => {
+                                    const statText = statusMap[rep.status_id] || 'Unknown';
+                                    const isResolved = [11, 9, 10].includes(rep.status_id);
+                                    const isDeceased = rep.status_id === 12;
+
+                                    const mediaList = rep.media || [];
+                                    const firstMedia = mediaList.find((m: any) =>
+                                        m.media_type !== 'Document' &&
+                                        !m.file_url?.toLowerCase().endsWith('.pdf') &&
+                                        !m.file_url?.toLowerCase().endsWith('.docx') &&
+                                        !m.file_url?.toLowerCase().endsWith('.doc')
+                                    );
+                                    const isVideo = firstMedia?.media_type === 'Video' || firstMedia?.file_url?.toLowerCase().match(/\.(mp4|mov|webm)$/i);
+                                    const mediaCount = mediaList.length;
+
+                                    const accentBarColor = isResolved 
+                                        ? 'bg-emerald-500' 
+                                        : isDeceased 
+                                        ? 'bg-slate-500' 
+                                        : 'bg-amber-500';
+
+                                    return (
+                                        <div
+                                            key={rep.report_id}
+                                            onClick={() => navigate(`/brgy/history/${rep.report_id}`)}
+                                            className="bg-white rounded-3xl p-4 border border-slate-200/90 shadow-sm hover:shadow-md hover:border-orange-300 transition-all duration-300 space-y-3.5 cursor-pointer relative overflow-hidden group active:scale-[0.99] animate-in fade-in slide-in-from-bottom-2"
+                                        >
+                                            {/* Accent colored top line */}
+                                            <div className={`absolute top-0 left-0 right-0 h-1 ${accentBarColor}`} />
+
+                                            {/* Header Row: ID, Category, Priority Badge */}
+                                            <div className="flex items-start justify-between gap-2 pt-1">
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <span className="text-[10px] font-mono font-black text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200">
+                                                            #{rep.report_id.toString().padStart(4, '0')}
+                                                        </span>
+                                                        <span className="text-sm font-black text-slate-900 truncate leading-snug group-hover:text-orange-600 transition-colors">
+                                                            {categoryMap[rep.category_id] || 'Other Incident'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shrink-0 ${getPriorityColor(rep.priority_level)}`}>
+                                                    {rep.priority_level}
+                                                </span>
+                                            </div>
+
+                                            {/* Animal Photo Preview (if available) */}
+                                            {firstMedia && (
+                                                <div className="w-full h-36 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 relative group-hover:shadow-inner transition-all">
+                                                    {isVideo ? (
+                                                        <video src={firstMedia.file_url} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <img
+                                                            src={firstMedia.file_url}
+                                                            alt="Incident media"
+                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                        />
+                                                    )}
+                                                    {mediaCount > 1 && (
+                                                        <span className="absolute bottom-2 right-2 bg-black/65 backdrop-blur-md text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full border border-white/20 shadow-xs">
+                                                            +{mediaCount - 1} photos
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Status Badge & Case Chat Row */}
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className={isResolved ? 'text-emerald-500' : isDeceased ? 'text-slate-500' : 'text-amber-500'}>
+                                                        {getStatusIcon(rep.status_id)}
+                                                    </span>
+                                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider ${getStatusColor(statText)}`}>
+                                                        {statText}
+                                                    </span>
+                                                </div>
+
+                                                <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                                    <ReportChatBadge
+                                                        reportId={rep.report_id}
+                                                        currentUserId={currentUser?.user_id}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedChatReport(rep);
+                                                            setIsChatOpen(true);
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Location & Details Box */}
+                                            <div className="bg-slate-50/90 rounded-2xl p-3 border border-slate-100 text-xs space-y-1.5">
+                                                <div className="flex items-center gap-1.5 text-slate-700 font-bold text-[11px]">
+                                                    <MapPin className="w-3.5 h-3.5 text-[#F97316] shrink-0" />
+                                                    <span className="truncate">{rep.landmark || 'No landmark specified'}</span>
+                                                </div>
+                                                {rep.description && (
+                                                    <p className="text-slate-500 text-[11px] line-clamp-2 leading-relaxed font-medium">
+                                                        {rep.description}
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            {/* Reporter & Action Row */}
+                                            <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-[10px] font-black shrink-0 border border-orange-200">
+                                                        {(rep.reporter_name || 'U').charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <span className="text-[11px] font-bold text-slate-700 truncate">
+                                                        {rep.reporter_name || `User ${rep.user_id}`}
+                                                    </span>
+                                                    <span className="text-[10px] text-slate-400 font-medium shrink-0">
+                                                        • <RelativeTimestamp date={rep.created_at} />
+                                                    </span>
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        navigate(`/brgy/history/${rep.report_id}`);
+                                                    }}
+                                                    className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] font-black text-[10.5px] rounded-xl border border-orange-200 uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-2xs group-hover:bg-[#F97316] group-hover:text-white group-hover:border-orange-500 cursor-pointer shrink-0"
+                                                >
+                                                    <span>View</span>
+                                                    <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                                                </button>
+                                            </div>
                                         </div>
-                                    )
-                                },
-                                {
-                                    header: "Outcome Status",
-                                    key: "status",
-                                    render: (rep) => (
-                                        <div className="flex items-center gap-2">
-                                            <ReportChatBadge
-                                                reportId={rep.report_id}
-                                                currentUserId={currentUser?.user_id}
+                                    );
+                                })
+                            )}
+                        </div>
+
+                        {/* ─── DESKTOP DATA TABLE ─── */}
+                        <div className="hidden md:block">
+                            <DataTable
+                                loading={loading}
+                                data={filteredReports}
+                                emptyMessage="No history reports found."
+                                loadingMessage="Loading history reports..."
+                                onRowClick={(rep) => navigate(`/brgy/history/${rep.report_id}`)}
+                                columns={[
+                                    {
+                                        header: "ID",
+                                        key: "report_id",
+                                        render: (rep) => (
+                                            <span className="text-xs font-mono text-gray-400">#{rep.report_id.toString().padStart(4, '0')}</span>
+                                        )
+                                    },
+                                    {
+                                        header: "Category",
+                                        key: "category",
+                                        render: (rep) => (
+                                            <div className="flex items-center space-x-2">
+                                                <span className="w-2 h-2 rounded-full bg-orange-400"></span>
+                                                <span className="text-sm font-bold text-gray-900">{categoryMap[rep.category_id] || 'Other'}</span>
+                                            </div>
+                                        )
+                                    },
+                                    {
+                                        header: "Priority",
+                                        key: "priority",
+                                        render: (rep) => (
+                                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getPriorityColor(rep.priority_level)}`}>
+                                                {rep.priority_level}
+                                            </span>
+                                        )
+                                    },
+                                    {
+                                        header: "Location",
+                                        key: "location",
+                                        render: (rep) => (
+                                            <div className="flex items-center space-x-1.5 text-gray-500">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                </svg>
+                                                <span className="text-xs truncate max-w-[150px]">{rep.landmark || 'No landmark'}</span>
+                                            </div>
+                                        )
+                                    },
+                                    {
+                                        header: "Outcome Status",
+                                        key: "status",
+                                        render: (rep) => (
+                                            <div className="flex items-center gap-2">
+                                                <ReportChatBadge
+                                                    reportId={rep.report_id}
+                                                    currentUserId={currentUser?.user_id}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedChatReport(rep);
+                                                        setIsChatOpen(true);
+                                                    }}
+                                                />
+                                                <span className={`${[11, 9, 10].includes(rep.status_id) ? 'text-green-500' : rep.status_id === 12 ? 'text-gray-500' : 'text-red-500'}`}>
+                                                    {getStatusIcon(rep.status_id)}
+                                                </span>
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || '')}`}>
+                                                    {statusMap[rep.status_id] || 'Unknown'}
+                                                </span>
+                                            </div>
+                                        )
+                                    },
+                                    {
+                                        header: "Reported",
+                                        key: "created_at",
+                                        render: (rep) => (
+                                            <span className="text-xs text-gray-400">
+                                                <RelativeTimestamp date={rep.created_at} />
+                                            </span>
+                                        )
+                                    },
+                                    {
+                                        header: "Submitted By",
+                                        key: "reporter",
+                                        render: (rep) => (
+                                            <div className="flex items-center space-x-2">
+                                                <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] text-gray-500 font-bold border border-gray-200">
+                                                    {(rep.reporter_name || 'U').charAt(0).toUpperCase()}
+                                                </div>
+                                                <span className="text-xs font-semibold text-gray-700">{rep.reporter_name || `User ${rep.user_id}`}</span>
+                                            </div>
+                                        )
+                                    },
+                                    {
+                                        header: "Action",
+                                        key: "action",
+                                        className: "text-right",
+                                        render: (rep) => (
+                                            <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    setSelectedChatReport(rep);
-                                                    setIsChatOpen(true);
+                                                    navigate(`/brgy/history/${rep.report_id}`);
                                                 }}
-                                            />
-                                            <span className={`${[11, 9, 10].includes(rep.status_id) ? 'text-green-500' : rep.status_id === 12 ? 'text-gray-500' : 'text-red-500'}`}>
-                                                {getStatusIcon(rep.status_id)}
-                                            </span>
-                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || '')}`}>
-                                                {statusMap[rep.status_id] || 'Unknown'}
-                                            </span>
-                                        </div>
-                                    )
-                                },
-                                {
-                                    header: "Reported",
-                                    key: "created_at",
-                                    render: (rep) => (
-                                        <span className="text-xs text-gray-400">
-                                            <RelativeTimestamp date={rep.created_at} />
-                                        </span>
-                                    )
-                                },
-                                {
-                                    header: "Submitted By",
-                                    key: "reporter",
-                                    render: (rep) => (
-                                        <div className="flex items-center space-x-2">
-                                            <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] text-gray-500 font-bold border border-gray-200">
-                                                {(rep.reporter_name || 'U').charAt(0).toUpperCase()}
-                                            </div>
-                                            <span className="text-xs font-semibold text-gray-700">{rep.reporter_name || `User ${rep.user_id}`}</span>
-                                        </div>
-                                    )
-                                },
-                                {
-                                    header: "Action",
-                                    key: "action",
-                                    className: "text-right",
-                                    render: (rep) => (
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                navigate(`/brgy/history/${rep.report_id}`);
-                                            }}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-100 rounded-lg hover:bg-orange-100 transition-all uppercase tracking-widest"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                            </svg>
-                                            View
-                                        </button>
-                                    )
-                                }
-                            ]}
-                        />
+                                                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-100 rounded-lg hover:bg-orange-100 transition-all uppercase tracking-widest cursor-pointer"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                </svg>
+                                                View
+                                            </button>
+                                        )
+                                    }
+                                ]}
+                            />
+                        </div>
 
                         {/* Info Banner */}
                         <div className="bg-orange-50/60 border border-orange-100 rounded-2xl p-5 flex items-start gap-4">
@@ -463,6 +709,8 @@ const BrgyHistoryReports = () => {
 
                     </div>
                 </div>
+
+                <BrgyBottomNav />
             </main>
 
             {/* Case Chat Drawer */}

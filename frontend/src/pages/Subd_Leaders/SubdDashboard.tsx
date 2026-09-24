@@ -627,28 +627,28 @@ const SubdDashboard = () => {
                         {/* Card 1: Pending Review */}
                         <div
                             onClick={() => navigate('/subd/reports')}
-                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[125px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-orange-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
+                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[140px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-orange-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
                         >
-                            <div className="flex items-start justify-between gap-1.5">
+                            <div className="flex items-start justify-between gap-1.5 sm:gap-2">
                                 <div className="min-w-0 flex-1">
-                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-orange-600 transition-colors leading-tight truncate">
+                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-orange-600 transition-colors leading-snug">
                                         Pending Review
                                     </h3>
-                                    <p className="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 leading-tight truncate">Awaiting your verification</p>
+                                    <p className="text-[9.5px] sm:text-[11px] text-slate-500 mt-0.5 leading-tight font-medium">Awaiting your verification</p>
                                 </div>
-                                <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full sm:rounded-2xl bg-orange-100/90 text-orange-600 flex items-center justify-center shrink-0 border border-orange-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 sm:w-5 sm:h-5" viewBox="0 0 20 20" fill="currentColor">
+                                <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full sm:rounded-2xl bg-orange-100/90 text-orange-600 flex items-center justify-center shrink-0 border border-orange-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5" viewBox="0 0 20 20" fill="currentColor">
                                         <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
                                     </svg>
                                 </div>
                             </div>
-                            <div className="mt-1.5 sm:mt-3">
+                            <div className="mt-2 sm:mt-3">
                                 <p className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-orange-600 transition-colors">
                                     {loading ? '...' : pendingReviewCount}
                                 </p>
-                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1 text-[9.5px] sm:text-[11px] font-bold text-slate-400">
-                                    <span className="inline-flex items-center justify-center w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-slate-100 text-slate-500 text-[7px] sm:text-[9px] shrink-0 font-black">-</span>
-                                    <span className="leading-tight truncate">0 change</span>
+                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[9.5px] sm:text-[11px] font-bold text-slate-500">
+                                    <span className="inline-flex items-center justify-center w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-slate-100 text-slate-600 text-[7px] sm:text-[9px] shrink-0 font-black">-</span>
+                                    <span className="leading-tight">0 change</span>
                                 </div>
                             </div>
                         </div>
@@ -656,26 +656,26 @@ const SubdDashboard = () => {
                         {/* Card 2: Under Barangay Action */}
                         <div
                             onClick={() => navigate('/subd/escalated')}
-                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[125px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-blue-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
+                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[140px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-blue-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
                         >
-                            <div className="flex items-start justify-between gap-1.5">
+                            <div className="flex items-start justify-between gap-1.5 sm:gap-2">
                                 <div className="min-w-0 flex-1">
-                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-blue-600 transition-colors leading-tight truncate">
+                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-blue-600 transition-colors leading-snug">
                                         Barangay Action
                                     </h3>
-                                    <p className="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 leading-tight truncate">Endorsed to Barangay</p>
+                                    <p className="text-[9.5px] sm:text-[11px] text-slate-500 mt-0.5 leading-tight font-medium">Endorsed to Barangay</p>
                                 </div>
-                                <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full sm:rounded-2xl bg-blue-100/90 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300 font-black text-xs">
+                                <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full sm:rounded-2xl bg-blue-100/90 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300 font-black text-xs">
                                     <span>A</span>
                                 </div>
                             </div>
-                            <div className="mt-1.5 sm:mt-3">
+                            <div className="mt-2 sm:mt-3">
                                 <p className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-blue-600 transition-colors">
                                     {loading ? '...' : underBrgyCount}
                                 </p>
-                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1 text-[9.5px] sm:text-[11px] font-bold text-blue-600">
+                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[9.5px] sm:text-[11px] font-bold text-blue-600">
                                     <span className="inline-flex items-center justify-center w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-blue-100 text-blue-700 text-[7px] sm:text-[9px] shrink-0 font-black">-</span>
-                                    <span className="leading-tight truncate">0 change</span>
+                                    <span className="leading-tight">0 change</span>
                                 </div>
                             </div>
                         </div>
@@ -683,28 +683,28 @@ const SubdDashboard = () => {
                         {/* Card 3: Registered Pets */}
                         <div
                             onClick={() => navigate('/subd/pets')}
-                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[125px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-emerald-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
+                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[140px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-emerald-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
                         >
-                            <div className="flex items-start justify-between gap-1.5">
+                            <div className="flex items-start justify-between gap-1.5 sm:gap-2">
                                 <div className="min-w-0 flex-1">
-                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-emerald-600 transition-colors leading-tight truncate">
+                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-emerald-600 transition-colors leading-snug">
                                         Registered Pets
                                     </h3>
-                                    <p className="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 leading-tight truncate">Verified subdivision pets</p>
+                                    <p className="text-[9.5px] sm:text-[11px] text-slate-500 mt-0.5 leading-tight font-medium">Verified subdivision pets</p>
                                 </div>
-                                <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full sm:rounded-2xl bg-emerald-100/90 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300">
-                                    <svg className="w-3.5 h-3.5 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 24 24">
+                                <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full sm:rounded-2xl bg-emerald-100/90 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300">
+                                    <svg className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5" fill="currentColor" viewBox="0 0 24 24">
                                         <path d="M12 21.5c-3.038 0-5.5-2.462-5.5-5.5s2.462-5.5 5.5-5.5s5.5 2.462 5.5 5.5s-2.462 5.5-5.5 5.5zm-5.5-12c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zm11 0c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zM12 8c-1.381 0-2.5-1.119-2.5-2.5S10.619 3 12 3s2.5 1.119 2.5 2.5S13.381 8 12 8z" />
                                     </svg>
                                 </div>
                             </div>
-                            <div className="mt-1.5 sm:mt-3">
+                            <div className="mt-2 sm:mt-3">
                                 <p className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-emerald-600 transition-colors">
                                     {loading ? '...' : displayPetCount}
                                 </p>
-                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1 text-[9px] sm:text-[11px] font-bold text-emerald-600">
+                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[9.5px] sm:text-[11px] font-bold text-emerald-600">
                                     <span className="inline-flex items-center justify-center w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-emerald-100 text-emerald-700 text-[7px] sm:text-[9px] shrink-0 font-black">↑</span>
-                                    <span className="leading-tight truncate">{petsRegisteredThisMonth} registered this month</span>
+                                    <span className="leading-tight">{petsRegisteredThisMonth} this month</span>
                                 </div>
                             </div>
                         </div>
@@ -712,28 +712,28 @@ const SubdDashboard = () => {
                         {/* Card 4: Pending Claims */}
                         <div
                             onClick={() => navigate('/subd/pet-claims')}
-                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[125px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-purple-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
+                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[140px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-purple-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
                         >
-                            <div className="flex items-start justify-between gap-1.5">
+                            <div className="flex items-start justify-between gap-1.5 sm:gap-2">
                                 <div className="min-w-0 flex-1">
-                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-purple-600 transition-colors leading-tight truncate">
+                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-purple-600 transition-colors leading-snug">
                                         Pending Claims
                                     </h3>
-                                    <p className="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 leading-tight truncate">Awaiting owner confirmation</p>
+                                    <p className="text-[9.5px] sm:text-[11px] text-slate-500 mt-0.5 leading-tight font-medium">Awaiting owner confirmation</p>
                                 </div>
-                                <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full sm:rounded-2xl bg-purple-100/90 text-purple-600 flex items-center justify-center shrink-0 border border-purple-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full sm:rounded-2xl bg-purple-100/90 text-purple-600 flex items-center justify-center shrink-0 border border-purple-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                                     </svg>
                                 </div>
                             </div>
-                            <div className="mt-1.5 sm:mt-3">
+                            <div className="mt-2 sm:mt-3">
                                 <p className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-purple-600 transition-colors">
                                     {loading ? '...' : pendingClaimsCount}
                                 </p>
-                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1 text-[9.5px] sm:text-[11px] font-bold text-purple-600">
+                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[9.5px] sm:text-[11px] font-bold text-purple-600">
                                     <span className="inline-flex items-center justify-center w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-purple-100 text-purple-700 text-[7px] sm:text-[9px] shrink-0 font-black">-</span>
-                                    <span className="leading-tight truncate">0 change</span>
+                                    <span className="leading-tight">0 change</span>
                                 </div>
                             </div>
                         </div>
@@ -741,28 +741,28 @@ const SubdDashboard = () => {
                         {/* Card 5: Holding Facility */}
                         <div
                             onClick={() => navigate('/subd/holding-facility')}
-                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[125px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-teal-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
+                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[140px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-teal-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
                         >
-                            <div className="flex items-start justify-between gap-1.5">
+                            <div className="flex items-start justify-between gap-1.5 sm:gap-2">
                                 <div className="min-w-0 flex-1">
-                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-teal-600 transition-colors leading-tight truncate">
+                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-teal-600 transition-colors leading-snug">
                                         Holding Facility
                                     </h3>
-                                    <p className="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 leading-tight truncate">Animals currently sheltered</p>
+                                    <p className="text-[9.5px] sm:text-[11px] text-slate-500 mt-0.5 leading-tight font-medium">Animals currently sheltered</p>
                                 </div>
-                                <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full sm:rounded-2xl bg-teal-100/90 text-teal-600 flex items-center justify-center shrink-0 border border-teal-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full sm:rounded-2xl bg-teal-100/90 text-teal-600 flex items-center justify-center shrink-0 border border-teal-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                                     </svg>
                                 </div>
                             </div>
-                            <div className="mt-1.5 sm:mt-3">
+                            <div className="mt-2 sm:mt-3">
                                 <p className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-teal-600 transition-colors">
                                     {loading ? '...' : holdingCount}
                                 </p>
-                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1 text-[9px] sm:text-[11px] font-bold text-teal-600">
+                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[9.5px] sm:text-[11px] font-bold text-teal-600">
                                     <span className="inline-flex items-center justify-center w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-teal-100 text-teal-700 text-[7px] sm:text-[9px] shrink-0 font-black">✓</span>
-                                    <span className="leading-tight truncate">{holdingCount === 1 ? '1 active in facility' : `${holdingCount} active in facility`}</span>
+                                    <span className="leading-tight">{holdingCount === 1 ? '1 active in facility' : `${holdingCount} active in facility`}</span>
                                 </div>
                             </div>
                         </div>

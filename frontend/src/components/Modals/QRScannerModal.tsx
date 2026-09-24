@@ -107,8 +107,9 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
         cameraTimeoutRef.current = setTimeout(async () => {
             try {
                 // Double check to prevent multiple instances
-                if (qrScannerRef.current) {
-                    await stopCamera();
+                const container = document.getElementById(scannerId);
+                if (!container) {
+                    return;
                 }
 
                 const html5QrCode = new Html5Qrcode(scannerId);
@@ -157,6 +158,9 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                 if (!cameraConfig) {
                     cameraConfig = isMobile ? 'environment' : 'user';
                 }
+
+                // Ensure container still exists before starting
+                if (!document.getElementById(scannerId)) return;
 
                 await html5QrCode.start(
                     cameraConfig,

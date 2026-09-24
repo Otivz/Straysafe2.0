@@ -4,12 +4,13 @@ import {
     User, PawPrint, Home, Flag, Building2, Phone, Mail, Lock, Users, Landmark,
     X, Rocket, Hospital, Settings, ScrollText, Pin, RefreshCw, Shield,
     CheckCircle2, Ban, Ambulance, Heart, Lightbulb, Download, Camera,
-    ShieldCheck, ArrowRightCircle, GitMerge, Cpu, Clock
+    ShieldCheck, ArrowRightCircle, GitMerge, Cpu, Clock, Sparkles, ArrowLeft
 } from 'lucide-react';
 import axios from 'axios';
 import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
+import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import MapComponent from '../../components/MapComponent';
 import AISuggestionPanel from '../../components/AISuggestionPanel';
 import AIPotentialMatchesList from '../../components/AIPotentialMatchesList';
@@ -918,7 +919,7 @@ const BrgyReportView = () => {
                     }
                 />
 
-                <main className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
+                <main className="flex-1 overflow-y-auto p-4 sm:p-8 pb-32 lg:pb-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto space-y-8">
                         {loading ? (
                             <div className="py-32 flex flex-col items-center justify-center gap-4">
@@ -943,6 +944,55 @@ const BrgyReportView = () => {
                             </div>
                         ) : (
                             <>
+                                {/* Mobile Hero Banner (block md:hidden) */}
+                                <div className="block md:hidden relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#EA580C] via-[#F97316] to-[#FB923C] p-5 shadow-lg shadow-orange-500/20 text-white animate-in fade-in slide-in-from-top-3 duration-300 mb-4">
+                                    {/* Decorative glowing backdrops */}
+                                    <div className="absolute -right-8 -top-8 w-36 h-36 bg-white/15 rounded-full blur-2xl pointer-events-none" />
+                                    <div className="absolute right-10 -bottom-8 w-32 h-32 bg-amber-300/20 rounded-full blur-xl pointer-events-none" />
+                                    <div className="absolute right-3 top-3 text-2xl opacity-85 select-none animate-bounce duration-1000">
+                                        🚨
+                                    </div>
+
+                                    <div className="relative z-10 space-y-3.5">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2.5">
+                                                <Link
+                                                    to="/brgy/rescue-requests"
+                                                    className="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 flex items-center justify-center text-white active:scale-95 transition-transform shrink-0"
+                                                >
+                                                    <ArrowLeft className="w-4 h-4" />
+                                                </Link>
+                                                <div>
+                                                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-black uppercase tracking-wider text-orange-100 border border-white/25 shadow-2xs mb-0.5">
+                                                        <Sparkles className="w-2.5 h-2.5 text-amber-200" /> Incident #{report.report_id}
+                                                    </div>
+                                                    <h1 className="text-base font-black tracking-tight leading-none text-white truncate max-w-[200px]">
+                                                        {categoryMap[report.category_id] || report.landmark || 'Rescue Operation'}
+                                                    </h1>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Mobile Quick Status & Details Strip */}
+                                        <div className="grid grid-cols-2 gap-2 pt-0.5">
+                                            <div className="bg-white/15 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex items-center gap-2 shadow-2xs">
+                                                <div className="w-2 h-2 rounded-full bg-emerald-300 animate-ping shrink-0" />
+                                                <div className="min-w-0">
+                                                    <div className="text-[9px] font-extrabold text-orange-100 uppercase tracking-wider truncate">Status</div>
+                                                    <div className="text-xs font-black text-white leading-tight truncate">{getReportStatusLabel(report.status_id)}</div>
+                                                </div>
+                                            </div>
+                                            <div className="bg-white/15 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex items-center gap-2 shadow-2xs">
+                                                <MapPin className="w-3.5 h-3.5 text-amber-200 shrink-0" />
+                                                <div className="min-w-0">
+                                                    <div className="text-[9px] font-extrabold text-orange-100 uppercase tracking-wider truncate">Landmark</div>
+                                                    <div className="text-xs font-black text-white leading-tight truncate">{report.landmark || 'On Site'}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 {/* Mission Stage Stepper */}
                                 <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm flex items-center justify-between mb-4 relative overflow-hidden">
                                     <div className="absolute inset-0 bg-gradient-to-r from-orange-50/50 to-transparent"></div>
@@ -2281,6 +2331,7 @@ const BrgyReportView = () => {
                         )}
                     </div>
                 </main>
+                <BrgyBottomNav />
             </div>
 
             {/* Case Chat Drawer */}

@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import { useEffect, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
-import axios from 'axios';
+import api from '../../utils/api';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
@@ -96,7 +96,7 @@ const SubdHazardAlert = () => {
     const fetchAnnouncements = async () => {
         if (!currentUser?.subdivision_id) return;
         try {
-            const res = await axios.get(`http://localhost:8000/announcements/subdivision/${currentUser.subdivision_id}`);
+            const res = await api.get(`/announcements/subdivision/${currentUser.subdivision_id}`);
             const mapped = res.data.map(mapApiAnnouncement);
             setAnnouncements(mapped);
             setCachedData('subd_announcements', mapped);
@@ -131,7 +131,7 @@ const SubdHazardAlert = () => {
     const handleLike = async (id: string) => {
         if (!currentUser?.user_id) return;
         try {
-            await axios.post(`http://localhost:8000/announcements/${id}/react`, {
+            await api.post(`/announcements/${id}/react`, {
                 user_id: currentUser.user_id,
                 reaction_type: "Like"
             });
@@ -148,7 +148,7 @@ const SubdHazardAlert = () => {
     const handleAddComment = async (annId: string, text: string) => {
         if (!currentUser?.user_id) return;
         try {
-            await axios.post(`http://localhost:8000/announcements/${annId}/comments`, {
+            await api.post(`/announcements/${annId}/comments`, {
                 user_id: currentUser.user_id,
                 comment: text
             });
@@ -159,23 +159,12 @@ const SubdHazardAlert = () => {
         }
     };
 
-    /* const handleToggleStatus = async (id: string, currentStatus: string) => {
-        const nextStatus = currentStatus === 'Published' ? 'Draft' : 'Published';
-        try {
-            await axios.patch(`http://localhost:8000/announcements/${id}/status`, { status: nextStatus });
-            await fetchAnnouncements();
-        } catch (err) {
-            console.error('Failed to toggle status:', err);
-            alert('Failed to update status.');
-        }
-    }; */
-
     const handleDeleteAnnouncement = async (id: string) => {
         if (!window.confirm("Are you sure you want to delete this announcement?")) {
             return;
         }
         try {
-            await axios.delete(`http://localhost:8000/announcements/${id}`);
+            await api.delete(`/announcements/${id}`);
             await fetchAnnouncements();
         } catch (err) {
             console.error('Failed to delete announcement:', err);
@@ -463,9 +452,9 @@ const SubdHazardAlert = () => {
 
             let announcementId = editAnnouncementId;
             if (editAnnouncementId) {
-                await axios.put(`http://localhost:8000/announcements/${editAnnouncementId}`, payload);
+                await api.put(`/announcements/${editAnnouncementId}`, payload);
             } else {
-                const created = await axios.post('http://localhost:8000/announcements/', payload);
+                const created = await api.post('/announcements/', payload);
                 announcementId = created.data.announcement_id;
             }
 
@@ -473,7 +462,7 @@ const SubdHazardAlert = () => {
                 for (const file of mediaFiles) {
                     const fd = new FormData();
                     fd.append('file', file);
-                    await axios.post(`http://localhost:8000/announcements/${announcementId}/media`, fd, {
+                    await api.post(`/announcements/${announcementId}/media`, fd, {
                         headers: { 'Content-Type': 'multipart/form-data' }
                     });
                 }

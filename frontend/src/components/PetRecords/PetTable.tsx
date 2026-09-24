@@ -73,7 +73,7 @@ const PetTable: React.FC<PetTableProps> = ({
                     </div>
 
                     {/* Mobile Showing Counter */}
-                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-wider text-right leading-tight shrink-0">
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider text-right leading-tight shrink-0">
                         SHOWING<br />
                         <span className="text-[#F97316] font-black">{loading ? 0 : filteredPets.length} OF {displayPets.length}</span>
                     </div>
@@ -82,14 +82,14 @@ const PetTable: React.FC<PetTableProps> = ({
                 {/* Mobile Search Input (Full width pill with search icon) */}
                 <div className="relative w-full">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                     <input
                         type="text"
                         placeholder="Search pets..."
                         value={searchTerm}
                         onChange={(e) => onSearchChange?.(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-[#F8FAFC] text-xs font-semibold text-slate-800 placeholder-slate-400 rounded-full focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 border border-slate-200/80 transition-all shadow-2xs"
+                        className="w-full pl-10 pr-4 py-2.5 bg-white text-xs font-bold text-slate-800 placeholder:text-slate-400 rounded-full focus:outline-none focus:ring-2 focus:ring-[#F97316]/30 border border-slate-200 transition-all shadow-xs"
                     />
                 </div>
 
@@ -102,10 +102,10 @@ const PetTable: React.FC<PetTableProps> = ({
                                 key={tab}
                                 type="button"
                                 onClick={() => setSpeciesFilter(tab)}
-                                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                                className={`px-4 py-1.5 rounded-full text-xs font-black tracking-wide transition-all cursor-pointer shrink-0 ${
                                     isActive
-                                        ? 'bg-[#F97316] text-white shadow-xs font-black'
-                                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                                        ? 'bg-[#F97316] text-white shadow-xs'
+                                        : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
                                 }`}
                             >
                                 {tab}
@@ -118,7 +118,7 @@ const PetTable: React.FC<PetTableProps> = ({
                 <div className="space-y-2.5 pt-1">
                     {loading ? (
                         Array.from({ length: 4 }).map((_, idx) => (
-                            <div key={idx} className="bg-white rounded-2xl p-3 border border-slate-200/70 shadow-sm animate-pulse flex items-center justify-between gap-3">
+                            <div key={idx} className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-xs animate-pulse flex items-center justify-between gap-3">
                                 <div className="flex items-center gap-3">
                                     <div className="w-13 h-13 bg-slate-100 rounded-2xl"></div>
                                     <div className="space-y-2">
@@ -133,12 +133,12 @@ const PetTable: React.FC<PetTableProps> = ({
                             </div>
                         ))
                     ) : filteredPets.length === 0 ? (
-                        <div className="bg-white rounded-2xl p-8 border border-slate-200 text-center shadow-sm">
+                        <div className="bg-white rounded-2xl p-8 border border-slate-200 text-center shadow-xs">
                             <div className="w-12 h-12 mx-auto bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 mb-2">
                                 🐾
                             </div>
-                            <h4 className="text-xs font-black text-slate-800 uppercase">No Records Found</h4>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Try another search or filter</p>
+                            <h4 className="text-xs font-black text-slate-900 uppercase">No Records Found</h4>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Try another search or filter</p>
                         </div>
                     ) : (
                         filteredPets.map((pet, index) => {
@@ -151,7 +151,7 @@ const PetTable: React.FC<PetTableProps> = ({
                                 <div
                                     key={pet.id}
                                     onClick={() => onSelectPet(pet)}
-                                    className={`bg-white rounded-2xl p-3 border transition-all flex items-center justify-between gap-3 shadow-xs active:scale-[0.99] cursor-pointer overflow-hidden ${
+                                    className={`bg-white rounded-2xl p-3.5 border transition-all flex items-center justify-between gap-3 shadow-xs active:scale-[0.99] cursor-pointer overflow-hidden ${
                                         isSelected 
                                             ? 'border-[#F97316] ring-2 ring-orange-500/20 bg-orange-50/20' 
                                             : 'border-slate-200 hover:border-orange-300 hover:shadow-md'
@@ -174,7 +174,7 @@ const PetTable: React.FC<PetTableProps> = ({
 
                                         {/* Pet Name & Breed */}
                                         <div className="min-w-0 flex-1">
-                                            <h4 className="text-sm sm:text-base font-black text-slate-900 truncate leading-tight">
+                                            <h4 className="text-sm font-black text-slate-900 truncate leading-tight">
                                                 {pet.name || 'Unnamed Pet'}
                                             </h4>
                                             <p className="text-xs font-bold text-slate-600 truncate mt-0.5">
@@ -189,22 +189,22 @@ const PetTable: React.FC<PetTableProps> = ({
                                             {/* Species Badge */}
                                             <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-2xs ${
                                                 isDog
-                                                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                                    ? 'bg-blue-50 text-blue-800 border-blue-200'
                                                     : isCat
-                                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                                    : 'bg-amber-50 text-amber-800 border-amber-200'
+                                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                                    : 'bg-amber-50 text-amber-900 border-amber-200'
                                             }`}>
                                                 {(pet.species || 'DOG').toUpperCase()}
                                             </span>
 
                                             {/* Age Badge */}
-                                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-200/80 uppercase tracking-wider shadow-2xs">
+                                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-800 border border-slate-300 uppercase tracking-wider shadow-2xs">
                                                 {formatAge(pet.age)}
                                             </span>
                                         </div>
 
                                         {/* Circular Chevron Arrow */}
-                                        <div className="w-7 h-7 rounded-full bg-orange-50 text-[#F97316] flex items-center justify-center shrink-0 border border-orange-200/70 shadow-2xs">
+                                        <div className="w-7 h-7 rounded-full bg-orange-50 text-[#F97316] flex items-center justify-center shrink-0 border border-orange-200 shadow-2xs">
                                             <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                                             </svg>

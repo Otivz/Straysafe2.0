@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { generateMemorableTitle } from '../../utils/chatUtils';
@@ -47,6 +48,14 @@ export default function MessagesDropdown({
     const navigate = useNavigate();
     const [filterTab, setFilterTab] = useState<'all' | 'matches' | 'reports'>('all');
     const [searchTerm, setSearchTerm] = useState('');
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 640);
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     if (!isOpen) return null;
 
@@ -90,10 +99,14 @@ export default function MessagesDropdown({
         }
     };
 
-    return (
-        <div className="absolute right-0 sm:-right-8 md:right-0 mt-3 w-[calc(100vw-24px)] max-w-[22rem] sm:w-[25rem] bg-white dark:bg-[#151C2C] rounded-2xl shadow-2xl border border-gray-100/90 dark:border-gray-800 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
+    const content = (
+        <div className={
+            isMobile
+                ? "fixed inset-0 w-full h-[100dvh] bg-white dark:bg-[#151C2C] z-[999999] flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-200"
+                : "absolute right-0 mt-3 w-[25rem] bg-white dark:bg-[#151C2C] rounded-2xl shadow-2xl border border-gray-100/90 dark:border-gray-800 overflow-hidden z-50 flex flex-col animate-in fade-in zoom-in-95 duration-200"
+        }>
             {/* Panel Header */}
-            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gradient-to-r from-orange-50/40 via-white to-white dark:from-[#1A2338] dark:via-[#151C2C] dark:to-[#151C2C]">
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gradient-to-r from-orange-50/40 via-white to-white dark:from-[#1A2338] dark:via-[#151C2C] dark:to-[#151C2C] shrink-0">
                 <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-lg bg-orange-100/80 dark:bg-orange-950/50 text-[#F97316] dark:text-orange-400 flex items-center justify-center">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -120,11 +133,20 @@ export default function MessagesDropdown({
                             </svg>
                         </button>
                     )}
+                    <button
+                        onClick={onClose}
+                        className="sm:hidden p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors cursor-pointer"
+                        title="Close messages"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
                 </div>
             </div>
 
             {/* Filter Tabs */}
-            <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-800 bg-gray-50/70 dark:bg-[#0E131F] flex items-center justify-between gap-1.5">
+            <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-800 bg-gray-50/70 dark:bg-[#0E131F] flex items-center justify-between gap-1.5 shrink-0">
                 <div className="flex items-center gap-1">
                     <button
                         onClick={() => setFilterTab('all')}
@@ -171,7 +193,7 @@ export default function MessagesDropdown({
             </div>
 
             {/* Scrollable Messages List */}
-            <div className="max-h-[22rem] overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
+            <div className="flex-1 sm:flex-initial sm:max-h-[22rem] overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
                 {loading && threads.length === 0 ? (
                     <div className="py-12 flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
                         <div className="w-7 h-7 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin"></div>
@@ -303,7 +325,7 @@ export default function MessagesDropdown({
 
             {/* Panel Footer */}
             {(currentRole === 'subd' || currentRole === 'brgy') && (
-                <div className="p-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-[#0E131F] flex items-center justify-between">
+                <div className="p-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-[#0E131F] flex items-center justify-between shrink-0">
                     <span className="text-[11px] font-semibold text-gray-400 dark:text-gray-400">
                         {currentRole === 'subd' ? 'Designated Leader Inbox' : 'Barangay Operations Inbox'}
                     </span>
@@ -323,4 +345,6 @@ export default function MessagesDropdown({
             )}
         </div>
     );
+
+    return isMobile ? createPortal(content, document.body) : content;
 }
