@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { getPetPicture, DEFAULT_PET_AVATAR } from '../../utils/avatar';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
@@ -117,7 +116,7 @@ const SubdPetRecords: React.FC = () => {
             if (forceLoading || !getCachedData('subd_pet_records')) {
                 setLoading(true);
             }
-            const response = await axios.get('http://localhost:8000/pets/');
+            const response = await api.get('/pets/');
 
             const mappedPets: PetRecord[] = response.data.map((pet: any) => mapRawPetToPetRecord(pet));
 

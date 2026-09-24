@@ -4,6 +4,7 @@ import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
+import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import Button from '../../components/Button';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -514,7 +515,7 @@ const BrgySettings: React.FC = () => {
                     }
                 />
 
-                <main className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
+                <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-32 lg:pb-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto space-y-6">
 
                         {/* Toast Alert */}
@@ -1507,6 +1508,7 @@ const BrgySettings: React.FC = () => {
 
                     </div>
                 </main>
+                <BrgyBottomNav />
             </div>
         </div>
     );

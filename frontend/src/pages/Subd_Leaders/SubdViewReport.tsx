@@ -7,7 +7,7 @@ import {
     ShieldCheck, ArrowRightCircle, GitMerge, Cpu, Clock, Ambulance, Hospital
 } from 'lucide-react';
 import axios from 'axios';
-import api from '../../utils/api';
+import api, { API_BASE_URL } from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate, useParams, Link, useLocation, useSearchParams } from 'react-router-dom';
@@ -210,7 +210,7 @@ const SubdViewReport = () => {
         if (!petId) return;
         setIsLoadingPetDetail(true);
         try {
-            const res = await axios.get(`http://localhost:8000/pets/${petId}`);
+            const res = await api.get(`/pets/${petId}`);
             setSelectedPetDetail(mapRawPetToPetRecord(res.data));
         } catch (e) {
             console.error("Failed to load pet details:", e);
@@ -233,7 +233,7 @@ const SubdViewReport = () => {
 
         if (report?.pet_id) {
             try {
-                const res = await axios.get(`http://localhost:8000/pets/${report.pet_id}/qr`);
+                const res = await api.get(`/pets/${report.pet_id}/qr`);
                 if (res.data?.qr_image_url) {
                     setSelectedQrPreview({
                         url: res.data.qr_image_url,
@@ -386,7 +386,7 @@ const SubdViewReport = () => {
         if (!id) return;
         try {
             setLoading(true);
-            const response = await axios.get(`http://localhost:8000/reports/${id}`);
+            const response = await api.get(`/reports/${id}`);
             if (response.data) {
                 setReport(response.data);
             } else {
@@ -395,7 +395,7 @@ const SubdViewReport = () => {
 
             // Fetch duplicate matches for this report
             try {
-                const dupRes = await axios.get(`http://localhost:8000/matches/duplicates/report/${id}`);
+                const dupRes = await api.get(`/matches/duplicates/report/${id}`);
                 if (dupRes.data && Array.isArray(dupRes.data)) {
                     setDuplicateMatches(dupRes.data.filter((m: any) => {
                         if (m.status !== 'AI_SUGGESTED') return false;
@@ -419,7 +419,7 @@ const SubdViewReport = () => {
 
     const handleDismissDuplicate = async (matchId: number) => {
         try {
-            await axios.put(`http://localhost:8000/matches/${matchId}/verify`, {
+            await api.put(`/matches/${matchId}/verify`, {
                 status: 'NOT_A_MATCH',
                 verified_by_user_id: currentUserId,
                 verification_notes: 'Staff dismissed duplicate sighting suggestion: Separate animals'
@@ -510,7 +510,7 @@ const SubdViewReport = () => {
 
         try {
             const parentId = replyingTo?.commentId || null;
-            await axios.post(`http://localhost:8000/reports/${report.report_id}/comments`, {
+            await api.post(`/reports/${report.report_id}/comments`, {
                 comment: commentInput.trim(),
                 user_id: currentUserId,
                 parent_comment_id: parentId
@@ -538,7 +538,7 @@ const SubdViewReport = () => {
             const formData = new FormData();
             formData.append('file', endorsementFile);
             formData.append('is_evidence', 'true');
-            await axios.post(`http://localhost:8000/reports/${report.report_id}/media`, formData, {
+            await api.post(`/reports/${report.report_id}/media`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
@@ -550,7 +550,7 @@ const SubdViewReport = () => {
             const preservedCondition = report.condition ? report.condition : (isInjured ? 'Injured' : undefined);
 
             // 2. Update status to Forwarded (4)
-            await axios.patch(`http://localhost:8000/reports/${report.report_id}/status`, {
+            await api.patch(`/reports/${report.report_id}/status`, {
                 status_id: 4,
                 user_id: currentUserId,
                 remarks: "Report forwarded to Barangay Operations for official review and approval.",
@@ -558,7 +558,7 @@ const SubdViewReport = () => {
             });
 
             // 3. Create official Rescue Request record
-            await axios.post('http://localhost:8000/rescue-requests/', {
+            await api.post('/rescue-requests/', {
                 report_id: report.report_id,
                 leader_id: currentUserId,
                 title: escalationTitle || `Endorsement for Report #${report.report_id}`,
@@ -621,7 +621,7 @@ const SubdViewReport = () => {
         if (!report) return;
         if (window.confirm('Are you sure you want to reject this incident report?')) {
             try {
-                await axios.patch(`http://localhost:8000/reports/${report.report_id}/status`, {
+                await api.patch(`/reports/${report.report_id}/status`, {
                     status_id: 3,
                     user_id: currentUserId,
                     remarks: "Report rejected based on Subdivision Leader verification criteria."
@@ -639,7 +639,7 @@ const SubdViewReport = () => {
         if (!report) return;
         try {
             setIsSubmittingFalseAlarm(true);
-            await axios.post(`http://localhost:8000/reports/${report.report_id}/mark-false-alarm`, {
+            await api.post(`/reports/${report.report_id}/mark-false-alarm`, {
                 user_id: currentUserId,
                 reason: falseAlarmReason,
                 notes: falseAlarmNotes
@@ -662,7 +662,7 @@ const SubdViewReport = () => {
         if (!report) return;
         try {
             setIsSubmittingVerify(true);
-            await axios.post(`http://localhost:8000/reports/${report.report_id}/verify-incident`, {
+            await api.post(`/reports/${report.report_id}/verify-incident`, {
                 user_id: currentUserId,
                 notes: verifyNotes,
                 behavior_finding: verifyBehaviorFinding,
@@ -694,7 +694,7 @@ const SubdViewReport = () => {
 
         try {
             setIsReviewingDispute(true);
-            await axios.patch(`http://localhost:8000/reports/${report.report_id}/disputes/${disputeId}/review`, {
+            await api.patch(`/reports/${report.report_id}/disputes/${disputeId}/review`, {
                 reviewer_id: currentUserId,
                 status: status,
                 reviewer_notes: disputeReviewNotes || (status === 'Accepted' ? 'Vaccination and pet ownership verified.' : 'Evidence insufficient.')
@@ -716,7 +716,7 @@ const SubdViewReport = () => {
         if (!report) return;
         try {
             setIsClaiming(true);
-            await axios.post(`http://localhost:8000/reports/${report.report_id}/claim`, {
+            await api.post(`/reports/${report.report_id}/claim`, {
                 user_id: currentUserId
             });
             setShowSuccess(true);
@@ -737,7 +737,7 @@ const SubdViewReport = () => {
         if (!window.confirm('Are you sure you want to release this report back to the unassigned queue?')) return;
         try {
             setIsUnclaiming(true);
-            await axios.post(`http://localhost:8000/reports/${report.report_id}/unclaim`, {
+            await api.post(`/reports/${report.report_id}/unclaim`, {
                 user_id: currentUserId
             });
             setShowSuccess(true);

@@ -4,6 +4,7 @@ import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
+import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import Button from '../../components/Button';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -362,7 +363,7 @@ const BrgyProfile = () => {
                 />
 
                 {/* Main Content Container */}
-                <div className="flex-1 overflow-y-auto p-8 lg:p-10 flex flex-col items-center justify-start scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-8 lg:p-10 pb-32 lg:pb-10 flex flex-col items-center justify-start scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                     <div className="w-full max-w-5xl space-y-8 animate-in fade-in duration-500 pb-16">
                         {loading ? (
                             <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -760,6 +761,8 @@ const BrgyProfile = () => {
                         )}
                     </div>
                 </div>
+
+                <BrgyBottomNav activeTab="profile" />
             </main>
         </div>
     );

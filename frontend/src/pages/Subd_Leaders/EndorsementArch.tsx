@@ -3,7 +3,7 @@ import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import Button from '../../components/Button';
-import axios from 'axios';
+import api from '../../utils/api';
 import { getCachedData, setCachedData } from '../../utils/cache';
 
 interface EndorsementDocument {
@@ -99,13 +99,13 @@ const EndorsementArch = () => {
         setMissionData(null);
         try {
             // First, try fetching the escalated rescue request record
-            const res = await axios.get(`http://localhost:8000/rescue-requests/report/${doc.report_id}`);
+            const res = await api.get(`/rescue-requests/report/${doc.report_id}`);
             if (res.data) {
                 setMissionData(res.data);
             } else {
                 // Secondary check: Fetch the report details directly to load escalated files
                 try {
-                    const reportRes = await axios.get(`http://localhost:8000/reports/${doc.report_id}`);
+                    const reportRes = await api.get(`/reports/${doc.report_id}`);
                     if (reportRes.data) {
                         setMissionData({
                             rescue_id: null,
@@ -127,7 +127,7 @@ const EndorsementArch = () => {
         } catch (err) {
             console.error('Failed to fetch live database rescue details, trying direct report:', err);
             try {
-                const reportRes = await axios.get(`http://localhost:8000/reports/${doc.report_id}`);
+                const reportRes = await api.get(`/reports/${doc.report_id}`);
                 if (reportRes.data) {
                     setMissionData({
                         rescue_id: null,
@@ -153,7 +153,7 @@ const EndorsementArch = () => {
     const fetchDocs = async (showLoading = true) => {
         try {
             if (showLoading && !getCachedData('subd_endorsement_docs')) setLoadingDocs(true);
-            const response = await axios.get('http://localhost:8000/rescue-requests/');
+            const response = await api.get('/rescue-requests/');
             if (response.data && response.data.length > 0) {
                 const mapped: EndorsementDocument[] = response.data.map((m: any) => {
                     let friendlyStatus: 'Received' | 'In Review' | 'Accepted' = 'Received';
@@ -249,7 +249,7 @@ const EndorsementArch = () => {
         
         const pollMission = async () => {
             try {
-                const res = await axios.get(`http://localhost:8000/rescue-requests/report/${selectedDoc.report_id}`);
+                const res = await api.get(`/rescue-requests/report/${selectedDoc.report_id}`);
                 if (res.data) {
                     setMissionData(res.data);
                 }

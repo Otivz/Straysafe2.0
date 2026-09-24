@@ -6,11 +6,11 @@ import {
     Home, Settings, BarChart3, User, Phone, Rocket, Scale, Info,
     X, Calendar, Timer, Camera, FileText, Pencil, Sparkles, Paperclip, PlayCircle
 } from 'lucide-react';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { getStoredToken } from '../../utils/api';
+import api from '../../utils/api';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
+import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 
@@ -248,11 +248,12 @@ const BrgyHoldingFacility = () => {
 
     const [quickImpoundAnimal, setQuickImpoundAnimal] = useState<HoldingAnimal | null>(null);
     const [isQuickImpounding, setIsQuickImpounding] = useState(false);
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
     const handleConfirmImpound = async (animal: HoldingAnimal) => {
         setIsQuickImpounding(true);
         try {
-            await axios.patch(`http://localhost:8000/holding/${animal.holding_id}`, {
+            await api.patch(`/holding/${animal.holding_id}`, {
                 facility_status: 8, // Impounded
                 updated_by: currentUser?.user_id,
                 update_notes: `Animal officially impounded after reaching ${impoundStayDuration}-day holding stay limit at ${animal.facility_name || 'holding facility'}.`,
@@ -291,23 +292,23 @@ const BrgyHoldingFacility = () => {
             try {
                 if (isAdmin) {
                     const [facRes, jurisRes] = await Promise.all([
-                        axios.get('http://localhost:8000/landmarks?is_holding_facility=true'),
-                        axios.get('http://localhost:8000/landmarks/jurisdictions'),
+                        api.get('/landmarks?is_holding_facility=true'),
+                        api.get('/landmarks/jurisdictions'),
                     ]);
                     if (Array.isArray(facRes.data)) setFacilities(facRes.data);
                     if (jurisRes.data) setJurisdictions(jurisRes.data);
                 } else if (isSubdLeader && defaultSubdId) {
-                    const res = await axios.get(`http://localhost:8000/landmarks?subdivision_id=${defaultSubdId}&is_holding_facility=true`);
+                    const res = await api.get(`/landmarks?subdivision_id=${defaultSubdId}&is_holding_facility=true`);
                     if (Array.isArray(res.data)) {
                         setFacilities(res.data.filter((f: any) => f.subdivision_id === defaultSubdId));
                     }
                 } else if (defaultBrgyId) {
-                    const res = await axios.get(`http://localhost:8000/landmarks?barangay_id=${defaultBrgyId}&is_holding_facility=true&barangay_only=true`);
+                    const res = await api.get(`/landmarks?barangay_id=${defaultBrgyId}&is_holding_facility=true&barangay_only=true`);
                     if (Array.isArray(res.data)) {
                         setFacilities(res.data.filter((f: any) => f.subdivision_id == null));
                     }
                 } else {
-                    const res = await axios.get('http://localhost:8000/landmarks?is_holding_facility=true&barangay_only=true');
+                    const res = await api.get('/landmarks?is_holding_facility=true&barangay_only=true');
                     if (Array.isArray(res.data)) {
                         setFacilities(res.data.filter((f: any) => f.subdivision_id == null));
                     }
@@ -367,8 +368,8 @@ const BrgyHoldingFacility = () => {
             params.impound_days = impoundStayDuration;
 
             const [animalsRes, metricsRes] = await Promise.all([
-                axios.get('http://localhost:8000/holding/', { params }),
-                axios.get('http://localhost:8000/holding/metrics', { params }),
+                api.get('/holding/', { params }),
+                api.get('/holding/metrics', { params }),
             ]);
             setAnimals(animalsRes.data || []);
             setMetrics(metricsRes.data || { total: 0, need_treatment: 0, healthy: 0, nearing_expiry: 0, resolved_today: 0, needs_impoundment: 0 });
@@ -424,7 +425,7 @@ const BrgyHoldingFacility = () => {
     const openDetail = async (animal: HoldingAnimal) => {
         // Fetch fresh with full timeline
         try {
-            const res = await axios.get(`http://localhost:8000/holding/${animal.holding_id}`);
+            const res = await api.get(`/holding/${animal.holding_id}`);
             setSelected(res.data);
             setUpdateForm({
                 facility_status: res.data.facility_status,
@@ -457,7 +458,7 @@ const BrgyHoldingFacility = () => {
                     const fd = new FormData();
                     fd.append('file', file);
                     fd.append('is_evidence', 'true');
-                    const uploadRes = await axios.post(`http://localhost:8000/reports/${selected.report_id}/media`, fd, {
+                    const uploadRes = await api.post(`/reports/${selected.report_id}/media`, fd, {
                         headers: { 'Content-Type': 'multipart/form-data' }
                     });
                     if (uploadRes.data?.media_id) {
@@ -468,7 +469,7 @@ const BrgyHoldingFacility = () => {
             }
 
             // 2. Perform patching (preserving intake_date genuine start time)
-            await axios.patch(`http://localhost:8000/holding/${selected.holding_id}`, {
+            await api.patch(`/holding/${selected.holding_id}`, {
                 facility_status: updateForm.facility_status,
                 kennel_slot: updateForm.kennel_slot,
                 medical_notes: updateForm.medical_notes,
@@ -478,7 +479,7 @@ const BrgyHoldingFacility = () => {
             });
             await fetchAll();
             // Refresh the selected modal too
-            const res = await axios.get(`http://localhost:8000/holding/${selected.holding_id}`);
+            const res = await api.get(`/holding/${selected.holding_id}`);
             setSelected(res.data);
         } catch (err) {
             console.error('Update failed:', err);
@@ -495,19 +496,17 @@ const BrgyHoldingFacility = () => {
         setPromoteError(null);
         setPromoteSuccess(null);
         try {
-            const token = getStoredToken();
-            await axios.post(
-                `http://localhost:8000/adoptions/promote/${selected.holding_id}`,
+            await api.post(
+                `/adoptions/promote/${selected.holding_id}`,
                 {
                     adoption_catalog_notes: promoteNotes,
                     notes: promoteNotes,
                     min_stay_days: impoundStayDuration,
-                },
-                { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+                }
             );
             setPromoteSuccess('Animal successfully promoted to public Adoption Catalog!');
             await fetchAll();
-            const res = await axios.get(`http://localhost:8000/holding/${selected.holding_id}`);
+            const res = await api.get(`/holding/${selected.holding_id}`);
             setSelected(res.data);
             setTimeout(() => {
                 setPromoteModalOpen(false);
@@ -533,7 +532,7 @@ const BrgyHoldingFacility = () => {
                     const fd = new FormData();
                     fd.append('file', file);
                     fd.append('is_evidence', 'true');
-                    await axios.post(`http://localhost:8000/reports/${selected.report_id}/media`, fd, {
+                    await api.post(`/reports/${selected.report_id}/media`, fd, {
                         headers: { 'Content-Type': 'multipart/form-data' }
                     });
                 }
@@ -541,11 +540,11 @@ const BrgyHoldingFacility = () => {
             }
 
             // 2. Add the timeline entry
-            await axios.post(`http://localhost:8000/holding/${selected.holding_id}/timeline`, {
+            await api.post(`/holding/${selected.holding_id}/timeline`, {
                 ...timelineForm,
                 logged_by: currentUser?.user_id,
             });
-            const res = await axios.get(`http://localhost:8000/holding/${selected.holding_id}`);
+            const res = await api.get(`/holding/${selected.holding_id}`);
             setSelected(res.data);
             setTimelineForm({ event_type: 'observation', title: '', notes: '' });
         } catch (err) {
@@ -597,7 +596,14 @@ const BrgyHoldingFacility = () => {
 
     return (
         <div className="flex h-screen bg-[#F8FAFC]">
-            {isAdmin ? <AdminSidebar /> : <BrgySidebar />}
+            {isAdmin ? (
+                <AdminSidebar />
+            ) : (
+                <BrgySidebar
+                    isMobileOpen={isMobileSidebarOpen}
+                    onCloseMobile={() => setIsMobileSidebarOpen(false)}
+                />
+            )}
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 {isAdmin ? (
@@ -613,6 +619,7 @@ const BrgyHoldingFacility = () => {
                     />
                 ) : (
                     <BrgyNavbar
+                        onMenuToggle={() => setIsMobileSidebarOpen(true)}
                         leftContent={
                             <div className="flex flex-col">
                                 <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Holding Facility</h1>
@@ -624,8 +631,54 @@ const BrgyHoldingFacility = () => {
                     />
                 )}
 
-                <main className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
+                <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-32 lg:pb-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto space-y-6">
+
+                        {/* ── Mobile Hero Banner (block md:hidden) ─────────── */}
+                        <div className="block md:hidden relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#4F46E5] via-[#6366F1] to-[#818CF8] p-5 shadow-lg shadow-indigo-500/20 text-white animate-in fade-in slide-in-from-top-3 duration-300">
+                            {/* Decorative glowing backdrops */}
+                            <div className="absolute -right-8 -top-8 w-36 h-36 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+                            <div className="absolute right-12 -bottom-10 w-32 h-32 bg-indigo-300/20 rounded-full blur-xl pointer-events-none" />
+                            <div className="absolute right-3 top-3 text-2xl opacity-85 select-none animate-bounce duration-1000">
+                                🐾
+                            </div>
+
+                            <div className="relative z-10 space-y-3.5">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white shadow-xs">
+                                            <Building2 className="w-5 h-5 animate-pulse" />
+                                        </div>
+                                        <div>
+                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-black uppercase tracking-wider text-indigo-100 border border-white/25 shadow-2xs mb-1">
+                                                <Sparkles className="w-2.5 h-2.5 text-amber-200" /> Facility Command
+                                            </div>
+                                            <h1 className="text-lg font-black tracking-tight leading-none text-white">
+                                                Holding Facility
+                                            </h1>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Quick Mobile Stats Strip */}
+                                <div className="grid grid-cols-2 gap-2 pt-0.5">
+                                    <div className="bg-white/15 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex items-center gap-2.5 shadow-2xs active:scale-95 transition-transform">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-amber-300 animate-ping shrink-0" />
+                                        <div className="min-w-0">
+                                            <div className="text-[10px] font-extrabold text-indigo-100 uppercase tracking-wider truncate">In Holding</div>
+                                            <div className="text-base font-black text-white leading-tight">{metrics.total} Animals</div>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white/15 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex items-center gap-2.5 shadow-2xs active:scale-95 transition-transform">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-300 shrink-0" />
+                                        <div className="min-w-0">
+                                            <div className="text-[10px] font-extrabold text-indigo-100 uppercase tracking-wider truncate">Healthy / Ready</div>
+                                            <div className="text-base font-black text-white leading-tight">{metrics.healthy}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
                         {/* ── Facility Selector & Management Header ─────────── */}
                         <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1215,6 +1268,7 @@ const BrgyHoldingFacility = () => {
                         </div>
 
                     </div>
+                    {!isSubdLeader && <BrgyBottomNav />}
                 </main>
             </div>
 

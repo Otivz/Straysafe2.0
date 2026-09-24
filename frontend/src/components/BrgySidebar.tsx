@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import Button from './Button';
@@ -383,20 +384,24 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                 {renderSidebarContent(isOpen, false)}
             </aside>
 
-            {/* MOBILE DRAWER OVERLAY */}
-            {isDrawerOpen && (
-                <div className="lg:hidden fixed inset-0 z-[1000] flex">
+            {/* MOBILE DRAWER OVERLAY (Right-side slide drawer for Barangay mobile) */}
+            {isDrawerOpen && createPortal(
+                <div className="lg:hidden fixed inset-0 z-[99999] flex justify-end">
                     {/* Backdrop */}
                     <div 
-                        className="fixed inset-0 bg-[#1a1208]/60 backdrop-blur-sm animate-in fade-in duration-300"
+                        className="fixed inset-0 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
                         onClick={handleDrawerClose}
                     />
                     
                     {/* Drawer Content */}
-                    <aside className="relative bg-white w-64 h-full flex flex-col justify-between shadow-2xl animate-in slide-in-from-left duration-300 z-[1010]">
+                    <aside 
+                        style={{ backgroundColor: '#ffffff' }}
+                        className="relative w-72 max-w-[82vw] !bg-white bg-white h-full flex flex-col justify-between shadow-2xl animate-in slide-in-from-right duration-200 z-[100000]"
+                    >
                         {renderSidebarContent(true, true)}
                     </aside>
-                </div>
+                </div>,
+                document.body
             )}
 
             <QRScannerModal isOpen={isQRScannerOpen} onClose={() => setIsQRScannerOpen(false)} />

@@ -3,7 +3,7 @@ import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import DataTable from '../../components/DataTable';
-import axios from 'axios';
+import api from '../../utils/api';
 import { getCachedData, setCachedData } from '../../utils/cache';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
@@ -54,8 +54,8 @@ const EscelatedMissions = () => {
             const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
             const currentUser = userStr ? JSON.parse(userStr) : null;
             const subId = currentUser?.subdivision_id;
-            const url = subId ? `http://localhost:8000/rescue-requests/?subdivision_id=${subId}` : 'http://localhost:8000/rescue-requests/';
-            const response = await axios.get(url);
+            const url = subId ? `/rescue-requests/?subdivision_id=${subId}` : '/rescue-requests/';
+            const response = await api.get(url);
             if (response.data && response.data.length > 0) {
                 // Calculate resolved today
                 const resolvedToday = response.data.filter((m: any) => {

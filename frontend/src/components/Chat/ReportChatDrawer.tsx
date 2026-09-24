@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { notifyChatUpdated, markReportChatAsSeen, generateMemorableTitle } from '../../utils/chatUtils';
 import { api } from '../../utils/api';
@@ -416,8 +417,8 @@ export default function ReportChatDrawer({
 
     if (!isOpen || !report || !currentUser) return null;
 
-    return (
-        <div className="fixed inset-0 z-[99999] overflow-hidden">
+    const drawerContent = (
+        <div className="fixed inset-0 z-[999999] overflow-hidden">
             {/* Backdrop */}
             <div 
                 className="absolute inset-0 bg-black/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-300"
@@ -983,4 +984,6 @@ export default function ReportChatDrawer({
             </div>
         </div>
     );
+
+    return createPortal(drawerContent, document.body);
 }
