@@ -4,7 +4,7 @@ import Button from '../../components/Button';
 import { EyeIcon, EyeOffIcon } from '../../components/icon';
 import SuccessModal from '../../components/Modals/SuccessModal';
 import { useTheme } from '../../context/ThemeContext';
-import { clearAuthStorage } from '../../utils/api';
+import { api, clearAuthStorage } from '../../utils/api';
 
 const GoogleIcon = () => (
     <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
@@ -31,36 +31,35 @@ const ResidentsLogin = () => {
     const navigate = useNavigate();
     const location = useLocation();
     
-    // Resolve previous attempted path, defaulting to ResiHomePage (/resident-home) instead of the adoption portal
+    // Resolve previous attempted path, strictly ensuring staff or admin paths never bleed into resident login
     const locationState = location.state as any;
     const rawFrom = typeof locationState?.from === 'string'
         ? locationState.from
         : locationState?.from?.pathname;
-    const destinationPath = (rawFrom && rawFrom !== '/adopt') ? rawFrom : '/resident-home';
+
+    const isResidentAllowedPath = (path?: string): boolean => {
+        if (!path || typeof path !== 'string') return false;
+        const normalized = path.toLowerCase().trim();
+        if (
+            normalized.startsWith('/subd') ||
+            normalized.startsWith('/brgy') ||
+            normalized.startsWith('/admin') ||
+            normalized.startsWith('/staff') ||
+            normalized.includes('/login') ||
+            normalized === '/adopt'
+        ) {
+            return false;
+        }
+        return true;
+    };
+
+    const destinationPath = (rawFrom && isResidentAllowedPath(rawFrom)) ? rawFrom : '/resident-home';
 
     const { setTheme } = useTheme();
 
     useEffect(() => {
         setTheme('light');
     }, [setTheme]);
-
-    // Auto-redirect if already logged in as a resident
-    useEffect(() => {
-        const rawUser = 
-            localStorage.getItem('resident_user') || 
-            sessionStorage.getItem('resident_user');
-        
-        if (rawUser) {
-            try {
-                const user = JSON.parse(rawUser);
-                if (user && user.role_id === 1) {
-                    navigate('/resident-home', { replace: true });
-                }
-            } catch {
-                // Ignore parse errors
-            }
-        }
-    }, [navigate]);
 
     const [isRegistering, setIsRegistering] = useState(false);
 
@@ -107,19 +106,8 @@ const ResidentsLogin = () => {
         setLoading(true);
 
         try {
-            const res = await fetch('http://127.0.0.1:8000/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
-            });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                setError(data.detail || 'Login failed. Please try again.');
-                setLoading(false);
-                return;
-            }
+            const res = await api.post('/auth/login', { email, password });
+            const data = res.data;
 
             // Restrict login to only Role ID 1 (Residents)
             if (data.role_id !== 1) {
@@ -137,8 +125,8 @@ const ResidentsLogin = () => {
             }
             localStorage.setItem('resident_user', JSON.stringify(data));
             navigate(destinationPath);
-        } catch (err) {
-            setError('Cannot connect to server. Make sure the backend is running.');
+        } catch (err: any) {
+            setError(err.response?.data?.detail || 'Login failed. Please check your credentials or network connection.');
         } finally {
             setLoading(false);
         }

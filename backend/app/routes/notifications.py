@@ -9,6 +9,18 @@ from app.utils.auth import get_current_user
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
+@router.get("/me", response_model=List[NotificationResponse])
+def get_my_notifications(
+    include_archived: bool = True,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    query = db.query(Notification).filter(Notification.user_id == current_user.user_id)
+    if not include_archived:
+        query = query.filter(Notification.is_archived == False)
+    return query.order_by(Notification.created_at.desc()).all()
+
+
 @router.get("/user/{user_id}", response_model=List[NotificationResponse])
 def get_user_notifications(
     user_id: int, 

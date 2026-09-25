@@ -8,6 +8,8 @@ import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { generateMemorableTitle } from '../../utils/chatUtils';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from '../../components/PetRecords/types';
+import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
+import { validateFile } from '../../utils/uploadValidation';
 import { getCachedData, setCachedData } from '../../utils/cache';
 import { getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
 
@@ -235,10 +237,16 @@ const BrgyMessages: React.FC = () => {
 
         try {
             setIsSending(true);
-            const formData = new FormData();
-            formData.append('message_text', inputText.trim() || 'Sent an attachment');
+            let mediaUrl: string | null = null;
             if (selectedImageFile) {
-                formData.append('file', selectedImageFile);
+                try {
+                    const result = await uploadDirectToCloudinary(selectedImageFile, 'chat_media');
+                    mediaUrl = result.url;
+                } catch (uploadErr: any) {
+                    setIsSending(false);
+                    alert(uploadErr?.message || 'Failed to upload attachment. Please try again.');
+                    return;
+                }
             }
 
             const isMatch = selectedThread.thread_mode === 'match' || (selectedThread.match_id !== undefined && selectedThread.match_id !== null && selectedThread.match_id > 0);
@@ -246,8 +254,9 @@ const BrgyMessages: React.FC = () => {
                 ? `/chat/matches/${selectedThread.match_id}/messages` 
                 : `/chat/reports/${selectedThread.report_id}/messages`;
 
-            const res = await api.post(endpoint, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+            const res = await api.post(endpoint, {
+                message_text: inputText.trim() || (mediaUrl ? '(Photo attached)' : 'Sent a message'),
+                media_url: mediaUrl
             });
 
             if (res.data) {
@@ -269,10 +278,17 @@ const BrgyMessages: React.FC = () => {
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
-            setSelectedImageFile(file);
-            setSelectedImagePreview(URL.createObjectURL(file));
+        if (!file) return;
+
+        const validation = validateFile(file);
+        if (!validation.valid) {
+            alert(validation.error);
+            e.target.value = '';
+            return;
         }
+
+        setSelectedImageFile(file);
+        setSelectedImagePreview(URL.createObjectURL(file));
     };
 
     const formatTime = (dateStr?: string) => {

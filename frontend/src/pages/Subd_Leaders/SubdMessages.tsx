@@ -9,6 +9,8 @@ import { DEFAULT_AVATAR } from '../../utils/avatar';
 import { generateMemorableTitle } from '../../utils/chatUtils';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from '../../components/PetRecords/types';
+import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
+import { validateFile } from '../../utils/uploadValidation';
 
 import { getCachedData, setCachedData } from '../../utils/cache';
 import { getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
@@ -291,10 +293,16 @@ const SubdMessages: React.FC = () => {
 
         try {
             setIsSending(true);
-            const formData = new FormData();
-            formData.append('message_text', inputText.trim() || 'Sent an attachment');
+            let mediaUrl: string | null = null;
             if (selectedImageFile) {
-                formData.append('file', selectedImageFile);
+                try {
+                    const result = await uploadDirectToCloudinary(selectedImageFile, 'chat_media');
+                    mediaUrl = result.url;
+                } catch (uploadErr: any) {
+                    setIsSending(false);
+                    alert(uploadErr?.message || 'Failed to upload attachment. Please try again.');
+                    return;
+                }
             }
 
             const isMatch = selectedThread.thread_mode === 'match' || (selectedThread.match_id !== undefined && selectedThread.match_id !== null && selectedThread.match_id > 0);
@@ -302,8 +310,9 @@ const SubdMessages: React.FC = () => {
                 ? `/chat/matches/${selectedThread.match_id}/messages` 
                 : `/chat/reports/${selectedThread.report_id}/messages`;
 
-            const res = await api.post(postEndpoint, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+            const res = await api.post(postEndpoint, {
+                message_text: inputText.trim() || (mediaUrl ? '(Photo attached)' : 'Sent a message'),
+                media_url: mediaUrl
             });
 
             if (res.data) {
@@ -324,6 +333,13 @@ const SubdMessages: React.FC = () => {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
+
+        const validation = validateFile(file);
+        if (!validation.valid) {
+            alert(validation.error);
+            e.target.value = '';
+            return;
+        }
 
         setSelectedImageFile(file);
         const reader = new FileReader();
@@ -885,7 +901,7 @@ const SubdMessages: React.FC = () => {
                                                     </div>
                                                     <div className="h-32 rounded-lg overflow-hidden relative bg-gray-100 border border-gray-100">
                                                         <img
-                                                            src={selectedThread.report?.media_url || selectedThread.report?.reporter_photo || DEFAULT_AVATAR}
+                                                            src={selectedThread.report?.media_url || (selectedThread.matched_pet as any)?.sighting_photo_url || DEFAULT_AVATAR}
                                                             alt="Sighting"
                                                             className="w-full h-full object-cover"
                                                             onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
@@ -1040,9 +1056,6 @@ const SubdMessages: React.FC = () => {
                                                         {/* Timestamp & Read Checkmark */}
                                                         <div className={`flex items-center gap-1 text-[10px] text-gray-400 ${isMe ? 'justify-end pr-1' : 'justify-start pl-1'}`}>
                                                             <span>{formatMessageTime(msg.sent_at)}</span>
-                                                            {isMe && (
-                                                                <span className="text-[#F97316] font-bold">✓✓</span>
-                                                            )}
                                                         </div>
                                                     </div>
 

@@ -85,9 +85,11 @@ const LandingPageNavbar = () => {
                             </Button>
                         </Link>
                     </div>
-                    <Button variant="primary" size="sm" className="px-4 min-[450px]:px-7 rounded-full shadow-lg shadow-orange-500/20 font-plus-jakarta font-bold transform transition-all active:scale-95 text-[10px] min-[450px]:text-sm">
-                        Report Now
-                    </Button>
+                    <Link to="/resident/report/new">
+                        <Button variant="primary" size="sm" className="px-4 min-[450px]:px-7 rounded-full shadow-lg shadow-orange-500/20 font-plus-jakarta font-bold transform transition-all active:scale-95 text-[10px] min-[450px]:text-sm">
+                            Report Now
+                        </Button>
+                    </Link>
 
                     {/* MOBILE TOGGLE */}
                     <button
@@ -128,8 +130,10 @@ const LandingPageNavbar = () => {
                         )
                     ))}
                     <div className="flex flex-col items-center gap-4 mt-8 w-full px-12">
-                        <Button variant="primary" size="lg" className="w-full rounded-2xl">Report a Stray</Button>
-                        <Link to="/login" className="w-full">
+                        <Link to="/resident/report/new" className="w-full" onClick={() => setIsMobileMenuOpen(false)}>
+                            <Button variant="primary" size="lg" className="w-full rounded-2xl">Report a Stray</Button>
+                        </Link>
+                        <Link to="/login" className="w-full" onClick={() => setIsMobileMenuOpen(false)}>
                             <Button variant="ghost" size="lg" className="w-full">Sign In</Button>
                         </Link>
                     </div>
