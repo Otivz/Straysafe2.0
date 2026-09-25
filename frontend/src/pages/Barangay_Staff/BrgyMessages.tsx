@@ -315,11 +315,7 @@ const BrgyMessages: React.FC = () => {
     const pastCases = threads.filter(t => isPastReport(t));
 
     const totalUnreadCount = threads.reduce((acc, t) => acc + (t.unread_count || 0), 0);
-    const myUnreadCount = myCases.reduce((acc, t) => acc + t.unread_count, 0);
-    const allUnreadCount = allCases.reduce((acc, t) => acc + t.unread_count, 0);
-    const matchesUnreadCount = matchesCases.reduce((acc, t) => acc + t.unread_count, 0);
-    const reportsUnreadCount = reportsCases.reduce((acc, t) => acc + t.unread_count, 0);
-    const pastUnreadCount = pastCases.reduce((acc, t) => acc + t.unread_count, 0);
+    void totalUnreadCount;
 
     const filteredThreads = threads.filter(thread => {
         const isMatch = thread.thread_mode === 'match' || !!thread.matched_pet;
@@ -512,7 +508,6 @@ const BrgyMessages: React.FC = () => {
                                 filteredThreads.map(thread => {
                                     const isSelected = selectedThread?.thread_id === thread.thread_id;
                                     const isMatch = thread.thread_mode === 'match' || !!thread.matched_pet;
-                                    const isPast = isPastReport(thread);
 
                                     const rawThumbnail = isMatch 
                                         ? (thread.matched_pet?.photo_url || thread.report?.media_url) 

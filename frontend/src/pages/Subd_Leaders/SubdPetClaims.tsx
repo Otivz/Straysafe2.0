@@ -8,7 +8,6 @@ import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import MapComponent from '../../components/MapComponent';
 import Button from '../../components/Button';
-import Select from '../../components/Dropdown';
 import { getCachedData, setCachedData } from '../../utils/cache';
 import MediaPreview from '../../components/Shared/MediaPreview';
 

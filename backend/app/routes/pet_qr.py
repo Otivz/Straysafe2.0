@@ -13,6 +13,7 @@ from app.models.notification import Notification
 from app.models.user import User
 from app.schemas.pet_qr import PetQRCodeResponse, PublicPetScanResponse, QRScanSubmit, PetQRScanResponse
 from app.utils.cloudinary_config import upload_to_cloudinary
+from app.utils.auth import get_current_user
 
 router = APIRouter(tags=["pet-qr"])
 
@@ -72,21 +73,58 @@ def generate_qr_for_pet_internal(pet_id: int, db: Session) -> PetQRCode:
     return db_qr
 
 @router.post("/pets/{pet_id}/generate-qr", response_model=PetQRCodeResponse)
-def generate_pet_qr(pet_id: int, db: Session = Depends(get_db)):
-    """Generate or recreate a unique secure QR code for a pet."""
+def generate_pet_qr(
+    pet_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Generate or recreate a unique secure QR code for a pet (Owner or Staff/Admin only)."""
+    pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
+    if not pet:
+        raise HTTPException(status_code=404, detail="Pet not found")
+    if current_user.role_id not in [2, 3, 4] and pet.owner_id != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: Only the pet owner or staff/admin can generate QR codes."
+        )
     return generate_qr_for_pet_internal(pet_id, db)
 
 @router.get("/pets/{pet_id}/qr", response_model=PetQRCodeResponse)
-def get_pet_qr(pet_id: int, db: Session = Depends(get_db)):
-    """Get the active QR code for a pet, or generate it if it doesn't exist yet."""
+def get_pet_qr(
+    pet_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get the active QR code for a pet, or generate it if it doesn't exist yet (Owner or Staff/Admin only)."""
+    pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
+    if not pet:
+        raise HTTPException(status_code=404, detail="Pet not found")
+    if current_user.role_id not in [2, 3, 4] and pet.owner_id != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: Only the pet owner or staff/admin can view pet QR code."
+        )
     db_qr = db.query(PetQRCode).filter(PetQRCode.pet_id == pet_id).first()
     if not db_qr:
         return generate_qr_for_pet_internal(pet_id, db)
     return db_qr
 
 @router.put("/pets/{pet_id}/toggle-qr", response_model=PetQRCodeResponse)
-def toggle_pet_qr(pet_id: int, is_active: bool, db: Session = Depends(get_db)):
-    """Deactivate or activate a pet's QR code."""
+def toggle_pet_qr(
+    pet_id: int, 
+    is_active: bool, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Deactivate or activate a pet's QR code (Owner or Staff/Admin only)."""
+    pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
+    if not pet:
+        raise HTTPException(status_code=404, detail="Pet not found")
+    if current_user.role_id not in [2, 3, 4] and pet.owner_id != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: Only the pet owner or staff/admin can toggle QR code status."
+        )
     db_qr = db.query(PetQRCode).filter(PetQRCode.pet_id == pet_id).first()
     if not db_qr:
         raise HTTPException(status_code=404, detail="QR Code not found for this pet")
@@ -96,6 +134,7 @@ def toggle_pet_qr(pet_id: int, is_active: bool, db: Session = Depends(get_db)):
     db.refresh(db_qr)
     return db_qr
 
+@router.get("/pet-qr/scan/{token}", response_model=PublicPetScanResponse)
 @router.get("/pet/scan/{token}", response_model=PublicPetScanResponse)
 def get_public_scan_info(token: str, db: Session = Depends(get_db)):
     """Retrieve public pet information via the secure QR token (no sensitive owner details)."""
@@ -194,12 +233,22 @@ def submit_pet_scan(token: str, scan_data: QRScanSubmit, db: Session = Depends(g
     return {"message": "Scan logged successfully", "scan_id": db_scan.scan_id}
 
 @router.get("/pets/{pet_id}/scan-history", response_model=List[PetQRScanResponse])
-def get_pet_scan_history(pet_id: int, db: Session = Depends(get_db)):
-    """Retrieve the complete scan log history for a given pet."""
+def get_pet_scan_history(
+    pet_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Retrieve the complete scan log history for a given pet (Owner or Staff/Admin only)."""
     # Ensure pet exists
     pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not pet:
         raise HTTPException(status_code=404, detail="Pet not found")
+        
+    if current_user.role_id not in [2, 3, 4] and pet.owner_id != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: Only the pet owner or staff/admin can view scan history."
+        )
         
     scans = db.query(PetQRScan).filter(PetQRScan.pet_id == pet_id).order_by(PetQRScan.scanned_at.desc()).all()
     

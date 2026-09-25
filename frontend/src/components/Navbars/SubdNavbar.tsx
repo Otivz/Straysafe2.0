@@ -364,7 +364,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
     };
 
     return (
-        <header className="h-16 sm:h-20 bg-white/95 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-3 sm:px-6 lg:px-8 sticky top-0 z-[2000] w-full shadow-sm">
+        <header className="h-16 sm:h-20 bg-white/95 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-3 sm:px-6 lg:px-8 sticky top-0 z-30 w-full shadow-sm">
 
             {/* Left Content Area */}
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-1 sm:mr-3">

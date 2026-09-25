@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
+from app.utils.auth import get_current_user, get_current_staff_or_admin
 
 from app.database import get_db
 from app.models.pet_claim import PetClaim
@@ -86,7 +87,11 @@ def get_claim(claim_id: int, db: Session = Depends(get_db)):
     return claim
 
 @router.post("/", response_model=PetClaimResponse)
-def create_or_update_claim(claim_in: PetClaimCreate, db: Session = Depends(get_db)):
+def create_or_update_claim(
+    claim_in: PetClaimCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     # Verify report and pet exist
     report = db.query(Report).filter(Report.report_id == claim_in.report_id).first()
     pet = db.query(Pet).filter(Pet.pet_id == claim_in.pet_id).first()
@@ -98,6 +103,16 @@ def create_or_update_claim(claim_in: PetClaimCreate, db: Session = Depends(get_d
         raise HTTPException(
             status_code=400,
             detail="This pet is marked as deceased and cannot be claimed or matched."
+        )
+
+    # Ownership checks: Assign ownership if unowned; enforce owner identity for resident claims
+    if pet.owner_id is None:
+        pet.owner_id = current_user.user_id
+        db.commit()
+    elif current_user.role_id == 1 and pet.owner_id != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission Denied: You can only submit claims for your own registered pet."
         )
 
     # Fetch corresponding match score from report_matches if available
@@ -162,11 +177,22 @@ def create_or_update_claim(claim_in: PetClaimCreate, db: Session = Depends(get_d
 def upload_claim_evidence(
     claim_id: int,
     payload: ClaimEvidenceSubmit,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    claim = db.query(PetClaim).filter(PetClaim.claim_id == claim_id).first()
+    claim = db.query(PetClaim).options(
+        joinedload(PetClaim.pet)
+    ).filter(PetClaim.claim_id == claim_id).first()
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
+
+    is_owner = (claim.pet and claim.pet.owner_id == current_user.user_id)
+    is_staff_or_admin = (current_user.role_id in [2, 3, 4])
+    if not (is_owner or is_staff_or_admin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission Denied: You can only upload evidence for your own pet claim."
+        )
 
     # File already lives in Cloudinary (browser uploaded directly via the
     # unsigned preset); just verify the URL is genuinely ours before trusting it.
@@ -200,7 +226,8 @@ def upload_claim_evidence(
 def update_claim_status(
     claim_id: int,
     status_update: PetClaimStatusUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     claim = db.query(PetClaim).options(
         joinedload(PetClaim.pet),
@@ -209,6 +236,29 @@ def update_claim_status(
 
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
+
+    is_owner = (claim.pet and claim.pet.owner_id == current_user.user_id)
+    is_staff_or_admin = (current_user.role_id in [2, 3, 4])
+
+    # Administrative transitions (Approved, Rejected, Handover Complete, etc.) strictly require Staff or Admin
+    if status_update.status in ["Approved", "Rejected", "Evidence Requested", "Handover Complete"]:
+        if not is_staff_or_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Permission Denied: Staff or Administrator privileges required to change claim status to " + status_update.status + "."
+            )
+    elif status_update.status in ["Pet Received", "Pending Review"]:
+        if not (is_owner or is_staff_or_admin):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Permission Denied: You are not authorized to update this claim."
+            )
+    else:
+        if not is_staff_or_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Permission Denied: Staff or Administrator privileges required."
+            )
 
     claim.status = status_update.status
     if status_update.remarks:
@@ -312,3 +362,46 @@ def update_claim_status(
     db.commit()
     db.refresh(claim)
     return claim
+
+
+@router.delete("/{claim_id}")
+def delete_claim(
+    claim_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Cancel or delete a pet claim.
+    Requires pet owner or Staff/Admin.
+    """
+    claim = db.query(PetClaim).options(
+        joinedload(PetClaim.pet)
+    ).filter(PetClaim.claim_id == claim_id).first()
+
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    is_owner = (claim.pet and claim.pet.owner_id == current_user.user_id)
+    is_staff_or_admin = (current_user.role_id in [2, 3, 4])
+
+    if not (is_owner or is_staff_or_admin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission Denied: You can only delete your own claims or require staff/admin privileges."
+        )
+
+    pet_id = claim.pet_id
+    db.delete(claim)
+    db.commit()
+
+    log_activity(
+        db=db,
+        action="DELETE_CLAIM",
+        target_table="pet_claims",
+        target_id=claim_id,
+        description=f"User {current_user.name} (Role {current_user.role_id}) deleted claim #{claim_id} for pet #{pet_id}",
+        log_type="operation",
+        user_id=current_user.user_id
+    )
+
+    return {"message": f"Claim #{claim_id} deleted successfully", "claim_id": claim_id}

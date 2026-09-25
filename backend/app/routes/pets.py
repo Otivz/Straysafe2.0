@@ -1,63 +1,176 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File, Form
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, cast, Any, Optional
+from sqlalchemy import or_, and_
 from app.database import get_db
 from app.models.pet import Pet
 from app.models.user import User
 from app.schemas.pet import PetCreate, PetUpdate, PetResponse
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.audit import log_activity
-from app.utils.uploads import validate_cloudinary_url
+from app.utils.uploads import validate_cloudinary_url, read_and_validate_upload
 from app.utils.model_loader import get_yolo_model
+from app.utils.auth import get_current_user, verify_subdivision_scope
 
 router = APIRouter(
     prefix="/pets",
     tags=["pets"]
 )
 
+def check_pet_access(
+    current_user: User, 
+    pet: Pet, 
+    db: Session, 
+    for_write: bool = False
+) -> bool:
+    """
+    Enforces Task 3.3 scoping on a Pet instance:
+    - Citizens (role_id == 1) can only update/view their own registered pets.
+    - Subdivision leaders (role_id == 2) can view/manage pets within their subdivision registry.
+    - Barangay staff (role_id == 3) can view/manage pets within their barangay.
+    - Admin (role_id == 4) has full access.
+    """
+    if current_user.role_id == 4:
+        return True
+
+    # 1. Citizen (role_id == 1): Must be explicit owner
+    if current_user.role_id == 1:
+        if pet.owner_id != current_user.user_id:
+            action = "update" if for_write else "view"
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied: Citizens can only {action} their own registered pets."
+            )
+        return True
+
+    # 2. Staff and Leaders: resolve owner's subdivision and barangay
+    owner = pet.owner or (db.query(User).filter(User.user_id == pet.owner_id).first() if pet.owner_id else None)
+    registered_by = pet.registered_by or (db.query(User).filter(User.user_id == pet.registered_by_user_id).first() if pet.registered_by_user_id else None)
+
+    pet_subdivision_id = (owner.subdivision_id if owner else None) or (registered_by.subdivision_id if registered_by else None)
+    pet_barangay_id = (owner.barangay_id if owner else None) or (registered_by.barangay_id if registered_by else None)
+
+    verify_subdivision_scope(
+        current_user=current_user,
+        resource_subdivision_id=pet_subdivision_id,
+        resource_barangay_id=pet_barangay_id,
+        db=db
+    )
+    return True
+
 @router.get("/", response_model=List[PetResponse])
-def get_pets(include_archived: bool = False, db: Session = Depends(get_db)):
-    from sqlalchemy.orm import joinedload
+def get_pets(
+    include_archived: bool = False, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     query = db.query(Pet).options(joinedload(Pet.owner))
     if not include_archived:
         query = query.filter(Pet.status.notin_(["Archived", "Inactive"]))
+
+    if current_user.role_id == 1:
+        # Citizens can only view their own registered pets
+        query = query.filter(Pet.owner_id == current_user.user_id)
+    elif current_user.role_id == 2:
+        # Subdivision leaders can view pets within their subdivision registry
+        query = query.outerjoin(User, Pet.owner_id == User.user_id).filter(
+            or_(
+                User.subdivision_id == current_user.subdivision_id,
+                and_(Pet.owner_id.is_(None), Pet.registered_by_user_id == current_user.user_id)
+            )
+        )
+    elif current_user.role_id == 3:
+        # Barangay staff can view pets within their barangay
+        query = query.outerjoin(User, Pet.owner_id == User.user_id).filter(
+            or_(
+                User.barangay_id == current_user.barangay_id,
+                and_(Pet.owner_id.is_(None), Pet.registered_by_user_id == current_user.user_id)
+            )
+        )
     return query.all()
 
 @router.get("/removed", response_model=List[PetResponse])
 @router.get("/archived", response_model=List[PetResponse])
-def get_removed_pets(subdivision_id: Optional[int] = None, db: Session = Depends(get_db)):
-    from app.models.user import User
-    from sqlalchemy.orm import joinedload
-    from sqlalchemy import or_
-    
+def get_removed_pets(
+    subdivision_id: Optional[int] = None, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     query = db.query(Pet).options(joinedload(Pet.owner)).filter(Pet.status.in_(["Archived", "Inactive"]))
-    if subdivision_id is not None:
+    if current_user.role_id == 1:
+        query = query.filter(Pet.owner_id == current_user.user_id)
+    elif current_user.role_id == 2:
+        query = query.outerjoin(User, Pet.owner_id == User.user_id).filter(
+            or_(User.subdivision_id == current_user.subdivision_id, Pet.owner_id.is_(None))
+        )
+    elif current_user.role_id == 3:
+        query = query.outerjoin(User, Pet.owner_id == User.user_id).filter(
+            or_(User.barangay_id == current_user.barangay_id, Pet.owner_id.is_(None))
+        )
+    elif current_user.role_id == 4 and subdivision_id is not None:
         query = query.outerjoin(User, Pet.owner_id == User.user_id).filter(
             or_(User.subdivision_id == subdivision_id, Pet.owner_id.is_(None))
         )
     return query.order_by(Pet.updated_at.desc()).all()
 
 @router.get("/{pet_id}", response_model=PetResponse)
-def get_pet(pet_id: int, db: Session = Depends(get_db)):
-    from sqlalchemy.orm import joinedload
+def get_pet(
+    pet_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     pet = db.query(Pet).options(joinedload(Pet.owner)).filter(Pet.pet_id == pet_id).first()
     if not pet:
         raise HTTPException(status_code=404, detail="Pet not found")
+    check_pet_access(current_user, pet, db, for_write=False)
     return pet
 
 @router.get("/owner/{owner_id}", response_model=List[PetResponse])
-def get_owner_pets(owner_id: int, include_archived: bool = False, db: Session = Depends(get_db)):
-    from sqlalchemy.orm import joinedload
+def get_owner_pets(
+    owner_id: int, 
+    include_archived: bool = False, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role_id == 1 and current_user.user_id != owner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Citizens can only view their own registered pets."
+        )
+    if current_user.role_id == 2:
+        target_owner = db.query(User).filter(User.user_id == owner_id).first()
+        if not target_owner or target_owner.subdivision_id != current_user.subdivision_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Owner is outside your subdivision jurisdiction."
+            )
+    if current_user.role_id == 3:
+        target_owner = db.query(User).filter(User.user_id == owner_id).first()
+        if not target_owner or target_owner.barangay_id != current_user.barangay_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Owner is outside your barangay jurisdiction."
+            )
+
     query = db.query(Pet).options(joinedload(Pet.owner)).filter(Pet.owner_id == owner_id)
     if not include_archived:
         query = query.filter(Pet.status.notin_(["Archived", "Inactive"]))
     return query.all()
 
 @router.get("/subdivision/{subdivision_id}", response_model=List[PetResponse])
-def get_subdivision_pets(subdivision_id: int, include_archived: bool = False, db: Session = Depends(get_db)):
-    from app.models.user import User
-    from sqlalchemy import or_
-    from sqlalchemy.orm import joinedload
+def get_subdivision_pets(
+    subdivision_id: int, 
+    include_archived: bool = False, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role_id == 1:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Citizens cannot access subdivision pet registries."
+        )
+    verify_subdivision_scope(current_user, subdivision_id, db=db)
+
     query = db.query(Pet).outerjoin(User, Pet.owner_id == User.user_id).filter(
         or_(User.subdivision_id == subdivision_id, Pet.owner_id.is_(None))
     )
@@ -98,12 +211,19 @@ def assign_pet_owner(
     req: Request, 
     verified_claim: Optional[bool] = None,
     process_type: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Assigns an owner to an unassigned pet (Subd, Brgy, Admin) 
     or reassigns an existing owner (Admin strictly only).
     """
+    if current_user.role_id == 1:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Citizens cannot assign or transfer pet ownership."
+        )
+
     pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not pet:
         raise HTTPException(status_code=404, detail="Pet not found")
@@ -111,9 +231,12 @@ def assign_pet_owner(
     owner = db.query(User).filter(User.user_id == owner_id).first()
     if not owner:
         raise HTTPException(status_code=404, detail="Owner user not found")
+
+    check_pet_access(current_user, pet, db, for_write=True)
+    verify_subdivision_scope(current_user, owner.subdivision_id, resource_barangay_id=owner.barangay_id, db=db)
     
-    actor = get_actor_user(req, db)
-    actor_role = actor.role_id if actor else None
+    actor = current_user
+    actor_role = actor.role_id
     
     old_owner_id = pet.owner_id
     
@@ -202,19 +325,55 @@ def assign_pet_owner(
     return pet
 
 @router.post("/", response_model=PetResponse)
-def create_pet(pet: PetCreate, req: Request, db: Session = Depends(get_db)):
+def create_pet(
+    pet: PetCreate, 
+    req: Request, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     pet_dict = pet.model_dump()
     
-    # Auto-resolve registered_by_name if user ID was provided but name wasn't
-    if pet_dict.get("registered_by_user_id") and not pet_dict.get("registered_by_name"):
-        reg_user = db.query(User).filter(User.user_id == pet_dict["registered_by_user_id"]).first()
-        if reg_user:
-            pet_dict["registered_by_name"] = reg_user.name
-    elif not pet_dict.get("registered_by_name") and pet_dict.get("owner_id"):
-        owner_user = db.query(User).filter(User.user_id == pet_dict["owner_id"]).first()
-        if owner_user:
-            pet_dict["registered_by_name"] = owner_user.name
-            pet_dict["registered_by_user_id"] = owner_user.user_id
+    if current_user.role_id == 1:
+        # Citizens can only register pets for themselves
+        if pet_dict.get("owner_id") and pet_dict["owner_id"] != current_user.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Citizens can only register pets for themselves."
+            )
+        pet_dict["owner_id"] = current_user.user_id
+        pet_dict["registered_by_user_id"] = current_user.user_id
+        pet_dict["registered_by_name"] = current_user.name
+    elif current_user.role_id == 2:
+        if pet_dict.get("owner_id"):
+            owner_user = db.query(User).filter(User.user_id == pet_dict["owner_id"]).first()
+            if owner_user and owner_user.subdivision_id != current_user.subdivision_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied: You can only register pets for residents within your subdivision."
+                )
+        pet_dict["registered_by_user_id"] = current_user.user_id
+        pet_dict["registered_by_name"] = current_user.name
+    elif current_user.role_id == 3:
+        if pet_dict.get("owner_id"):
+            owner_user = db.query(User).filter(User.user_id == pet_dict["owner_id"]).first()
+            if owner_user and owner_user.barangay_id != current_user.barangay_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied: You can only register pets for residents within your barangay."
+                )
+        pet_dict["registered_by_user_id"] = current_user.user_id
+        pet_dict["registered_by_name"] = current_user.name
+    elif current_user.role_id == 4:
+        # Auto-resolve registered_by_name if user ID was provided but name wasn't
+        if pet_dict.get("registered_by_user_id") and not pet_dict.get("registered_by_name"):
+            reg_user = db.query(User).filter(User.user_id == pet_dict["registered_by_user_id"]).first()
+            if reg_user:
+                pet_dict["registered_by_name"] = reg_user.name
+        elif not pet_dict.get("registered_by_name") and pet_dict.get("owner_id"):
+            owner_user = db.query(User).filter(User.user_id == pet_dict["owner_id"]).first()
+            if owner_user:
+                pet_dict["registered_by_name"] = owner_user.name
+                pet_dict["registered_by_user_id"] = owner_user.user_id
 
     db_pet = Pet(**pet_dict)
     db.add(db_pet)
@@ -244,11 +403,19 @@ def create_pet(pet: PetCreate, req: Request, db: Session = Depends(get_db)):
     return db_pet
 
 @router.put("/{pet_id}", response_model=PetResponse)
-def update_pet(pet_id: int, pet_update: PetUpdate, req: Request, db: Session = Depends(get_db)):
+def update_pet(
+    pet_id: int, 
+    pet_update: PetUpdate, 
+    req: Request, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     from app.models.pet_claim import PetClaim
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
+
+    check_pet_access(current_user, db_pet, db, for_write=True)
     
     # Validation: Prevent marking a deceased pet as Lost
     if pet_update.status and pet_update.status.lower() == "lost":
@@ -287,7 +454,21 @@ def update_pet(pet_id: int, pet_update: PetUpdate, req: Request, db: Session = D
     return db_pet
 
 @router.get("/owner/{owner_id}/history")
-def get_owner_pet_history(owner_id: int, db: Session = Depends(get_db)):
+def get_owner_pet_history(
+    owner_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role_id == 1 and current_user.user_id != owner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Citizens can only view their own pet history."
+        )
+    if current_user.role_id in [2, 3]:
+        target_owner = db.query(User).filter(User.user_id == owner_id).first()
+        target_subd = target_owner.subdivision_id if target_owner else None
+        target_brgy = target_owner.barangay_id if target_owner else None
+        verify_subdivision_scope(current_user, target_subd, resource_barangay_id=target_brgy, db=db)
     from app.models.audit_log import AuditLog
     from sqlalchemy.orm import joinedload
     from datetime import datetime
@@ -479,11 +660,18 @@ from pydantic import BaseModel as PyBaseModel
 from typing import Optional as PyOptional
 
 @router.post("/{pet_id}/restore", response_model=PetResponse)
-def restore_pet_by_id(pet_id: int, req: Request, db: Session = Depends(get_db)):
+def restore_pet_by_id(
+    pet_id: int, 
+    req: Request, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     from sqlalchemy.orm import joinedload
     db_pet = db.query(Pet).options(joinedload(Pet.owner)).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
+
+    check_pet_access(current_user, db_pet, db, for_write=True)
     
     old_status = db_pet.status
     db_pet.status = "Active"
@@ -527,13 +715,19 @@ class PetRestorePayload(PyBaseModel):
     owner_id: PyOptional[int] = None
 
 @router.post("/restore")
-def restore_pet(payload: PetRestorePayload, req: Request, db: Session = Depends(get_db)):
+def restore_pet(
+    payload: PetRestorePayload, 
+    req: Request, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     from app.models.audit_log import AuditLog
     
     # If the pet already exists in database (e.g. archived), reactivate it directly!
     if payload.pet_id:
         existing_pet = db.query(Pet).filter(Pet.pet_id == payload.pet_id).first()
         if existing_pet:
+            check_pet_access(current_user, existing_pet, db, for_write=True)
             old_status = existing_pet.status
             existing_pet.status = "Active"
             if payload.pet_name:
@@ -678,7 +872,12 @@ def restore_pet(payload: PetRestorePayload, req: Request, db: Session = Depends(
 
 @router.delete("/{pet_id}")
 @router.post("/{pet_id}/remove")
-def remove_pet(pet_id: int, req: Request, db: Session = Depends(get_db)):
+def remove_pet(
+    pet_id: int,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Soft-archives a pet for removal.
     Does NOT hard-delete from the database.
@@ -689,23 +888,10 @@ def remove_pet(pet_id: int, req: Request, db: Session = Depends(get_db)):
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
     
-    actor = get_actor_user(req, db)
-    actor_role = actor.role_id if actor else None
+    check_pet_access(current_user, db_pet, db, for_write=True)
 
-    # Subdivision Leaders (role 2) and Barangay Staff (role 3) are strictly prohibited from removing pet records
-    if actor and actor_role in (2, 3):
-        role_label = "Subdivision Leaders" if actor_role == 2 else "Barangay Staff"
-        raise HTTPException(
-            status_code=403,
-            detail=f"Permission Denied: {role_label} do not have permission to remove pet records. Only System Administrators can remove or archive pet records."
-        )
-
-    # Citizen (role 1) can only remove their own registered pet
-    if actor and actor_role == 1 and db_pet.owner_id != actor.user_id:
-        raise HTTPException(
-            status_code=403,
-            detail="Permission Denied: Residents can only remove their own registered pets."
-        )
+    actor = current_user
+    actor_role = current_user.role_id
 
     old_status = db_pet.status
     pet_snapshot = {
@@ -734,7 +920,7 @@ def remove_pet(pet_id: int, req: Request, db: Session = Depends(get_db)):
     db.refresh(db_pet)
 
     actor_title = "Admin" if actor_role == 4 else ("Resident" if actor_role == 1 else "Officer")
-    actor_name = actor.name if actor else actor_title
+    actor_name = actor.name if actor.name else actor_title
 
     log_activity(
         db=db,
@@ -745,7 +931,7 @@ def remove_pet(pet_id: int, req: Request, db: Session = Depends(get_db)):
         log_type="operation",
         old_values=pet_snapshot,
         new_values={"status": "Archived"},
-        user_id=actor.user_id if actor else None,
+        user_id=actor.user_id,
         request=req
     )
     return {
@@ -830,11 +1016,13 @@ async def upload_pet_photo(
     file: Optional[UploadFile] = File(None),
     photo_url: Optional[str] = Form(None),
     url: Optional[str] = Form(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
+    check_pet_access(current_user, db_pet, db, for_write=True)
     
     target_url = photo_url or url
     try:
@@ -844,12 +1032,12 @@ async def upload_pet_photo(
             db.commit()
             return {"photo_url": target_url}
         elif file:
-            file_content = await file.read()
-            image_url = upload_to_cloudinary(file_content, folder="pets", filename=file.filename)
+            file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file, allowed={'Image'})
+            image_url = upload_to_cloudinary(file_content, folder="pets", filename=unique_filename)
             if not image_url:
                 raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
             db_pet.photo_url = image_url
-            auto_extract_pet_colors(file_content, file.filename or "", db_pet)
+            auto_extract_pet_colors(file_content, unique_filename, db_pet)
             db.commit()
             return {"photo_url": image_url}
         else:
@@ -865,11 +1053,13 @@ async def upload_vaccine_card(
     file: Optional[UploadFile] = File(None),
     card_url: Optional[str] = Form(None),
     url: Optional[str] = Form(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
+    check_pet_access(current_user, db_pet, db, for_write=True)
     
     target_url = card_url or url
     try:
@@ -879,8 +1069,8 @@ async def upload_vaccine_card(
             db.commit()
             return {"vaccine_card_url": target_url}
         elif file:
-            file_content = await file.read()
-            card_url_res = upload_to_cloudinary(file_content, folder="vaccines", filename=file.filename)
+            file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file, allowed={'Image', 'Document'})
+            card_url_res = upload_to_cloudinary(file_content, folder="vaccines", filename=unique_filename)
             if not card_url_res:
                 raise HTTPException(status_code=500, detail="Failed to upload vaccine card to Cloudinary")
             db_pet.vaccine_card_url = card_url_res
@@ -899,11 +1089,13 @@ async def upload_pet_photo_front(
     file: Optional[UploadFile] = File(None),
     photo_front_url: Optional[str] = Form(None),
     url: Optional[str] = Form(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
+    check_pet_access(current_user, db_pet, db, for_write=True)
     
     target_url = photo_front_url or url
     try:
@@ -913,8 +1105,8 @@ async def upload_pet_photo_front(
             db.commit()
             return {"photo_front_url": target_url}
         elif file:
-            file_content = await file.read()
-            image_url = upload_to_cloudinary(file_content, folder="pets/sides", filename=file.filename)
+            file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file, allowed={'Image'})
+            image_url = upload_to_cloudinary(file_content, folder="pets/sides", filename=unique_filename)
             if not image_url:
                 raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
             db_pet.photo_front_url = image_url
@@ -933,11 +1125,13 @@ async def upload_pet_photo_left(
     file: Optional[UploadFile] = File(None),
     photo_left_url: Optional[str] = Form(None),
     url: Optional[str] = Form(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
+    check_pet_access(current_user, db_pet, db, for_write=True)
     
     target_url = photo_left_url or url
     try:
@@ -947,8 +1141,8 @@ async def upload_pet_photo_left(
             db.commit()
             return {"photo_left_url": target_url}
         elif file:
-            file_content = await file.read()
-            image_url = upload_to_cloudinary(file_content, folder="pets/sides", filename=file.filename)
+            file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file, allowed={'Image'})
+            image_url = upload_to_cloudinary(file_content, folder="pets/sides", filename=unique_filename)
             if not image_url:
                 raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
             db_pet.photo_left_url = image_url
@@ -967,11 +1161,13 @@ async def upload_pet_photo_right(
     file: Optional[UploadFile] = File(None),
     photo_right_url: Optional[str] = Form(None),
     url: Optional[str] = Form(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
+    check_pet_access(current_user, db_pet, db, for_write=True)
     
     target_url = photo_right_url or url
     try:
@@ -981,8 +1177,8 @@ async def upload_pet_photo_right(
             db.commit()
             return {"photo_right_url": target_url}
         elif file:
-            file_content = await file.read()
-            image_url = upload_to_cloudinary(file_content, folder="pets/sides", filename=file.filename)
+            file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file, allowed={'Image'})
+            image_url = upload_to_cloudinary(file_content, folder="pets/sides", filename=unique_filename)
             if not image_url:
                 raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
             db_pet.photo_right_url = image_url
@@ -997,7 +1193,11 @@ async def upload_pet_photo_right(
 
 
 @router.delete("/{pet_id}/permanent")
-def delete_pet_record(pet_id: int, db: Session = Depends(get_db)):
+def delete_pet_record(
+    pet_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Permanently delete a pet record and safely clean up related references:
     - Pet QR codes
@@ -1005,6 +1205,12 @@ def delete_pet_record(pet_id: int, db: Session = Depends(get_db)):
     - Pet Claims
     - Unlinks reports referencing this pet
     """
+    if current_user.role_id != 4:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission Denied: Only System Administrators can permanently delete pet records."
+        )
+
     db_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not db_pet:
         raise HTTPException(status_code=404, detail="Pet not found")
@@ -1027,9 +1233,24 @@ def delete_pet_record(pet_id: int, db: Session = Depends(get_db)):
         db.query(Report).filter(Report.pet_id == pet_id).update({"pet_id": None}, synchronize_session=False)
 
         # 5. Delete the pet
+        pet_name = db_pet.pet_name
         db.delete(db_pet)
         db.commit()
-        return {"message": f"Pet #{pet_id} '{db_pet.pet_name}' was successfully removed from records."}
+
+        log_activity(
+            db=db,
+            action="PERMANENT_DELETE_PET",
+            target_table="pets",
+            target_id=pet_id,
+            description=f"Admin {current_user.name} permanently deleted pet record: {pet_name} (pet_id={pet_id})",
+            log_type="security",
+            user_id=current_user.user_id,
+        )
+
+        return {"message": f"Pet #{pet_id} '{pet_name}' was successfully removed from records."}
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to delete pet: {str(e)}")

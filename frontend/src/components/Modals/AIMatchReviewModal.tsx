@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import { api } from '../../utils/api';
 import Button from '../Button';
 import { DEFAULT_AVATAR } from '../../utils/avatar';
 import AddPetModal from '../PetRecords/AddPetModal';
@@ -78,7 +78,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
         try {
             const petId = petData.pet_id || petData.id;
             if (petId) {
-                const res = await axios.get(`http://localhost:8000/pets/${petId}`);
+                const res = await api.get(`/pets/${petId}`);
                 setSelectedPetRecord(mapRawPetToPetRecord(res.data));
             } else {
                 setSelectedPetRecord(mapRawPetToPetRecord(petData));
@@ -117,22 +117,11 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
         setSubmitError('');
 
         try {
-            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-            const staffUser = JSON.parse(localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user') || '{}');
-            const adminUser = JSON.parse(localStorage.getItem('admin_user') || '{}');
-            const activeUser = staffUser.user_id ? staffUser : adminUser;
-
-            const res = await axios.post(
-                `http://localhost:8000/matches/${match.match_id}/verify`,
+            const res = await api.post(
+                `/matches/${match.match_id}/verify`,
                 {
                     decision: selectedDecision,
                     notes: verificationNotes.trim()
-                },
-                {
-                    headers: {
-                        Authorization: token ? `Bearer ${token}` : undefined,
-                        'X-User-Id': activeUser.user_id ? String(activeUser.user_id) : undefined
-                    }
                 }
             );
 
@@ -153,8 +142,8 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     const handleOwnerFeedback = async (decision: 'OWNER_CONFIRMED' | 'OWNER_REJECTED') => {
         setIsSubmittingOwnerFeedback(true);
         try {
-            const res = await axios.post(
-                `http://localhost:8000/matches/${match.match_id}/owner-feedback`,
+            const res = await api.post(
+                `/matches/${match.match_id}/owner-feedback`,
                 {
                     owner_confirmation: decision,
                     remarks: ownerRemarks.trim() || undefined

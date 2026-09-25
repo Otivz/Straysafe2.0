@@ -1,9 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.schemas.auth import LoginRequest, LoginResponse, GoogleAuthRequest, UserPublicResponse
-from app.utils.auth import verify_password, create_access_token, get_current_user
+from app.utils.auth import (
+    verify_password,
+    create_access_token,
+    decode_access_token,
+    create_refresh_token,
+    decode_refresh_token,
+    set_refresh_cookie,
+    clear_refresh_cookie,
+    is_token_revoked,
+    revoke_token,
+    get_current_user
+)
 from app.utils.audit import log_activity
 from app.limiter import limiter
 
@@ -14,7 +25,7 @@ router = APIRouter(
 
 @router.post("/login", response_model=LoginResponse)
 @limiter.limit("5/minute")
-def login(request: Request, login_request: LoginRequest, db: Session = Depends(get_db)):
+def login(request: Request, login_request: LoginRequest, response: Response, db: Session = Depends(get_db)):
     # Find user by email
     user = db.query(User).filter(User.email == login_request.email).first()
     
@@ -70,13 +81,20 @@ def login(request: Request, login_request: LoginRequest, db: Session = Depends(g
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Generate JWT token
+    # Generate JWT access token & refresh token
     token = create_access_token({
         "sub": str(user.user_id),
         "user_id": user.user_id,
         "email": user.email,
         "role_id": user.role_id
     })
+    refresh_token = create_refresh_token({
+        "sub": str(user.user_id),
+        "user_id": user.user_id,
+        "email": user.email,
+        "role_id": user.role_id
+    })
+    set_refresh_cookie(response, refresh_token)
 
     # Successful login
     log_activity(
@@ -162,7 +180,7 @@ def get_me(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/google", response_model=LoginResponse)
-def google_auth(request: GoogleAuthRequest, req: Request, db: Session = Depends(get_db)):
+def google_auth(request: GoogleAuthRequest, req: Request, response: Response, db: Session = Depends(get_db)):
     import secrets
     from app.utils.auth import get_password_hash
 
@@ -235,13 +253,20 @@ def google_auth(request: GoogleAuthRequest, req: Request, db: Session = Depends(
     db.commit()
     db.refresh(user)
 
-    # Generate JWT token
+    # Generate JWT access token & refresh token
     token = create_access_token({
         "sub": str(user.user_id),
         "user_id": user.user_id,
         "email": user.email,
         "role_id": user.role_id
     })
+    refresh_token = create_refresh_token({
+        "sub": str(user.user_id),
+        "user_id": user.user_id,
+        "email": user.email,
+        "role_id": user.role_id
+    })
+    set_refresh_cookie(response, refresh_token)
 
     b_name = user.barangay.barangay_name if user.barangay else (user.subdivision.barangay.barangay_name if user.subdivision and user.subdivision.barangay else ("San Vicente" if user.role_id in [2, 3] else None))
     p_name = user.position.position_name if user.position else ("Barangay Head Officer" if user.is_head_officer else None)
@@ -268,4 +293,126 @@ def google_auth(request: GoogleAuthRequest, req: Request, db: Session = Depends(
         "access_token": token,
         "token_type": "bearer"
     }
+
+
+@router.post("/refresh")
+def refresh_session_token(request: Request, response: Response, db: Session = Depends(get_db)):
+    """
+    Exchange a valid 7-day refresh token stored in httpOnly cookie for a new 60-min access token.
+    Rotates the refresh token cookie upon successful verification.
+    """
+    token = request.cookies.get("refresh_token")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token missing",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    payload = decode_refresh_token(token)
+    if not payload or not payload.get("user_id"):
+        clear_refresh_cookie(response)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Verify refresh token jti has not been revoked
+    jti = payload.get("jti")
+    if jti and is_token_revoked(db, jti):
+        clear_refresh_cookie(response)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has been revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = db.query(User).filter(User.user_id == payload["user_id"]).first()
+    if not user:
+        clear_refresh_cookie(response)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if user.status == "Inactive":
+        clear_refresh_cookie(response)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account inactive. Please contact the administrator.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Blacklist previous refresh token upon rotation
+    if jti:
+        revoke_token(db, payload, token_type="refresh")
+
+    # Generate fresh 60-minute access token and rotated 7-day refresh token
+    new_access_token = create_access_token({
+        "sub": str(user.user_id),
+        "user_id": user.user_id,
+        "email": user.email,
+        "role_id": user.role_id
+    })
+    new_refresh_token = create_refresh_token({
+        "sub": str(user.user_id),
+        "user_id": user.user_id,
+        "email": user.email,
+        "role_id": user.role_id
+    })
+    set_refresh_cookie(response, new_refresh_token)
+
+    return {
+        "access_token": new_access_token,
+        "token_type": "bearer"
+    }
+
+
+@router.post("/logout")
+def logout(request: Request, response: Response, db: Session = Depends(get_db)):
+    """
+    Server-side logout: revokes the active access token and refresh token,
+    clears the refresh cookie, and logs the logout event.
+    """
+    user_id_logged = None
+
+    # 1. Revoke access token if provided in Authorization header
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        access_token_str = auth_header.split(" ")[1]
+        payload = decode_access_token(access_token_str)
+        if payload and payload.get("jti"):
+            user_id_logged = payload.get("user_id")
+            revoke_token(db, payload, token_type="access")
+
+    # 2. Revoke refresh token if present in cookies
+    refresh_token_str = request.cookies.get("refresh_token")
+    if refresh_token_str:
+        rt_payload = decode_refresh_token(refresh_token_str)
+        if rt_payload and rt_payload.get("jti"):
+            user_id_logged = user_id_logged or rt_payload.get("user_id")
+            revoke_token(db, rt_payload, token_type="refresh")
+
+    # 3. Clear refresh token cookie
+    clear_refresh_cookie(response)
+
+    # 4. Record audit log
+    if user_id_logged:
+        try:
+            log_activity(
+                db=db,
+                action="LOGOUT",
+                target_table="users",
+                target_id=int(user_id_logged),
+                description="User logged out and session tokens were revoked",
+                user_id=int(user_id_logged),
+                log_type="security",
+                request=request
+            )
+        except Exception:
+            pass
+
+    return {"message": "Logged out successfully"}
 

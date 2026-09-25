@@ -26,6 +26,7 @@ from app.utils.auth import (
 )
 from app.utils.audit import log_activity
 from app.utils.cloudinary_config import upload_to_cloudinary
+from app.utils.uploads import read_and_validate_upload
 from app.schemas.adoption import (
     AdoptionApplyRequest,
     AdoptionReviewRequest,
@@ -69,6 +70,9 @@ def _can_manage_adoption(current_user: User, animal: HoldingAnimal, db: Session)
         if report.subdivision and report.subdivision.barangay_id != current_user.barangay_id:
             return False
         return True
+    return False
+
+
 def _build_adoption_response(app: Adoption) -> AdoptionResponse:
     animal = app.animal
     photo = None
@@ -540,14 +544,12 @@ async def upload_adoption_id(
     current_user: User = Depends(get_current_resident),
 ):
     """Upload Government ID document image for adoption application."""
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image (JPEG, PNG, WEBP).")
+    file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(
+        file,
+        allowed={'Image'}
+    )
 
-    file_content = await file.read()
-    if len(file_content) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File size must be under 10MB.")
-
-    url = upload_to_cloudinary(file_content, folder="adoption_ids", filename=file.filename)
+    url = upload_to_cloudinary(file_content, folder="adoption_ids", filename=unique_filename)
     if not url:
         raise HTTPException(status_code=500, detail="Failed to upload ID document. Please try again.")
 

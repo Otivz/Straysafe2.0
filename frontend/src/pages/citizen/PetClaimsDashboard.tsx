@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import api from '../../utils/api';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
@@ -70,8 +69,8 @@ const PetClaimsDashboard = () => {
     const fetchResidentClaims = async () => {
         try {
             const [claimsRes, notifsRes] = await Promise.allSettled([
-                axios.get(`http://localhost:8000/claims/?owner_id=${residentUser.user_id}`),
-                axios.get(`http://localhost:8000/notifications/user/${residentUser.user_id}`)
+                api.get(`/claims/?owner_id=${residentUser.user_id}`),
+                api.get(`/notifications/user/${residentUser.user_id}`)
             ]);
 
             if (claimsRes.status === 'fulfilled' && claimsRes.value.data && claimsRes.value.data.length > 0) {

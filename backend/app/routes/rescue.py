@@ -1,5 +1,6 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
+from app.utils.auth import get_current_staff_or_admin, get_current_user
 
 logger = logging.getLogger(__name__)
 from decimal import Decimal
@@ -132,7 +133,11 @@ def _populate_rescue_fields(rescue: Optional[Rescue], db: Session) -> Optional[R
 
 
 @router.post("/", response_model=RescueRequestResponse)
-def create_rescue_request(request_in: RescueRequestCreate, db: Session = Depends(get_db)):
+def create_rescue_request(
+    request_in: RescueRequestCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
     try:
         # If the report is merged as duplicate, attach to the primary case to maintain single active rescue assignment
         target_report_id = request_in.report_id
@@ -312,7 +317,13 @@ def get_rescue_request(rescue_id: int, db: Session = Depends(get_db)):
 
 @router.patch("/{rescue_id}", response_model=RescueRequestResponse)
 @router.put("/{rescue_id}", response_model=RescueRequestResponse)
-def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: Session = Depends(get_db)):
+@router.patch("/{rescue_id}/status", response_model=RescueRequestResponse)
+def update_rescue_request(
+    rescue_id: int, 
+    request_in: RescueRequestUpdate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
     try:
         db_rescue = db.query(Rescue).options(
             joinedload(Rescue.report).joinedload(Report.media),
@@ -339,30 +350,43 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
         lng = update_data.pop("longitude", None)
         lmk = update_data.pop("landmark", None)
         custody_status = update_data.pop("custody_status", None)
-        # Accept both barangay_staff_id and user_id for flexibility
-        staff_id_for_history = update_data.pop("user_id", None) or update_data.get("barangay_staff_id")
+        # Use verified authenticated user for history/audit
+        staff_id_for_history = current_user.user_id
 
-        # Check permission: Only personnel assigned to this report (or Barangay Head Officer) can update its status
-        updater_user_id = staff_id_for_history or update_data.get("barangay_staff_id") or update_data.get("staff_id")
-        if updater_user_id:
-            updater = db.query(User).filter(User.user_id == updater_user_id).first()
-            if updater and updater.role_id == 3:
-                is_head = getattr(updater, 'is_head_officer', False)
-                if not is_head:
-                    is_assigned = (
-                        db_rescue.staff_id == updater.user_id or
-                        db_rescue.leader_id == updater.user_id or
-                        db.query(RescueAssignment).filter(
-                            RescueAssignment.rescue_id == rescue_id,
-                            (RescueAssignment.user_id == updater.user_id) | (RescueAssignment.staff_id == updater.user_id),
-                            RescueAssignment.assignment_status == "Assigned"
-                        ).first() is not None
+        # Check permission: Only personnel assigned to this report, Head Officer, or Admin can update its status
+        if current_user.role_id == 3:
+            is_head = getattr(current_user, 'is_head_officer', False)
+            if not is_head:
+                is_assigned = (
+                    db_rescue.staff_id == current_user.user_id or
+                    db_rescue.leader_id == current_user.user_id or
+                    db.query(RescueAssignment).filter(
+                        RescueAssignment.rescue_id == rescue_id,
+                        (RescueAssignment.user_id == current_user.user_id) | (RescueAssignment.staff_id == current_user.user_id),
+                        RescueAssignment.assignment_status == "Assigned"
+                    ).first() is not None
+                )
+                if not is_assigned:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Only personnel assigned to this report or administrators have the ability to update its status."
                     )
-                    if not is_assigned:
-                        raise HTTPException(
-                            status_code=403,
-                            detail="Only personnel assigned to this report have the ability to update its status."
-                        )
+        elif current_user.role_id == 2:
+            # Subdivision Leader can only update within their subdivision
+            is_subd_leader = (
+                db_rescue.leader_id == current_user.user_id or
+                (db_rescue.report and db_rescue.report.subdivision_id == current_user.subdivision_id)
+            )
+            if not is_subd_leader:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Subdivision Leaders can only update rescue requests within their subdivision."
+                )
+        elif current_user.role_id != 4:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access forbidden: Staff or Admin role required"
+            )
 
         # Map barangay_staff_id → staff_id (DB column name) if it exists in update_data
         if "barangay_staff_id" in update_data:
@@ -646,7 +670,7 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
                         already_in = db.query(HoldingAnimal).filter(
                             HoldingAnimal.report_id == report_obj.report_id
                         ).first()
-                        staff_id_for_log = staff_id_for_history or updater_user_id or original_staff_id
+                        staff_id_for_log = staff_id_for_history or original_staff_id
                         if not already_in:
                             raw_t = (report_obj.animal_type or '').strip().lower()
                             a_type = 'Dog' if ('dog' in raw_t or 'canine' in raw_t or 'puppy' in raw_t) else ('Cat' if ('cat' in raw_t or 'feline' in raw_t or 'kitten' in raw_t) else 'Unknown')
@@ -779,7 +803,11 @@ def update_rescue_request(rescue_id: int, request_in: RescueRequestUpdate, db: S
 
 
 @router.post("/assign-team", response_model=RescueRequestResponse)
-def assign_rescue_team(payload: RescueAssignTeamRequest, db: Session = Depends(get_db)):
+def assign_rescue_team(
+    payload: RescueAssignTeamRequest, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
     """Assign 1 to 5 field responders to a rescue mission."""
     try:
         db_rescue = None
@@ -804,7 +832,7 @@ def assign_rescue_team(payload: RescueAssignTeamRequest, db: Session = Depends(g
         if not assigned_ids or len(assigned_ids) == 0:
             raise HTTPException(status_code=400, detail="Please select at least one field responder.")
 
-        assigner_id = payload.user_id or payload.barangay_staff_id or assigned_ids[0]
+        assigner_id = current_user.user_id
 
         # Set primary staff to the lead responder
         db_rescue.staff_id = assigned_ids[0]
@@ -891,3 +919,13 @@ def assign_rescue_team(payload: RescueAssignTeamRequest, db: Session = Depends(g
         db.rollback()
         logger.error(f"Error assigning team: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── Alias Router for /rescue prefix ───────────────────────────────────────────
+rescue_alias_router = APIRouter(
+    prefix="/rescue",
+    tags=["rescue-requests"]
+)
+rescue_alias_router.add_api_route("/assign-team", assign_rescue_team, methods=["POST"], response_model=RescueRequestResponse)
+rescue_alias_router.add_api_route("/{rescue_id}", update_rescue_request, methods=["PATCH", "PUT"], response_model=RescueRequestResponse)
+rescue_alias_router.add_api_route("/{rescue_id}/status", update_rescue_request, methods=["PATCH"], response_model=RescueRequestResponse)

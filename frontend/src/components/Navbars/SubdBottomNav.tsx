@@ -25,7 +25,7 @@ const SubdBottomNav: React.FC<SubdBottomNavProps> = ({
     const inactiveColor = 'text-slate-400 hover:text-slate-600';
 
     return (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[7000]">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30">
             {/* Glass bar */}
             <div className="relative bg-white/95 backdrop-blur-2xl border-t border-gray-100/90 shadow-[0_-8px_32px_rgba(0,0,0,0.08)] flex items-center justify-around px-2 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+8px)] transition-colors duration-200">
                 

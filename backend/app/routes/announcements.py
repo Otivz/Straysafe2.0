@@ -1,7 +1,7 @@
 from app.tasks import unassigned_checker
 from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models.announcement import Announcement, AnnouncementMedia, AnnouncementCategory, AnnouncementComment, AnnouncementReaction
 from app.utils.audit import log_activity
 from app.models.user import User, Subdivision
+from app.utils.auth import get_current_user, get_current_staff_or_admin
 from app.schemas.announcement import (
     AnnouncementCreate,
     AnnouncementResponse,
@@ -18,6 +19,7 @@ from app.schemas.announcement import (
     AnnouncementReactionResponse
 )
 from app.utils.cloudinary_config import upload_to_cloudinary
+from app.utils.uploads import read_and_validate_upload
 
 router = APIRouter(prefix="/announcements", tags=["announcements"])
 
@@ -156,7 +158,7 @@ def update_announcement_status(
     if not ann:
         raise HTTPException(status_code=404, detail="Announcement not found")
     
-    ann.status = status
+    ann.status = status  # type: ignore
     db.commit()
     db.refresh(ann)
     ann = (
@@ -172,6 +174,8 @@ def update_announcement_status(
         .filter(Announcement.announcement_id == announcement_id)
         .first()
     )
+    if not ann:
+        raise HTTPException(status_code=404, detail="Announcement not found")
     return _to_response(ann)
 
 
@@ -216,10 +220,18 @@ def get_resident_announcement_feed(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/", response_model=AnnouncementResponse)
-def create_announcement(payload: AnnouncementCreate, db: Session = Depends(get_db)):
-    creator = db.query(User).filter(User.user_id == payload.created_by).first()
-    if not creator:
-        raise HTTPException(status_code=404, detail="User not found")
+def create_announcement(
+    payload: AnnouncementCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
+    if current_user.role_id not in [2, 3, 4]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: Only Subdivision Leaders (Role 2), Barangay Staff (Role 3), or Administrators (Role 4) can create announcements."
+        )
+
+    creator = current_user
 
     mapped_category = CATEGORY_MAP.get(payload.category, payload.category)
     category = db.query(AnnouncementCategory).filter(AnnouncementCategory.category_name == mapped_category).first()
@@ -230,7 +242,7 @@ def create_announcement(payload: AnnouncementCreate, db: Session = Depends(get_d
     row = Announcement(
         barangay_id=payload.barangay_id or creator.barangay_id,  # type: ignore
         subdivision_id=payload.subdivision_id or creator.subdivision_id,  # type: ignore
-        created_by=payload.created_by,  # type: ignore
+        created_by=creator.user_id,  # type: ignore
         category_id=category.category_id,  # type: ignore
         title=payload.title,  # type: ignore
         content=payload.content,  # type: ignore
@@ -250,7 +262,7 @@ def create_announcement(payload: AnnouncementCreate, db: Session = Depends(get_d
         target_table="announcements",
         target_id=row.announcement_id,  # type: ignore
         description=f"Created announcement '{payload.title}' with visibility '{payload.visibility}' (Status: {target_status}).",
-        user_id=payload.created_by,
+        user_id=creator.user_id,
         log_type="operation"
     )
 
@@ -286,18 +298,10 @@ async def upload_announcement_media(
     if not ann:
         raise HTTPException(status_code=404, detail="Announcement not found")
 
-    file_content = await file.read()
-    file_url = upload_to_cloudinary(file_content, folder="announcements", filename=file.filename)
+    file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file)
+    file_url = upload_to_cloudinary(file_content, folder="announcements", filename=unique_filename)
     if not file_url:
         raise HTTPException(status_code=500, detail="Failed to upload media")
-
-    ext = (file.filename or "").lower()
-    if ext.endswith((".mp4", ".mov", ".avi", ".webm")):
-        media_type = "Video"
-    elif ext.endswith((".pdf", ".doc", ".docx")):
-        media_type = "Document"
-    else:
-        media_type = "Image"
 
     media = AnnouncementMedia(
         announcement_id=announcement_id,
@@ -492,11 +496,22 @@ def update_announcement(announcement_id: int, payload: AnnouncementCreate, db: S
 
 
 @router.delete("/{announcement_id}", response_model=dict)
-def delete_announcement(announcement_id: int, db: Session = Depends(get_db)):
+def delete_announcement(
+    announcement_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     ann = db.query(Announcement).filter(Announcement.announcement_id == announcement_id).first()
     if not ann:
         raise HTTPException(status_code=404, detail="Announcement not found")
         
+    # Restrict deletion to author or admin
+    if current_user.role_id != 4 and ann.created_by != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: You can only delete your own announcements unless you are an administrator."
+        )
+
     # Log activity
     log_activity(
         db=db,
@@ -504,7 +519,7 @@ def delete_announcement(announcement_id: int, db: Session = Depends(get_db)):
         target_table="announcements",
         target_id=announcement_id,
         description=f"Deleted announcement '{ann.title}'.",
-        user_id=ann.created_by,  # type: ignore
+        user_id=current_user.user_id,
         log_type="operation"
     )
 

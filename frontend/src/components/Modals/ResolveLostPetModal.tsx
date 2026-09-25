@@ -126,6 +126,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
     report,
     onSuccess
 }) => {
+    void subdivisionName;
     const hasRegisteredPet = Boolean(pet?.pet_id && pet.pet_id > 0);
     const animalName = pet?.pet_name && pet.pet_name !== 'Pet' && pet.pet_name !== 'Animal' 
         ? pet.pet_name 
@@ -258,7 +259,6 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
         (targetReport?.status?.status_name && targetReport.status.status_name.toLowerCase().includes('escalat'))
     );
 
-    const effectiveSubdivisionName = subdivisionName || targetReport?.subdivision?.subdivision_name || targetReport?.subdivision_name;
     const selectedFacility = facilities.find(f => f.landmark_id === selectedFacilityId) || (facilities.length > 0 ? facilities[0] : null);
 
     const isBrgyFacility = selectedFacility 

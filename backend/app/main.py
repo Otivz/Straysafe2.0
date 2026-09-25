@@ -1,15 +1,26 @@
 import sys
 import os
+import json
 import asyncio
+import logging
 from typing import Any, cast
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.limiter import limiter
+from dotenv import load_dotenv
+
+# Load environment variables from the project root
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), '.env')
+load_dotenv(dotenv_path=env_path)
+
+logger = logging.getLogger("uvicorn.error")
 
 # Add the 'backend' directory to sys.path so 'app' can be imported correctly
 # when running from the project root.
@@ -22,6 +33,7 @@ from app.routes import audit_logs as audit_logs_router
 from app.models.pet_qr import PetQRCode, PetQRScan
 from app.models.audit_log import AuditLog  # noqa: F401 — ensures table is in Base.metadata
 from app.models.pet_claim import PetClaim  # noqa: F401 — ensures table is in Base.metadata
+from app.models.revoked_token import RevokedToken  # noqa: F401 — ensures table is in Base.metadata
 from app.models.report_dispute import ReportDispute  # noqa: F401
 from app.models.chat import ChatThread, ChatMessage  # noqa: F401
 from app.models.warning import OwnerWarning  # noqa: F401
@@ -917,8 +929,24 @@ ensure_report_transfer_columns()
 ensure_report_disputes_table()
 ensure_landmarks_table()
 ensure_report_location_columns()
+def ensure_revoked_tokens_table():
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS revoked_tokens (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                jti VARCHAR(255) NOT NULL UNIQUE,
+                token_type VARCHAR(50) NOT NULL DEFAULT 'access',
+                user_id INT NULL,
+                revoked_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                expires_at DATETIME NOT NULL,
+                INDEX idx_revoked_jti (jti),
+                INDEX idx_revoked_expires (expires_at)
+            )
+        """))
+
 ensure_holding_animals_columns()
 ensure_adoption_tables_and_columns()
+ensure_revoked_tokens_table()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -938,14 +966,83 @@ app = FastAPI(title="StraySafe API", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, cast(Any, _rate_limit_exceeded_handler))
 
-# Configure CORS
+# Configure CORS dynamically from environment variables
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+]
+
+cors_env = os.getenv("CORS_ALLOWED_ORIGINS")
+if cors_env:
+    cors_str = cors_env.strip()
+    if cors_str.startswith("[") and cors_str.endswith("]"):
+        try:
+            cors_allowed_origins = json.loads(cors_str)
+        except Exception:
+            cors_allowed_origins = [o.strip().strip("'\"") for o in cors_str.strip("[]").split(",") if o.strip()]
+    else:
+        cors_allowed_origins = [o.strip() for o in cors_str.split(",") if o.strip()]
+else:
+    cors_allowed_origins = DEFAULT_CORS_ORIGINS
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174", "http://127.0.0.1:5174"],
+    allow_origins=cors_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Exception Handlers: Sanitize error responses and mask raw internal database/SQL traces
+SENSITIVE_ERROR_KEYWORDS = (
+    "sql", "select ", "insert into", "update ", "delete from",
+    "syntax error", "foreign key", "table", "column", "pymysql",
+    "mysql", "mariadb", "operationalerror", "integrityerror",
+    "password", "access denied", "duplicate entry", "cannot add or update"
+)
+
+@app.exception_handler(SQLAlchemyError)
+async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
+    """
+    Catch any unhandled database exceptions and mask raw schema/query details from clients.
+    """
+    logger.error(f"Database error on {request.method} {request.url.path}: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "A database error occurred. Internal details have been masked for security."}
+    )
+
+@app.exception_handler(HTTPException)
+async def sanitized_http_exception_handler(request: Request, exc: HTTPException):
+    """
+    Mask raw database or stack trace details in 500-level HTTPExceptions.
+    """
+    detail = exc.detail
+    if exc.status_code >= 500 and isinstance(detail, str):
+        lower_detail = detail.lower()
+        if any(keyword in lower_detail for keyword in SENSITIVE_ERROR_KEYWORDS):
+            logger.error(f"Masked sensitive 500 error on {request.method} {request.url.path}: {detail}")
+            detail = "An internal server error occurred. Internal details have been masked for security."
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": detail},
+        headers=exc.headers
+    )
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    """
+    Catch-all unhandled exception handler ensuring clean 500 responses without tracebacks.
+    """
+    if isinstance(exc, HTTPException):
+        return await sanitized_http_exception_handler(request, exc)
+    logger.error(f"Unhandled error on {request.method} {request.url.path}: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An internal server error occurred. Internal details have been masked for security."}
+    )
 
 # Create uploads directory if it doesn't exist
 os.makedirs("uploads", exist_ok=True)
@@ -958,6 +1055,7 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(reports.router)
 app.include_router(rescue.router)
+app.include_router(rescue.rescue_alias_router)
 app.include_router(pets.router)
 app.include_router(pet_qr.router)
 app.include_router(notifications.router)

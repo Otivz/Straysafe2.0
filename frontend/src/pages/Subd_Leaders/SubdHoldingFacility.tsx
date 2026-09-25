@@ -191,7 +191,7 @@ const SubdHoldingFacility = () => {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     // Stay duration before handover / impoundment limit (in days)
-    const [impoundStayDuration] = useState<number>(() => {
+    const [impoundStayDuration, setImpoundStayDuration] = useState<number>(() => {
         const saved = localStorage.getItem('subd_holding_stay_duration');
         if (saved) {
             const parsed = parseInt(saved, 10);
@@ -199,6 +199,12 @@ const SubdHoldingFacility = () => {
         }
         return 0;
     });
+
+    const handleDurationChange = (newVal: number) => {
+        const clamped = Math.max(0, Math.min(90, isNaN(newVal) ? 0 : newVal));
+        setImpoundStayDuration(clamped);
+        localStorage.setItem('subd_holding_stay_duration', String(clamped));
+    };
 
     // Selected animal detail modal
     const [selected, setSelected] = useState<HoldingAnimal | null>(null);
@@ -794,6 +800,47 @@ const SubdHoldingFacility = () => {
                                 />
                             </div>
 
+                            {/* ── Stay Duration Limit Number Spinner ── */}
+                            <div className="flex items-center gap-2.5 bg-amber-50/80 border border-amber-200/90 px-3 py-1.5 rounded-xl shadow-2xs">
+                                <div className="flex flex-col">
+                                    <span className="text-[9px] font-black uppercase tracking-wider text-amber-950 leading-none">
+                                        Stay Limit
+                                    </span>
+                                    <span className="text-[8px] font-bold text-amber-700/80 mt-0.5">
+                                        Duration Spinner
+                                    </span>
+                                </div>
+                                <div className="flex items-center bg-white rounded-lg border border-amber-300 shadow-2xs overflow-hidden">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDurationChange(impoundStayDuration - 1)}
+                                        disabled={impoundStayDuration <= 0}
+                                        className="w-7 h-7 flex items-center justify-center text-amber-900 hover:bg-amber-100 disabled:opacity-30 disabled:hover:bg-transparent font-black text-sm transition-colors cursor-pointer"
+                                        title="Decrease stay limit"
+                                    >
+                                        −
+                                    </button>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        max={90}
+                                        value={impoundStayDuration}
+                                        onChange={(e) => handleDurationChange(Number(e.target.value))}
+                                        className="w-10 text-center font-black text-xs text-amber-950 focus:outline-none bg-transparent"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDurationChange(impoundStayDuration + 1)}
+                                        disabled={impoundStayDuration >= 90}
+                                        className="w-7 h-7 flex items-center justify-center text-amber-900 hover:bg-amber-100 disabled:opacity-30 disabled:hover:bg-transparent font-black text-sm transition-colors cursor-pointer"
+                                        title="Increase stay limit"
+                                    >
+                                        +
+                                    </button>
+                                </div>
+                                <span className="text-xs font-black text-amber-900">days</span>
+                            </div>
+
                             <select
                                 value={statusFilter}
                                 onChange={e => setStatusFilter(Number(e.target.value))}
@@ -1046,7 +1093,7 @@ const SubdHoldingFacility = () => {
                 const isSelectedTransferred = selected.facility_type === 'barangay_facility' || (selected.facility_name && selected.facility_name.toLowerCase().includes('barangay'));
 
                 return (
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[3000] p-4">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
                         <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
 
                             {/* Modal Header */}

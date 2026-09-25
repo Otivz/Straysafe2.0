@@ -11,6 +11,7 @@ from app.models.user import User, Barangay, Position, Subdivision, Role
 from app.schemas.user import UserCreate, UserUpdate, UserResponse, PositionResponse
 from app.utils.auth import get_password_hash, get_current_user
 from app.utils.cloudinary_config import upload_to_cloudinary
+from app.utils.uploads import read_and_validate_upload
 from app.utils.audit import log_activity
 
 router = APIRouter(
@@ -160,7 +161,7 @@ def _resolve_position_id(db: Session, position_input: Optional[str | int]) -> Op
     if isinstance(position_input, int):
         return position_input
     
-    pos_str = str(position_input).strip()
+    pos_str = position_input.strip()
     if not pos_str:
         return None
     if pos_str.isdigit():
@@ -190,6 +191,10 @@ def create_user(user_in: UserCreate, req: Request, db: Session = Depends(get_db)
     # Create user object
     user_data = user_in.model_dump()
     user_data["password"] = hashed_password
+    
+    # CRITICAL-02 Remediation: Public registration strictly creates Resident/Citizen accounts (role_id=1)
+    user_data["role_id"] = 1
+    user_data["is_head_officer"] = False
     
     # Resolve position string if provided
     pos_input = user_data.pop("position", None) or user_data.pop("position_name", None)
@@ -289,7 +294,29 @@ def update_user(
 
 
 @router.patch("/{user_id}/status", response_model=UserResponse)
-def update_user_status(user_id: int, status_in: str, req: Request, db: Session = Depends(get_db)):
+def update_user_status(
+    user_id: int, 
+    status_in: str, 
+    req: Request, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Only System Admin (role_id == 4) or Barangay Head Officer (role_id == 3 and is_head_officer)
+    is_admin = current_user.role_id == 4
+    is_head_brgy = current_user.role_id == 3 and getattr(current_user, "is_head_officer", False)
+    if not (is_admin or is_head_brgy):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Only System Administrators or Barangay Head Officers can change user statuses."
+        )
+
+    # Prevent deactivating the primary admin account (user_id == 1)
+    if user_id == 1 and status_in.lower() in ["inactive", "deactivated", "suspended", "banned"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot deactivate the primary system administrator account."
+        )
+
     db_user = db.query(User).filter(User.user_id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -310,10 +337,29 @@ def update_user_status(user_id: int, status_in: str, req: Request, db: Session =
         new_values={"status": status_in},
         request=req
     )
-    return db_user
+    return _populate_user_fields(db_user)
 
 @router.delete("/{user_id}")
-def delete_user(user_id: int, req: Request, db: Session = Depends(get_db)):
+def delete_user(
+    user_id: int, 
+    req: Request, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Only System Admin (role_id == 4)
+    if current_user.role_id != 4:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Only System Administrators can delete user accounts."
+        )
+
+    # Prevent deleting the primary admin account (user_id == 1)
+    if user_id == 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete the primary system administrator account."
+        )
+
     db_user = db.query(User).filter(User.user_id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -344,25 +390,51 @@ def delete_user(user_id: int, req: Request, db: Session = Depends(get_db)):
 @router.post("/{user_id}/profile-picture", response_model=UserResponse)
 async def upload_profile_picture(
     user_id: int,
+    request: Request,
     file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    if current_user.user_id != user_id and current_user.role_id != 4:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to update this user's profile picture"
+        )
+
     user = db.query(User).filter(User.user_id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    safe_filename = file.filename or ""
-    file_extension = os.path.splitext(safe_filename)[1]
-    unique_filename = f"profile_{user_id}_{uuid.uuid4().hex[:8]}{file_extension}"
+    content_bytes, unique_filename, media_type, resource_type = await read_and_validate_upload(
+        file,
+        allowed={'Image'}
+    )
 
+    safe_name = f"profile_{user_id}_{unique_filename}"
     try:
-        file_content = await file.read()
-        file_url = upload_to_cloudinary(file_content, unique_filename)
+        file_url = upload_to_cloudinary(content_bytes, folder="profiles", filename=safe_name)
+        if not file_url:
+            raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
         
         user.profile_picture = file_url
         db.commit()
         db.refresh(user)
-        return user
+
+        log_activity(
+            db=db,
+            action="UPDATE_PROFILE_PICTURE",
+            target_table="users",
+            target_id=user.user_id,
+            description=f"Updated profile picture for user: {user.name} ({user.email})",
+            user_id=current_user.user_id,
+            log_type="operation",
+            request=request
+        )
+
+        return _populate_user_fields(user)
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Cloudinary upload failed: {str(e)}")

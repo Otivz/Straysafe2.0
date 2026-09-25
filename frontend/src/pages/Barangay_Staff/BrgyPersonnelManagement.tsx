@@ -5,7 +5,6 @@ import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import { api, API_BASE_URL } from '../../utils/api';
 import { 
     Sparkles, 
-    UserCheck, 
     Shield, 
     Plus, 
     Search, 
@@ -15,7 +14,6 @@ import {
     Check, 
     Copy, 
     Eye, 
-    SlidersHorizontal, 
     Zap, 
     AlertCircle,
     X,
