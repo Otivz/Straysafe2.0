@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import axios from 'axios';
 import { api } from '../../utils/api';
 import { validateFile, UPLOAD_ACCEPT } from '../../utils/uploadValidation';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
@@ -117,7 +116,7 @@ const PetMatchReview = () => {
         setLoading(true);
         try {
             // 1. Fetch Report details
-            const reportRes = await axios.get(`http://localhost:8000/reports/${reportId}`);
+            const reportRes = await api.get(`/reports/${reportId}`);
             const repData = reportRes.data;
 
             if (repData.latitude && repData.longitude) {
@@ -139,7 +138,7 @@ const PetMatchReview = () => {
             // 2. Fetch Owner's pets (Strictly exclude Deceased pets)
             let activePets: any[] = [];
             try {
-                const petsRes = await axios.get(`http://localhost:8000/pets/owner/${currentUser.user_id}`);
+                const petsRes = await api.get(`/pets/owner/${currentUser.user_id}`);
                 activePets = petsRes.data.filter((p: any) => p.status && p.status.toLowerCase() !== 'deceased');
             } catch (e) {
                 console.warn("Could not load pets for owner", e);
@@ -148,7 +147,7 @@ const PetMatchReview = () => {
             // 3. Fetch matched candidate pet from Report Matches
             let targetMatchedPetId: number | null = null;
             try {
-                const matchRes = await axios.get(`http://localhost:8000/matches/report/${reportId}`);
+                const matchRes = await api.get(`/matches/report/${reportId}`);
                 if (Array.isArray(matchRes.data) && matchRes.data.length > 0) {
                     setAllReportMatches(matchRes.data);
                     
@@ -176,7 +175,7 @@ const PetMatchReview = () => {
             // 4. Check backend first for real claim data
             let matchingClaim = null;
             try {
-                const claimsRes = await axios.get(`http://localhost:8000/claims/?owner_id=${currentUser.user_id}`);
+                const claimsRes = await api.get(`/claims/?owner_id=${currentUser.user_id}`);
                 matchingClaim = claimsRes.data.find((c: any) => c.report_id === parseInt(reportId || '0') && c.pet?.status?.toLowerCase() !== 'deceased');
             } catch (e) {
                 console.warn("Could not load backend claims", e);
@@ -318,7 +317,7 @@ const PetMatchReview = () => {
 
             // Attempt posting to backend endpoint (backward compatible)
             try {
-                const res = await axios.post('http://localhost:8000/claims/', {
+                const res = await api.post('/claims/', {
                     report_id: parseInt(reportId || '0'),
                     pet_id: selectedPetId,
                     remarks: remarks || "I confirm this is my pet.",
@@ -392,11 +391,11 @@ const PetMatchReview = () => {
 
             // Sync with backend report_matches owner feedback
             try {
-                const matchRes = await axios.get(`http://localhost:8000/matches/report/${reportId}`);
+                const matchRes = await api.get(`/matches/report/${reportId}`);
                 if (Array.isArray(matchRes.data) && matchRes.data.length > 0) {
                     const matchingRecord = matchRes.data.find((m: any) => m.matched_pet_id === selectedPetId);
                     if (matchingRecord) {
-                        await axios.post(`http://localhost:8000/matches/${matchingRecord.match_id}/owner-feedback`, {
+                        await api.post(`/matches/${matchingRecord.match_id}/owner-feedback`, {
                             owner_confirmation: "OWNER_CONFIRMED",
                             remarks: remarks || "Owner confirmed match and submitted ownership proofs."
                         });
@@ -441,7 +440,7 @@ const PetMatchReview = () => {
         }
         setIsSubmitting(true);
         try {
-            const res = await axios.patch(`http://localhost:8000/claims/${existingClaim.claim_id}/status`, {
+            const res = await api.patch(`/claims/${existingClaim.claim_id}/status`, {
                 status: "Pet Received",
                 remarks: "Confirmed received by owner."
             });

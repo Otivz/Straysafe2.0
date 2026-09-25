@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import api from '../../utils/api';
 import {
     Upload,
     Camera,
@@ -234,7 +235,7 @@ export default function ReportStrayPage() {
     useEffect(() => {
         const fetchLandmarks = async () => {
             try {
-                const res = await axios.get('http://localhost:8000/landmarks');
+                const res = await api.get('/landmarks');
                 if (res.data && Array.isArray(res.data)) {
                     setLandmarks(res.data);
                 }
@@ -330,7 +331,7 @@ export default function ReportStrayPage() {
         try {
             const mediaData = new FormData();
             mediaData.append("file", primaryFile);
-            const res = await axios.post('http://localhost:8000/reports/analyze-media', mediaData);
+            const res = await api.post('/reports/analyze-media', mediaData);
             if (res.status === 200 && res.data) {
                 const ai = res.data;
                 const isDetected = ai.animal_detected !== false && !['unknown', 'none', ''].includes((ai.animal_type || '').toLowerCase());
@@ -513,7 +514,7 @@ export default function ReportStrayPage() {
                 ai_suggested_priority: formData.priorityLevel
             };
 
-            const response = await axios.post('http://localhost:8000/reports/', payload);
+            const response = await api.post('/reports/', payload);
             if (response.status === 200 || response.status === 201) {
                 const actualReportId = response.data.report_id;
                 if (actualReportId && formData.mediaFiles && formData.mediaFiles.length > 0) {
@@ -551,7 +552,7 @@ export default function ReportStrayPage() {
                                 mediaData.append("media_type", mediaItem.kind === 'video' ? 'Video' : 'Image');
                                 mediaData.append("status_id", "1");
                                 mediaData.append("is_evidence", "false");
-                                await axios.post(`http://localhost:8000/reports/${actualReportId}/media`, mediaData);
+                                await api.post(`/reports/${actualReportId}/media`, mediaData);
                             } catch (err: any) {
                                 console.error('Media URL registration error:', err?.response?.data || err);
                             }

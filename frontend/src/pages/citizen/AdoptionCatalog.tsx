@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../utils/api';
 import { getPetPicture } from '../../utils/avatar';
 import { Heart, Search, MapPin, Phone, User, Shield, ArrowRight, Sparkles, AlertCircle, ArrowLeft, ClipboardList } from 'lucide-react';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
@@ -59,7 +59,7 @@ const AdoptionCatalog = () => {
             setLoading(true);
             setError(null);
             try {
-                const res = await axios.get('http://localhost:8000/adoptions/catalog');
+                const res = await api.get('/adoptions/catalog');
                 setAnimals(Array.isArray(res.data) ? res.data : []);
             } catch (err: any) {
                 console.error("Failed to load adoption catalog", err);

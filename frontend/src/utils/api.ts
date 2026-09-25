@@ -7,6 +7,7 @@ export const api = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
+    withCredentials: true,
 });
 
 export const getStoredToken = (): string | null => {
@@ -42,6 +43,16 @@ export const clearAuthStorage = () => {
     sessionStorage.removeItem('staff_user');
 };
 
+export const logoutUser = async () => {
+    try {
+        await api.post('/auth/logout');
+    } catch {
+        // Ignore failure if backend unreachable
+    } finally {
+        clearAuthStorage();
+    }
+};
+
 // Request Interceptor: Automatically attach Bearer token
 api.interceptors.request.use(
     (config) => {
@@ -54,24 +65,96 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// Response Interceptor: Automatically handle 401 Unauthorized
+// Response Interceptor: Automatically refresh on 401 or handle logout
+let isRefreshing = false;
+let failedQueue: Array<{
+    resolve: (token: string) => void;
+    reject: (error: any) => void;
+}> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+    failedQueue.forEach((prom) => {
+        if (error) {
+            prom.reject(error);
+        } else if (token) {
+            prom.resolve(token);
+        }
+    });
+    failedQueue = [];
+};
+
 api.interceptors.response.use(
     (response) => response,
-    (error) => {
-        if (error.response && error.response.status === 401) {
-            // Unauthenticated or token expired
-            console.warn('Session expired or unauthorized request. Clearing session...');
-            clearAuthStorage();
-            if (!window.location.pathname.includes('/login')) {
-                const isStaff = window.location.pathname.startsWith('/subd') || window.location.pathname.startsWith('/brgy');
-                const isAdmin = window.location.pathname.startsWith('/admin');
-                if (isAdmin) {
-                    window.location.href = '/admin/login';
-                } else if (isStaff) {
-                    window.location.href = '/staff/login';
-                } else {
-                    window.location.href = '/login';
+    async (error) => {
+        const originalRequest = error.config;
+        if (error.response && error.response.status === 401 && !originalRequest._retry) {
+            // Avoid infinite loops for login or refresh requests
+            if (originalRequest.url?.includes('/auth/refresh') || originalRequest.url?.includes('/auth/login')) {
+                clearAuthStorage();
+                return Promise.reject(error);
+            }
+
+            if (isRefreshing) {
+                return new Promise((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                })
+                    .then((token) => {
+                        originalRequest.headers.Authorization = `Bearer ${token}`;
+                        return api(originalRequest);
+                    })
+                    .catch((err) => Promise.reject(err));
+            }
+
+            originalRequest._retry = true;
+            isRefreshing = true;
+
+            try {
+                const res = await axios.post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true });
+                const newToken = res.data?.access_token;
+                if (newToken) {
+                    if (sessionStorage.getItem('access_token')) {
+                        sessionStorage.setItem('access_token', newToken);
+                    }
+                    if (localStorage.getItem('access_token')) {
+                        localStorage.setItem('access_token', newToken);
+                    }
+                    for (const key of ['staff_user', 'resident_user', 'admin_user']) {
+                        const raw = sessionStorage.getItem(key) || localStorage.getItem(key);
+                        if (raw) {
+                            try {
+                                const parsed = JSON.parse(raw);
+                                if (parsed && (parsed.access_token || parsed.token)) {
+                                    if (parsed.access_token) parsed.access_token = newToken;
+                                    if (parsed.token) parsed.token = newToken;
+                                    if (sessionStorage.getItem(key)) sessionStorage.setItem(key, JSON.stringify(parsed));
+                                    if (localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(parsed));
+                                }
+                            } catch {}
+                        }
+                    }
+                    api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+                    originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                    processQueue(null, newToken);
+                    return api(originalRequest);
                 }
+            } catch (refreshErr) {
+                processQueue(refreshErr, null);
+                console.warn('Session expired or unauthorized request. Clearing session...');
+                clearAuthStorage();
+                if (!window.location.pathname.includes('/login')) {
+                    const isStaff = window.location.pathname.startsWith('/subd') || window.location.pathname.startsWith('/brgy');
+                    const isAdmin = window.location.pathname.startsWith('/admin');
+                    if (isAdmin) {
+                        window.location.href = '/admin/login';
+                    } else if (isStaff) {
+                        window.location.href = '/staff/login';
+                    } else {
+                        window.location.href = '/login';
+                    }
+                }
+                return Promise.reject(refreshErr);
+            } finally {
+                isRefreshing = false;
             }
         }
         return Promise.reject(error);

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { api } from '../../utils/api';
 import { getPetPicture } from '../../utils/avatar';
 import { ArrowLeft, Heart, Shield, Phone, MapPin, AlertCircle, CheckCircle2, Upload, CreditCard } from 'lucide-react';
@@ -66,7 +65,7 @@ const AdoptionApplyForm = () => {
             const uid = user?.user_id || user?.id;
             if (!uid) return;
             try {
-                const res = await axios.get(`http://localhost:8000/pets/owner/${uid}`);
+                const res = await api.get(`/pets/owner/${uid}`);
                 const list = Array.isArray(res.data) ? res.data : [];
                 const activePets = list.filter(
                     (p: any) => !['archived', 'inactive'].includes((p.status || '').toLowerCase())
@@ -88,7 +87,7 @@ const AdoptionApplyForm = () => {
             if (!id) return;
             setLoadingAnimal(true);
             try {
-                const res = await axios.get(`http://localhost:8000/adoptions/catalog/${id}`);
+                const res = await api.get(`/adoptions/catalog/${id}`);
                 setAnimal(res.data);
             } catch (err: any) {
                 console.error("Failed to load animal for application", err);

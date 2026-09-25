@@ -220,25 +220,6 @@ const SubdDashboard = () => {
     );
     const pendingReviewCount = pendingReviewReports.length;
 
-    // Comparison calculations
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const yesterdayStart = new Date(todayStart);
-    yesterdayStart.setDate(yesterdayStart.getDate() - 1);
-
-    const reportsToday = reports.filter(r => r.created_at && new Date(r.created_at) >= todayStart).length;
-    const reportsYesterday = reports.filter(r => {
-        if (!r.created_at) return false;
-        const d = new Date(r.created_at);
-        return d >= yesterdayStart && d < todayStart;
-    }).length;
-    const pendingDiff = reportsToday - reportsYesterday;
-    const pendingComparison = pendingDiff > 0
-        ? { text: `${pendingDiff} more than yesterday`, symbol: '↑', color: 'text-orange-600', bg: 'bg-orange-100' }
-        : pendingDiff < 0
-            ? { text: `${Math.abs(pendingDiff)} less than yesterday`, symbol: '↓', color: 'text-emerald-600', bg: 'bg-emerald-100' }
-            : { text: '0 change', symbol: '→', color: 'text-slate-500', bg: 'bg-slate-100' };
-
     const underBrgyCount = reports.filter(r => [4, 5, 13].includes(r.status_id)).length;
     const displayPetCount = petCount;
 
@@ -252,21 +233,6 @@ const SubdDashboard = () => {
         return s.includes('pending') || s.includes('review') || s.includes('evidence') || s.includes('potential') || s.includes('match');
     });
     const pendingClaimsCount = pendingClaimsList.length;
-
-    const claimsToday = claims.filter(c => {
-        const d = new Date(c.created_at || c.updated_at || 0);
-        return d >= todayStart;
-    }).length;
-    const claimsYesterday = claims.filter(c => {
-        const d = new Date(c.created_at || c.updated_at || 0);
-        return d >= yesterdayStart && d < todayStart;
-    }).length;
-    const claimsDiff = claimsToday - claimsYesterday;
-    const claimsComparison = claimsDiff > 0
-        ? { text: `${claimsDiff} more than yesterday`, symbol: '↑', color: 'text-purple-600', bg: 'bg-purple-100' }
-        : claimsDiff < 0
-            ? { text: `${Math.abs(claimsDiff)} less than yesterday`, symbol: '↓', color: 'text-slate-500', bg: 'bg-slate-100' }
-            : { text: '0 change', symbol: '→', color: 'text-purple-600', bg: 'bg-purple-100' };
 
     const activeHoldingAnimals = holdingAnimals.filter(a => ![3, 4, 5, 7, 8].includes(a.facility_status));
     const holdingCount = activeHoldingAnimals.length;

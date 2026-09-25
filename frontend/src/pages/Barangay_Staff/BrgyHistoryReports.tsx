@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, MapPin, Search, ArrowRight, ShieldCheck, FileText, CheckCircle2 } from 'lucide-react';
+import { Sparkles, MapPin, Search, ArrowRight } from 'lucide-react';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';

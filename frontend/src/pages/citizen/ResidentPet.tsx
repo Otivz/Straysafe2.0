@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import api from '../../utils/api';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
@@ -328,7 +327,7 @@ const ResidentPet = () => {
             try {
                 const mediaData = new FormData();
                 mediaData.append("file", file);
-                const res = await axios.post('http://localhost:8000/reports/analyze-media', mediaData);
+                const res = await api.post('/reports/analyze-media', mediaData);
                 
                 if (res.status === 200 && res.data) {
                     const ai = res.data;
@@ -455,7 +454,7 @@ const ResidentPet = () => {
 
     const fetchPets = async () => {
         try {
-            const response = await axios.get(`http://localhost:8000/pets/owner/${currentUser.user_id}`);
+            const response = await api.get(`/pets/owner/${currentUser.user_id}`);
             setPets(response.data);
         } catch (error) {
             console.error('Error fetching pets:', error);
@@ -580,7 +579,7 @@ const ResidentPet = () => {
     const handleDeletePet = async (id: number) => {
         if (window.confirm('Are you sure you want to remove this pet?')) {
             try {
-                await axios.delete(`http://localhost:8000/pets/${id}`);
+                await api.delete(`/pets/${id}`);
                 fetchPets();
             } catch (error) {
                 console.error('Error deleting pet:', error);
@@ -692,9 +691,9 @@ const ResidentPet = () => {
             if (vaccineCardUrl) petData.vaccine_card_url = vaccineCardUrl;
 
             if (editingPetId) {
-                await axios.put(`http://localhost:8000/pets/${editingPetId}`, petData);
+                await api.put(`/pets/${editingPetId}`, petData);
             } else {
-                await axios.post('http://localhost:8000/pets/', petData);
+                await api.post('/pets/', petData);
             }
 
             fetchPets();

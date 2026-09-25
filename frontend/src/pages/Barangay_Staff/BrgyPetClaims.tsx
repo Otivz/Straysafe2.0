@@ -8,7 +8,6 @@ import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import MapComponent from '../../components/MapComponent';
 import Button from '../../components/Button';
-import Select from '../../components/Dropdown';
 import MediaPreview from '../../components/Shared/MediaPreview';
 import { getCachedData, setCachedData } from '../../utils/cache';
 

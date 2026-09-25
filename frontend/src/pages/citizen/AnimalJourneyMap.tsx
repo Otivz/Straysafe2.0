@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../utils/api';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -97,11 +97,7 @@ const AnimalJourneyMap = () => {
             setLoading(true);
             setError(null);
             try {
-                const headers: Record<string, string> = {};
-                if (token) {
-                    headers['Authorization'] = `Bearer ${token}`;
-                }
-                const res = await axios.get(`http://localhost:8000/adoptions/journey/${id}`, { headers });
+                const res = await api.get(`/adoptions/journey/${id}`);
                 setJourney(res.data);
             } catch (err: any) {
                 console.error("Failed to load journey map", err);

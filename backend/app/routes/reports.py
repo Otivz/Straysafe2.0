@@ -1,5 +1,5 @@
 # pyrefly: ignore [missing-import]
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form, BackgroundTasks, status
 import os
 import uuid
 from datetime import datetime, timedelta
@@ -35,8 +35,9 @@ from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.color_detection import extract_dominant_colors
 from app.utils.audit import log_activity
 from app.utils.ai_suggestions import call_gemini_with_fallback
-from app.utils.uploads import validate_cloudinary_url
+from app.utils.uploads import validate_cloudinary_url, read_and_validate_upload
 from app.utils.model_loader import get_yolo_model
+from app.utils.auth import get_current_staff_or_admin, verify_subdivision_scope
 
 router = APIRouter(
     prefix="/reports",
@@ -1442,10 +1443,21 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/{report_id}")
-def delete_report(report_id: int, req: Request, db: Session = Depends(get_db)):
+def delete_report(
+    report_id: int, 
+    req: Request, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
+    if current_user.role_id not in [3, 4]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Only Barangay Staff or System Administrators can delete reports."
+        )
     report = db.query(Report).filter(Report.report_id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+    verify_subdivision_scope(current_user, report.subdivision_id, db=db)
     report_snapshot = {"report_id": report.report_id, "animal_type": str(report.animal_type), "status_id": report.current_status_id}
     
     try:
@@ -1488,10 +1500,17 @@ def delete_report(report_id: int, req: Request, db: Session = Depends(get_db)):
 
 
 @router.patch("/{report_id}", response_model=ReportResponse)
-def update_report(report_id: int, report_update: ReportUpdate, db: Session = Depends(get_db)):
+def update_report(
+    report_id: int, 
+    report_update: ReportUpdate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
     db_report = db.query(Report).options(joinedload(Report.assigned_leader)).filter(Report.report_id == report_id).first()
     if not db_report:
         raise HTTPException(status_code=404, detail="Report not found")
+
+    verify_subdivision_scope(current_user, db_report.subdivision_id, db=db)
 
     update_data = report_update.model_dump(exclude_unset=True)
 
@@ -1734,26 +1753,10 @@ async def upload_report_media(
             resolved_media_type = media_type or detected_type
             resolved_url = file_url
         elif file:
-            safe_filename = file.filename or ""
-            file_extension = os.path.splitext(safe_filename)[1].lower()
-            unique_filename = f"{uuid.uuid4()}{file_extension}"
-            MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
-            file_bytes = await file.read()
-            if len(file_bytes) > MAX_FILE_SIZE:
-                raise HTTPException(
-                    status_code=413,
-                    detail=f"File too large ({len(file_bytes) / (1024 * 1024):.1f}MB). Maximum allowed is 50MB."
-                )
+            file_bytes, unique_filename, resolved_media_type, _ = await read_and_validate_upload(file)
             resolved_url = upload_to_cloudinary(file_bytes, filename=unique_filename)
             if not resolved_url:
                 raise HTTPException(status_code=500, detail="Cloudinary returned an empty URL")
-
-            if file_extension in ['.mp4', '.mov', '.avi', '.webm']:
-                resolved_media_type = 'Video'
-            elif file_extension in ['.pdf', '.docx', '.doc']:
-                resolved_media_type = 'Document'
-            else:
-                resolved_media_type = 'Image'
 
         if not resolved_url:
             raise HTTPException(status_code=400, detail="Could not resolve media URL.")
@@ -1792,7 +1795,13 @@ async def upload_report_media(
 
 
 @router.patch("/{report_id}/status", response_model=ReportResponse)
-def update_report_status(report_id: int, status_update: ReportStatusUpdate, req: Request, db: Session = Depends(get_db)):
+def update_report_status(
+    report_id: int, 
+    status_update: ReportStatusUpdate, 
+    req: Request, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
     report = db.query(Report).options(
         joinedload(Report.assigned_leader),
         joinedload(Report.facility),
@@ -1803,32 +1812,41 @@ def update_report_status(report_id: int, status_update: ReportStatusUpdate, req:
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
+    verify_subdivision_scope(current_user, report.subdivision_id, db=db)
+
+    # Determine acting updater: current authenticated user (admin may override if specified)
+    updater = current_user
+    if current_user.role_id == 4 and status_update.user_id:
+        target_u = db.query(User).filter(User.user_id == status_update.user_id).first()
+        if target_u:
+            updater = target_u
+    else:
+        status_update.user_id = current_user.user_id
+
     # Check permission for Barangay Staff: only assigned personnel or Head Officer can update status
-    if status_update.user_id:
-        updater = db.query(User).filter(User.user_id == status_update.user_id).first()
-        if updater and updater.role_id == 3:
-            is_head = getattr(updater, 'is_head_officer', False)
-            if not is_head:
-                rescues = db.query(Rescue).filter(Rescue.report_id == report_id).all()
-                is_assigned = False
-                for r in rescues:
-                    if r.staff_id == updater.user_id or r.leader_id == updater.user_id:
-                        is_assigned = True
-                        break
-                    asgn = db.query(RescueAssignment).filter(
-                        RescueAssignment.rescue_id == r.rescue_id,
-                        (RescueAssignment.user_id == updater.user_id) | (RescueAssignment.staff_id == updater.user_id),
-                        RescueAssignment.assignment_status == "Assigned"
-                    ).first()
-                    if asgn:
-                        is_assigned = True
-                        break
-                if not is_assigned:
-                    raise HTTPException(
-                        status_code=403,
-                        detail="Only personnel assigned to this report have the ability to update its status."
-                    )
-        elif updater and updater.role_id == 2:
+    if updater and updater.role_id == 3:
+        is_head = getattr(updater, 'is_head_officer', False)
+        if not is_head:
+            rescues = db.query(Rescue).filter(Rescue.report_id == report_id).all()
+            is_assigned = False
+            for r in rescues:
+                if r.staff_id == updater.user_id or r.leader_id == updater.user_id:
+                    is_assigned = True
+                    break
+                asgn = db.query(RescueAssignment).filter(
+                    RescueAssignment.rescue_id == r.rescue_id,
+                    (RescueAssignment.user_id == updater.user_id) | (RescueAssignment.staff_id == updater.user_id),
+                    RescueAssignment.assignment_status == "Assigned"
+                ).first()
+                if asgn:
+                    is_assigned = True
+                    break
+            if not is_assigned:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Only personnel assigned to this report have the ability to update its status."
+                )
+    elif updater and updater.role_id == 2:
             rescue_record = db.query(Rescue).filter(Rescue.report_id == report_id).first()
             is_already_escalated = (
                 report.endorsement_letter is not None or
@@ -2268,12 +2286,22 @@ def link_pet_to_report(report_id: int, pet_id: int, req: Request, db: Session = 
 
 
 @router.post("/{report_id}/claim", response_model=ReportResponse)
-def claim_report(report_id: int, claim_in: ReportClaimRequest, req: Request, db: Session = Depends(get_db)):
+def claim_report(
+    report_id: int, 
+    claim_in: ReportClaimRequest, 
+    req: Request, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
     """Claim ownership of an unassigned report by a subdivision officer with atomic concurrency check."""
     # 1. Fetch claiming officer
-    user = db.query(User).filter(User.user_id == claim_in.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = current_user
+    if current_user.role_id == 4 and claim_in.user_id:
+        target_u = db.query(User).filter(User.user_id == claim_in.user_id).first()
+        if target_u:
+            user = target_u
+    else:
+        claim_in.user_id = current_user.user_id
 
     if user.role_id not in [2, 4]:
         raise HTTPException(status_code=403, detail="Only Subdivision Leaders / Officers are authorized to claim reports.")
@@ -2295,10 +2323,8 @@ def claim_report(report_id: int, claim_in: ReportClaimRequest, req: Request, db:
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    # 3. Check subdivision match
-    if user.role_id == 2 and user.subdivision_id and report.subdivision_id:
-        if user.subdivision_id != report.subdivision_id:
-            raise HTTPException(status_code=403, detail="You can only claim reports within your assigned subdivision.")
+    # 3. Check subdivision scope
+    verify_subdivision_scope(user, report.subdivision_id, db=db)
 
     # Block claiming merged duplicate reports
     if report.current_status_id == 18 or report.duplicate_of_report_id:
@@ -2398,12 +2424,22 @@ def claim_report(report_id: int, claim_in: ReportClaimRequest, req: Request, db:
 
 
 @router.post("/{report_id}/take-over", response_model=ReportResponse)
-def takeover_report(report_id: int, takeover_in: ReportTakeoverRequest, req: Request, db: Session = Depends(get_db)):
+def takeover_report(
+    report_id: int, 
+    takeover_in: ReportTakeoverRequest, 
+    req: Request, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
     """Take over handling of a report from another officer with reason tracking."""
     # 1. Fetch new handler
-    new_officer = db.query(User).filter(User.user_id == takeover_in.user_id).first()
-    if not new_officer:
-        raise HTTPException(status_code=404, detail="User not found")
+    new_officer = current_user
+    if current_user.role_id == 4 and takeover_in.user_id:
+        target_u = db.query(User).filter(User.user_id == takeover_in.user_id).first()
+        if target_u:
+            new_officer = target_u
+    else:
+        takeover_in.user_id = current_user.user_id
 
     if new_officer.role_id not in [2, 4]:
         raise HTTPException(status_code=403, detail="Only Subdivision Leaders / Officers are authorized to take over reports.")
@@ -2425,9 +2461,7 @@ def takeover_report(report_id: int, takeover_in: ReportTakeoverRequest, req: Req
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    if new_officer.role_id == 2 and new_officer.subdivision_id and report.subdivision_id:
-        if new_officer.subdivision_id != report.subdivision_id:
-            raise HTTPException(status_code=403, detail="You can only take over reports within your assigned subdivision.")
+    verify_subdivision_scope(new_officer, report.subdivision_id, db=db)
 
     prev_handler_id = report.assigned_leader_id
     prev_handler_name = report.assigned_leader.name if report.assigned_leader else (f"Officer #{prev_handler_id}" if prev_handler_id else "Unassigned")
@@ -2552,11 +2586,21 @@ def takeover_report(report_id: int, takeover_in: ReportTakeoverRequest, req: Req
 
 
 @router.post("/{report_id}/unclaim", response_model=ReportResponse)
-def unclaim_report(report_id: int, unclaim_in: ReportClaimRequest, req: Request, db: Session = Depends(get_db)):
+def unclaim_report(
+    report_id: int, 
+    unclaim_in: ReportClaimRequest, 
+    req: Request, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
     """Release a claimed report back to the unassigned queue."""
-    user = db.query(User).filter(User.user_id == unclaim_in.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = current_user
+    if current_user.role_id == 4 and unclaim_in.user_id:
+        target_u = db.query(User).filter(User.user_id == unclaim_in.user_id).first()
+        if target_u:
+            user = target_u
+    else:
+        unclaim_in.user_id = current_user.user_id
 
     report = db.query(Report).options(
         joinedload(Report.assigned_leader),
@@ -2573,6 +2617,8 @@ def unclaim_report(report_id: int, unclaim_in: ReportClaimRequest, req: Request,
 
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+
+    verify_subdivision_scope(user, report.subdivision_id, db=db)
 
     if report.assigned_leader_id != user.user_id and user.role_id != 4:
         raise HTTPException(status_code=403, detail="You can only unclaim reports assigned to yourself.")
@@ -2626,11 +2672,21 @@ def unclaim_report(report_id: int, unclaim_in: ReportClaimRequest, req: Request,
 # ==============================================================================
 
 @router.post("/{report_id}/transfer/request", response_model=ReportResponse)
-def request_transfer_report(report_id: int, transfer_in: ReportTransferRequest, req: Request, db: Session = Depends(get_db)):
+def request_transfer_report(
+    report_id: int, 
+    transfer_in: ReportTransferRequest, 
+    req: Request, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
     """Initiate a transfer request from the current handler to another subdivision leader."""
-    sender = db.query(User).filter(User.user_id == transfer_in.user_id).first()
-    if not sender:
-        raise HTTPException(status_code=404, detail="Sender user not found")
+    sender = current_user
+    if current_user.role_id == 4 and transfer_in.user_id:
+        target_u = db.query(User).filter(User.user_id == transfer_in.user_id).first()
+        if target_u:
+            sender = target_u
+    else:
+        transfer_in.user_id = current_user.user_id
 
     target = db.query(User).filter(User.user_id == transfer_in.target_user_id).first()
     if not target:
@@ -2675,9 +2731,8 @@ def request_transfer_report(report_id: int, transfer_in: ReportTransferRequest, 
     if report.assigned_leader_id != sender.user_id and sender.role_id != 4:
         raise HTTPException(status_code=403, detail="Only the currently assigned handler can transfer this report.")
 
-    if target.role_id == 2 and report.subdivision_id and target.subdivision_id:
-        if target.subdivision_id != report.subdivision_id:
-            raise HTTPException(status_code=400, detail="Target officer must be assigned to the same subdivision.")
+    verify_subdivision_scope(sender, report.subdivision_id, db=db)
+    verify_subdivision_scope(target, report.subdivision_id, db=db)
 
     from datetime import datetime
     now = datetime.now()
@@ -2744,11 +2799,21 @@ def request_transfer_report(report_id: int, transfer_in: ReportTransferRequest, 
 
 
 @router.post("/{report_id}/transfer/accept", response_model=ReportResponse)
-def accept_transfer_report(report_id: int, action_in: ReportTransferActionRequest, req: Request, db: Session = Depends(get_db)):
+def accept_transfer_report(
+    report_id: int, 
+    action_in: ReportTransferActionRequest, 
+    req: Request, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
     """Accept an incoming transfer request and assume primary handling of the report."""
-    recipient = db.query(User).filter(User.user_id == action_in.user_id).first()
-    if not recipient:
-        raise HTTPException(status_code=404, detail="Recipient user not found")
+    recipient = current_user
+    if current_user.role_id == 4 and action_in.user_id:
+        target_u = db.query(User).filter(User.user_id == action_in.user_id).first()
+        if target_u:
+            recipient = target_u
+    else:
+        action_in.user_id = current_user.user_id
 
     report = db.query(Report).options(
         joinedload(Report.assigned_leader),
@@ -2767,6 +2832,8 @@ def accept_transfer_report(report_id: int, action_in: ReportTransferActionReques
 
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+
+    verify_subdivision_scope(recipient, report.subdivision_id, db=db)
 
     if report.pending_transfer_to_id != recipient.user_id and recipient.role_id != 4:
         raise HTTPException(status_code=403, detail="You are not the designated recipient of this transfer request.")
@@ -2845,11 +2912,21 @@ def accept_transfer_report(report_id: int, action_in: ReportTransferActionReques
 
 
 @router.post("/{report_id}/transfer/reject", response_model=ReportResponse)
-def reject_transfer_report(report_id: int, reject_in: ReportTransferRejectRequest, req: Request, db: Session = Depends(get_db)):
+def reject_transfer_report(
+    report_id: int, 
+    reject_in: ReportTransferRejectRequest, 
+    req: Request, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
     """Decline an incoming transfer request with reason, keeping the original handler responsible."""
-    recipient = db.query(User).filter(User.user_id == reject_in.user_id).first()
-    if not recipient:
-        raise HTTPException(status_code=404, detail="Recipient user not found")
+    recipient = current_user
+    if current_user.role_id == 4 and reject_in.user_id:
+        target_u = db.query(User).filter(User.user_id == reject_in.user_id).first()
+        if target_u:
+            recipient = target_u
+    else:
+        reject_in.user_id = current_user.user_id
 
     report = db.query(Report).options(
         joinedload(Report.assigned_leader),
@@ -2868,6 +2945,8 @@ def reject_transfer_report(report_id: int, reject_in: ReportTransferRejectReques
 
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+
+    verify_subdivision_scope(recipient, report.subdivision_id, db=db)
 
     if report.pending_transfer_to_id != recipient.user_id and recipient.role_id != 4:
         raise HTTPException(status_code=403, detail="You are not the designated recipient of this transfer request.")
@@ -2942,11 +3021,21 @@ def reject_transfer_report(report_id: int, reject_in: ReportTransferRejectReques
 
 
 @router.post("/{report_id}/transfer/cancel", response_model=ReportResponse)
-def cancel_transfer_report(report_id: int, action_in: ReportTransferActionRequest, req: Request, db: Session = Depends(get_db)):
+def cancel_transfer_report(
+    report_id: int, 
+    action_in: ReportTransferActionRequest, 
+    req: Request, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
     """Withdraw/cancel a pending transfer request before it is accepted."""
-    user = db.query(User).filter(User.user_id == action_in.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = current_user
+    if current_user.role_id == 4 and action_in.user_id:
+        target_u = db.query(User).filter(User.user_id == action_in.user_id).first()
+        if target_u:
+            user = target_u
+    else:
+        action_in.user_id = current_user.user_id
 
     report = db.query(Report).options(
         joinedload(Report.assigned_leader),
@@ -2965,6 +3054,8 @@ def cancel_transfer_report(report_id: int, action_in: ReportTransferActionReques
 
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+
+    verify_subdivision_scope(user, report.subdivision_id, db=db)
 
     if report.pending_transfer_from_id != user.user_id and user.role_id != 4:
         raise HTTPException(status_code=403, detail="You can only cancel transfer requests you initiated.")
@@ -3038,6 +3129,8 @@ def verify_incident_report(report_id: int, verify_in: ReportVerifyRequest, req: 
     user = db.query(User).filter(User.user_id == verify_in.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    verify_subdivision_scope(user, report.subdivision_id, db=db)
 
     if user.role_id == 2:
         rescue_record = db.query(Rescue).filter(Rescue.report_id == report_id).first()
@@ -3181,6 +3274,8 @@ def mark_report_false_alarm(report_id: int, false_in: ReportFalseAlarmRequest, r
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    verify_subdivision_scope(user, report.subdivision_id, db=db)
+
     if user.role_id == 2:
         rescue_record = db.query(Rescue).filter(Rescue.report_id == report_id).first()
         is_escalated = (
@@ -3297,6 +3392,9 @@ def merge_duplicate_report(
     if not primary_report:
         raise HTTPException(status_code=404, detail="Primary report not found.")
 
+    verify_subdivision_scope(actor, report.subdivision_id, db=db)
+    verify_subdivision_scope(actor, primary_report.subdivision_id, db=db)
+
     # Cannot merge into a closed/resolved/deceased/false-alarm/merged/claimed report
     if primary_report.current_status_id in [3, 9, 10, 11, 12, 14, 18]:
         raise HTTPException(status_code=400, detail="Cannot merge into a report that is already closed, resolved, claimed by owner, dismissed, or merged.")
@@ -3310,11 +3408,6 @@ def merge_duplicate_report(
     if sec_breed and pri_breed and sec_breed not in ['unknown', 'n/a'] and pri_breed not in ['unknown', 'n/a']:
         if sec_breed != pri_breed and sec_breed not in pri_breed and pri_breed not in sec_breed:
             raise HTTPException(status_code=400, detail=f"Cannot merge reports of different breeds ({report.animal_breed} vs {primary_report.animal_breed}). Both must be the same breed.")
-
-    # Check subdivision authorization for subdivision leaders
-    if actor.role_id == 2:
-        if actor.subdivision_id and report.subdivision_id != actor.subdivision_id:
-            raise HTTPException(status_code=403, detail="Subdivision leaders can only merge reports within their assigned subdivision.")
 
     old_status_id = report.current_status_id
 
@@ -3480,6 +3573,8 @@ def unmerge_duplicate_report(
     if not report:
         raise HTTPException(status_code=404, detail="Report not found.")
 
+    verify_subdivision_scope(actor, report.subdivision_id, db=db)
+
     if not report.duplicate_of_report_id and report.current_status_id != 18:
         raise HTTPException(status_code=400, detail=f"Report #{report_id} is not currently merged.")
 
@@ -3595,17 +3690,13 @@ async def create_report_dispute(
 
     vaccine_url = None
     if vaccination_card and vaccination_card.filename:
-        v_content = await vaccination_card.read()
-        v_ext = os.path.splitext(vaccination_card.filename)[1] or ".jpg"
-        v_name = f"dispute_vax_{uuid.uuid4()}{v_ext}"
-        vaccine_url = upload_to_cloudinary(v_content, filename=v_name)
+        v_content, v_name, _, _ = await read_and_validate_upload(vaccination_card, allowed={'Image', 'Document'})
+        vaccine_url = upload_to_cloudinary(v_content, filename=f"dispute_vax_{v_name}")
 
     photo_url = None
     if supporting_photo and supporting_photo.filename:
-        p_content = await supporting_photo.read()
-        p_ext = os.path.splitext(supporting_photo.filename)[1] or ".jpg"
-        p_name = f"dispute_proof_{uuid.uuid4()}{p_ext}"
-        photo_url = upload_to_cloudinary(p_content, filename=p_name)
+        p_content, p_name, _, _ = await read_and_validate_upload(supporting_photo, allowed={'Image'})
+        photo_url = upload_to_cloudinary(p_content, filename=f"dispute_proof_{p_name}")
 
     # Check if a pending dispute already exists for this user/report
     existing_dispute = db.query(ReportDispute).filter(
@@ -3762,6 +3853,8 @@ def review_report_dispute(
     reviewer = db.query(User).filter(User.user_id == review_in.reviewer_id).first()
     if not reviewer:
         raise HTTPException(status_code=404, detail="Reviewer not found")
+
+    verify_subdivision_scope(reviewer, report.subdivision_id, db=db)
 
     from datetime import datetime
     now = datetime.now()

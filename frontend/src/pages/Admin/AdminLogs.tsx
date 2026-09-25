@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { api } from '../../utils/api';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import SummaryCard from '../../components/Cards/SummaryCard';
 import DataTable from '../../components/DataTable';
-
-const API_URL = 'http://localhost:8000/audit-logs/';
 
 interface AuditLog {
     id: number;
@@ -36,7 +34,7 @@ const AdminLogs = () => {
         setLoading(true);
         setError(null);
         try {
-            const response = await axios.get<AuditLog[]>(API_URL);
+            const response = await api.get<AuditLog[]>('/audit-logs/');
             setLogs(response.data);
         } catch (err: unknown) {
             console.error('Failed to fetch audit logs:', err);

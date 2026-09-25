@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import axios from 'axios';
 import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture, getPetPicture } from '../../utils/avatar';
 import Button from '../../components/Button';
@@ -140,7 +139,7 @@ const ResidentSettings = () => {
         if (activeTab === 'notifications') {
             const userId = getUserId();
             if (userId) {
-                axios.post(`http://localhost:8000/notifications/mark-all-read/${userId}`)
+                api.post(`/notifications/mark-all-read/${userId}`)
                     .then(() => fetchUserNotifications())
                     .catch(err => console.error('Failed to auto mark notifications read:', err));
             }
@@ -168,7 +167,7 @@ const ResidentSettings = () => {
         const userId = getUserId();
         if (!userId) return;
         try {
-            const response = await axios.get(`http://localhost:8000/notifications/user/${userId}?include_archived=true`);
+            const response = await api.get(`/notifications/user/${userId}?include_archived=true`);
             setNotificationsList(response.data);
         } catch (error) {
             console.error('Error fetching user notifications:', error);
@@ -180,7 +179,7 @@ const ResidentSettings = () => {
         if (!userId) return;
         setIsPetHistoryLoading(true);
         try {
-            const response = await axios.get(`http://localhost:8000/pets/owner/${userId}/history`);
+            const response = await api.get(`/pets/owner/${userId}/history`);
             if (response.data) {
                 setPetHistoryData(response.data);
             }
@@ -202,7 +201,7 @@ const ResidentSettings = () => {
         setRestoringPetId(targetKey);
         try {
             const userId = getUserId();
-            await axios.post('http://localhost:8000/pets/restore', {
+            await api.post('/pets/restore', {
                 pet_id: pet.pet_id,
                 log_id: pet.log_id,
                 pet_name: pet.pet_name,
@@ -225,7 +224,7 @@ const ResidentSettings = () => {
 
     const handleArchiveNotification = async (id: number) => {
         try {
-            await axios.post(`http://localhost:8000/notifications/${id}/archive`);
+            await api.post(`/notifications/${id}/archive`);
             fetchUserNotifications();
             showNotification('Notification moved to archive');
         } catch (error) {
@@ -235,7 +234,7 @@ const ResidentSettings = () => {
 
     const handleUnarchiveNotification = async (id: number) => {
         try {
-            await axios.post(`http://localhost:8000/notifications/${id}/unarchive`);
+            await api.post(`/notifications/${id}/unarchive`);
             fetchUserNotifications();
             showNotification('Notification restored to active inbox');
         } catch (error) {
@@ -245,7 +244,7 @@ const ResidentSettings = () => {
 
     const handleToggleRead = async (id: number, currentRead: boolean) => {
         try {
-            await axios.patch(`http://localhost:8000/notifications/${id}`, { is_read: !currentRead });
+            await api.patch(`/notifications/${id}`, { is_read: !currentRead });
             fetchUserNotifications();
         } catch (error) {
             console.error('Error toggling read status:', error);
@@ -254,7 +253,7 @@ const ResidentSettings = () => {
 
     const handleDeleteNotification = async (id: number) => {
         try {
-            await axios.delete(`http://localhost:8000/notifications/${id}`);
+            await api.delete(`/notifications/${id}`);
             fetchUserNotifications();
             showNotification('Notification permanently deleted');
         } catch (error) {
@@ -265,7 +264,7 @@ const ResidentSettings = () => {
     const handleArchiveAll = async () => {
         const userId = getUserId();
         try {
-            await axios.post(`http://localhost:8000/notifications/archive-all/${userId}`);
+            await api.post(`/notifications/archive-all/${userId}`);
             fetchUserNotifications();
             showNotification('All active notifications archived');
         } catch (error) {
@@ -277,7 +276,7 @@ const ResidentSettings = () => {
         const userId = getUserId();
         if (!window.confirm('Are you sure you want to permanently delete all archived notifications?')) return;
         try {
-            await axios.delete(`http://localhost:8000/notifications/archived/clear/${userId}`);
+            await api.delete(`/notifications/archived/clear/${userId}`);
             fetchUserNotifications();
             showNotification('Archived notifications cleared');
         } catch (error) {
@@ -515,7 +514,7 @@ const ResidentSettings = () => {
                 onMarkAllNotificationsRead={async () => {
                     const storedUser = localStorage.getItem('resident_user');
                     const userId = storedUser ? JSON.parse(storedUser).user_id : initialUser.user_id;
-                    await axios.post(`http://localhost:8000/notifications/mark-all-read/${userId}`);
+                    await api.post(`/notifications/mark-all-read/${userId}`);
                     fetchUserNotifications();
                 }}
             />

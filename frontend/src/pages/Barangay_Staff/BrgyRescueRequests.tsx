@@ -15,7 +15,7 @@ import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import { api } from '../../utils/api';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
-import { Sparkles, Shield, Clock, Flame, CheckCircle2, AlertTriangle, RefreshCw, Plus, Search, MapPin, Eye, Filter } from 'lucide-react';
+import { Sparkles, Shield, RefreshCw } from 'lucide-react';
 
 interface RescueRequest {
     rescue_id: number;

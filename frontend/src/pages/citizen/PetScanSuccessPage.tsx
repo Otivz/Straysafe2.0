@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../utils/api';
 
 
 
@@ -12,7 +12,7 @@ const PetScanSuccessPage = () => {
     useEffect(() => {
         const fetchPetName = async () => {
             try {
-                const response = await axios.get(`http://localhost:8000/pet/scan/${token}`);
+                const response = await api.get(`/pet/scan/${token}`);
                 if (response.data && response.data.pet_name) {
                     setPetName(response.data.pet_name);
                 }

@@ -6,7 +6,7 @@ import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import MapComponent from '../../components/MapComponent';
-import { Sparkles, MapPin, Activity, Flame, Shield, CheckCircle2, Clock, Truck, FileText, X, Layers, Radio } from 'lucide-react';
+import { MapPin, Activity, Flame, Shield, CheckCircle2, Clock, Truck, FileText, X } from 'lucide-react';
 
 const BrgyDashboard = () => {
     const navigate = useNavigate();

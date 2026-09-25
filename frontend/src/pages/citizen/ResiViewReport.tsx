@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams, useLocation, Link } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../utils/api';
 import {
     Siren, MapPin, PawPrint, Palette, Tag, User, Gift, FileText, Megaphone,
     Crosshair, Search, MessageCircle, Scale, Link2, Shield, AlertTriangle, Phone,
@@ -393,17 +393,17 @@ const ResiViewReport = () => {
         if (!id) return;
         try {
             setLoading(true);
-            const response = await axios.get(`http://localhost:8000/reports/${id}`);
+            const response = await api.get(`/reports/${id}`);
             if (response.data) {
                 setReport(response.data);
 
                 // Fetch holding animal details if status suggests it is/was in holding
                 try {
-                    const holdingRes = await axios.get('http://localhost:8000/holding/');
+                    const holdingRes = await api.get('/holding/');
                     const targetReportId = response.data.duplicate_of_report_id ? Number(response.data.duplicate_of_report_id) : Number(id);
                     const matchingAnimal = holdingRes.data.find((a: any) => a.report_id === Number(id) || a.report_id === targetReportId);
                     if (matchingAnimal) {
-                        const detailRes = await axios.get(`http://localhost:8000/holding/${matchingAnimal.holding_id}`);
+                        const detailRes = await api.get(`/holding/${matchingAnimal.holding_id}`);
                         setHoldingAnimal(detailRes.data);
                     } else {
                         setHoldingAnimal(null);
@@ -415,7 +415,7 @@ const ResiViewReport = () => {
 
                 // Check if current user owns a matched registered pet for this report
                 try {
-                    const matchesRes = await axios.get(`http://localhost:8000/matches/report/${id}`);
+                    const matchesRes = await api.get(`/matches/report/${id}`);
                     if (Array.isArray(matchesRes.data) && currentUserId) {
                         const myMatch = matchesRes.data.find((m: any) => m.matched_pet?.owner_id === currentUserId);
                         setUserMatch(myMatch || null);
@@ -511,7 +511,7 @@ const ResiViewReport = () => {
         }
         setIsDisputeModalOpen(true);
         try {
-            const res = await axios.get(`http://localhost:8000/pets/user/${currentUser.user_id}`);
+            const res = await api.get(`/pets/user/${currentUser.user_id}`);
             if (Array.isArray(res.data)) {
                 setUserPets(res.data);
                 if (userMatch?.matched_pet?.pet_id) {
@@ -548,7 +548,7 @@ const ResiViewReport = () => {
                 formData.append('supporting_photo', supportingPhotoFile);
             }
 
-            await axios.post(`http://localhost:8000/reports/${report.report_id}/disputes`, formData, {
+            await api.post(`/reports/${report.report_id}/disputes`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 

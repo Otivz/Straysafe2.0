@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.database import get_db
 from app.models.audit_log import AuditLog
 from app.models.user import User
+from app.utils.auth import get_optional_user
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -29,7 +30,16 @@ class AuditLogResponse(BaseModel):
 
 
 @router.get("/", response_model=List[AuditLogResponse])
-def get_audit_logs(db: Session = Depends(get_db)):
+def get_audit_logs(
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user)
+):
+    if not current_user or current_user.role_id != 4:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: Admin role required"
+        )
+
     logs = (
         db.query(AuditLog, User.name)
         .outerjoin(User, AuditLog.user_id == User.user_id)

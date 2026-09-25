@@ -2,9 +2,10 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
+from app.utils.auth import get_current_staff_or_admin, get_current_user
 
 from app.database import get_db
 from app.models.report import HoldingAnimal, HoldingTimeline, Report, FacilityStatus, StatusHistory
@@ -394,14 +395,23 @@ def get_animal(holding_id: int, db: Session = Depends(get_db)):
 
 # ── POST /holding/ ────────────────────────────────────────────────────────────
 @router.post("/", response_model=HoldingAnimalResponse)
-def create_animal(body: HoldingAnimalCreate, db: Session = Depends(get_db)):
+def create_animal(
+    body: HoldingAnimalCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
     try:
         # Prevent duplicate intakes for the same report
         existing = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == body.report_id).first()
         if existing:
             raise HTTPException(status_code=409, detail="Animal already in holding facility for this report")
 
-        animal = HoldingAnimal(**body.model_dump())
+        # Automatically associate the logged-in staff member
+        intake_staff_id = current_user.user_id if not body.intake_staff_id else body.intake_staff_id
+
+        animal_dict = body.model_dump()
+        animal_dict["intake_staff_id"] = intake_staff_id
+        animal = HoldingAnimal(**animal_dict)
         db.add(animal)
         db.flush()
 
@@ -411,7 +421,7 @@ def create_animal(body: HoldingAnimalCreate, db: Session = Depends(get_db)):
             event_type="intake",
             title="Animal Admitted to Holding Facility",
             notes=f"Admitted from Report #{body.report_id}.",
-            logged_by=body.intake_staff_id,
+            logged_by=current_user.user_id,
         )
         db.add(first_log)
         
@@ -422,7 +432,7 @@ def create_animal(body: HoldingAnimalCreate, db: Session = Depends(get_db)):
             target_table="holding_animals",
             target_id=animal.holding_id,
             description=f"Stray animal from Report #{body.report_id} admitted to holding facility (ID: {animal.holding_id}).",
-            user_id=body.intake_staff_id,
+            user_id=current_user.user_id,
             log_type="operation"
         )
 
@@ -441,7 +451,12 @@ def create_animal(body: HoldingAnimalCreate, db: Session = Depends(get_db)):
 
 # ── PATCH /holding/{holding_id} ───────────────────────────────────────────────
 @router.patch("/{holding_id}", response_model=HoldingAnimalResponse)
-def update_animal(holding_id: int, body: HoldingAnimalUpdate, db: Session = Depends(get_db)):
+def update_animal(
+    holding_id: int, 
+    body: HoldingAnimalUpdate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
     try:
         animal = db.query(HoldingAnimal).filter(HoldingAnimal.holding_id == holding_id).first()
         if not animal:
@@ -450,34 +465,33 @@ def update_animal(holding_id: int, body: HoldingAnimalUpdate, db: Session = Depe
         old_status = animal.facility_status
         update_data = body.model_dump(exclude_unset=True)
 
-        updated_by   = update_data.pop("updated_by", None)
+        updated_by   = current_user.user_id
+        update_data.pop("updated_by", None)
         update_notes = update_data.pop("update_notes", None)
         media_ids    = update_data.pop("media_ids", None)
 
-        if updated_by:
-            updater = db.query(User).filter(User.user_id == updated_by).first()
-            if updater and updater.role_id == 2:
-                # Check if animal is transferred to barangay or in barangay custody
-                is_in_barangay = False
-                if animal.report and animal.report.facility:
-                    is_in_barangay = (
-                        animal.report.facility.facility_type == 'barangay_facility' or
-                        'barangay' in (animal.report.facility.name or '').lower()
-                    )
-                elif animal.facility_status == 5:
-                    is_in_barangay = True
-                
-                if is_in_barangay:
-                    raise HTTPException(
-                        status_code=403,
-                        detail="This animal is currently in a Barangay facility and cannot be modified by Subdivision Leaders. You can only track its progress."
-                    )
+        if current_user.role_id == 2:
+            # Check if animal is transferred to barangay or in barangay custody
+            is_in_barangay = False
+            if animal.report and animal.report.facility:
+                is_in_barangay = (
+                    animal.report.facility.facility_type == 'barangay_facility' or
+                    'barangay' in (animal.report.facility.name or '').lower()
+                )
+            elif animal.facility_status == 5:
+                is_in_barangay = True
+            
+            if is_in_barangay:
+                raise HTTPException(
+                    status_code=403,
+                    detail="This animal is currently in a Barangay facility and cannot be modified by Subdivision Leaders. You can only track its progress."
+                )
 
-                if update_data.get("facility_status") in (6, 7, 8):
-                    raise HTTPException(
-                        status_code=403,
-                        detail="Only Barangay staff and administrators have the authority to manage adoption or mark an animal as Impounded."
-                    )
+            if update_data.get("facility_status") in (6, 7, 8):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Only Barangay staff and administrators have the authority to manage adoption or mark an animal as Impounded."
+                )
 
         for key, value in update_data.items():
             if hasattr(animal, key):
@@ -603,36 +617,39 @@ def update_animal(holding_id: int, body: HoldingAnimalUpdate, db: Session = Depe
 
 # ── POST /holding/{holding_id}/timeline ───────────────────────────────────────
 @router.post("/{holding_id}/timeline", response_model=HoldingTimelineResponse)
-def add_timeline_entry(holding_id: int, body: HoldingTimelineCreate, db: Session = Depends(get_db)):
+def add_timeline_entry(
+    holding_id: int, 
+    body: HoldingTimelineCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
     try:
         animal = db.query(HoldingAnimal).filter(HoldingAnimal.holding_id == holding_id).first()
         if not animal:
             raise HTTPException(status_code=404, detail="Holding record not found")
 
-        if body.logged_by:
-            updater = db.query(User).filter(User.user_id == body.logged_by).first()
-            if updater and updater.role_id == 2:
-                is_in_barangay = False
-                if animal.report and animal.report.facility:
-                    is_in_barangay = (
-                        animal.report.facility.facility_type == 'barangay_facility' or
-                        'barangay' in (animal.report.facility.name or '').lower()
-                    )
-                elif animal.facility_status == 5:
-                    is_in_barangay = True
-                
-                if is_in_barangay:
-                    raise HTTPException(
-                        status_code=403,
-                        detail="This animal is currently in a Barangay facility and cannot be modified by Subdivision Leaders. You can only track its progress."
-                    )
+        if current_user.role_id == 2:
+            is_in_barangay = False
+            if animal.report and animal.report.facility:
+                is_in_barangay = (
+                    animal.report.facility.facility_type == 'barangay_facility' or
+                    'barangay' in (animal.report.facility.name or '').lower()
+                )
+            elif animal.facility_status == 5:
+                is_in_barangay = True
+            
+            if is_in_barangay:
+                raise HTTPException(
+                    status_code=403,
+                    detail="This animal is currently in a Barangay facility and cannot be modified by Subdivision Leaders. You can only track its progress."
+                )
 
         log = HoldingTimeline(
             holding_id=holding_id,
             event_type=body.event_type,
             title=body.title,
             notes=body.notes,
-            logged_by=body.logged_by,
+            logged_by=current_user.user_id,
         )
         db.add(log)
         db.flush()
@@ -651,7 +668,7 @@ def add_timeline_entry(holding_id: int, body: HoldingTimelineCreate, db: Session
             target_table="holding_timeline",
             target_id=log.log_id,
             description=f"Added timeline event '{body.title}' to holding animal #{holding_id}.",
-            user_id=body.logged_by,
+            user_id=current_user.user_id,
             log_type="operation"
         )
 
@@ -665,3 +682,53 @@ def add_timeline_entry(holding_id: int, body: HoldingTimelineCreate, db: Session
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── DELETE /holding/{holding_id} ──────────────────────────────────────────────
+@router.delete("/{holding_id}")
+def delete_animal(
+    holding_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
+    """
+    Delete a holding facility record and associated timeline logs.
+    Restricted to Staff (roles 2, 3) and Admin (role 4).
+    """
+    animal = db.query(HoldingAnimal).filter(HoldingAnimal.holding_id == holding_id).first()
+    if not animal:
+        raise HTTPException(status_code=404, detail="Holding record not found")
+
+    if current_user.role_id == 2:
+        if animal.report and animal.report.subdivision_id != current_user.subdivision_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Permission Denied: Subdivision Leaders can only delete holding records within their subdivision."
+            )
+
+    report_id = animal.report_id
+    kennel_slot = animal.kennel_slot
+
+    try:
+        # Delete timeline entries for this holding animal
+        db.query(HoldingTimeline).filter(HoldingTimeline.holding_id == holding_id).delete(synchronize_session=False)
+
+        # Delete holding animal record
+        db.delete(animal)
+
+        log_activity(
+            db=db,
+            action="Delete Holding Animal",
+            target_table="holding_animals",
+            target_id=holding_id,
+            description=f"Staff/Admin {current_user.name} (Role {current_user.role_id}) deleted holding record #{holding_id} (Report #{report_id}, Kennel: {kennel_slot or 'N/A'}).",
+            user_id=current_user.user_id,
+            log_type="operation"
+        )
+
+        db.commit()
+        return {"message": f"Holding record #{holding_id} deleted successfully", "holding_id": holding_id}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting holding record {holding_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to delete holding record: {str(e)}")

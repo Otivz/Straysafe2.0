@@ -471,7 +471,7 @@ const ResiHomePage = () => {
             try {
                 const mediaData = new FormData();
                 mediaData.append("file", primaryFile);
-                const res = await axios.post('http://localhost:8000/reports/analyze-media', mediaData);
+                const res = await api.post('/reports/analyze-media', mediaData);
                 if (res.status === 200 && res.data) {
                     const ai = res.data;
                     const isDetected = ai.animal_detected !== false && !['unknown', 'none', ''].includes((ai.animal_type || '').toLowerCase());
@@ -560,7 +560,7 @@ const ResiHomePage = () => {
     useEffect(() => {
         const fetchLandmarks = async () => {
             try {
-                const res = await axios.get('http://localhost:8000/landmarks');
+                const res = await api.get('/landmarks');
                 if (res.data && Array.isArray(res.data)) {
                     setLandmarks(res.data);
                 }
@@ -905,7 +905,7 @@ const ResiHomePage = () => {
     const fetchAnnouncements = async () => {
         if (!currentUserId) return;
         try {
-            const response = await axios.get(`http://localhost:8000/announcements/feed/resident/${currentUserId}`);
+            const response = await api.get(`/announcements/feed/resident/${currentUserId}`);
             setAnnouncements(response.data);
         } catch (error) {
             console.error('Failed to fetch announcements:', error);
@@ -915,7 +915,7 @@ const ResiHomePage = () => {
     const handleLikeAnnouncement = async (announcementId: number) => {
         if (!currentUserId) return;
         try {
-            await axios.post(`http://localhost:8000/announcements/${announcementId}/react`, {
+            await api.post(`/announcements/${announcementId}/react`, {
                 user_id: currentUserId,
                 reaction_type: "Like"
             });
@@ -929,7 +929,7 @@ const ResiHomePage = () => {
         const text = annCommentInputs[announcementId];
         if (!text || !text.trim() || !currentUserId) return;
         try {
-            await axios.post(`http://localhost:8000/announcements/${announcementId}/comments`, {
+            await api.post(`/announcements/${announcementId}/comments`, {
                 user_id: currentUserId,
                 comment: text.trim(),
                 parent_comment_id: parentCommentId
@@ -1016,12 +1016,10 @@ const ResiHomePage = () => {
         return `${month} ${day}, ${year} at ${time}`;
     };
 
-    const API_URL = 'http://localhost:8000/reports';
-
     const fetchNotifications = async () => {
         if (!currentUserId) return;
         try {
-            const response = await axios.get(`http://localhost:8000/notifications/user/${currentUserId}`);
+            const response = await api.get(`/notifications/user/${currentUserId}`);
             setNotifications(response.data);
         } catch (error) {
             console.error('Failed to fetch notifications:', error);
@@ -1031,7 +1029,7 @@ const ResiHomePage = () => {
     const handleMarkAllNotificationsRead = async () => {
         if (!currentUserId) return;
         try {
-            await axios.post(`http://localhost:8000/notifications/mark-all-read/${currentUserId}`);
+            await api.post(`/notifications/mark-all-read/${currentUserId}`);
             fetchNotifications();
         } catch (error) {
             console.error('Failed to mark all notifications as read:', error);
@@ -1040,7 +1038,7 @@ const ResiHomePage = () => {
 
     const handleMarkNotificationRead = async (id: number) => {
         try {
-            await axios.patch(`http://localhost:8000/notifications/${id}`, { is_read: true });
+            await api.patch(`/notifications/${id}`, { is_read: true });
             fetchNotifications();
         } catch (error) {
             console.error('Failed to mark notification as read:', error);
@@ -1050,7 +1048,7 @@ const ResiHomePage = () => {
     const handleDismissNotification = async (id: number) => {
         setDismissedNotificationIds(prev => new Set(prev).add(id));
         try {
-            await axios.post(`http://localhost:8000/notifications/${id}/archive`);
+            await api.post(`/notifications/${id}/archive`);
             fetchNotifications();
         } catch (error) {
             console.error('Failed to archive notification:', error);
@@ -1236,7 +1234,7 @@ const ResiHomePage = () => {
                 patchPayload.estimated_size = animalTypeValidation.user_estimated_size;
             }
 
-            await axios.patch(`http://localhost:8000/reports/${animalTypeValidation.reportId}`, patchPayload);
+            await api.patch(`/reports/${animalTypeValidation.reportId}`, patchPayload);
 
             toast.success('Report updated with suggestions successfully!');
         } catch (error) {
@@ -1274,7 +1272,7 @@ const ResiHomePage = () => {
         try {
             const isEdit = editingReportId !== null;
             if (!isEdit) {
-                await axios.delete(`http://localhost:8000/reports/${animalTypeValidation.reportId}`);
+                await api.delete(`/reports/${animalTypeValidation.reportId}`);
             }
         } catch (error) {
             console.error('Failed to cancel temporary report:', error);
@@ -1311,7 +1309,7 @@ const ResiHomePage = () => {
                     validationData.append('files', file);
                 }
 
-                const response = await axios.post('http://localhost:8000/reports/validate-images', validationData, {
+                const response = await api.post('/reports/validate-images', validationData, {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
 
@@ -1430,18 +1428,9 @@ const ResiHomePage = () => {
             };
 
             const isEditing = editingReportId !== null;
-            const url = isEditing
-                ? `http://localhost:8000/reports/${editingReportId}`
-                : `${API_URL}/`;
-
-            const method = isEditing ? 'PATCH' : 'POST';
-
-            const response = await axios({
-                method: method.toLowerCase() as any,
-                url: url,
-                data: payload,
-                headers: { 'Content-Type': 'application/json' }
-            });
+            const response = isEditing
+                ? await api.patch(`/reports/${editingReportId}`, payload)
+                : await api.post('/reports/', payload);
 
             if (response.status === 200 || response.status === 201) {
                 const resultData = response.data;
@@ -1451,7 +1440,7 @@ const ResiHomePage = () => {
                 if (isEditing && formData.mediaIdsToDelete.length > 0) {
                     for (const mediaId of formData.mediaIdsToDelete) {
                         try {
-                            await axios.delete(`http://localhost:8000/reports/media/${mediaId}`);
+                            await api.delete(`/reports/media/${mediaId}`);
                         } catch (err) {
                             console.error(`Failed to delete media ${mediaId}:`, err);
                         }
@@ -1505,7 +1494,7 @@ const ResiHomePage = () => {
                                 mediaData.append("status_id", "1"); // Status 1 = Reported
                                 mediaData.append("is_evidence", "false");
 
-                                await axios.post(`${API_URL}/${actualReportId}/media`, mediaData);
+                                await api.post(`/reports/${actualReportId}/media`, mediaData);
                             } catch (err: any) {
                                 const errorMsg = err.response?.data?.detail || err.message;
                                 console.error('Failed to attach media URL:', errorMsg);

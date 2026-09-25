@@ -9,7 +9,7 @@ import MapComponent from '../../components/MapComponent';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { api } from '../../utils/api';
-import { Sparkles, ArrowLeft, History, Archive, MapPin, CheckCircle2 } from 'lucide-react';
+import { Sparkles, ArrowLeft, MapPin, CheckCircle2 } from 'lucide-react';
 
 interface Report {
     report_id: number;

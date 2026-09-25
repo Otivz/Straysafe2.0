@@ -46,7 +46,7 @@ const RejectTransferModal: React.FC<RejectTransferModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
             <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-gray-100 flex flex-col gap-6 relative">
                 {/* Header */}
                 <div className="flex items-center justify-between pb-4 border-b border-gray-100">

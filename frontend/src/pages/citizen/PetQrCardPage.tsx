@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import axios from 'axios';
+import { api } from '../../utils/api';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
@@ -66,12 +66,12 @@ const PetQrCardPage = () => {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const petRes = await axios.get(`http://localhost:8000/pets/${petId}`);
+            const petRes = await api.get(`/pets/${petId}`);
             setPet(petRes.data);
 
             // Fetch active QR code
             try {
-                const qrRes = await axios.get(`http://localhost:8000/pets/${petId}/qr`);
+                const qrRes = await api.get(`/pets/${petId}/qr`);
                 setQr(qrRes.data);
             } catch (err) {
                 console.error("Failed to fetch QR automatically:", err);
@@ -89,7 +89,7 @@ const PetQrCardPage = () => {
         if (window.confirm("Generating a new QR code will deactivate the old tag. Are you sure you want to proceed?")) {
             try {
                 setIsGenerating(true);
-                const res = await axios.post(`http://localhost:8000/pets/${pet.pet_id}/generate-qr`);
+                const res = await api.post(`/pets/${pet.pet_id}/generate-qr`);
                 setQr(res.data);
                 alert("New QR Identification Tag generated successfully!");
             } catch (err) {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../utils/api';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import MapComponent from '../../components/MapComponent';
 
@@ -67,7 +67,7 @@ const PetScanPage = () => {
     const fetchPublicPetDetails = async () => {
         try {
             setLoading(true);
-            const response = await axios.get(`http://localhost:8000/pet/scan/${token}`);
+            const response = await api.get(`/pet/scan/${token}`);
             setPet(response.data);
         } catch (err: any) {
             console.error(err);
@@ -195,7 +195,7 @@ const PetScanPage = () => {
                 notes: notes
             };
 
-            await axios.post(`http://localhost:8000/pet/scan/${token}/submit`, scanPayload);
+            await api.post(`/pet/scan/${token}/submit`, scanPayload);
             
             // Redirect to success confirmation page
             navigate(`/pet/scan/${token}/success`);

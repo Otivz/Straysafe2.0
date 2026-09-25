@@ -226,7 +226,7 @@ const BrgyHoldingFacility = () => {
             try {
                 const parsedObj = JSON.parse(brgySettings);
                 if (typeof parsedObj?.adoptionGraceDays === 'number' && parsedObj.adoptionGraceDays >= 0) return parsedObj.adoptionGraceDays;
-            } catch {}
+            } catch { }
         }
         return 0;
     });
@@ -879,7 +879,7 @@ const BrgyHoldingFacility = () => {
                                         );
 
                                         return (
-                                            <div 
+                                            <div
                                                 key={animal.holding_id}
                                                 className="bg-white rounded-2xl border border-red-200 p-3.5 shadow-xs flex flex-col justify-between hover:border-red-400 hover:shadow-md transition-all gap-3"
                                             >
@@ -963,7 +963,7 @@ const BrgyHoldingFacility = () => {
                             <div className="flex items-center gap-2.5 bg-amber-50/80 border border-amber-200/90 px-3 py-1.5 rounded-xl shadow-2xs">
                                 <div className="flex flex-col">
                                     <span className="text-[9px] font-black uppercase tracking-wider text-amber-950 leading-none">
-                                        Impound Stay Limit
+                                        Stay Limit
                                     </span>
                                     <span className="text-[8px] font-bold text-amber-700/80 mt-0.5">
                                         Duration Spinner
@@ -1061,13 +1061,12 @@ const BrgyHoldingFacility = () => {
                                         <div
                                             key={animal.holding_id}
                                             onClick={() => openDetail(animal)}
-                                            className={`bg-white rounded-3xl border shadow-sm hover:shadow-xl hover:border-indigo-200 transition-all duration-300 flex flex-col overflow-hidden cursor-pointer group ${
-                                                isOverdue 
-                                                    ? 'border-red-300 ring-2 ring-red-200/60 shadow-md' 
-                                                    : isResolved 
-                                                        ? 'opacity-75 bg-gray-50/50 border-gray-150' 
+                                            className={`bg-white rounded-3xl border shadow-sm hover:shadow-xl hover:border-indigo-200 transition-all duration-300 flex flex-col overflow-hidden cursor-pointer group ${isOverdue
+                                                    ? 'border-red-300 ring-2 ring-red-200/60 shadow-md'
+                                                    : isResolved
+                                                        ? 'opacity-75 bg-gray-50/50 border-gray-150'
                                                         : 'border-gray-100'
-                                            }`}
+                                                }`}
                                         >
                                             {/* Card Top / Prominent Image Hero */}
                                             <div className="relative w-full h-52 bg-slate-100 overflow-hidden">
@@ -1106,11 +1105,10 @@ const BrgyHoldingFacility = () => {
                                                     )}
 
                                                     {/* Facility Status Badge */}
-                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-wider uppercase backdrop-blur-md shadow-sm border ${
-                                                        firstImage 
-                                                            ? 'bg-white/95 text-gray-900 border-white/60' 
+                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-wider uppercase backdrop-blur-md shadow-sm border ${firstImage
+                                                            ? 'bg-white/95 text-gray-900 border-white/60'
                                                             : statusMeta.color
-                                                    }`}>
+                                                        }`}>
                                                         {statusMeta.name}
                                                     </span>
                                                 </div>
@@ -1305,8 +1303,8 @@ const BrgyHoldingFacility = () => {
                                     key={tab}
                                     onClick={() => setDetailTab(tab)}
                                     className={`px-4 py-3 text-xs font-bold uppercase tracking-widest transition-colors border-b-2 -mb-px ${detailTab === tab
-                                            ? 'border-indigo-500 text-indigo-600'
-                                            : 'border-transparent text-gray-400 hover:text-gray-600'
+                                        ? 'border-indigo-500 text-indigo-600'
+                                        : 'border-transparent text-gray-400 hover:text-gray-600'
                                         }`}
                                 >
                                     {tab === 'info'
@@ -1330,9 +1328,9 @@ const BrgyHoldingFacility = () => {
                                         if (!residentImage) return null;
                                         return (
                                             <div className="relative w-full h-52 rounded-2xl overflow-hidden border border-gray-150 shadow-sm bg-gray-50 group">
-                                                <img 
-                                                    src={residentImage.file_url} 
-                                                    alt="Resident Uploaded Animal" 
+                                                <img
+                                                    src={residentImage.file_url}
+                                                    alt="Resident Uploaded Animal"
                                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                                 />
                                                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex flex-col justify-end p-4">
@@ -1392,10 +1390,10 @@ const BrgyHoldingFacility = () => {
                                                 {selected.report_media.map((media, idx) => {
                                                     const isVideo = media.media_type === 'Video' || media.file_url.toLowerCase().match(/\.(mp4|mov|avi|webm)$/i);
                                                     const isDoc = media.media_type === 'Document' || media.file_url.toLowerCase().endsWith('.pdf') || media.file_url.toLowerCase().endsWith('.docx');
-                                                    
+
                                                     return (
-                                                        <div 
-                                                            key={media.media_id} 
+                                                        <div
+                                                            key={media.media_id}
                                                             onClick={() => setLightboxMedia({ mediaList: selected.report_media || [], index: idx })}
                                                             className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-50 cursor-pointer group hover:border-indigo-400 hover:shadow-md transition-all duration-200"
                                                         >
@@ -1679,8 +1677,8 @@ const BrgyHoldingFacility = () => {
                                                         <div className="space-y-1.5 mt-1 border-t border-gray-100 pt-2">
                                                             <div className="flex items-center justify-between text-[10px] font-black uppercase text-gray-400">
                                                                 <span>Selected files ({uploadFiles.length})</span>
-                                                                <button 
-                                                                    type="button" 
+                                                                <button
+                                                                    type="button"
                                                                     onClick={() => setUploadFiles([])}
                                                                     className="text-red-500 hover:text-red-600 font-bold"
                                                                 >
@@ -1936,12 +1934,12 @@ const BrgyHoldingFacility = () => {
 
             {/* ─── Lightbox / Media Viewer Modal ───────────────────────────────── */}
             {lightboxMedia && (
-                <div 
+                <div
                     className="fixed inset-0 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center z-[100] p-4 select-none"
                     onClick={() => setLightboxMedia(null)}
                 >
                     {/* Close Button */}
-                    <button 
+                    <button
                         onClick={() => setLightboxMedia(null)}
                         className="absolute top-4 right-4 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-[110]"
                     >
@@ -1949,7 +1947,7 @@ const BrgyHoldingFacility = () => {
                     </button>
 
                     {/* Media Container */}
-                    <div 
+                    <div
                         className="w-full max-w-4xl max-h-[80vh] flex items-center justify-center p-2 relative"
                         onClick={e => e.stopPropagation()}
                     >
@@ -1966,15 +1964,15 @@ const BrgyHoldingFacility = () => {
                                         <h3 className="text-lg font-black text-gray-900">Document Evidence</h3>
                                         <p className="text-xs text-gray-400 mt-1 mb-6">This attachment is a document or verification letter.</p>
                                         <div className="flex gap-3 w-full">
-                                            <a 
-                                                href={current.file_url} 
-                                                target="_blank" 
-                                                rel="noopener noreferrer" 
+                                            <a
+                                                href={current.file_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
                                                 className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-lg shadow-indigo-100 text-center"
                                             >
                                                 Open Document
                                             </a>
-                                            <button 
+                                            <button
                                                 onClick={() => setLightboxMedia(null)}
                                                 className="flex-1 py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors"
                                             >
@@ -1987,22 +1985,22 @@ const BrgyHoldingFacility = () => {
 
                             if (isVideo) {
                                 return (
-                                    <video 
-                                        src={current.file_url} 
-                                        controls 
-                                        autoPlay 
-                                        className="max-w-full max-h-[80vh] rounded-2xl shadow-2xl animate-scale-up" 
-                                        onClick={e => e.stopPropagation()} 
+                                    <video
+                                        src={current.file_url}
+                                        controls
+                                        autoPlay
+                                        className="max-w-full max-h-[80vh] rounded-2xl shadow-2xl animate-scale-up"
+                                        onClick={e => e.stopPropagation()}
                                     />
                                 );
                             }
 
                             return (
-                                <img 
-                                    src={current.file_url} 
-                                    alt="Evidence view" 
-                                    className="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl animate-scale-up" 
-                                    onClick={e => e.stopPropagation()} 
+                                <img
+                                    src={current.file_url}
+                                    alt="Evidence view"
+                                    className="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl animate-scale-up"
+                                    onClick={e => e.stopPropagation()}
                                 />
                             );
                         })()}

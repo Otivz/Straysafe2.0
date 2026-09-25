@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import axios from 'axios';
+import { api } from '../../utils/api';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
@@ -61,10 +61,10 @@ const PetScanHistoryPage = () => {
     const fetchScanHistory = async () => {
         try {
             setLoading(true);
-            const petRes = await axios.get(`http://localhost:8000/pets/${petId}`);
+            const petRes = await api.get(`/pets/${petId}`);
             setPet(petRes.data);
 
-            const scansRes = await axios.get(`http://localhost:8000/pets/${petId}/scan-history`);
+            const scansRes = await api.get(`/pets/${petId}/scan-history`);
             setScans(scansRes.data);
         } catch (err) {
             console.error("Failed to fetch scan history:", err);

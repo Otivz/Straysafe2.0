@@ -18,7 +18,7 @@ from app.schemas.report_match import (
     OwnerFeedbackRequest
 )
 from app.utils.audit import log_activity
-from app.utils.auth import decode_access_token
+from app.utils.auth import decode_access_token, get_current_user, get_current_staff_or_admin
 
 # Statuses representing closed, resolved, terminal, or consolidated cases
 RESOLVED_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18]
@@ -874,11 +874,13 @@ def get_matches_for_report(report_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{match_id}/verify", response_model=ReportMatchResponse)
+@router.put("/{match_id}/verify", response_model=ReportMatchResponse)
 def verify_match(
     match_id: int,
     payload: ReportMatchVerifyRequest,
     req: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
 ):
     """
     Staff Verification Endpoint:
@@ -911,25 +913,13 @@ def verify_match(
     if not match:
         raise HTTPException(status_code=404, detail="Match record not found")
 
-    # Authorize staff user
-    actor = get_actor_user(req, db)
-    if not actor:
-        # Fallback default admin if no header provided during tests
-        actor = db.query(User).filter(User.role_id.in_([2, 3, 4])).first()
-
-    if not actor or actor.role_id not in [2, 3, 4]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Residents cannot verify matches. Authorized staff or admin access required."
-        )
-
     role_names = {2: "Subdivision Leader", 3: "Barangay Staff", 4: "Admin"}
-    actor_role = role_names.get(actor.role_id, "Staff Official")
+    actor_role = role_names.get(current_user.role_id, "Staff Official")
 
     # Check subdivision boundary if Subdivision Leader (role 2)
-    if actor.role_id == 2 and actor.subdivision_id:
+    if current_user.role_id == 2 and current_user.subdivision_id:
         src_subd = match.source_report.subdivision_id if match.source_report else None
-        if src_subd and src_subd != actor.subdivision_id:
+        if src_subd and src_subd != current_user.subdivision_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Subdivision Leaders can only verify reports within their designated subdivision."
@@ -941,7 +931,7 @@ def verify_match(
     # Apply updates
     match.status = new_status
     match.verification_notes = payload.notes.strip()
-    match.reviewed_by = actor.user_id
+    match.reviewed_by = current_user.user_id
     match.reviewer_role = actor_role
     match.verified_at = datetime.now(timezone.utc)
 
@@ -972,13 +962,13 @@ def verify_match(
         # Add to StatusHistory for source report
         hist = StatusHistory(
             report_id=match.source_report_id,
-            remarks=f"Match confirmed by {actor.name} ({actor_role}): {payload.notes}"
+            remarks=f"Match confirmed by {current_user.name} ({actor_role}): {payload.notes}"
         )
         db.add(hist)
         if match.matched_report_id:
             hist_matched = StatusHistory(
                 report_id=match.matched_report_id,
-                remarks=f"Confirmed duplicate match with Report #{match.source_report_id} by {actor.name} ({actor_role}): {payload.notes}"
+                remarks=f"Confirmed duplicate match with Report #{match.source_report_id} by {current_user.name} ({actor_role}): {payload.notes}"
             )
             db.add(hist_matched)
 
@@ -1008,15 +998,15 @@ def verify_match(
         action="VERIFY_AI_MATCH",
         target_table="report_matches",
         target_id=match.match_id,
-        description=f"Staff {actor.name} ({actor_role}) verified match #{match.match_id} as '{new_status}'. Notes: {payload.notes}",
-        user_id=actor.user_id,
+        description=f"Staff {current_user.name} ({actor_role}) verified match #{match.match_id} as '{new_status}'. Notes: {payload.notes}",
+        user_id=current_user.user_id,
         log_type="security",
         old_values={"status": prev_status},
         new_values={
             "status": new_status,
             "decision": payload.decision,
             "notes": payload.notes,
-            "reviewer_id": actor.user_id,
+            "reviewer_id": current_user.user_id,
             "reviewer_role": actor_role
         },
         request=req
@@ -1032,13 +1022,18 @@ def submit_owner_feedback(
     match_id: int,
     payload: OwnerFeedbackRequest,
     req: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Resident / Owner Feedback Endpoint:
     Stores supporting evidence without altering the official staff verification status.
+    Requires authentication. User must be the owner of the matched pet, report submitter, or staff/admin.
     """
-    match = db.query(ReportMatch).filter(ReportMatch.match_id == match_id).first()
+    match = db.query(ReportMatch).options(
+        joinedload(ReportMatch.source_report),
+        joinedload(ReportMatch.matched_pet)
+    ).filter(ReportMatch.match_id == match_id).first()
     if not match:
         raise HTTPException(status_code=404, detail="Match record not found")
 
@@ -1046,20 +1041,28 @@ def submit_owner_feedback(
     if payload.owner_confirmation not in allowed:
         raise HTTPException(status_code=400, detail=f"Invalid owner response. Must be one of {allowed}.")
 
+    is_owner = bool(match.matched_pet and match.matched_pet.owner_id == current_user.user_id)
+    is_reporter = bool(match.source_report and match.source_report.user_id == current_user.user_id)
+    is_staff = current_user.role_id in [2, 3, 4]
+
+    if not (is_owner or is_reporter or is_staff):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: You can only submit feedback for your own pet or report."
+        )
+
     match.owner_confirmation_status = payload.owner_confirmation
     if payload.remarks:
         match.owner_notes = payload.remarks.strip()
 
     # Record in audit trail as resident action
-    actor = get_actor_user(req, db)
-    actor_id = actor.user_id if actor else None
     log_activity(
         db=db,
         action="OWNER_MATCH_FEEDBACK",
         target_table="report_matches",
         target_id=match.match_id,
-        description=f"Owner submitted feedback for match #{match.match_id}: {payload.owner_confirmation}",
-        user_id=actor_id,
+        description=f"User {current_user.name} submitted feedback for match #{match.match_id}: {payload.owner_confirmation}",
+        user_id=current_user.user_id,
         log_type="operation",
         new_values={"owner_confirmation": payload.owner_confirmation, "remarks": payload.remarks},
         request=req
@@ -1071,8 +1074,11 @@ def submit_owner_feedback(
 
 
 @router.post("/scan-all")
-def scan_all_reports(db: Session = Depends(get_db)):
-    """Scans all non-deceased reports and generates AI potential matches."""
+def scan_all_reports(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
+    """Scans all non-deceased reports and generates AI potential matches (Staff/Admin only)."""
     active_reports = db.query(Report).filter(
         Report.current_status_id != 12,
         Report.current_status_id.notin_([3])
@@ -1087,7 +1093,11 @@ def scan_all_reports(db: Session = Depends(get_db)):
 
 
 @router.post("/scan/{report_id}")
-def scan_single_report(report_id: int, db: Session = Depends(get_db)):
-    """Scans single report for potential matches."""
+def scan_single_report(
+    report_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
+    """Scans single report for potential matches (Staff/Admin only)."""
     created = scan_and_generate_matches_for_report(report_id, db)
     return {"status": "success", "report_id": report_id, "matches_found": len(created)}

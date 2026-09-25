@@ -17,6 +17,7 @@ from app.models.announcement import (
     AnnouncementComment, AnnouncementReaction
 )
 from app.models.audit_log import AuditLog
+from app.models.revoked_token import RevokedToken
 
 __all__ = [
     "Role", "Position", "Barangay", "Subdivision", "User",
@@ -33,5 +34,6 @@ __all__ = [
     "Notification",
     "AnnouncementCategory", "Announcement", "AnnouncementMedia",
     "AnnouncementComment", "AnnouncementReaction",
-    "AuditLog"
+    "AuditLog",
+    "RevokedToken"
 ]

@@ -64,28 +64,9 @@ const ProtectedRoute = ({ allowedRoles = [4] }: ProtectedRouteProps) => {
                     if (isMounted) setStatus('unauthorized');
                 }
             } catch (err: any) {
-                if (err?.response?.status === 401 || err?.response?.status === 403) {
-                    console.error('ProtectedRoute session verification failed (unauthorized):', err);
-                    clearAuthStorage();
-                    if (isMounted) setStatus('unauthorized');
-                } else {
-                    // Network glitch or server error fallback
-                    try {
-                        const parsedUser = JSON.parse(rawUser);
-                        const roleId = parsedUser.role_id;
-                        if (isMounted) {
-                            setUserRole(roleId);
-                            if (allowedRoles.includes(roleId)) {
-                                setStatus('authorized');
-                            } else {
-                                setStatus('forbidden');
-                            }
-                        }
-                    } catch {
-                        clearAuthStorage();
-                        if (isMounted) setStatus('unauthorized');
-                    }
-                }
+                console.error('ProtectedRoute session verification failed:', err);
+                clearAuthStorage();
+                if (isMounted) setStatus('unauthorized');
             }
         };
 
