@@ -228,19 +228,31 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             IconComponent = Ambulance;
             description = 'Response team deployed to secure and contain the animal.';
         }
-        // 9. Animal Picked Up / Secured
-        else if (remarksLower.includes('picked up') || remarksLower.includes('animal secured') || statusId === 6) {
-            actionTitle = 'ANIMAL SECURED';
-            type = 'green';
-            IconComponent = PawPrint;
-            description = 'Animal successfully captured and secured in transit.';
+        // 9. Relocation / Holding / Observation (check facility movement BEFORE animal secured so holding remarks don't get misclassified)
+        else if (remarksLower.includes('relocated to') || remarksLower.includes('transferred to') || remarksLower.includes('relocation') || remarksLower.includes('transfer')) {
+            actionTitle = 'FACILITY RELOCATION / TRANSFER';
+            type = 'orange';
+            IconComponent = Hospital;
+            description = rawRemarks || 'Animal relocated to designated facility.';
         }
-        // 10. Relocation / Holding
-        else if (remarksLower.includes('relocated to') || remarksLower.includes('transferred to') || remarksLower.includes('holding') || statusId === 7 || statusId === 8) {
+        else if (remarksLower.includes('stay limit') || remarksLower.includes('observation note') || remarksLower.includes('daily note')) {
+            actionTitle = 'FACILITY OBSERVATION';
+            type = 'blue';
+            IconComponent = Clock;
+            description = rawRemarks || 'Facility observation recorded.';
+        }
+        else if (statusId === 7 || statusId === 8 || remarksLower.includes('holding') || remarksLower.includes('facility') || remarksLower.includes('shelter')) {
             actionTitle = 'MOVED TO HOLDING FACILITY';
             type = 'orange';
             IconComponent = Hospital;
             description = rawRemarks || 'Animal safely admitted to temporary holding pen.';
+        }
+        // 10. Animal Picked Up / Secured (Status 6 in-transit only)
+        else if (statusId === 6 || remarksLower.includes('picked up') || remarksLower.includes('animal secured')) {
+            actionTitle = 'ANIMAL SECURED';
+            type = 'green';
+            IconComponent = PawPrint;
+            description = 'Animal successfully captured and secured in transit.';
         }
         // 11. Claim Approved / Pet Claimed
         else if (remarksLower.includes('claim') || statusId === 9) {
@@ -273,11 +285,17 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
 
         if (!author) {
             if (assignedLeaderName) author = assignedLeaderName;
-            else author = 'Barangay Staff';
+            else if (rawRemarks.toLowerCase().includes('subdivision') || rawRemarks.toLowerCase().includes('selera') || (hist as any).subdivision_id) author = 'Subdivision Officer';
+            else author = 'Authorized Personnel';
         }
         if (author.toLowerCase().startsWith('by ')) {
             author = author.substring(3).trim();
         }
+
+        // Only keep media with valid, non-empty file_url
+        const validHistMedia = (hist.media || []).filter((m: any) => 
+            m && m.file_url && typeof m.file_url === 'string' && m.file_url.trim() !== '' && m.file_url !== 'null' && m.file_url !== 'undefined'
+        );
 
         return {
             id: hist.history_id || `hist-${index}`,
@@ -287,12 +305,77 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             description,
             type,
             IconComponent,
-            media: hist.media,
+            media: validHistMedia,
             isEscalation: (remarksLower.includes('escalat') || statusId === 4) && !!endorsementLetter
         };
     });
 
-    const allEvents = [initialEntry, ...parsedHistory];
+    const cleanRepeatedText = (text: string): string => {
+        if (!text) return text;
+        const parts = text.split(/(?<=[.;])\s+/);
+        const seen = new Set<string>();
+        const cleaned: string[] = [];
+        for (const part of parts) {
+            const trimmed = part.trim();
+            const base = trimmed.replace(/\s*\([^)]*\)\s*$/, '').toLowerCase();
+            if (base && seen.has(base)) {
+                const prevIdx = cleaned.findIndex(p => p.trim().replace(/\s*\([^)]*\)\s*$/, '').toLowerCase() === base);
+                if (prevIdx !== -1 && trimmed.length > cleaned[prevIdx].length) {
+                    cleaned[prevIdx] = trimmed;
+                }
+                continue;
+            }
+            if (base) seen.add(base);
+            cleaned.push(trimmed);
+        }
+        return cleaned.join(' ');
+    };
+
+    const isFacilityMovement = (title: string) => 
+        title === 'MOVED TO HOLDING FACILITY' || title === 'FACILITY RELOCATION / TRANSFER';
+
+    // Deduplicate consecutive events or merge facility movement events occurring within 5 minutes
+    const deduplicatedParsedHistory: TimelineItem[] = [];
+    for (const item of parsedHistory) {
+        item.description = cleanRepeatedText(item.description);
+        const last = deduplicatedParsedHistory[deduplicatedParsedHistory.length - 1];
+
+        if (last) {
+            const timeDiff = Math.abs(new Date(item.timestamp || 0).getTime() - new Date(last.timestamp || 0).getTime());
+
+            // Case 1: Identical action titles within 3 minutes
+            if (last.actionTitle === item.actionTitle && (timeDiff <= 180000 || last.description === item.description)) {
+                if (item.media && item.media.length > 0) {
+                    const existingIds = new Set((last.media || []).map((m: any) => m.media_id || m.file_url));
+                    const newMedia = item.media.filter((m: any) => !existingIds.has(m.media_id || m.file_url));
+                    last.media = [...(last.media || []), ...newMedia];
+                }
+                continue;
+            }
+
+            // Case 2: Redundant facility movement events (e.g. "MOVED TO HOLDING FACILITY" and "FACILITY RELOCATION / TRANSFER") within 5 minutes
+            if (isFacilityMovement(last.actionTitle) && isFacilityMovement(item.actionTitle) && timeDiff <= 300000) {
+                last.actionTitle = 'MOVED TO HOLDING FACILITY';
+
+                // Merge media attachments so evidence is preserved
+                if (item.media && item.media.length > 0) {
+                    const existingIds = new Set((last.media || []).map((m: any) => m.media_id || m.file_url));
+                    const newMedia = item.media.filter((m: any) => !existingIds.has(m.media_id || m.file_url));
+                    last.media = [...(last.media || []), ...newMedia];
+                }
+
+                // If the second item has extra details, incorporate cleanly
+                if (item.description && !last.description.includes(item.description)) {
+                    last.description = cleanRepeatedText(`${last.description} ${item.description}`);
+                }
+                continue;
+            }
+        }
+
+        deduplicatedParsedHistory.push(item);
+    }
+
+    const allEvents = [initialEntry, ...deduplicatedParsedHistory];
 
     return (
         <div className="relative pl-7">
@@ -361,29 +444,70 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
                                 )}
 
                                 {/* Media Attachments */}
-                                {evt.media && evt.media.length > 0 && (
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2.5">
-                                        {evt.media.map((item: Media) => (
-                                            <div
-                                                key={item.media_id}
-                                                onClick={() => setActiveMedia(item)}
-                                                className="relative aspect-video rounded-xl overflow-hidden cursor-pointer group/media border border-gray-100 dark:border-gray-700 shadow-2xs"
-                                            >
-                                                {item.media_type === 'Video' ? (
-                                                    <div className="w-full h-full bg-black/90 flex items-center justify-center">
-                                                        <Camera className="w-4 h-4 text-white/80" />
-                                                    </div>
-                                                ) : (
-                                                    <img
-                                                        src={item.file_url}
-                                                        className="w-full h-full object-cover transition-transform group-hover/media:scale-105"
-                                                        alt="Evidence"
-                                                    />
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+                                {(() => {
+                                    const allMedia = (evt.media || []).filter((m: Media) => 
+                                        m && m.file_url && typeof m.file_url === 'string' && m.file_url.trim() !== '' && m.file_url !== 'null' && m.file_url !== 'undefined'
+                                    );
+                                    const visualMedia = allMedia.filter((m: Media) => 
+                                        m.media_type !== 'Document' && !m.file_url.toLowerCase().endsWith('.pdf') && !m.file_url.toLowerCase().includes('/raw/')
+                                    );
+                                    const docMedia = allMedia.filter((m: Media) => 
+                                        m.media_type === 'Document' || m.file_url.toLowerCase().endsWith('.pdf') || m.file_url.toLowerCase().includes('/raw/')
+                                    );
+
+                                    if (visualMedia.length === 0 && docMedia.length === 0) return null;
+
+                                    return (
+                                        <div className="mt-2.5 space-y-2">
+                                            {visualMedia.length > 0 && (
+                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                    {visualMedia.map((item: Media) => (
+                                                        <div
+                                                            key={item.media_id || item.file_url}
+                                                            onClick={() => setActiveMedia(item)}
+                                                            className="relative aspect-video rounded-xl overflow-hidden cursor-pointer group/media border border-gray-100 dark:border-gray-700 shadow-2xs bg-gray-100 dark:bg-gray-800"
+                                                        >
+                                                            {item.media_type === 'Video' || item.file_url.match(/\.(mp4|webm|mov|avi)$/i) ? (
+                                                                <div className="w-full h-full bg-black/90 flex items-center justify-center">
+                                                                    <Camera className="w-4 h-4 text-white/80" />
+                                                                </div>
+                                                            ) : (
+                                                                <img
+                                                                    src={item.file_url}
+                                                                    className="w-full h-full object-cover transition-transform group-hover/media:scale-105"
+                                                                    alt="Evidence"
+                                                                    loading="lazy"
+                                                                    onError={(e) => {
+                                                                        // Cleanly hide container if image fails to load or 404s
+                                                                        const parent = e.currentTarget.parentElement;
+                                                                        if (parent) parent.style.display = 'none';
+                                                                    }}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {docMedia.length > 0 && (
+                                                <div className="flex flex-wrap gap-2">
+                                                    {docMedia.map((item: Media) => (
+                                                        <a
+                                                            key={item.media_id || item.file_url}
+                                                            href={item.file_url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-50 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-900/40 text-[11px] font-bold text-orange-700 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/60 transition-colors"
+                                                        >
+                                                            <FileText className="w-3.5 h-3.5 shrink-0" />
+                                                            <span>View Attached Document</span>
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
                     );

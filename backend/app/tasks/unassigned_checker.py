@@ -101,17 +101,16 @@ def check_and_notify_unassigned_reports(threshold_minutes: int = 30) -> int:
     return processed_count
 
 
-def check_and_notify_overdue_holding_animals(default_stay_days: int = 0) -> int:
+def check_and_notify_overdue_holding_animals(default_stay_days: int = 3) -> int:
     """
     Checks for active holding animals that:
     1. Are not resolved/discharged (facility_status not in 3, 4, 5, 7, 8)
     2. Have an intake_date
-    3. Have exceeded the stay duration limit (default 0 days for testing)
+    3. Have exceeded the stay duration limit (default 3 days)
     4. Have not been notified yet (overdue_notified is False or None)
 
-    Sends a high-priority holding_overdue_alert notification to all active
-    Barangay Staff and Head Officers (role_id IN (3, 4, 5)), records a timeline entry,
-    and marks overdue_notified = True.
+    Sends a holding_overdue_alert notification to relevant staff,
+    records a timeline entry, and marks overdue_notified = True.
     """
     db: Session = SessionLocal()
     processed_count = 0
@@ -143,38 +142,65 @@ def check_and_notify_overdue_holding_animals(default_stay_days: int = 0) -> int:
             animal_desc = animal.animal_name or animal.breed or animal.animal_type or "Rescued Stray"
             rep_id_str = f"#{report.report_id}" if report else f"Holding #{animal.holding_id}"
 
-            target_staff = [
-                s for s in brgy_staff_all
-                if not report or not getattr(report, 'barangay_id', None) or getattr(s, 'barangay_id', None) is None or s.barangay_id == report.barangay_id
-            ] or brgy_staff_all
+            is_subd_case = (
+                report is not None
+                and report.subdivision_id is not None
+                and not report.endorsement_letter
+                and report.current_status_id not in (4, 5, 6, 13)
+            )
 
-            for staff in target_staff:
-                existing = db.query(Notification).filter(
-                    Notification.user_id == staff.user_id,
-                    Notification.type == "holding_overdue_alert",
-                    Notification.related_id == animal.holding_id
-                ).first()
-
-                if not existing:
+            if is_subd_case and report is not None:
+                # Notify subdivision leaders of stay limit
+                subd_leaders = db.query(User).filter(
+                    User.subdivision_id == report.subdivision_id,
+                    User.role_id == 2
+                ).all()
+                for leader in subd_leaders:
                     notif = Notification(
-                        user_id=staff.user_id,
-                        title=f"🚨 Holding Stay Overdue: {animal_desc} ({rep_id_str})",
+                        user_id=leader.user_id,
+                        title=f"⏳ Holding Stay Notice: {animal_desc} ({rep_id_str})",
                         message=(
-                            f"Animal in holding facility has reached {days_held} days in custody, "
-                            f"exceeding the {default_stay_days}-day stay limit. "
-                            f"Please review for impoundment or promote to adoption catalog."
+                            f"Animal in subdivision holding facility has reached {days_held} days in custody "
+                            f"(limit: {default_stay_days} days). Please consider coordinating next steps or endorsement to Barangay."
                         ),
                         type="holding_overdue_alert",
                         related_id=animal.holding_id
                     )
                     db.add(notif)
+            else:
+                target_staff = [
+                    s for s in brgy_staff_all
+                    if not report or not getattr(report, 'barangay_id', None) or getattr(s, 'barangay_id', None) is None or s.barangay_id == report.barangay_id
+                ] or brgy_staff_all
 
-            # Record timeline entry
+                for staff in target_staff:
+                    existing = db.query(Notification).filter(
+                        Notification.user_id == staff.user_id,
+                        Notification.type == "holding_overdue_alert",
+                        Notification.related_id == animal.holding_id
+                    ).first()
+
+                    if not existing:
+                        notif = Notification(
+                            user_id=staff.user_id,
+                            title=f"🚨 Holding Stay Overdue: {animal_desc} ({rep_id_str})",
+                            message=(
+                                f"Animal in holding facility has reached {days_held} days in custody, "
+                                f"exceeding the {default_stay_days}-day stay limit. "
+                                f"Please review for impoundment or promote to adoption catalog."
+                            ),
+                            type="holding_overdue_alert",
+                            related_id=animal.holding_id
+                        )
+                        db.add(notif)
+
+            # Record timeline entry with neutral author
             timeline_entry = HoldingTimeline(
                 holding_id=animal.holding_id,
                 event_type='observation',
-                title=f'Stay Limit Reached ({days_held} Days Held)',
-                notes=f'Animal reached {days_held} days in facility custody, exceeding the {default_stay_days}-day stay limit. Barangay responders notified.',
+                title=f'Stay Limit Notice ({days_held} Days Held)',
+                notes=f'Animal reached {days_held} days in facility custody (stay limit: {default_stay_days} days).',
+                logged_by=None,
             )
             db.add(timeline_entry)
 
@@ -204,7 +230,7 @@ async def start_unassigned_reports_watcher(interval_seconds: int = 60, threshold
     while True:
         try:
             await asyncio.to_thread(check_and_notify_unassigned_reports, threshold_minutes)
-            await asyncio.to_thread(check_and_notify_overdue_holding_animals, 0)
+            await asyncio.to_thread(check_and_notify_overdue_holding_animals, 3)
         except asyncio.CancelledError:
             logger.info("Operations Watcher stopped.")
             break

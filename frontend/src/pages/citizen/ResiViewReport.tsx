@@ -5,7 +5,7 @@ import {
     Siren, MapPin, PawPrint, Palette, Tag, User, Gift, FileText, Megaphone,
     Crosshair, Search, MessageCircle, Scale, Link2, Shield, AlertTriangle, Phone,
     Hourglass, Compass, Home, Landmark, Ruler, Timer, Flag, X, Lightbulb, Check,
-    Syringe, Camera, Info, Map as MapIcon, ScrollText
+    Syringe, Camera, Info, Map as MapIcon, ScrollText, Maximize2, Minimize2
 } from 'lucide-react';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import MapComponent from '../../components/MapComponent';
@@ -173,6 +173,35 @@ const ResiViewReport = () => {
     const [locationAmbiguous, setLocationAmbiguous] = useState(false);
     const [isSettingStartingPoint, setIsSettingStartingPoint] = useState(false);
     const [isMapExpanded, setIsMapExpanded] = useState(false);
+    const [isMapMaximized, setIsMapMaximized] = useState(false);
+    const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
+    const expandedMapContainerRef = useRef<HTMLDivElement>(null);
+
+    const toggleNativeFullscreen = () => {
+        if (!document.fullscreenElement) {
+            expandedMapContainerRef.current?.requestFullscreen?.().catch(() => {});
+            setIsNativeFullscreen(true);
+        } else {
+            document.exitFullscreen?.().catch(() => {});
+            setIsNativeFullscreen(false);
+        }
+    };
+
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsNativeFullscreen(!!document.fullscreenElement);
+        };
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    }, []);
+
+    const handleCloseExpandedMap = () => {
+        if (document.fullscreenElement) {
+            document.exitFullscreen?.().catch(() => {});
+        }
+        setIsMapExpanded(false);
+    };
+
     const watchIdRef = useRef<number | null>(null);
 
     const stopLocationTracking = () => {
@@ -1237,15 +1266,42 @@ const ResiViewReport = () => {
                                                 if (logMedia.length === 0) {
                                                     logMedia = report.media?.filter((m: any) => {
                                                         if (!m.is_evidence) return false;
-                                                        if (m.holding_log_id && m.holding_log_id !== log.log_id) return false;
-                                                        const diff = Math.abs(new Date(m.uploaded_at).getTime() - new Date(log.logged_at).getTime());
-                                                        return diff <= 120000; // 2 minutes window
+                                                        // Never treat documents or PDFs as visual holding evidence
+                                                        if (m.media_type === 'Document' || (m.file_url && m.file_url.toLowerCase().endsWith('.pdf'))) return false;
+                                                        // Exclude media tied to other statuses (e.g. status 4 escalation)
+                                                        if (m.status_id === 4) return false;
+                                                        // If explicitly assigned to a holding log, only attach to this specific log
+                                                        if (m.holding_log_id) return m.holding_log_id === log.log_id;
+                                                        return false;
                                                     }) || [];
+                                                }
+                                                // Ensure only valid, non-empty media items are retained
+                                                logMedia = logMedia.filter((m: any) => m && m.file_url && typeof m.file_url === 'string' && m.file_url.trim() !== '' && m.file_url !== 'null' && m.file_url !== 'undefined');
+
+                                                // If this is an intake or transfer log and report.history already has a facility admission/movement, merge media into it to prevent redundant status cards
+                                                if (log.event_type === 'intake' || log.event_type === 'transfer') {
+                                                    const existingHistIndex = h.findIndex((rh: any) => {
+                                                        const isFac = rh.report_status_id === 7 || rh.report_status_id === 8 ||
+                                                            (rh.remarks && (rh.remarks.toLowerCase().includes('holding') || rh.remarks.toLowerCase().includes('facility') || rh.remarks.toLowerCase().includes('relocat') || rh.remarks.toLowerCase().includes('transfer')));
+                                                        if (!isFac) return false;
+                                                        const timeDiff = Math.abs(new Date(rh.created_at || rh.timestamp || 0).getTime() - new Date(log.logged_at).getTime());
+                                                        return timeDiff <= 300000; // within 5 minutes
+                                                    });
+
+                                                    if (existingHistIndex !== -1) {
+                                                        if (logMedia.length > 0) {
+                                                            const existingMedia = h[existingHistIndex].media || [];
+                                                            const existingIds = new Set(existingMedia.map((m: any) => m.media_id || m.file_url));
+                                                            const freshMedia = logMedia.filter((m: any) => !existingIds.has(m.media_id || m.file_url));
+                                                            h[existingHistIndex].media = [...existingMedia, ...freshMedia];
+                                                        }
+                                                        return; // Skip adding duplicate holding log so it stays as one clean status
+                                                    }
                                                 }
 
                                                 // Determine the mapped report status ID based on log title/event
-                                                let statusId = 7; // default: Under Observation
-                                                const titleLower = log.title.toLowerCase();
+                                                let statusId = 16; // default: Observation / In-facility care
+                                                const titleLower = (log.title || '').toLowerCase();
                                                 if (log.event_type === 'outcome') {
                                                     if (titleLower.includes('deceased')) {
                                                         statusId = 12; // Deceased
@@ -1256,14 +1312,19 @@ const ResiViewReport = () => {
                                                     } else {
                                                         statusId = 11; // Resolved
                                                     }
+                                                } else if (log.event_type === 'intake') {
+                                                    statusId = 7;
                                                 }
+
+                                                const fallbackAuthor = report.assigned_leader_name || (report.subdivision_id ? 'Subdivision Officer' : 'Facility Caretaker');
+                                                const effectiveUpdater = log.staff_name || (log.logged_by ? fallbackAuthor : 'System Monitor');
 
                                                 h.push({
                                                     history_id: 100000 + log.log_id,
                                                     report_status_id: statusId,
                                                     remarks: `${log.title}${log.notes ? ` — ${log.notes}` : ''}`,
                                                     created_at: log.logged_at,
-                                                    updater_name: log.staff_name || 'Barangay Staff',
+                                                    updater_name: effectiveUpdater,
                                                     media: logMedia
                                                 });
                                             });
@@ -1285,7 +1346,7 @@ const ResiViewReport = () => {
                 </div>
 
                 {/* Location Intelligence (Map component - below the main content grid) */}
-                <div className="bg-gray-900 text-white p-8 rounded-[2.5rem] shadow-xl relative overflow-hidden group mt-10">
+                <div className="bg-gray-900 text-white p-3.5 sm:p-6 md:p-8 rounded-2xl sm:rounded-[2.5rem] shadow-xl relative overflow-hidden group mt-6 sm:mt-10">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-150 transition-transform duration-700" />
                     <div className="relative z-10">
                         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -1294,9 +1355,19 @@ const ResiViewReport = () => {
                                 {([6, 7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status?.toLowerCase().includes('facility') || report.custody_status?.toLowerCase().includes('secured')) && (
                                     <span className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-400/30 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
                                         <PawPrint className="w-3 h-3" />
-                                        <span>Animal Secured at Holding Facility</span>
+                                        <span className="hidden sm:inline">Animal Secured at Holding Facility</span>
+                                        <span className="sm:hidden">Secured</span>
                                     </span>
                                 )}
+                                <button
+                                    type="button"
+                                    onClick={() => setIsMapMaximized(prev => !prev)}
+                                    className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-wider border border-white/15 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer hover:scale-105 active:scale-95"
+                                    title={isMapMaximized ? "Reset to Standard Size" : "Maximize Map Height"}
+                                >
+                                    {isMapMaximized ? <Minimize2 className="w-3.5 h-3.5 text-amber-300" /> : <Maximize2 className="w-3.5 h-3.5 text-amber-300" />}
+                                    <span>{isMapMaximized ? "Standard" : "Maximize"}</span>
+                                </button>
                                 <button
                                     type="button"
                                     onClick={() => setIsMapExpanded(true)}
@@ -1306,7 +1377,8 @@ const ResiViewReport = () => {
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-amber-300" viewBox="0 0 20 20" fill="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h3a1 1 0 010 2H5v2a1 1 0 01-2 0V4zm14 0a1 1 0 00-1-1h-3a1 1 0 110 2h2v2a1 1 0 112 0V4zM3 16a1 1 0 001 1h3a1 1 0 100-2H5v-2a1 1 0 10-2 0v3zm14 0a1 1 0 01-1 1h-3a1 1 0 100-2h2v-2a1 1 0 102 0v3z" />
                                     </svg>
-                                    <span>Expand Map</span>
+                                    <span className="hidden xs:inline">Fullscreen</span>
+                                    <span className="xs:hidden">Expand</span>
                                 </button>
                             </div>
                         </div>
@@ -1516,19 +1588,38 @@ const ResiViewReport = () => {
                             </div>
                         )}
 
-                        <div id="report-map-container" className="w-full h-[500px] rounded-2xl overflow-hidden border border-white/10 relative">
-                            {/* Floating Expand Map Button */}
-                            <button
-                                type="button"
-                                onClick={() => setIsMapExpanded(true)}
-                                className="absolute top-4 right-4 z-[400] px-3 py-1.5 bg-slate-900/85 hover:bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-wider border border-white/20 transition-all flex items-center gap-1.5 shadow-lg backdrop-blur-md cursor-pointer hover:scale-105 active:scale-95"
-                                title="Expand Map to Fullscreen"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-amber-300" viewBox="0 0 20 20" fill="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h3a1 1 0 010 2H5v2a1 1 0 01-2 0V4zm14 0a1 1 0 00-1-1h-3a1 1 0 110 2h2v2a1 1 0 112 0V4zM3 16a1 1 0 001 1h3a1 1 0 100-2H5v-2a1 1 0 10-2 0v3zm14 0a1 1 0 01-1 1h-3a1 1 0 100-2h2v-2a1 1 0 102 0v3z" />
-                                </svg>
-                                <span>Expand</span>
-                            </button>
+                        <div 
+                            id="report-map-container" 
+                            className={`w-full ${
+                                isMapMaximized 
+                                    ? 'h-[80vh] min-h-[550px]' 
+                                    : 'h-[65vh] min-h-[460px] sm:h-[520px] md:h-[580px]'
+                            } transition-all duration-300 rounded-xl sm:rounded-2xl overflow-hidden border border-white/10 relative`}
+                        >
+                            {/* Floating Map Controls */}
+                            <div className="absolute top-3 sm:top-4 right-3 sm:right-4 z-[400] flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsMapMaximized(prev => !prev)}
+                                    className="px-2.5 sm:px-3 py-1.5 bg-slate-900/85 hover:bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-wider border border-white/20 transition-all flex items-center gap-1.5 shadow-lg backdrop-blur-md cursor-pointer hover:scale-105 active:scale-95"
+                                    title={isMapMaximized ? "Reset to Standard Size" : "Maximize Map Height"}
+                                >
+                                    {isMapMaximized ? <Minimize2 className="h-3.5 w-3.5 text-amber-300" /> : <Maximize2 className="h-3.5 w-3.5 text-amber-300" />}
+                                    <span className="hidden xs:inline">{isMapMaximized ? "Standard" : "Maximize"}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsMapExpanded(true)}
+                                    className="px-2.5 sm:px-3 py-1.5 bg-slate-900/85 hover:bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-wider border border-white/20 transition-all flex items-center gap-1.5 shadow-lg backdrop-blur-md cursor-pointer hover:scale-105 active:scale-95"
+                                    title="Expand Map to Fullscreen"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-amber-300" viewBox="0 0 20 20" fill="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h3a1 1 0 010 2H5v2a1 1 0 01-2 0V4zm14 0a1 1 0 00-1-1h-3a1 1 0 110 2h2v2a1 1 0 112 0V4zM3 16a1 1 0 001 1h3a1 1 0 100-2H5v-2a1 1 0 10-2 0v3zm14 0a1 1 0 01-1 1h-3a1 1 0 100-2h2v-2a1 1 0 102 0v3z" />
+                                    </svg>
+                                    <span className="hidden xs:inline">Fullscreen</span>
+                                    <span className="xs:hidden">Expand</span>
+                                </button>
+                            </div>
 
                             {(() => {
                                 const isRelocated = report.status_id !== 6 && ([7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || report.custody_status === 'In Subdivision Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude)));
@@ -1594,6 +1685,7 @@ const ResiViewReport = () => {
                                         showGeofence={true}
                                         showLandmarks={false}
                                         showHoldingFacilities={true}
+                                        hideViewDetailsButton={true}
                                         markers={resiMarkers}
                                         onMapClick={(routingState || isSettingStartingPoint) ? (clickedLat, clickedLng) => handlePinReposition(clickedLat, clickedLng) : undefined}
                                         routing={routingState ? {
@@ -1618,8 +1710,11 @@ const ResiViewReport = () => {
 
                 {/* FULLSCREEN EXPANDED MAP MODAL */}
                 {isMapExpanded && report && (
-                    <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
-                        <div className="bg-slate-900 border border-white/20 rounded-3xl shadow-2xl w-[96%] h-[94%] flex flex-col p-4 sm:p-6 text-white overflow-hidden animate-in zoom-in-95 duration-200">
+                    <div 
+                        ref={expandedMapContainerRef}
+                        className="fixed inset-0 z-[9999] bg-slate-900 w-full h-full flex flex-col p-3 sm:p-5 text-white overflow-hidden animate-in fade-in duration-200"
+                    >
+                        <div className="w-full h-full flex flex-col overflow-hidden">
                             {/* Header */}
                             <div className="flex justify-between items-center mb-3 shrink-0 pb-3 border-b border-white/10 gap-3">
                                 <div className="min-w-0">
@@ -1646,7 +1741,15 @@ const ResiViewReport = () => {
                                     )}
                                     <button
                                         type="button"
-                                        onClick={() => setIsMapExpanded(false)}
+                                        onClick={toggleNativeFullscreen}
+                                        className="p-2 hover:bg-white/10 rounded-2xl transition-colors text-slate-300 hover:text-white cursor-pointer border border-white/10 flex items-center justify-center"
+                                        title={isNativeFullscreen ? "Exit Browser Fullscreen" : "Enter Browser Fullscreen"}
+                                    >
+                                        {isNativeFullscreen ? <Minimize2 className="w-5 h-5 text-amber-300" /> : <Maximize2 className="w-5 h-5 text-amber-300" />}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleCloseExpandedMap}
                                         className="p-2 hover:bg-white/10 rounded-2xl transition-colors text-slate-300 hover:text-white cursor-pointer border border-white/10"
                                         title="Close Expanded Map"
                                     >
@@ -1715,7 +1818,7 @@ const ResiViewReport = () => {
                             </div>
 
                             {/* Expanded Map Canvas */}
-                            <div className="flex-1 rounded-2xl overflow-hidden relative border border-white/10 min-h-0">
+                            <div className="flex-1 rounded-none sm:rounded-2xl overflow-hidden relative border-0 sm:border border-white/10 min-h-0">
                                 {(() => {
                                     const isRelocated = report.status_id !== 6 && ([7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || report.custody_status === 'In Subdivision Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude)));
                                     const activeFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : null;
@@ -1780,6 +1883,7 @@ const ResiViewReport = () => {
                                             showGeofence={true}
                                             showLandmarks={true}
                                             showHoldingFacilities={true}
+                                            hideViewDetailsButton={true}
                                             markers={resiMarkers}
                                             onMapClick={(routingState || isSettingStartingPoint) ? (clickedLat, clickedLng) => handlePinReposition(clickedLat, clickedLng) : undefined}
                                             routing={routingState ? {

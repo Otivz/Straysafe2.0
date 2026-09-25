@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import api from '../../utils/api';
@@ -24,9 +24,11 @@ import { useToast } from '../../context/ToastContext';
 import {
     Eye, Shield, MapPin, Siren, PawPrint, Palette, Tag, User, Gift, FileText,
     Megaphone, MessageCircle, AlertTriangle, Camera, Video, X, Bandage, Dog, Cat,
-    Bot, Check, Map, Pin, Home, Rocket, Search, Users, Ban, Sparkles, Ruler, Phone,
-    ClipboardList, Star, Info, LifeBuoy, ArrowLeft, ArrowRight, Upload
+    Bot, Check, Map, Pin, Home, Rocket, Users, Ban, Sparkles, Ruler, Phone,
+    ClipboardList, Star, Info, LifeBuoy, ArrowLeft, ArrowRight, Upload,
+    Maximize2, Minimize2
 } from 'lucide-react';
+import StraySafeLoading, { AnimalLoadingOverlay } from '../../components/StraySafeLoading';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 
 const DefaultIcon = L.icon({
@@ -120,6 +122,21 @@ const RecenterMap = ({ center }: { center: [number, number] }) => {
     return null;
 };
 
+const InvalidateMapSize = ({ trigger }: { trigger?: any }) => {
+    const map = useMap();
+    useEffect(() => {
+        const t1 = setTimeout(() => map.invalidateSize(), 50);
+        const t2 = setTimeout(() => map.invalidateSize(), 200);
+        const t3 = setTimeout(() => map.invalidateSize(), 400);
+        return () => {
+            clearTimeout(t1);
+            clearTimeout(t2);
+            clearTimeout(t3);
+        };
+    }, [map, trigger]);
+    return null;
+};
+
 
 
 interface ReportFormData {
@@ -161,7 +178,7 @@ const categoryMap: Record<number, string> = {
 
 const parseReportDescription = (description: string) => {
     if (!description) return { cleanNotes: '', pattern: '', conditions: '', markings: '' };
-    
+
     if (description.includes('|') || description.toLowerCase().includes('pattern:') || description.toLowerCase().includes('observed conditions:') || description.toLowerCase().includes('notes:')) {
         const parts = description.split('|').map((p: string) => p.trim());
         let pattern = '';
@@ -220,13 +237,13 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
                             if (colonIdx !== -1) {
                                 const key = raw.slice(0, colonIdx).trim();
                                 const val = raw.slice(colonIdx + 1).trim();
-                                const isWide = key.toLowerCase().includes('circumstances') || 
-                                               key.toLowerCase().includes('notes') || 
-                                               key.toLowerCase().includes('instructions') ||
-                                               key.toLowerCase().includes('last seen');
+                                const isWide = key.toLowerCase().includes('circumstances') ||
+                                    key.toLowerCase().includes('notes') ||
+                                    key.toLowerCase().includes('instructions') ||
+                                    key.toLowerCase().includes('last seen');
                                 return (
-                                    <div 
-                                        key={idx} 
+                                    <div
+                                        key={idx}
                                         className={`p-3 rounded-2xl bg-white border border-stone-100 shadow-2xs ${isWide ? 'sm:col-span-2' : ''}`}
                                     >
                                         <p className="text-[9px] font-black text-amber-800 uppercase tracking-widest mb-1 flex items-center gap-1">
@@ -342,7 +359,7 @@ const ResiHomePage = () => {
     const [replyingTo, setReplyingTo] = useState<Record<number, { commentId: number, userName: string } | null>>({});
     const [expandedComments, setExpandedComments] = useState<Record<number, boolean>>({});
 
-    const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+
     const [editingReportId, setEditingReportId] = useState<number | null>(null);
     const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
     const [animalTypeValidation, setAnimalTypeValidation] = useState<{
@@ -363,7 +380,7 @@ const ResiHomePage = () => {
     const [revertColors, setRevertColors] = useState<boolean>(false);
     const [revertSize, setRevertSize] = useState<boolean>(false);
     const [activeQrModal, setActiveQrModal] = useState<{ url: string; petName?: string; hash?: string; ownerName?: string; ownerPhone?: string } | null>(null);
-    const menuRef = useRef<HTMLDivElement>(null);
+
 
     // Chat Drawer state
     const [isChatOpen, setIsChatOpen] = useState(false);
@@ -458,7 +475,7 @@ const ResiHomePage = () => {
                 if (res.status === 200 && res.data) {
                     const ai = res.data;
                     const isDetected = ai.animal_detected !== false && !['unknown', 'none', ''].includes((ai.animal_type || '').toLowerCase());
-                    
+
                     if (!isDetected) {
                         setAiAnalysisResult({
                             animalDetected: false,
@@ -536,6 +553,7 @@ const ResiHomePage = () => {
     const [resolvedAddress, setResolvedAddress] = useState('');
     const [isGeocoding, setIsGeocoding] = useState(false);
     const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
+    const [isInlineMapExpanded, setIsInlineMapExpanded] = useState(false);
     const [tempLandmark, setTempLandmark] = useState('');
     const [landmarks, setLandmarks] = useState<any[]>([]);
 
@@ -679,15 +697,7 @@ const ResiHomePage = () => {
     };
 
 
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-                setOpenMenuId(null);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+
 
     useEffect(() => {
         const fetchBreeds = async () => {
@@ -792,20 +802,20 @@ const ResiHomePage = () => {
         }
     }, [formData.animalBreed, formData.animalType, breedsData]);
 
-    const handleDeleteReport = async (reportId: number) => {
-        if (!window.confirm('Are you sure you want to delete this report?')) return;
+    const handleCancelReport = async (reportId: number) => {
+        if (!window.confirm('Are you sure you want to cancel this report? This will withdraw the report from the active feed.')) return;
         try {
             const response = await fetch(`http://localhost:8000/reports/${reportId}`, {
                 method: 'DELETE'
             });
             if (response.ok) {
-                toast.success('Report deleted successfully');
+                toast.success('Report cancelled successfully');
                 fetchReports();
             } else {
-                toast.error('Failed to delete report');
+                toast.error('Failed to cancel report');
             }
         } catch (error) {
-            console.error('Error deleting report:', error);
+            console.error('Error cancelling report:', error);
             toast.error('An error occurred while connecting to the server.');
         }
     };
@@ -855,7 +865,6 @@ const ResiHomePage = () => {
         setFormData(initialData);
         setEditingReportId(report.report_id);
         setIsAddReportModalOpen(true);
-        setOpenMenuId(null);
     };
 
     const fetchReports = async () => {
@@ -872,11 +881,11 @@ const ResiHomePage = () => {
                     const statusName = (report.status_name || report.status?.status_name || '').toLowerCase();
 
                     const isResolved = [3, 9, 10, 11, 12].includes(statusId) ||
-                                       statusName.includes('resolved') ||
-                                       statusName.includes('claimed') ||
-                                       statusName.includes('released') ||
-                                       statusName.includes('deceased') ||
-                                       statusName.includes('rejected');
+                        statusName.includes('resolved') ||
+                        statusName.includes('claimed') ||
+                        statusName.includes('released') ||
+                        statusName.includes('deceased') ||
+                        statusName.includes('rejected');
 
                     return isVisible && !isResolved;
                 });
@@ -1063,9 +1072,9 @@ const ResiHomePage = () => {
             if (idMatch) targetReportId = Number(idMatch[1]);
         }
 
-        const isMatchInquiry = typeStr === 'match_message' || 
-                               titleStr.includes('match inquiry') || 
-                               (titleStr.includes('💬') && (titleStr.includes('match') || msgStr.includes('look-alike') || msgStr.includes('match')));
+        const isMatchInquiry = typeStr === 'match_message' ||
+            titleStr.includes('match inquiry') ||
+            (titleStr.includes('💬') && (titleStr.includes('match') || msgStr.includes('look-alike') || msgStr.includes('match')));
 
         const isMatch = typeStr === 'potential_match' ||
             typeStr === 'match_review' ||
@@ -1627,7 +1636,7 @@ const ResiHomePage = () => {
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div className="flex items-start gap-3 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
                                     <input type="checkbox" id="ack" className="mt-1 w-5 h-5 rounded border-gray-300 text-blue-500 focus:ring-blue-500" required />
                                     <label htmlFor="ack" className="text-[11px] font-semibold text-gray-700 leading-relaxed">
@@ -1825,8 +1834,8 @@ const ResiHomePage = () => {
                                                 <label
                                                     key={cat.id}
                                                     className={`p-4 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${formData.category_id === cat.id
-                                                            ? 'border-[#F97316] bg-orange-50/50 shadow-sm'
-                                                            : 'border-gray-100 bg-[#FAFAF9] hover:border-gray-200'
+                                                        ? 'border-[#F97316] bg-orange-50/50 shadow-sm'
+                                                        : 'border-gray-100 bg-[#FAFAF9] hover:border-gray-200'
                                                         }`}
                                                 >
                                                     <input
@@ -1854,12 +1863,15 @@ const ResiHomePage = () => {
                                 {reportStep === 3 && (
                                     <div className="space-y-6 animate-in fade-in duration-300">
                                         {isAnalyzingMedia ? (
-                                            <div className="p-8 bg-orange-50/60 border border-orange-200 rounded-3xl flex flex-col items-center justify-center text-center space-y-3">
-                                                <div className="w-8 h-8 border-3 border-[#F97316] border-t-transparent rounded-full animate-spin" />
-                                                <div>
-                                                    <h4 className="text-xs font-black uppercase tracking-wider text-[#1a1208]">Analyzing Media...</h4>
-                                                    <p className="text-[10px] font-bold text-gray-500 mt-1">Our AI is checking for dogs and cats and extracting characteristics</p>
-                                                </div>
+                                            <div className="py-6 sm:py-10 flex flex-col items-center justify-center">
+                                                <StraySafeLoading
+                                                    animalType={formData.animalType || 'dog'}
+                                                    size="md"
+                                                    badgeText="🤖 AI Vision Analysis"
+                                                    message="Analyzing Stray Media"
+                                                    subMessage="Detecting animal type, primary coat colors, and traits..."
+                                                    showProgressBar={true}
+                                                />
                                             </div>
                                         ) : aiAnalysisResult && !aiAnalysisResult.animalDetected ? (
                                             <div className="p-6 bg-red-50/80 border-2 border-red-200 rounded-3xl space-y-5 text-center animate-in fade-in">
@@ -2093,9 +2105,9 @@ const ResiHomePage = () => {
                                                                         <div className="w-4 h-4 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin" />
                                                                     </div>
                                                                 ) : breedImageUrl ? (
-                                                                    <img 
-                                                                        src={breedImageUrl} 
-                                                                        alt="Breed Preview" 
+                                                                    <img
+                                                                        src={breedImageUrl}
+                                                                        alt="Breed Preview"
                                                                         className="w-12 h-12 object-cover rounded-xl shadow-sm border border-white shrink-0"
                                                                     />
                                                                 ) : null}
@@ -2176,19 +2188,17 @@ const ResiHomePage = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => setFormData(prev => ({ ...prev, custodyStatus: 'Sighting' }))}
-                                                className={`p-4 rounded-3xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
-                                                    formData.custodyStatus === 'Sighting'
+                                                className={`p-4 rounded-3xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${formData.custodyStatus === 'Sighting'
                                                         ? 'border-[#F97316] bg-orange-50/50 shadow-sm ring-2 ring-orange-200/50'
                                                         : 'border-gray-200 bg-white hover:border-gray-300'
-                                                }`}
+                                                    }`}
                                             >
                                                 <div className="flex items-start justify-between w-full mb-2">
                                                     <div className="w-9 h-9 rounded-2xl bg-orange-100 flex items-center justify-center text-[#F97316]">
                                                         <Eye className="w-4 h-4" />
                                                     </div>
-                                                    <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                                                        formData.custodyStatus === 'Sighting' ? 'border-[#F97316] bg-[#F97316]' : 'border-gray-300'
-                                                    }`}>
+                                                    <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${formData.custodyStatus === 'Sighting' ? 'border-[#F97316] bg-[#F97316]' : 'border-gray-300'
+                                                        }`}>
                                                         {formData.custodyStatus === 'Sighting' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                                                     </span>
                                                 </div>
@@ -2206,19 +2216,17 @@ const ResiHomePage = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => setFormData(prev => ({ ...prev, custodyStatus: 'Secured' }))}
-                                                className={`p-4 rounded-3xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${
-                                                    formData.custodyStatus === 'Secured'
+                                                className={`p-4 rounded-3xl border-2 text-left transition-all flex flex-col justify-between cursor-pointer ${formData.custodyStatus === 'Secured'
                                                         ? 'border-[#F97316] bg-orange-50/50 shadow-sm ring-2 ring-orange-200/50'
                                                         : 'border-gray-200 bg-white hover:border-gray-300'
-                                                }`}
+                                                    }`}
                                             >
                                                 <div className="flex items-start justify-between w-full mb-2">
                                                     <div className="w-9 h-9 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600">
                                                         <Shield className="w-4 h-4" />
                                                     </div>
-                                                    <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                                                        formData.custodyStatus === 'Secured' ? 'border-[#F97316] bg-[#F97316]' : 'border-gray-300'
-                                                    }`}>
+                                                    <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${formData.custodyStatus === 'Secured' ? 'border-[#F97316] bg-[#F97316]' : 'border-gray-300'
+                                                        }`}>
                                                         {formData.custodyStatus === 'Secured' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                                                     </span>
                                                 </div>
@@ -2259,7 +2267,7 @@ const ResiHomePage = () => {
                                                         }}
                                                         className="px-4 py-2 bg-[#F97316] text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-sm hover:scale-105 transition-all cursor-pointer flex items-center gap-1.5"
                                                     >
-                                                        <Map className="w-3.5 h-3.5" /> Map Pin
+                                                        <Map className="w-3.5 h-3.5" /> Fullscreen Map
                                                     </button>
                                                 </div>
                                             </div>
@@ -2275,11 +2283,10 @@ const ResiHomePage = () => {
                                                             setFormData(prev => ({ ...prev, securedLocationMode: 'with_animal' }));
                                                             handleGetUseCurrentLocation();
                                                         }}
-                                                        className={`p-3 rounded-2xl border text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
-                                                            formData.securedLocationMode === 'with_animal'
+                                                        className={`p-3 rounded-2xl border text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${formData.securedLocationMode === 'with_animal'
                                                                 ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                                                                 : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                                                        }`}
+                                                            }`}
                                                     >
                                                         <MapPin className="w-4 h-4 shrink-0" />
                                                         <span>I'm with animal (Use GPS)</span>
@@ -2291,11 +2298,10 @@ const ResiHomePage = () => {
                                                             setTempLandmark(formData.landmark);
                                                             setIsMapPickerOpen(true);
                                                         }}
-                                                        className={`p-3 rounded-2xl border text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
-                                                            formData.securedLocationMode === 'secured_elsewhere'
+                                                        className={`p-3 rounded-2xl border text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${formData.securedLocationMode === 'secured_elsewhere'
                                                                 ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                                                                 : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                                                        }`}
+                                                            }`}
                                                     >
                                                         <MapPin className="w-4 h-4 shrink-0" />
                                                         <span>Secured elsewhere (Pin Map)</span>
@@ -2313,6 +2319,144 @@ const ResiHomePage = () => {
                                                 </div>
                                             </div>
                                         )}
+
+                                        {/* Interactive Pinpoint Map directly on Step 6 */}
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest flex items-center gap-1.5">
+                                                    <Map className="w-3.5 h-3.5 text-[#F97316]" /> Pinpoint Incident Location
+                                                </label>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsInlineMapExpanded(!isInlineMapExpanded)}
+                                                        className="text-[10px] font-black text-[#F97316] uppercase tracking-wider flex items-center gap-1 hover:underline cursor-pointer"
+                                                    >
+                                                        {isInlineMapExpanded ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+                                                        <span>{isInlineMapExpanded ? 'Collapse' : 'Expand Height'}</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setTempLandmark(formData.landmark);
+                                                            setIsMapPickerOpen(true);
+                                                        }}
+                                                        className="text-[10px] font-black text-gray-500 hover:text-gray-800 uppercase tracking-wider flex items-center gap-1 hover:underline cursor-pointer"
+                                                    >
+                                                        <Maximize2 className="w-3 h-3" /> Fullscreen
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div className={`relative w-full ${isInlineMapExpanded ? 'h-96 sm:h-[440px]' : 'h-64 sm:h-72'} transition-all duration-300 rounded-3xl overflow-hidden border border-gray-200 shadow-inner bg-gray-100`}>
+                                                {/* Floating Quick Action Buttons on Map Canvas */}
+                                                <div className="absolute top-3 right-3 z-[400] flex items-center gap-1.5">
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleGetUseCurrentLocation}
+                                                        className="flex items-center gap-1 px-2.5 py-1.5 bg-white/95 hover:bg-white text-gray-800 text-[11px] font-black rounded-xl shadow-md border border-gray-200 backdrop-blur-xs transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                                                        title="Use Current Device GPS"
+                                                    >
+                                                        <MapPin className="w-3 h-3 text-[#F97316]" />
+                                                        <span className="hidden xs:inline">GPS</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setTempLandmark(formData.landmark);
+                                                            setIsMapPickerOpen(true);
+                                                        }}
+                                                        className="flex items-center gap-1 px-2.5 py-1.5 bg-white/95 hover:bg-white text-gray-800 text-[11px] font-black rounded-xl shadow-md border border-gray-200 backdrop-blur-xs transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                                                        title="Open Fullscreen Map"
+                                                    >
+                                                        <Maximize2 className="w-3 h-3 text-[#F97316]" />
+                                                        <span className="hidden xs:inline">Expand</span>
+                                                    </button>
+                                                </div>
+
+                                                {/* Floating helper hint */}
+                                                <div className="absolute bottom-2.5 left-3 z-[400] bg-white/90 backdrop-blur-md px-3 py-1 rounded-xl border border-gray-200 shadow-sm pointer-events-none text-[10px] font-bold text-gray-700 flex items-center gap-1.5">
+                                                    <span className="w-2 h-2 rounded-full bg-[#F97316] animate-ping" />
+                                                    <span>Tap map to drop pin or select landmark</span>
+                                                </div>
+
+                                                <MapContainer
+                                                    center={[formData.latitude, formData.longitude]}
+                                                    zoom={17}
+                                                    className="h-full w-full"
+                                                    scrollWheelZoom={true}
+                                                >
+                                                    <InvalidateMapSize trigger={`${reportStep}-${isInlineMapExpanded}`} />
+                                                    <TileLayer
+                                                        attribution='&copy; OpenStreetMap'
+                                                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                                    />
+                                                    <RecenterMap center={[formData.latitude, formData.longitude]} />
+                                                    <LocationPicker
+                                                        position={[formData.latitude, formData.longitude]}
+                                                        onLocationSelect={(lat, lng) => setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }))}
+                                                    />
+                                                    <Polygon
+                                                        positions={SELERA_POLYGON.map(p => [p.lat, p.lng] as [number, number])}
+                                                        pathOptions={{ color: '#F97316', fillColor: '#F97316', fillOpacity: 0.1, weight: 2, dashArray: '5, 10' }}
+                                                    />
+
+                                                    {/* Registered Landmarks on Map */}
+                                                    {landmarks.map((lm) => (
+                                                        <Marker
+                                                            key={`step6-lm-${lm.landmark_id}`}
+                                                            position={[lm.latitude, lm.longitude]}
+                                                            icon={createLandmarkPinIcon(lm.category, lm.is_holding_facility)}
+                                                            eventHandlers={{
+                                                                click: () => {
+                                                                    setFormData(prev => ({
+                                                                        ...prev,
+                                                                        latitude: lm.latitude,
+                                                                        longitude: lm.longitude,
+                                                                        landmark: lm.name
+                                                                    }));
+                                                                    setTempLandmark(lm.name);
+                                                                    setResolvedAddress(lm.name);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <Tooltip direction="top" offset={[0, -18]} className="custom-hover-tooltip font-bold">
+                                                                <span>{getLandmarkCategory(lm.category, lm.is_holding_facility).emoji} {lm.name}</span>
+                                                            </Tooltip>
+                                                            <Popup>
+                                                                <div className="p-2 text-xs min-w-[150px]">
+                                                                    <div className="flex items-center gap-1 mb-1">
+                                                                        <span>{getLandmarkCategory(lm.category, lm.is_holding_facility).emoji}</span>
+                                                                        <strong className="font-bold text-gray-900">{lm.name}</strong>
+                                                                    </div>
+                                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                                                        {getLandmarkCategory(lm.category, lm.is_holding_facility).label}
+                                                                    </p>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setFormData(prev => ({
+                                                                                ...prev,
+                                                                                latitude: lm.latitude,
+                                                                                longitude: lm.longitude,
+                                                                                landmark: lm.name
+                                                                            }));
+                                                                            setTempLandmark(lm.name);
+                                                                            setResolvedAddress(lm.name);
+                                                                        }}
+                                                                        className="w-full mt-1.5 py-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg text-[10px] uppercase tracking-wider transition-all"
+                                                                    >
+                                                                        Select This Spot
+                                                                    </button>
+                                                                </div>
+                                                            </Popup>
+                                                        </Marker>
+                                                    ))}
+
+                                                    <ReturnToSeleraButton />
+                                                </MapContainer>
+                                            </div>
+                                        </div>
 
                                         <div>
                                             <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest mb-2 block">Street Address</label>
@@ -2360,11 +2504,10 @@ const ResiHomePage = () => {
                                                                     setTempLandmark(lm.name);
                                                                     setResolvedAddress(lm.name);
                                                                 }}
-                                                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
-                                                                    formData.landmark === lm.name
+                                                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${formData.landmark === lm.name
                                                                         ? 'bg-[#F97316] text-white border-[#F97316] shadow-sm'
                                                                         : 'bg-white hover:bg-orange-50/70 border-gray-200 text-gray-700 hover:border-orange-300'
-                                                                }`}
+                                                                    }`}
                                                             >
                                                                 <span>{getLandmarkCategory(lm.category, lm.is_holding_facility).emoji}</span>
                                                                 <span>{lm.name}</span>
@@ -2419,7 +2562,7 @@ const ResiHomePage = () => {
                                             <div className="flex justify-between py-1 border-b border-gray-100"><span className="text-gray-400">Animal Type:</span> <span>{formData.animalType}</span></div>
                                             <div className="flex justify-between py-1 border-b border-gray-100"><span className="text-gray-400">Category:</span> <span>{formData.category || 'Injured Animal'}</span></div>
                                             <div className="flex justify-between py-1 border-b border-gray-100">
-                                                <span className="text-gray-400">Animal Custody:</span> 
+                                                <span className="text-gray-400">Animal Custody:</span>
                                                 <span className={`font-black inline-flex items-center gap-1 ${formData.custodyStatus === 'Secured' ? 'text-emerald-600' : 'text-[#F97316]'}`}>
                                                     {formData.custodyStatus === 'Secured'
                                                         ? <><Home className="w-3.5 h-3.5" /> Secured in Safe Place</>
@@ -2617,25 +2760,31 @@ const ResiHomePage = () => {
                     </div>
                 )}
 
-                {/* AI Checking/Loading Overlay */}
-                {isCheckingAI && (
-                    <div className="fixed inset-0 z-[400] flex items-center justify-center p-4">
-                        <div className="absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300" />
-                        <div className="relative w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl p-10 text-center animate-in zoom-in-95 duration-300 border border-gray-50">
-                            <div className="flex flex-col items-center justify-center gap-6">
-                                <div className="relative flex items-center justify-center">
-                                    <div className="w-16 h-16 rounded-full border-4 border-orange-100 border-t-[#F97316] animate-spin" />
-                                    <Search className="absolute w-5 h-5 text-[#F97316]" />
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-black uppercase tracking-tight text-[#1a1208] mb-1">AI Scan Active</h3>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-3">Checking for Single Animal validation</p>
-                                    <p className="text-xs font-bold text-[#F97316] animate-pulse">{validationStatus}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                {/* AI Checking/Loading Overlay with Mascot GIF */}
+                <AnimalLoadingOverlay
+                    isVisible={isCheckingAI}
+                    animalType={formData.animalType || aiAnalysisResult?.animalType || 'dog'}
+                    badgeText="🤖 AI Verification"
+                    message="AI Scan Active"
+                    subMessage="Validating image consistency and checking for single animal detection..."
+                    progressText={validationStatus || undefined}
+                    showProgressBar={true}
+                />
+
+                {/* Submitting Incident Report Loading Overlay with Mascot GIF */}
+                <AnimalLoadingOverlay
+                    isVisible={isSubmitting}
+                    animalType={formData.animalType || aiAnalysisResult?.animalType || 'dog'}
+                    badgeText={
+                        (formData.animalType || '').toLowerCase().includes('cat')
+                            ? '🐱 Cat Sighting Dispatch'
+                            : '🐶 Dog Sighting Dispatch'
+                    }
+                    message="Submitting Incident Report"
+                    subMessage="Uploading photo evidence, saving GPS coordinates, and dispatching alert to responders..."
+                    progressText="Processing stray report dispatch..."
+                    showProgressBar={true}
+                />
 
                 {/* Inconclusive Warning Modal */}
                 {showInconclusiveModal && (
@@ -2739,7 +2888,7 @@ const ResiHomePage = () => {
                                 </p>
                             </div>
                             <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
-                                <div 
+                                <div
                                     className="bg-gradient-to-r from-orange-500 to-amber-500 h-full rounded-full transition-all duration-300 ease-out"
                                     style={{ width: `${uploadProgress}%` }}
                                 />
@@ -2922,12 +3071,12 @@ const ResiHomePage = () => {
                                                                                     <div className="flex gap-3 relative">
                                                                                         {/* Parent Avatar & Vertical Line */}
                                                                                         <div className="relative flex flex-col items-center shrink-0">
-                                                                                             <img 
-                                                                                                 src={getProfilePicture(c.user_photo)} 
-                                                                                                 className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm" 
-                                                                                                 alt={c.user_name || 'User'} 
-                                                                                                 onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
-                                                                                             />
+                                                                                            <img
+                                                                                                src={getProfilePicture(c.user_photo)}
+                                                                                                className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm"
+                                                                                                alt={c.user_name || 'User'}
+                                                                                                onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                                                                            />
                                                                                             {(replies.length > 0 || annReplyingTo[ann.announcement_id]?.commentId === c.comment_id) && (
                                                                                                 <div className="absolute top-8 bottom-[-16px] left-1/2 -translate-x-1/2 w-[2px] bg-gray-100 z-0"></div>
                                                                                             )}
@@ -2964,12 +3113,12 @@ const ResiHomePage = () => {
                                                                                                             )}
 
                                                                                                             {/* Child Avatar */}
-                                                                                                            <img 
-                                                                                                                 src={getProfilePicture(reply.user_photo)} 
-                                                                                                                 className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0" 
-                                                                                                                 alt={reply.user_name || 'User'} 
-                                                                                                                 onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
-                                                                                                             />
+                                                                                                            <img
+                                                                                                                src={getProfilePicture(reply.user_photo)}
+                                                                                                                className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0"
+                                                                                                                alt={reply.user_name || 'User'}
+                                                                                                                onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                                                                                            />
 
                                                                                                             <div className="flex-1">
                                                                                                                 {/* Child Bubble */}
@@ -3108,62 +3257,48 @@ const ResiHomePage = () => {
                                 return (
                                     <div key={report.report_id} className="max-w-3xl mx-auto">
                                         <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden mb-12 hover:shadow-2xl transition-all duration-300">
-                                            {/* Top Thin Bar: ID (Left) + Menu (Right) */}
-                                            <div className="px-4 sm:px-8 py-2.5 border-b border-gray-50 flex items-center justify-between bg-gray-50/20">
-                                                <p className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                                                    Report #STR-{(report.report_id || 0).toString().padStart(4, '0')}
-                                                </p>
-                                                <div className="flex items-center gap-4">
-                                                    <div className="relative" ref={openMenuId === report.report_id ? menuRef : null}>
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setOpenMenuId(openMenuId === report.report_id ? null : report.report_id);
-                                                            }}
-                                                            className="p-1.5 text-gray-400 hover:text-[#1a1208] rounded-full hover:bg-white hover:shadow-sm transition-all border border-transparent hover:border-gray-100"
-                                                        >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                                <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
-                                                            </svg>
-                                                        </button>
-                                                        {openMenuId === report.report_id && (
-                                                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-gray-100 py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); openReportDetail(report.report_id, report); }}
-                                                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-blue-600 hover:bg-blue-50 transition-colors"
-                                                                >
-                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                                    </svg>
-                                                                    View Report
-                                                                </button>
-
-                                                                {report.user_id === currentUserId && report.status_id === 1 && (
-                                                                    <>
-                                                                        <button
-                                                                            onClick={(e) => { e.stopPropagation(); handleEditClick(report); }}
-                                                                            className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-[#F97316] hover:bg-orange-50 transition-colors border-t border-gray-50"
-                                                                        >
-                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                                            </svg>
-                                                                            Edit Details
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={(e) => { e.stopPropagation(); handleDeleteReport(report.report_id); setOpenMenuId(null); }}
-                                                                            className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-colors border-t border-gray-50"
-                                                                        >
-                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                                            </svg>
-                                                                            Delete Report
-                                                                        </button>
-                                                                    </>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                            {/* Top Header Bar: ID (Left) + Actions (Right) */}
+                                            <div className="px-3.5 sm:px-6 py-2.5 border-b border-gray-100 flex items-center justify-between gap-2 bg-gray-50/40">
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    <span className="w-2 h-2 rounded-full bg-orange-400"></span>
+                                                    <p className="text-[10px] sm:text-xs font-black text-gray-500 uppercase tracking-wider">
+                                                        #STR-{(report.report_id || 0).toString().padStart(4, '0')}
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => { e.stopPropagation(); openReportDetail(report.report_id, report); }}
+                                                        className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-blue-600 bg-blue-50/90 hover:bg-blue-100 hover:text-blue-700 active:scale-95 rounded-xl transition-all border border-blue-200/60 shadow-xs cursor-pointer"
+                                                        title="View Full Report"
+                                                    >
+                                                        <Eye className="w-3.5 h-3.5 shrink-0" />
+                                                        <span>View</span>
+                                                    </button>
+                                                    {report.user_id === currentUserId && report.status_id === 1 && (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); handleEditClick(report); }}
+                                                                className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-[#F97316] bg-orange-50/90 hover:bg-orange-100 hover:text-orange-700 active:scale-95 rounded-xl transition-all border border-orange-200/60 shadow-xs cursor-pointer"
+                                                                title="Edit Report"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                                </svg>
+                                                                <span>Edit</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); handleCancelReport(report.report_id); }}
+                                                                className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-rose-600 bg-rose-50/90 hover:bg-rose-100 hover:text-rose-700 active:scale-95 rounded-xl transition-all border border-rose-200/60 shadow-xs cursor-pointer"
+                                                                title="Cancel Report"
+                                                            >
+                                                                <X className="w-3.5 h-3.5 shrink-0" />
+                                                                <span>Cancel</span>
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </div>
 
@@ -3348,7 +3483,7 @@ const ResiHomePage = () => {
                                                                 )}
                                                             </div>
                                                         </div>
-                                                        
+
                                                         <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
                                                             {report.owner_phone && (
                                                                 <a
@@ -3472,10 +3607,10 @@ const ResiHomePage = () => {
                                                                             <div className="flex gap-3 relative">
                                                                                 {/* Parent Avatar & Vertical Line */}
                                                                                 <div className="relative flex flex-col items-center shrink-0">
-                                                                                    <img 
-                                                                                        src={getProfilePicture(c.user_photo)} 
-                                                                                        className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm" 
-                                                                                        alt={c.user_name || 'User'} 
+                                                                                    <img
+                                                                                        src={getProfilePicture(c.user_photo)}
+                                                                                        className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm"
+                                                                                        alt={c.user_name || 'User'}
                                                                                         onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
                                                                                     />
                                                                                     {(replies.length > 0 || replyingTo[report.report_id]?.commentId === c.comment_id) && (
@@ -3514,10 +3649,10 @@ const ResiHomePage = () => {
                                                                                                     )}
 
                                                                                                     {/* Child Avatar */}
-                                                                                                    <img 
-                                                                                                        src={getProfilePicture(reply.user_photo)} 
-                                                                                                        className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0" 
-                                                                                                        alt={reply.user_name || 'User'} 
+                                                                                                    <img
+                                                                                                        src={getProfilePicture(reply.user_photo)}
+                                                                                                        className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0"
+                                                                                                        alt={reply.user_name || 'User'}
                                                                                                         onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
                                                                                                     />
 
@@ -3668,9 +3803,9 @@ const ResiHomePage = () => {
                                         const typeStr = (notif.type || '').toLowerCase();
                                         const titleStr = (notif.title || '').toLowerCase();
                                         const msgStr = (notif.message || '').toLowerCase();
-                                        const isMatchInquiry = typeStr === 'match_message' || 
-                                                               titleStr.includes('match inquiry') || 
-                                                               (titleStr.includes('💬') && (titleStr.includes('match') || msgStr.includes('look-alike') || msgStr.includes('match')));
+                                        const isMatchInquiry = typeStr === 'match_message' ||
+                                            titleStr.includes('match inquiry') ||
+                                            (titleStr.includes('💬') && (titleStr.includes('match') || msgStr.includes('look-alike') || msgStr.includes('match')));
                                         const isMatch = typeStr === 'potential_match' ||
                                             typeStr === 'match_review' ||
                                             titleStr.includes('match') ||
@@ -3949,6 +4084,7 @@ const ResiHomePage = () => {
                                 className="h-full w-full z-10"
                                 scrollWheelZoom={true}
                             >
+                                <InvalidateMapSize trigger={isMapPickerOpen} />
                                 <TileLayer
                                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -4066,11 +4202,10 @@ const ResiHomePage = () => {
                                                     setTempLandmark(lm.name);
                                                     setResolvedAddress(lm.name);
                                                 }}
-                                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer border ${
-                                                    tempLandmark === lm.name
+                                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer border ${tempLandmark === lm.name
                                                         ? 'bg-[#F97316] text-white border-[#F97316]'
                                                         : 'bg-[#FAFAF9] hover:bg-orange-50 border-gray-200 text-gray-700'
-                                                }`}
+                                                    }`}
                                             >
                                                 <span>{getLandmarkCategory(lm.category, lm.is_holding_facility).emoji}</span>
                                                 <span>{lm.name}</span>
@@ -4120,11 +4255,11 @@ const ResiHomePage = () => {
 
             {/* Lost Pet QR Code Lightbox Modal */}
             {activeQrModal && (
-                <div 
+                <div
                     className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
                     onClick={() => setActiveQrModal(null)}
                 >
-                    <div 
+                    <div
                         className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl border border-amber-100 animate-in zoom-in-95 duration-200 text-center relative"
                         onClick={(e) => e.stopPropagation()}
                     >

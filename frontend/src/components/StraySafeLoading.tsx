@@ -4,8 +4,8 @@ import React, { useState, useEffect } from 'react';
 import catGifAsset from '../assets/straysafe_running_cat.gif';
 import dogGifAsset from '../assets/straysafe_dog_running.gif';
 
-export const CAT_LOADING_GIF: string = catGifAsset || '/assets/straysafe_running_cat.gif';
-export const DOG_LOADING_GIF: string = dogGifAsset || '/assets/straysafe_dog_running.gif';
+export const CAT_LOADING_GIF: string = catGifAsset;
+export const DOG_LOADING_GIF: string = dogGifAsset;
 
 // Automatic silent preloader so both animations appear instantly with 0ms lag
 if (typeof window !== 'undefined') {
@@ -14,6 +14,14 @@ if (typeof window !== 'undefined') {
         p1.src = CAT_LOADING_GIF;
         const p2 = new Image();
         p2.src = DOG_LOADING_GIF;
+        if (catGifAsset) {
+            const p3 = new Image();
+            p3.src = catGifAsset;
+        }
+        if (dogGifAsset) {
+            const p4 = new Image();
+            p4.src = dogGifAsset;
+        }
     } catch {
         // Safe ignore during SSR or non-browser environments
     }
@@ -91,22 +99,30 @@ export const StraySafeLoading: React.FC<StraySafeLoadingProps> = ({
     const primaryAsset = isCat ? CAT_LOADING_GIF : DOG_LOADING_GIF;
 
     const [imgSrc, setImgSrc] = useState<string>(primaryAsset);
+    const [isImgLoaded, setIsImgLoaded] = useState<boolean>(false);
 
     // Synchronize image whenever animalType changes
     useEffect(() => {
         setImgSrc(primaryAsset);
+        setIsImgLoaded(false);
     }, [primaryAsset]);
 
     const handleImgError = () => {
         if (isCat) {
-            if (imgSrc !== '/assets/straysafe_running_cat.gif') {
-                setImgSrc('/assets/straysafe_running_cat.gif');
-            } else {
-                setImgSrc('/assets/straysafe_dog_running.gif');
+            if (imgSrc !== catGifAsset && catGifAsset) {
+                setImgSrc(catGifAsset);
+            } else if (imgSrc !== DOG_LOADING_GIF) {
+                setImgSrc(DOG_LOADING_GIF);
+            } else if (dogGifAsset) {
+                setImgSrc(dogGifAsset);
             }
         } else {
-            if (imgSrc !== '/assets/straysafe_dog_running.gif') {
-                setImgSrc('/assets/straysafe_dog_running.gif');
+            if (imgSrc !== dogGifAsset && dogGifAsset) {
+                setImgSrc(dogGifAsset);
+            } else if (imgSrc !== CAT_LOADING_GIF) {
+                setImgSrc(CAT_LOADING_GIF);
+            } else if (catGifAsset) {
+                setImgSrc(catGifAsset);
             }
         }
     };
@@ -118,27 +134,27 @@ export const StraySafeLoading: React.FC<StraySafeLoadingProps> = ({
     const sizeConfig = {
         sm: {
             card: 'max-w-[280px] p-4 rounded-3xl',
-            imgWrap: 'max-w-[220px]',
+            imgWrap: 'max-w-[200px] min-h-[120px]',
             title: 'text-sm font-black',
             sub: 'text-[11px]',
             badge: 'text-[9px] px-2.5 py-0.5 mb-2',
             bar: 'max-w-[180px] h-1',
         },
         md: {
-            card: 'max-w-[400px] p-6 rounded-[2.5rem]',
-            imgWrap: 'max-w-[340px]',
+            card: 'max-w-[92vw] sm:max-w-[400px] p-4 sm:p-6 rounded-3xl sm:rounded-[2.5rem]',
+            imgWrap: 'w-full max-w-[260px] sm:max-w-[340px] min-h-[130px] sm:min-h-[170px]',
             title: 'text-base sm:text-lg font-black',
             sub: 'text-xs',
-            badge: 'text-[10px] px-3 py-1 mb-3',
-            bar: 'max-w-[240px] h-1.5',
+            badge: 'text-[10px] px-3 py-1 mb-2.5 sm:mb-3',
+            bar: 'max-w-[200px] sm:max-w-[240px] h-1.5',
         },
         lg: {
-            card: 'max-w-[460px] p-8 rounded-[2.5rem]',
-            imgWrap: 'max-w-[390px]',
-            title: 'text-lg sm:text-xl font-black',
+            card: 'max-w-[92vw] sm:max-w-[460px] p-4 sm:p-8 rounded-3xl sm:rounded-[2.5rem]',
+            imgWrap: 'w-full max-w-[270px] sm:max-w-[380px] min-h-[140px] sm:min-h-[190px]',
+            title: 'text-base sm:text-xl font-black',
             sub: 'text-xs sm:text-sm',
-            badge: 'text-[11px] px-3.5 py-1 mb-4',
-            bar: 'max-w-[280px] h-2',
+            badge: 'text-[10px] sm:text-[11px] px-3 sm:px-3.5 py-1 mb-2.5 sm:mb-4',
+            bar: 'max-w-[200px] sm:max-w-[280px] h-1.5 sm:h-2',
         }
     }[size];
 
@@ -151,7 +167,7 @@ export const StraySafeLoading: React.FC<StraySafeLoadingProps> = ({
         >
             <div className={`relative w-full ${sizeConfig.card} bg-[#FAF6F0]/95 dark:bg-[#151C2C]/95 backdrop-blur-xl border border-orange-200/70 dark:border-orange-500/25 shadow-2xl shadow-orange-950/20 flex flex-col items-center transition-all duration-300 hover:scale-[1.01]`}>
 
-                {/* Brand / Status Pilll */}
+                {/* Brand / Status Pill */}
                 {effectiveBadge && (
                     <div className={`inline-flex items-center gap-2 rounded-full bg-orange-100/80 dark:bg-orange-950/60 border border-orange-300/40 dark:border-orange-800/50 text-[#C2410C] dark:text-orange-400 font-black uppercase tracking-widest ${sizeConfig.badge}`}>
                         <span className="relative flex h-2 w-2">
@@ -163,18 +179,26 @@ export const StraySafeLoading: React.FC<StraySafeLoadingProps> = ({
                 )}
 
                 {/* Animated Mascot Artwork (Either Cat OR Dog - Never Both) */}
-                <div className={`relative w-full ${sizeConfig.imgWrap} rounded-[2rem] overflow-hidden shadow-md border border-amber-200/50 dark:border-gray-700/60 bg-[#F4ECE2] dark:bg-[#1a2338] p-1.5 flex items-center justify-center`}>
+                <div className={`relative w-full ${sizeConfig.imgWrap} rounded-2xl sm:rounded-[2rem] overflow-hidden shadow-md border border-amber-200/50 dark:border-gray-700/60 bg-[#F4ECE2] dark:bg-[#1a2338] p-1.5 flex items-center justify-center`}>
+                    {!isImgLoaded && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-orange-50/50 dark:bg-gray-800/50 animate-pulse z-0">
+                            <span className="text-2xl animate-bounce">{isCat ? '🐱' : '🐶'}</span>
+                        </div>
+                    )}
                     <img
                         key={imgSrc}
                         src={imgSrc}
                         alt={isCat ? "STRAY-SAFE Running Cat Loading Animation" : "STRAY-SAFE Running Dog Loading Animation"}
+                        onLoad={() => setIsImgLoaded(true)}
                         onError={handleImgError}
-                        className="w-full h-auto rounded-[1.6rem] block object-contain select-none pointer-events-none transition-opacity duration-300"
+                        loading="eager"
+                        decoding="async"
+                        className={`w-full h-auto min-h-[120px] max-h-[170px] sm:max-h-[240px] rounded-xl sm:rounded-[1.6rem] block object-contain select-none pointer-events-none transition-opacity duration-300 z-10 ${isImgLoaded ? 'opacity-100' : 'opacity-90'}`}
                     />
                 </div>
 
                 {/* Main Message with animated bounce dots */}
-                <h3 className={`mt-4 uppercase tracking-tight text-[#1a1208] dark:text-white flex items-center justify-center gap-0.5 ${sizeConfig.title}`}>
+                <h3 className={`mt-3 sm:mt-4 uppercase tracking-tight text-[#1a1208] dark:text-white flex items-center justify-center gap-0.5 ${sizeConfig.title}`}>
                     <span>{effectiveMessage}</span>
                     <span className="inline-flex text-[#F97316]">
                         <span className="animate-bounce" style={{ animationDelay: '0ms' }}>.</span>
@@ -185,21 +209,21 @@ export const StraySafeLoading: React.FC<StraySafeLoadingProps> = ({
 
                 {/* Subtitle / Contextual Message */}
                 {subMessage && (
-                    <p className={`mt-2 text-gray-500 dark:text-gray-400 font-semibold leading-relaxed max-w-xs ${sizeConfig.sub}`}>
+                    <p className={`mt-1.5 sm:mt-2 text-gray-500 dark:text-gray-400 font-semibold leading-relaxed max-w-xs ${sizeConfig.sub}`}>
                         {subMessage}
                     </p>
                 )}
 
                 {/* Optional Step Progress Text */}
                 {progressText && (
-                    <p className="mt-2 text-[11px] font-bold text-[#F97316] tracking-wide animate-pulse">
+                    <p className="mt-1.5 sm:mt-2 text-[11px] font-bold text-[#F97316] tracking-wide animate-pulse">
                         {progressText}
                     </p>
                 )}
 
                 {/* Progress Bar Shimmer */}
                 {showProgressBar && (
-                    <div className={`w-full ${sizeConfig.bar} mt-4 bg-orange-100/90 dark:bg-gray-800 rounded-full overflow-hidden relative`}>
+                    <div className={`w-full ${sizeConfig.bar} mt-3 sm:mt-4 bg-orange-100/90 dark:bg-gray-800 rounded-full overflow-hidden relative`}>
                         <div className="absolute inset-y-0 bg-gradient-to-r from-orange-400 via-[#F97316] to-amber-400 rounded-full w-1/2 animate-[progress_1.6s_ease-in-out_infinite]" />
                     </div>
                 )}
@@ -217,7 +241,7 @@ export const StraySafeLoading: React.FC<StraySafeLoadingProps> = ({
 
     if (fullScreen) {
         return (
-            <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 dark:bg-black/80 backdrop-blur-md animate-in fade-in duration-200 pointer-events-auto select-none">
+            <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-black/60 dark:bg-black/80 backdrop-blur-md animate-in fade-in duration-200 pointer-events-auto select-none overflow-y-auto">
                 {content}
             </div>
         );

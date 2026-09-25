@@ -71,12 +71,8 @@ const ResiMobileNav = ({
                     onClick={onAddReportClick}
                     className="relative flex flex-col items-center gap-1 min-w-[52px] -mt-6 group active:scale-90 transition-transform duration-150 select-none"
                 >
-                    {/* Pulse rings */}
-                    <span className="absolute top-0 left-1/2 -translate-x-1/2 w-12 h-12 rounded-full bg-[#F97316]/30 animate-ping" style={{ animationDuration: '2s' }} />
-                    <span className="absolute top-0 left-1/2 -translate-x-1/2 w-12 h-12 rounded-full bg-[#F97316]/15 animate-ping" style={{ animationDuration: '2.5s', animationDelay: '0.4s' }} />
-
                     {/* Button */}
-                    <div className="relative w-14 h-14 bg-gradient-to-br from-[#FF8C38] to-[#F97316] rounded-full flex items-center justify-center text-white shadow-xl shadow-orange-300/50 border-4 border-white group-hover:shadow-orange-400/60 transition-all duration-200">
+                    <div className="relative w-14 h-14 bg-gradient-to-br from-[#FF8C38] to-[#F97316] rounded-full flex items-center justify-center text-white shadow-md border-4 border-white dark:border-gray-900 group-hover:shadow-lg transition-all duration-200">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 transition-transform duration-200 group-hover:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
                         </svg>

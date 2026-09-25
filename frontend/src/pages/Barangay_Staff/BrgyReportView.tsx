@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import {
     AlertTriangle, Check, MessageCircle, FileText, Link2, Zap, Search, MapPin,
     User, PawPrint, Home, Flag, Building2, Phone, Mail, Lock, Users, Landmark,
-    X, Rocket, Hospital, Settings, ScrollText, Pin, RefreshCw, Shield,
-    CheckCircle2, Ban, Ambulance, Heart, Lightbulb, Download, Camera,
+    X, Rocket, Hospital, Settings, ScrollText, Shield,
+    CheckCircle2, Ban, Ambulance, Lightbulb, Download, Camera,
     ShieldCheck, ArrowRightCircle, GitMerge, Cpu, Clock, Sparkles, ArrowLeft
 } from 'lucide-react';
 import axios from 'axios';
@@ -1904,7 +1904,7 @@ const BrgyReportView = () => {
                                                 </div>
                                             </div>
 
-                                            <div className={`w-full ${isInlineMapExpanded ? 'h-[480px]' : 'h-72'} transition-all duration-300 rounded-3xl overflow-hidden border border-gray-200 shadow-inner relative`}>
+                                            <div className={`w-full ${isInlineMapExpanded ? 'h-[500px] sm:h-[560px]' : 'h-[400px] sm:h-[460px] md:h-72'} transition-all duration-300 rounded-3xl overflow-hidden border border-gray-200 shadow-inner relative`}>
                                                 {/* Floating Expand Map Button inside canvas */}
                                                 <div className="absolute top-3 right-3 z-[400]">
                                                     <button
@@ -2218,19 +2218,31 @@ const BrgyReportView = () => {
                                                                 IconComponent = Ambulance;
                                                                 description = 'Response team deployed to secure and contain the animal.';
                                                             }
-                                                            // 9. Animal Picked Up / Secured
-                                                            else if (remarksLower.includes('picked up') || remarksLower.includes('animal secured') || statusId === 6) {
-                                                                actionTitle = 'ANIMAL SECURED';
-                                                                type = 'green';
-                                                                IconComponent = PawPrint;
-                                                                description = 'Animal successfully captured and secured in transit.';
+                                                            // 9. Relocation / Holding / Observation (check facility movement BEFORE animal secured so holding remarks don't get misclassified)
+                                                            else if (remarksLower.includes('relocated to') || remarksLower.includes('transferred to') || remarksLower.includes('relocation') || remarksLower.includes('transfer')) {
+                                                                actionTitle = 'FACILITY RELOCATION / TRANSFER';
+                                                                type = 'orange';
+                                                                IconComponent = Hospital;
+                                                                description = rawRemarks || 'Animal relocated to designated facility.';
                                                             }
-                                                            // 10. Relocation / Holding
-                                                            else if (remarksLower.includes('relocated to') || remarksLower.includes('transferred to') || remarksLower.includes('holding') || statusId === 7 || statusId === 8) {
+                                                            else if (remarksLower.includes('stay limit') || remarksLower.includes('observation note') || remarksLower.includes('daily note')) {
+                                                                actionTitle = 'FACILITY OBSERVATION';
+                                                                type = 'blue';
+                                                                IconComponent = Clock;
+                                                                description = rawRemarks || 'Facility observation recorded.';
+                                                            }
+                                                            else if (statusId === 7 || statusId === 8 || remarksLower.includes('holding') || remarksLower.includes('facility') || remarksLower.includes('shelter')) {
                                                                 actionTitle = 'MOVED TO HOLDING FACILITY';
                                                                 type = 'orange';
                                                                 IconComponent = Hospital;
                                                                 description = rawRemarks || 'Animal safely admitted to temporary holding pen.';
+                                                            }
+                                                            // 10. Animal Picked Up / Secured (Status 6 in-transit only)
+                                                            else if (statusId === 6 || remarksLower.includes('picked up') || remarksLower.includes('animal secured')) {
+                                                                actionTitle = 'ANIMAL SECURED';
+                                                                type = 'green';
+                                                                IconComponent = PawPrint;
+                                                                description = 'Animal successfully captured and secured in transit.';
                                                             }
                                                             // 11. Claim Approved / Pet Claimed
                                                             else if (remarksLower.includes('claim') || statusId === 9) {
@@ -2262,7 +2274,7 @@ const BrgyReportView = () => {
                                                             }
 
                                                             if (!author) {
-                                                                author = 'Barangay Officer';
+                                                                author = rawRemarks.toLowerCase().includes('subdivision') ? 'Subdivision Officer' : 'Barangay Officer';
                                                             }
                                                             if (author.toLowerCase().startsWith('by ')) {
                                                                 author = author.substring(3).trim();
@@ -2279,7 +2291,52 @@ const BrgyReportView = () => {
                                                             };
                                                         });
 
-                                                        const allEvents = [initialEntry, ...parsedHistory];
+                                                        const cleanRepeatedText = (text: string): string => {
+                                                            if (!text) return text;
+                                                            const parts = text.split(/(?<=[.;])\s+/);
+                                                            const seen = new Set<string>();
+                                                            const cleaned: string[] = [];
+                                                            for (const part of parts) {
+                                                                const trimmed = part.trim();
+                                                                const base = trimmed.replace(/\s*\([^)]*\)\s*$/, '').toLowerCase();
+                                                                if (base && seen.has(base)) {
+                                                                    const prevIdx = cleaned.findIndex(p => p.trim().replace(/\s*\([^)]*\)\s*$/, '').toLowerCase() === base);
+                                                                    if (prevIdx !== -1 && trimmed.length > cleaned[prevIdx].length) {
+                                                                        cleaned[prevIdx] = trimmed;
+                                                                    }
+                                                                    continue;
+                                                                }
+                                                                if (base) seen.add(base);
+                                                                cleaned.push(trimmed);
+                                                            }
+                                                            return cleaned.join(' ');
+                                                        };
+
+                                                        const isFacilityMovement = (title: string) => 
+                                                            title === 'MOVED TO HOLDING FACILITY' || title === 'FACILITY RELOCATION / TRANSFER';
+
+                                                        // Deduplicate consecutive events and merge redundant facility movement events within 5 minutes
+                                                        const deduplicatedHistory: TimelineItem[] = [];
+                                                        for (const item of parsedHistory) {
+                                                            item.description = cleanRepeatedText(item.description);
+                                                            const last = deduplicatedHistory[deduplicatedHistory.length - 1];
+                                                            if (last) {
+                                                                const timeDiff = Math.abs(new Date(item.timestamp || 0).getTime() - new Date(last.timestamp || 0).getTime());
+                                                                if (last.actionTitle === item.actionTitle && (timeDiff <= 180000 || last.description === item.description)) {
+                                                                    continue;
+                                                                }
+                                                                if (isFacilityMovement(last.actionTitle) && isFacilityMovement(item.actionTitle) && timeDiff <= 300000) {
+                                                                    last.actionTitle = 'MOVED TO HOLDING FACILITY';
+                                                                    if (item.description && !last.description.includes(item.description)) {
+                                                                        last.description = cleanRepeatedText(`${last.description} ${item.description}`);
+                                                                    }
+                                                                    continue;
+                                                                }
+                                                            }
+                                                            deduplicatedHistory.push(item);
+                                                        }
+
+                                                        const allEvents = [initialEntry, ...deduplicatedHistory];
 
                                                         return allEvents.map((evt) => {
                                                             const style = typeStyles[evt.type] || typeStyles.gray;
@@ -3059,8 +3116,8 @@ const BrgyReportView = () => {
 
             {/* ENLARGED FULLSCREEN MAP MODAL */}
             {isMapExpanded && report && (
-                <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-3xl shadow-2xl w-[98%] sm:w-[95%] h-[95%] sm:h-[92%] flex flex-col p-4 sm:p-6 animate-in zoom-in-95 duration-200 border border-gray-100 overflow-hidden">
+                <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-none sm:rounded-3xl shadow-2xl w-full h-full sm:w-[95%] sm:h-[92%] flex flex-col p-3 sm:p-6 animate-in zoom-in-95 duration-200 border-0 sm:border border-gray-100 overflow-hidden">
                         {/* Header */}
                         <div className="flex justify-between items-center mb-3 sm:mb-4 shrink-0 pb-3 border-b border-gray-100">
                             <div className="flex items-center gap-2.5">
