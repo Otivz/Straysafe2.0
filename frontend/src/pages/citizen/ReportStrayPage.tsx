@@ -1313,7 +1313,7 @@ export default function ReportStrayPage() {
                                     className="h-full w-full"
                                     scrollWheelZoom={true}
                                 >
-                                    <InvalidateMapSize trigger={isInlineMapExpanded} />
+                                    <InvalidateMapSize trigger={`${currentStep}-${isInlineMapExpanded}`} />
                                     <TileLayer
                                         attribution='&copy; OpenStreetMap'
                                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

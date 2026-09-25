@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import axios from 'axios';
-import { getProfilePicture, DEFAULT_AVATAR, DEFAULT_PET_AVATAR } from '../utils/avatar';
+import { DEFAULT_AVATAR, DEFAULT_PET_AVATAR } from '../utils/avatar';
 import { createBarangayHQIcon, createHoldingFacilityPinIcon, createLandmarkPinIcon, getLandmarkCategory, getLandmarkZoomMetrics } from '../utils/landmarkIcons';
 
 
@@ -450,6 +450,19 @@ mapStyleElement.textContent = `
     .custom-hover-tooltip.leaflet-tooltip-top::before {
         border-top-color: #F97316 !important;
     }
+    .custom-facility-hover-tooltip.leaflet-tooltip {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        pointer-events: none !important;
+    }
+    .custom-facility-hover-tooltip.leaflet-tooltip-top::before,
+    .custom-facility-hover-tooltip.leaflet-tooltip-bottom::before,
+    .custom-facility-hover-tooltip.leaflet-tooltip-left::before,
+    .custom-facility-hover-tooltip.leaflet-tooltip-right::before {
+        display: none !important;
+    }
     .leaflet-marker-icon {
         opacity: 1 !important;
         visibility: visible !important;
@@ -643,6 +656,7 @@ interface MapComponentProps {
     }[];
     showPopups?: boolean;
     showReturnToSelera?: boolean;
+    hideViewDetailsButton?: boolean;
 }
 
 // Internal component to handle view changes
@@ -843,7 +857,8 @@ const MapComponent = ({
     polylines = [],
     onMapClick,
     showPopups = true,
-    showReturnToSelera = true
+    showReturnToSelera = true,
+    hideViewDetailsButton = false
 }: MapComponentProps) => {
     const navigate = useNavigate();
     const [selectedReportMarker, setSelectedReportMarker] = useState<any>(null);
@@ -1040,11 +1055,18 @@ const MapComponent = ({
                         const lmLng = lm.lng;
                         const isHolding = Boolean(lm.is_holding_facility);
 
-                        const hasOverlappingReportMarker = markers.some(m =>
-                            (Math.abs(m.lat - lmLat) < 0.0006 && Math.abs(m.lng - lmLng) < 0.0006) ||
-                            (m.rawData?.facility_id && m.rawData.facility_id === lm.landmark_id) ||
-                            (m.category === 'Holding Facility' && isHolding)
-                        );
+                        const hasOverlappingReportMarker = markers.some(m => {
+                            if (m.category === 'Holding Facility' || m.category === 'Facility Holding' || m.category === 'Secured Facility') {
+                                const targetName = (m.rawData?.facility?.name || m.rawData?.facility_name || m.rawData?.landmark || m.title || '').toLowerCase();
+                                const matchesId = (m.rawData?.facility_id && m.rawData.facility_id === lm.landmark_id) ||
+                                                  (m.rawData?.facility?.landmark_id && m.rawData.facility.landmark_id === lm.landmark_id);
+                                const matchesName = lm.name && (targetName.includes(lm.name.toLowerCase()) || lm.name.toLowerCase().includes(targetName));
+                                const matchesCoord = Math.abs(m.lat - lmLat) < 0.0006 && Math.abs(m.lng - lmLng) < 0.0006;
+                                return isHolding && (matchesId || matchesName || matchesCoord);
+                            }
+                            return (Math.abs(m.lat - lmLat) < 0.0006 && Math.abs(m.lng - lmLng) < 0.0006) ||
+                                   (m.rawData?.facility_id && m.rawData.facility_id === lm.landmark_id);
+                        });
                         if (hasOverlappingReportMarker) {
                             return null;
                         }
@@ -1145,16 +1167,35 @@ const MapComponent = ({
                         }
                     }
 
+                    let markerLat = marker.lat;
+                    let markerLng = marker.lng;
+                    if (isHoldingFacility) {
+                        const targetName = (marker.rawData?.facility?.name || marker.rawData?.facility_name || marker.rawData?.landmark || marker.title || '').toLowerCase();
+                        const matchingLm = dbLandmarks.find((l: any) =>
+                            (marker.rawData?.facility_id && l.landmark_id === marker.rawData.facility_id) ||
+                            (marker.rawData?.facility?.landmark_id && l.landmark_id === marker.rawData.facility.landmark_id) ||
+                            (l.is_holding_facility && l.name && (targetName.includes(l.name.toLowerCase()) || l.name.toLowerCase().includes(targetName))) ||
+                            (l.is_holding_facility && Math.abs(((l.lat != null ? l.lat : l.latitude) || 0) - marker.lat) < 0.003 && Math.abs(((l.lng != null ? l.lng : l.longitude) || 0) - marker.lng) < 0.003)
+                        );
+                        if (matchingLm) {
+                            markerLat = matchingLm.lat != null ? matchingLm.lat : (matchingLm.latitude != null ? matchingLm.latitude : markerLat);
+                            markerLng = matchingLm.lng != null ? matchingLm.lng : (matchingLm.longitude != null ? matchingLm.longitude : markerLng);
+                        } else if (marker.rawData?.facility?.latitude != null && marker.rawData?.facility?.longitude != null) {
+                            markerLat = parseFloat(marker.rawData.facility.latitude.toString());
+                            markerLng = parseFloat(marker.rawData.facility.longitude.toString());
+                        }
+                    }
+
                     return (
                         <Marker
                             key={marker.id}
-                            position={[marker.lat, marker.lng]}
+                            position={[markerLat, markerLng]}
                             draggable={Boolean(marker.draggable)}
                             icon={
                                 marker.category === 'Selected Location' ? createSelectedPinIcon() :
                                 (marker.category === 'Barangay Office' || marker.category === 'HQ') ? createBarangayHQIcon(currentZoom) :
                                     isUserLoc ? createUserLocationIcon() :
-                                        isHoldingFacility ? createFacilityHoldingIcon(animalTypeStr, facilityNameStr, petImage, lmIcon, currentZoom) :
+                                        isHoldingFacility ? createHoldingFacilityPinIcon(facilityNameStr, currentZoom) :
                                             isInitialSighting ? InitialSightingIcon :
                                                 marker.color ? createColoredIncidentIcon(marker.color, animalTypeStr || marker.category) : IncidentIcon
                             }
@@ -1175,7 +1216,145 @@ const MapComponent = ({
                                 }
                             }}
                         >
-                            {marker.title && !isHoldingFacility && (
+                            {isHoldingFacility ? (
+                                <Tooltip
+                                    direction="top"
+                                    offset={[0, -Math.round(getLandmarkZoomMetrics(currentZoom).size / 2) - 6]}
+                                    opacity={1}
+                                    className="custom-facility-hover-tooltip"
+                                >
+                                    <div style={{
+                                        display: 'inline-flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.25))',
+                                        pointerEvents: 'none'
+                                    }}>
+                                        {/* Main Horizontal Card Pin */}
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '12px',
+                                            background: '#FFFFFF',
+                                            border: '2px solid #E2E8F0',
+                                            padding: '7px 16px 7px 8px',
+                                            borderRadius: '16px',
+                                            color: '#0F172A',
+                                            whiteSpace: 'nowrap',
+                                            boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
+                                            userSelect: 'none'
+                                        }}>
+                                            {/* Left Landmark / Facility Icon Badge */}
+                                            <div style={{
+                                                width: '38px',
+                                                height: '38px',
+                                                borderRadius: '50%',
+                                                background: '#FFFFFF',
+                                                border: '2px solid #059669',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                fontSize: '20px',
+                                                flexShrink: 0,
+                                                boxShadow: '0 2px 6px rgba(0,0,0,0.08)'
+                                            }}>
+                                                {lmIcon || '🐾'}
+                                            </div>
+
+                                            {/* Center Animal Avatar with Shield Checkmark Badge */}
+                                            <div style={{ position: 'relative', width: '38px', height: '38px', flexShrink: 0 }}>
+                                                <div style={{
+                                                    width: '38px',
+                                                    height: '38px',
+                                                    borderRadius: '50%',
+                                                    background: '#F1F5F9',
+                                                    border: '2px solid #CBD5E1',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    overflow: 'hidden'
+                                                }}>
+                                                    {petImage ? (
+                                                        <img
+                                                            src={petImage}
+                                                            alt="Pet"
+                                                            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                                                            onError={(e: any) => {
+                                                                e.currentTarget.style.display = 'none';
+                                                                if (e.currentTarget.nextSibling) e.currentTarget.nextSibling.style.display = 'inline';
+                                                            }}
+                                                        />
+                                                    ) : null}
+                                                    <span style={{ fontSize: '20px', lineHeight: 1, display: petImage ? 'none' : 'inline' }}>
+                                                        {(animalTypeStr || '').toLowerCase().includes('cat') ? '🐱' : '🐶'}
+                                                    </span>
+                                                </div>
+                                                {/* Green Checkmark Badge */}
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    bottom: '-2px',
+                                                    right: '-2px',
+                                                    width: '15px',
+                                                    height: '15px',
+                                                    borderRadius: '50%',
+                                                    background: '#10B981',
+                                                    border: '2px solid #FFFFFF',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    color: 'white',
+                                                    fontSize: '9px',
+                                                    fontWeight: 900
+                                                }}>
+                                                    ✓
+                                                </div>
+                                            </div>
+
+                                            {/* Right Text Info */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left', paddingRight: '4px' }}>
+                                                <div style={{
+                                                    fontSize: '13px',
+                                                    fontWeight: 900,
+                                                    color: '#0F172A',
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.04em',
+                                                    lineHeight: 1.2
+                                                }}>
+                                                    {facilityNameStr ? facilityNameStr.toUpperCase() : 'HOLDING FACILITY'}
+                                                </div>
+                                                <div style={{
+                                                    fontSize: '10px',
+                                                    fontWeight: 800,
+                                                    color: '#059669',
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.06em',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    lineHeight: 1.2,
+                                                    marginTop: '2px'
+                                                }}>
+                                                    <span style={{ fontSize: '9px', fontWeight: 900 }}>✓</span>
+                                                    {facilityNameStr && (facilityNameStr.toLowerCase() === 'holding facility' || facilityNameStr.toLowerCase() === 'facility')
+                                                        ? 'SECURED INSIDE'
+                                                        : 'HOLDING FACILITY • SECURED INSIDE'}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Downward Pointer Triangle */}
+                                        <div style={{
+                                            width: 0,
+                                            height: 0,
+                                            borderLeft: '9px solid transparent',
+                                            borderRight: '9px solid transparent',
+                                            borderTop: '9px solid #FFFFFF',
+                                            marginTop: '-1px',
+                                            filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.1))'
+                                        }} />
+                                    </div>
+                                </Tooltip>
+                            ) : marker.title ? (
                                 <Tooltip 
                                     direction="top" 
                                     offset={[0, isUserLoc ? -12 : -32]} 
@@ -1187,7 +1366,7 @@ const MapComponent = ({
                                         <span>{marker.title}</span>
                                     </div>
                                 </Tooltip>
-                            )}
+                            ) : null}
                             {!isUserLoc && !isHoldingFacility && showPopups && (
                                 <Popup className="custom-popup">
                                     <div className="p-3 w-[250px] text-gray-800 flex flex-col gap-2 select-none">
@@ -1347,23 +1526,25 @@ const MapComponent = ({
                     )}
 
                     {/* Action Button */}
-                    <button
-                        type="button"
-                        onClick={() => {
-                            if (onViewDetails) {
-                                onViewDetails(selectedReportMarker);
-                            } else {
-                                const rId = selectedReportMarker.rawData?.report_id || (selectedReportMarker.id > 0 ? selectedReportMarker.id : null);
-                                if (rId) navigate(`/subd/reports/${rId}`);
-                            }
-                        }}
-                        className="w-full py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-2xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
-                    >
-                        <span>View Full Report Details</span>
-                        <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                        </svg>
-                    </button>
+                    {!hideViewDetailsButton && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (onViewDetails) {
+                                    onViewDetails(selectedReportMarker);
+                                } else {
+                                    const rId = selectedReportMarker.rawData?.report_id || (selectedReportMarker.id > 0 ? selectedReportMarker.id : null);
+                                    if (rId) navigate(`/subd/reports/${rId}`);
+                                }
+                            }}
+                            className="w-full py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-2xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
+                        >
+                            <span>View Full Report Details</span>
+                            <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                            </svg>
+                        </button>
+                    )}
                 </div>
             )}
         </div>

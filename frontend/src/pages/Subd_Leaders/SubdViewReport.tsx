@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     AlertTriangle, Mail, MessageCircle, Check, X, Shield, User, Lock, RefreshCw,
     Search, Link2, Ban, Scale, Home, MapPin, Flag, Building2, PawPrint, Phone,
-    Syringe, Camera, Rocket, ScrollText, FileText, Pin, CheckCircle2, ClipboardList,
+    Syringe, Camera, Rocket, ScrollText, FileText, CheckCircle2, ClipboardList,
     Sparkles, Zap, Bandage, Hourglass,
-    ShieldCheck, ArrowRightCircle, GitMerge, Cpu, Clock, Ambulance, Hospital
+    ShieldCheck, ArrowRightCircle, GitMerge, Cpu, Clock, Ambulance, Hospital,
+    Maximize2, Minimize2
 } from 'lucide-react';
 import axios from 'axios';
-import api, { API_BASE_URL } from '../../utils/api';
+import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate, useParams, Link, useLocation, useSearchParams } from 'react-router-dom';
@@ -175,6 +176,33 @@ const SubdViewReport = () => {
     const [loading, setLoading] = useState(true);
     const [showSuccess, setShowSuccess] = useState(false);
     const [isMapExpanded, setIsMapExpanded] = useState(false);
+    const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
+    const expandedMapContainerRef = useRef<HTMLDivElement>(null);
+
+    const toggleNativeFullscreen = () => {
+        if (!document.fullscreenElement) {
+            expandedMapContainerRef.current?.requestFullscreen?.().catch(() => {});
+            setIsNativeFullscreen(true);
+        } else {
+            document.exitFullscreen?.().catch(() => {});
+            setIsNativeFullscreen(false);
+        }
+    };
+
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsNativeFullscreen(!!document.fullscreenElement);
+        };
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    }, []);
+
+    const handleCloseExpandedMap = () => {
+        if (document.fullscreenElement) {
+            document.exitFullscreen?.().catch(() => {});
+        }
+        setIsMapExpanded(false);
+    };
     const [isAddPetModalOpen, setIsAddPetModalOpen] = useState(false);
     const [selectedPetDetail, setSelectedPetDetail] = useState<PetRecord | null>(null);
     const [isLoadingPetDetail, setIsLoadingPetDetail] = useState(false);
@@ -1821,21 +1849,31 @@ const SubdViewReport = () => {
                                             Expand Map
                                         </button>
                                     </div>
-                                    <div className="w-full h-64 rounded-2xl overflow-hidden border border-gray-100 shadow-sm bg-gray-50">
+                                    <div className="w-full h-[400px] sm:h-[460px] md:h-[500px] rounded-2xl overflow-hidden border border-gray-100 shadow-sm bg-gray-50">
                                         {(() => {
                                             const isRelocated = report.status_id !== 6 && ([7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || report.custody_status === 'In Subdivision Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude)));
                                             const currentLat = report.latitude != null ? parseFloat(report.latitude.toString()) : null;
                                             const currentLng = report.longitude != null ? parseFloat(report.longitude.toString()) : null;
                                             const initLat = report.initial_latitude != null ? parseFloat(report.initial_latitude.toString()) : null;
                                             const initLng = report.initial_longitude != null ? parseFloat(report.initial_longitude.toString()) : null;
+                                            const facLat = report.facility?.latitude != null 
+                                                ? parseFloat(report.facility.latitude.toString()) 
+                                                : (report.facility_id === 2 ? 14.8018 : (report.facility_id === 5 ? 14.8069 : currentLat));
+                                            const facLng = report.facility?.longitude != null 
+                                                ? parseFloat(report.facility.longitude.toString()) 
+                                                : (report.facility_id === 2 ? 121.0028 : (report.facility_id === 5 ? 121.0039 : currentLng));
+
+                                            const holdingLat = isRelocated && facLat != null ? facLat : (currentLat ?? 14.8018);
+                                            const holdingLng = isRelocated && facLng != null ? facLng : (currentLng ?? 121.0028);
+
                                             const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
-                                            const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && currentLat != null && currentLng != null && (Math.abs(initLat - currentLat) > 0.0001 || Math.abs(initLng - currentLng) > 0.0001);
+                                            const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && holdingLat != null && holdingLng != null && (Math.abs(initLat - holdingLat) > 0.0001 || Math.abs(initLng - holdingLng) > 0.0001);
 
                                             const markersList = [
                                                 {
                                                     id: report.report_id,
-                                                    lat: report.latitude,
-                                                    lng: report.longitude,
+                                                    lat: isRelocated ? holdingLat : (currentLat ?? 14.8018),
+                                                    lng: isRelocated ? holdingLng : (currentLng ?? 121.0028),
                                                     title: isRelocated 
                                                         ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}` 
                                                         : (report.status_id === 6 
@@ -1845,7 +1883,7 @@ const SubdViewReport = () => {
                                                     priority: report.priority_level,
                                                     rawData: {
                                                         ...report,
-                                                        facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Facility' }) : undefined,
+                                                        facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Facility', latitude: holdingLat, longitude: holdingLng }) : undefined,
                                                         facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Facility') : undefined
                                                     }
                                                 },
@@ -1876,7 +1914,7 @@ const SubdViewReport = () => {
 
                                             return (
                                                 <MapComponent
-                                                    center={[report.latitude, report.longitude]}
+                                                    center={[isRelocated ? holdingLat : (currentLat ?? 14.8018), isRelocated ? holdingLng : (currentLng ?? 121.0028)]}
                                                     zoom={17}
                                                     showHeatmap={false}
                                                     showPopups={false}
@@ -2811,19 +2849,31 @@ const SubdViewReport = () => {
                                                             IconComponent = Ambulance;
                                                             description = 'Response team deployed to secure and contain the animal.';
                                                         }
-                                                        // 9. Animal Picked Up / Secured
-                                                        else if (remarksLower.includes('picked up') || remarksLower.includes('animal secured') || statusId === 6) {
-                                                            actionTitle = 'ANIMAL SECURED';
-                                                            type = 'green';
-                                                            IconComponent = PawPrint;
-                                                            description = 'Animal successfully captured and secured in transit.';
+                                                        // 9. Relocation / Holding / Observation (check facility movement BEFORE animal secured so holding remarks don't get misclassified)
+                                                        else if (remarksLower.includes('relocated to') || remarksLower.includes('transferred to') || remarksLower.includes('relocation') || remarksLower.includes('transfer')) {
+                                                            actionTitle = 'FACILITY RELOCATION / TRANSFER';
+                                                            type = 'orange';
+                                                            IconComponent = Hospital;
+                                                            description = rawRemarks || 'Animal relocated to designated facility.';
                                                         }
-                                                        // 10. Relocation / Holding
-                                                        else if (remarksLower.includes('relocated to') || remarksLower.includes('transferred to') || remarksLower.includes('holding') || statusId === 7 || statusId === 8) {
+                                                        else if (remarksLower.includes('stay limit') || remarksLower.includes('observation note') || remarksLower.includes('daily note')) {
+                                                            actionTitle = 'FACILITY OBSERVATION';
+                                                            type = 'blue';
+                                                            IconComponent = Clock;
+                                                            description = rawRemarks || 'Facility observation recorded.';
+                                                        }
+                                                        else if (statusId === 7 || statusId === 8 || remarksLower.includes('holding') || remarksLower.includes('facility') || remarksLower.includes('shelter')) {
                                                             actionTitle = 'MOVED TO HOLDING FACILITY';
                                                             type = 'orange';
                                                             IconComponent = Hospital;
                                                             description = rawRemarks || 'Animal safely admitted to temporary holding pen.';
+                                                        }
+                                                        // 10. Animal Picked Up / Secured (Status 6 in-transit only)
+                                                        else if (statusId === 6 || remarksLower.includes('picked up') || remarksLower.includes('animal secured')) {
+                                                            actionTitle = 'ANIMAL SECURED';
+                                                            type = 'green';
+                                                            IconComponent = PawPrint;
+                                                            description = 'Animal successfully captured and secured in transit.';
                                                         }
                                                         // 11. Claim Approved / Pet Claimed
                                                         else if (remarksLower.includes('claim') || statusId === 9) {
@@ -2855,7 +2905,7 @@ const SubdViewReport = () => {
                                                         }
 
                                                         if (!author) {
-                                                            author = 'Subdivision Officer';
+                                                            author = report.assigned_leader_name || 'Subdivision Officer';
                                                         }
                                                         if (author.toLowerCase().startsWith('by ')) {
                                                             author = author.substring(3).trim();
@@ -2872,7 +2922,52 @@ const SubdViewReport = () => {
                                                         };
                                                     });
 
-                                                    const allEvents = [initialEntry, ...parsedHistory];
+                                                    const cleanRepeatedText = (text: string): string => {
+                                                        if (!text) return text;
+                                                        const parts = text.split(/(?<=[.;])\s+/);
+                                                        const seen = new Set<string>();
+                                                        const cleaned: string[] = [];
+                                                        for (const part of parts) {
+                                                            const trimmed = part.trim();
+                                                            const base = trimmed.replace(/\s*\([^)]*\)\s*$/, '').toLowerCase();
+                                                            if (base && seen.has(base)) {
+                                                                const prevIdx = cleaned.findIndex(p => p.trim().replace(/\s*\([^)]*\)\s*$/, '').toLowerCase() === base);
+                                                                if (prevIdx !== -1 && trimmed.length > cleaned[prevIdx].length) {
+                                                                    cleaned[prevIdx] = trimmed;
+                                                                }
+                                                                continue;
+                                                            }
+                                                            if (base) seen.add(base);
+                                                            cleaned.push(trimmed);
+                                                        }
+                                                        return cleaned.join(' ');
+                                                    };
+
+                                                    const isFacilityMovement = (title: string) => 
+                                                        title === 'MOVED TO HOLDING FACILITY' || title === 'FACILITY RELOCATION / TRANSFER';
+
+                                                    // Deduplicate consecutive events and merge redundant facility movement events within 5 minutes
+                                                    const deduplicatedHistory: TimelineItem[] = [];
+                                                    for (const item of parsedHistory) {
+                                                        item.description = cleanRepeatedText(item.description);
+                                                        const last = deduplicatedHistory[deduplicatedHistory.length - 1];
+                                                        if (last) {
+                                                            const timeDiff = Math.abs(new Date(item.timestamp || 0).getTime() - new Date(last.timestamp || 0).getTime());
+                                                            if (last.actionTitle === item.actionTitle && (timeDiff <= 180000 || last.description === item.description)) {
+                                                                continue;
+                                                            }
+                                                            if (isFacilityMovement(last.actionTitle) && isFacilityMovement(item.actionTitle) && timeDiff <= 300000) {
+                                                                last.actionTitle = 'MOVED TO HOLDING FACILITY';
+                                                                if (item.description && !last.description.includes(item.description)) {
+                                                                    last.description = cleanRepeatedText(`${last.description} ${item.description}`);
+                                                                }
+                                                                continue;
+                                                            }
+                                                        }
+                                                        deduplicatedHistory.push(item);
+                                                    }
+
+                                                    const allEvents = [initialEntry, ...deduplicatedHistory];
 
                                                     return allEvents.map((evt) => {
                                                         const style = typeStyles[evt.type] || typeStyles.gray;
@@ -3176,22 +3271,36 @@ const SubdViewReport = () => {
 
             {/* ENLARGED FULLSCREEN MAP MODAL */}
             {isMapExpanded && report && (
-                <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-white rounded-3xl shadow-2xl w-[95%] h-[92%] flex flex-col p-6 animate-in zoom-in-95 duration-200">
+                <div 
+                    ref={expandedMapContainerRef}
+                    className="fixed inset-0 z-[9999] bg-white w-full h-full flex flex-col p-3 sm:p-5 overflow-hidden animate-in fade-in duration-200"
+                >
+                    <div className="w-full h-full flex flex-col overflow-hidden">
                         {/* Header */}
-                        <div className="flex justify-between items-center mb-4 shrink-0">
+                        <div className="flex justify-between items-center mb-3 sm:mb-4 shrink-0 pb-3 border-b border-gray-100">
                             <div>
                                 <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Incident Map View</h3>
                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Expanded View of Report #{report.report_id} and Surroundings</p>
                             </div>
-                            <button
-                                onClick={() => setIsMapExpanded(false)}
-                                className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-700 cursor-pointer"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={toggleNativeFullscreen}
+                                    className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500 hover:text-gray-800 cursor-pointer flex items-center justify-center border border-gray-200"
+                                    title={isNativeFullscreen ? "Exit Browser Fullscreen" : "Enter Browser Fullscreen"}
+                                >
+                                    {isNativeFullscreen ? <Minimize2 className="w-5 h-5 text-[#F97316]" /> : <Maximize2 className="w-5 h-5 text-[#F97316]" />}
+                                </button>
+                                <button
+                                    onClick={handleCloseExpandedMap}
+                                    className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-700 cursor-pointer border border-gray-200"
+                                    title="Close Expanded Map"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
 
                         {/* Map Area */}
@@ -3202,14 +3311,24 @@ const SubdViewReport = () => {
                                 const currentLng = report.longitude != null ? parseFloat(report.longitude.toString()) : null;
                                 const initLat = report.initial_latitude != null ? parseFloat(report.initial_latitude.toString()) : null;
                                 const initLng = report.initial_longitude != null ? parseFloat(report.initial_longitude.toString()) : null;
+                                const facLat = report.facility?.latitude != null 
+                                    ? parseFloat(report.facility.latitude.toString()) 
+                                    : (report.facility_id === 2 ? 14.8018 : (report.facility_id === 5 ? 14.8069 : currentLat));
+                                const facLng = report.facility?.longitude != null 
+                                    ? parseFloat(report.facility.longitude.toString()) 
+                                    : (report.facility_id === 2 ? 121.0028 : (report.facility_id === 5 ? 121.0039 : currentLng));
+
+                                const holdingLat = isRelocated && facLat != null ? facLat : (currentLat ?? 14.8018);
+                                const holdingLng = isRelocated && facLng != null ? facLng : (currentLng ?? 121.0028);
+
                                 const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
-                                const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && currentLat != null && currentLng != null && (Math.abs(initLat - currentLat) > 0.0001 || Math.abs(initLng - currentLng) > 0.0001);
+                                const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && holdingLat != null && holdingLng != null && (Math.abs(initLat - holdingLat) > 0.0001 || Math.abs(initLng - holdingLng) > 0.0001);
 
                                 const markersList = [
                                     {
                                         id: report.report_id,
-                                        lat: report.latitude,
-                                        lng: report.longitude,
+                                        lat: isRelocated ? holdingLat : (currentLat ?? 14.8018),
+                                        lng: isRelocated ? holdingLng : (currentLng ?? 121.0028),
                                         title: isRelocated 
                                             ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}` 
                                             : (report.status_id === 6 
@@ -3219,7 +3338,7 @@ const SubdViewReport = () => {
                                         priority: report.priority_level,
                                         rawData: {
                                             ...report,
-                                            facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Facility' }) : undefined,
+                                            facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Facility', latitude: holdingLat, longitude: holdingLng }) : undefined,
                                             facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Facility') : undefined
                                         }
                                     },
@@ -3251,7 +3370,7 @@ const SubdViewReport = () => {
                                 return (
                                     <MapComponent
                                         height="100%"
-                                        center={[report.latitude, report.longitude]}
+                                        center={[isRelocated ? holdingLat : (currentLat ?? 14.8018), isRelocated ? holdingLng : (currentLng ?? 121.0028)]}
                                         zoom={18}
                                         showHeatmap={false}
                                         showPopups={false}

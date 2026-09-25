@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import { api } from '../../utils/api';
 import MapComponent from '../../components/MapComponent';
 import SubdSidebar from '../../components/SubdSidebar';
@@ -55,6 +56,33 @@ const SubdDashboard = () => {
     const [priorityFilter, setPriorityFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
     const [mapMode, setMapMode] = useState<'pins' | 'heatmap' | 'both'>('both');
     const [isMapExpanded, setIsMapExpanded] = useState(false);
+    const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
+    const expandedMapContainerRef = useRef<HTMLDivElement>(null);
+
+    const toggleNativeFullscreen = () => {
+        if (!document.fullscreenElement) {
+            expandedMapContainerRef.current?.requestFullscreen?.().catch(() => {});
+            setIsNativeFullscreen(true);
+        } else {
+            document.exitFullscreen?.().catch(() => {});
+            setIsNativeFullscreen(false);
+        }
+    };
+
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsNativeFullscreen(!!document.fullscreenElement);
+        };
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    }, []);
+
+    const handleCloseExpandedMap = () => {
+        if (document.fullscreenElement) {
+            document.exitFullscreen?.().catch(() => {});
+        }
+        setIsMapExpanded(false);
+    };
     const [selectedDetailReport, setSelectedDetailReport] = useState<any>(null);
     const [selectedReport, setSelectedReport] = useState<any>(null);
     const [selectedMapCoords, setSelectedMapCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -1723,10 +1751,13 @@ const SubdDashboard = () => {
 
             {/* ENLARGED FULLSCREEN MAP MODAL */}
             {isMapExpanded && (
-                <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full sm:w-[95%] h-full sm:h-[92%] flex flex-col p-3 sm:p-6 animate-in zoom-in-95 duration-200">
+                <div 
+                    ref={expandedMapContainerRef}
+                    className="fixed inset-0 z-[9999] bg-white w-full h-full flex flex-col p-3 sm:p-5 overflow-hidden animate-in fade-in duration-200"
+                >
+                    <div className="w-full h-full flex flex-col overflow-hidden">
                         {/* Header */}
-                        <div className="flex justify-between items-center mb-2.5 sm:mb-4 shrink-0">
+                        <div className="flex justify-between items-center mb-2.5 sm:mb-4 shrink-0 pb-2.5 sm:pb-3 border-b border-gray-100">
                             <div>
                                 <h3 className="text-sm sm:text-xl font-black text-gray-900 uppercase tracking-tight">Geospatial Community Map</h3>
                                 <p className="text-[9px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Full Subdivision Real-Time View</p>
@@ -1753,8 +1784,17 @@ const SubdDashboard = () => {
                                     </button>
                                 </div>
                                 <button
-                                    onClick={() => setIsMapExpanded(false)}
-                                    className="p-1.5 sm:p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors text-gray-500 hover:text-gray-800 shrink-0 cursor-pointer"
+                                    type="button"
+                                    onClick={toggleNativeFullscreen}
+                                    className="p-1.5 sm:p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors text-gray-500 hover:text-gray-800 shrink-0 cursor-pointer flex items-center justify-center border border-gray-200"
+                                    title={isNativeFullscreen ? "Exit Browser Fullscreen" : "Enter Browser Fullscreen"}
+                                >
+                                    {isNativeFullscreen ? <Minimize2 className="h-5 w-5 sm:h-6 sm:w-6 text-[#F97316]" /> : <Maximize2 className="h-5 w-5 sm:h-6 sm:w-6 text-[#F97316]" />}
+                                </button>
+                                <button
+                                    onClick={handleCloseExpandedMap}
+                                    className="p-1.5 sm:p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors text-gray-500 hover:text-gray-800 shrink-0 cursor-pointer border border-gray-200"
+                                    title="Close Expanded Map"
                                 >
                                     <svg className="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />

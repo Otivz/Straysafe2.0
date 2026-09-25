@@ -38,4 +38,7 @@
 - **Generative AI & Multimodal LLM:** OpenRouter & Groq Cloud (`openai` SDK interface)
 - **Image Processing:** Pillow (PIL)
 
-
+## 🚀 Deployment Plan
+- **Frontend Hosting:** Vercel (Optimized for React/TypeScript applications with automated deployments).
+- **Backend Hosting:** Render (Ideal for Python/FastAPI applications with continuous deployment from GitHub).
+- **Database Hosting:** Aiven (Managed PostgreSQL database for secure, reliable, and scalable data storage).

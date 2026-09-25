@@ -215,6 +215,8 @@ def _populate(animal: HoldingAnimal) -> HoldingAnimal:
     for log in animal.timeline:
         if log.staff:
             log.staff_name = log.staff.name  # type: ignore[attr-defined]
+        elif log.logged_by is None:
+            log.staff_name = "System Monitor"
     return animal
 
 

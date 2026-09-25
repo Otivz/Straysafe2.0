@@ -4,7 +4,7 @@ import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import { api } from '../../utils/api';
-import { DEFAULT_AVATAR } from '../../utils/avatar';
+import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { generateMemorableTitle } from '../../utils/chatUtils';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from '../../components/PetRecords/types';
