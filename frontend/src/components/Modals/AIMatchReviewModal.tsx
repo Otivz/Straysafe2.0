@@ -609,64 +609,164 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                     </div>
                                 </div>
                             ) : isPetMatch ? (
-                                <div className="flex flex-wrap items-center justify-between gap-3">
-                                    <div className="text-xs text-gray-500 font-medium">
-                                        <strong className="text-gray-800">Final Verification Rule:</strong> AI recommendations require staff confirmation before officially matching cases.
-                                    </div>
-                                    <div className="flex items-center gap-2 flex-wrap justify-end">
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsAddPetModalOpen(true)}
-                                            className="px-3.5 py-2.5 rounded-xl border border-orange-200 bg-orange-50 hover:bg-orange-100 text-[#F97316] text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                            title="If this animal has no record in the system yet, register it now"
-                                        >
-                                            <span>🐾</span> Add Record for this Animal
-                                        </button>
-                                        <button
-                                            onClick={() => { setSelectedDecision('NOT_A_MATCH'); setVerificationNotes(''); }}
-                                            className="px-4 py-2.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs"
-                                        >
-                                            <span>✕</span> Not a Match
-                                        </button>
-                                        <button
-                                            onClick={() => { setSelectedDecision('UNABLE_TO_VERIFY'); setVerificationNotes(''); }}
-                                            className="px-4 py-2.5 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs"
-                                        >
-                                            <span>?</span> Unable to Verify
-                                        </button>
-                                        <button
-                                            onClick={() => { setSelectedDecision('CONFIRMED_MATCH'); setVerificationNotes(''); }}
-                                            className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shadow-emerald-600/20"
-                                        >
-                                            <span>✓</span> Confirm Match
-                                        </button>
+                                <div className="flex flex-col gap-3">
+                                    {match.status && match.status !== 'AI_SUGGESTED' && (
+                                        <div className="px-4 py-2.5 rounded-xl bg-gray-100 border border-gray-200 text-xs text-gray-700 flex items-center justify-between">
+                                            <span className="font-semibold">Current Review Decision:</span>
+                                            <div className="flex items-center gap-2">
+                                                {getStatusBadge(match.status)}
+                                                {match.verified_at && (
+                                                    <span className="text-[11px] text-gray-500">
+                                                        by {match.reviewer?.name || 'Staff'} ({match.reviewer_role || 'Official'})
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <div className="text-xs text-gray-500 font-medium">
+                                            <strong className="text-gray-800">Final Verification Rule:</strong> AI recommendations require staff confirmation before officially matching cases.
+                                        </div>
+                                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                                            {source?.pet_id || targetPet?.pet_id || source?.pet_name || match.matched_pet_id ? (
+                                                <button
+                                                    type="button"
+                                                    disabled
+                                                    className="px-3.5 py-2.5 rounded-xl border border-emerald-900 bg-emerald-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-not-allowed opacity-80"
+                                                    title="Pet record is already registered and linked to this animal"
+                                                >
+                                                    <span className="text-emerald-200 font-black">✓</span> Record Already Added
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsAddPetModalOpen(true)}
+                                                    className="px-3.5 py-2.5 rounded-xl border border-orange-200 bg-orange-50 hover:bg-orange-100 text-[#F97316] text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                                    title="If this animal has no record in the system yet, register it now"
+                                                >
+                                                    <span>🐾</span> Add Record for this Animal
+                                                </button>
+                                            )}
+
+                                            {match.status === 'NOT_A_MATCH' ? (
+                                                <button
+                                                    disabled
+                                                    className="px-4 py-2.5 rounded-xl border border-red-900 bg-red-800 text-white text-xs font-bold flex items-center gap-1.5 cursor-not-allowed opacity-80"
+                                                >
+                                                    <span>✕</span> Marked Not a Match
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => { setSelectedDecision('NOT_A_MATCH'); setVerificationNotes(''); }}
+                                                    className="px-4 py-2.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                                >
+                                                    <span>✕</span> Not a Match
+                                                </button>
+                                            )}
+
+                                            {match.status === 'UNABLE_TO_VERIFY' ? (
+                                                <button
+                                                    disabled
+                                                    className="px-4 py-2.5 rounded-xl border border-amber-900 bg-amber-800 text-white text-xs font-bold flex items-center gap-1.5 cursor-not-allowed opacity-80"
+                                                >
+                                                    <span>?</span> Marked Unable to Verify
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => { setSelectedDecision('UNABLE_TO_VERIFY'); setVerificationNotes(''); }}
+                                                    className="px-4 py-2.5 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                                >
+                                                    <span>?</span> Unable to Verify
+                                                </button>
+                                            )}
+
+                                            {match.status === 'CONFIRMED_MATCH' ? (
+                                                <button
+                                                    disabled
+                                                    className="px-5 py-2.5 rounded-xl border border-emerald-900 bg-emerald-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-not-allowed opacity-80"
+                                                >
+                                                    <span>✓</span> Match Confirmed
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => { setSelectedDecision('CONFIRMED_MATCH'); setVerificationNotes(''); }}
+                                                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shadow-emerald-600/20 cursor-pointer"
+                                                >
+                                                    <span>✓</span> Confirm Match
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             ) : (
-                                <div className="flex flex-wrap items-center justify-between gap-3">
-                                    <div className="text-xs text-gray-500 font-medium">
-                                        <strong className="text-gray-800">Duplicate Action:</strong> If confirmed as the same stray sighting, merge secondary report into primary to consolidate evidence.
-                                    </div>
-                                    <div className="flex items-center gap-2 flex-wrap justify-end">
-                                        <button
-                                            onClick={() => { setSelectedDecision('NOT_A_MATCH'); setVerificationNotes('Staff confirmed these are separate/different stray animals.'); }}
-                                            className="px-4 py-2.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                        >
-                                            <span>✕</span> Separate / Different Animal
-                                        </button>
-                                        <button
-                                            onClick={() => { setSelectedDecision('UNABLE_TO_VERIFY'); setVerificationNotes('Inconclusive evidence to confirm duplicate sighting.'); }}
-                                            className="px-4 py-2.5 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                        >
-                                            <span>?</span> Unable to Verify
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsMergeModalOpen(true)}
-                                            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-[#F97316] hover:from-amber-700 hover:to-[#ea580c] text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shadow-orange-500/20 cursor-pointer"
-                                        >
-                                            <span>🔗</span> Confirm Duplicate & Merge Reports
-                                        </button>
+                                <div className="flex flex-col gap-3">
+                                    {match.status && match.status !== 'AI_SUGGESTED' && (
+                                        <div className="px-4 py-2.5 rounded-xl bg-gray-100 border border-gray-200 text-xs text-gray-700 flex items-center justify-between">
+                                            <span className="font-semibold">Current Duplicate Review Decision:</span>
+                                            <div className="flex items-center gap-2">
+                                                {getStatusBadge(match.status)}
+                                                {match.verified_at && (
+                                                    <span className="text-[11px] text-gray-500">
+                                                        by {match.reviewer?.name || 'Staff'} ({match.reviewer_role || 'Official'})
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <div className="text-xs text-gray-500 font-medium">
+                                            <strong className="text-gray-800">Duplicate Action:</strong> If confirmed as the same stray sighting, merge secondary report into primary to consolidate evidence.
+                                        </div>
+                                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                                            {match.status === 'NOT_A_MATCH' ? (
+                                                <button
+                                                    disabled
+                                                    className="px-4 py-2.5 rounded-xl border border-red-900 bg-red-800 text-white text-xs font-bold flex items-center gap-1.5 cursor-not-allowed opacity-80"
+                                                >
+                                                    <span>✕</span> Marked as Separate
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => { setSelectedDecision('NOT_A_MATCH'); setVerificationNotes('Staff confirmed these are separate/different stray animals.'); }}
+                                                    className="px-4 py-2.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                                >
+                                                    <span>✕</span> Separate / Different Animal
+                                                </button>
+                                            )}
+
+                                            {match.status === 'UNABLE_TO_VERIFY' ? (
+                                                <button
+                                                    disabled
+                                                    className="px-4 py-2.5 rounded-xl border border-amber-900 bg-amber-800 text-white text-xs font-bold flex items-center gap-1.5 cursor-not-allowed opacity-80"
+                                                >
+                                                    <span>?</span> Marked Unable to Verify
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => { setSelectedDecision('UNABLE_TO_VERIFY'); setVerificationNotes('Inconclusive evidence to confirm duplicate sighting.'); }}
+                                                    className="px-4 py-2.5 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                                >
+                                                    <span>?</span> Unable to Verify
+                                                </button>
+                                            )}
+
+                                            {match.status === 'CONFIRMED_MATCH' || source?.status_id === 18 || source?.duplicate_of_report_id || targetReport?.status_id === 18 || targetReport?.duplicate_of_report_id ? (
+                                                <button
+                                                    disabled
+                                                    className="px-5 py-2.5 rounded-xl bg-stone-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-not-allowed opacity-80 border border-stone-900"
+                                                >
+                                                    <span>🔗</span> Marked as Duplicate
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsMergeModalOpen(true)}
+                                                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-[#F97316] hover:from-amber-700 hover:to-[#ea580c] text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shadow-orange-500/20 cursor-pointer"
+                                                >
+                                                    <span>🔗</span> Confirm Duplicate & Merge Reports
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             )}

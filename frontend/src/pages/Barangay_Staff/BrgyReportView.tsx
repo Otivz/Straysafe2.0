@@ -92,6 +92,14 @@ interface Report {
     merged_reports?: any[];
     has_duplicate_flag?: boolean;
     duplicate_match_count?: number;
+    review_status?: string | null;
+    review_type?: string | null;
+    reviewed_by_name?: string | null;
+    reviewed_by_role?: string | null;
+    reviewed_at?: string | null;
+    review_notes?: string | null;
+    matched_pet_record?: any;
+    matched_report_record?: any;
     verified_actual_bite?: boolean | null;
     verified_chasing?: boolean | null;
     verified_attempted_bite?: boolean | null;
@@ -1193,6 +1201,93 @@ const BrgyReportView = () => {
                                             >
                                                 <span>Separate / Unmerge</span>
                                             </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Persistent Staff / Subdivision Review Decision Dossier */}
+                                {((report.review_status && report.review_status !== 'Unreviewed') || report.pet_id) && (
+                                    <div className={`p-6 rounded-3xl border-2 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 animate-in fade-in duration-300 shadow-sm mb-6 ${
+                                        (report.review_status === 'Confirmed Match' || report.pet_id)
+                                            ? 'bg-emerald-500/10 border-emerald-300 text-emerald-950'
+                                            : (report.review_status === 'Confirmed Duplicate' || report.status_id === 18 || report.duplicate_of_report_id)
+                                            ? 'bg-stone-100 border-stone-300 text-stone-900'
+                                            : report.review_status === 'Not a Match'
+                                            ? 'bg-rose-500/10 border-rose-300 text-rose-950'
+                                            : 'bg-amber-500/10 border-amber-300 text-amber-950'
+                                    }`}>
+                                        <div className="flex items-start gap-4">
+                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-md ${
+                                                (report.review_status === 'Confirmed Match' || report.pet_id)
+                                                    ? 'bg-emerald-600 text-white shadow-emerald-600/20'
+                                                    : (report.review_status === 'Confirmed Duplicate' || report.status_id === 18 || report.duplicate_of_report_id)
+                                                    ? 'bg-stone-800 text-white shadow-stone-800/20'
+                                                    : report.review_status === 'Not a Match'
+                                                    ? 'bg-rose-600 text-white shadow-rose-600/20'
+                                                    : 'bg-amber-600 text-white shadow-amber-600/20'
+                                            }`}>
+                                                {(report.review_status === 'Confirmed Match' || report.pet_id) ? (
+                                                    <PawPrint className="w-6 h-6" />
+                                                ) : (report.review_status === 'Confirmed Duplicate' || report.status_id === 18 || report.duplicate_of_report_id) ? (
+                                                    <Link2 className="w-6 h-6" />
+                                                ) : report.review_status === 'Not a Match' ? (
+                                                    <X className="w-6 h-6" />
+                                                ) : (
+                                                    <AlertTriangle className="w-6 h-6" />
+                                                )}
+                                            </div>
+
+                                            <div className="space-y-1.5">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-white/80 border border-current shadow-2xs">
+                                                        Review Decision (Subdivision Verified)
+                                                    </span>
+                                                    <span className="font-extrabold text-sm uppercase tracking-wide">
+                                                        {report.review_status || (report.pet_id ? 'Confirmed Match' : 'Confirmed Duplicate')}
+                                                    </span>
+                                                </div>
+
+                                                {/* Pet Match Details */}
+                                                {(report.review_status === 'Confirmed Match' || report.pet_id) && (
+                                                    <p className="text-xs font-bold text-emerald-900 flex items-center gap-2 flex-wrap mt-1">
+                                                        <span>Matched Pet: <strong className="underline">{report.matched_pet_record?.pet_name || report.pet_name || 'Registered Pet'}</strong></span>
+                                                        {(report.matched_pet_record?.breed || report.animal_breed) && (
+                                                            <span className="text-emerald-700">({report.matched_pet_record?.breed || report.animal_breed})</span>
+                                                        )}
+                                                        {(report.matched_pet_record?.owner_name || report.owner_name) && (
+                                                            <span className="text-emerald-700">• Owner: {report.matched_pet_record?.owner_name || report.owner_name}</span>
+                                                        )}
+                                                    </p>
+                                                )}
+
+                                                {/* Duplicate Details */}
+                                                {(report.review_status === 'Confirmed Duplicate' || report.duplicate_of_report_id) && (
+                                                    <p className="text-xs font-bold text-stone-800 flex items-center gap-2 flex-wrap mt-1">
+                                                        <span>Confirmed Duplicate of Primary Case #{report.duplicate_of_report_id || report.matched_report_record?.report_id || 'Active'}</span>
+                                                    </p>
+                                                )}
+
+                                                {/* Review Notes / Rationale */}
+                                                {(report.review_notes || report.merge_notes) && (
+                                                    <p className="text-xs italic opacity-90 mt-0.5">
+                                                        "{report.review_notes || report.merge_notes}"
+                                                    </p>
+                                                )}
+
+                                                {/* Reviewer and Timestamp Metadata */}
+                                                <div className="flex items-center gap-3 text-[11px] opacity-75 font-semibold pt-1">
+                                                    <span>Reviewed by: <strong>{report.reviewed_by_name || report.merged_by_name || 'Subdivision Leader'}</strong> {report.reviewed_by_role ? `(${report.reviewed_by_role})` : ''}</span>
+                                                    <span>•</span>
+                                                    <span>Reviewed at: {report.reviewed_at || report.merged_at ? new Date(String(report.reviewed_at || report.merged_at)).toLocaleString() : 'Recorded in system'}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="shrink-0 flex items-center gap-2">
+                                            <span className="px-3.5 py-1.5 rounded-xl bg-white/90 text-xs font-black uppercase tracking-wider border border-current shadow-xs flex items-center gap-1.5">
+                                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                                <span>Decision Preserved</span>
+                                            </span>
                                         </div>
                                     </div>
                                 )}

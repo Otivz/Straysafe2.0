@@ -375,6 +375,25 @@ def create_pet(
                 pet_dict["registered_by_name"] = owner_user.name
                 pet_dict["registered_by_user_id"] = owner_user.user_id
 
+    # Prevent duplicate pet registration (idempotency check)
+    target_owner = pet_dict.get("owner_id")
+    target_name = (pet_dict.get("pet_name") or "").strip().lower()
+    target_type = (pet_dict.get("pet_type") or "").strip()
+    target_breed = (pet_dict.get("breed") or "").strip()
+
+    if target_name and target_name not in ["no name", "unknown", ""]:
+        dup_query = db.query(Pet).filter(
+            Pet.owner_id == target_owner,
+            Pet.pet_type == target_type,
+            Pet.status != "Deceased"
+        )
+        for cand in dup_query.all():
+            cand_name = (cand.pet_name or "").strip().lower()
+            cand_breed = (cand.breed or "").strip()
+            if cand_name == target_name:
+                if not target_breed or not cand_breed or target_breed.lower() == cand_breed.lower():
+                    return cand
+
     db_pet = Pet(**pet_dict)
     db.add(db_pet)
     db.commit()

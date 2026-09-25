@@ -751,14 +751,24 @@ def get_duplicate_matches(
         ReportMatch.matched_pet_id.is_(None)
     )
 
-    # Exclude any matches where either source_report or matched_report has been resolved, closed, or merged
+    # Exclude unreviewed AI suggestions if resolved/merged, but always retain human verified/confirmed records
     query = query.join(SrcReport, ReportMatch.source_report_id == SrcReport.report_id).filter(
-        SrcReport.current_status_id.notin_(RESOLVED_STATUS_IDS),
-        SrcReport.duplicate_of_report_id.is_(None)
+        or_(
+            ReportMatch.status.in_(["CONFIRMED_MATCH", "NOT_A_MATCH", "UNABLE_TO_VERIFY"]),
+            and_(
+                SrcReport.current_status_id.notin_(RESOLVED_STATUS_IDS),
+                SrcReport.duplicate_of_report_id.is_(None)
+            )
+        )
     )
     query = query.join(CandReport, ReportMatch.matched_report_id == CandReport.report_id).filter(
-        CandReport.current_status_id.notin_(RESOLVED_STATUS_IDS),
-        CandReport.duplicate_of_report_id.is_(None)
+        or_(
+            ReportMatch.status.in_(["CONFIRMED_MATCH", "NOT_A_MATCH", "UNABLE_TO_VERIFY"]),
+            and_(
+                CandReport.current_status_id.notin_(RESOLVED_STATUS_IDS),
+                CandReport.duplicate_of_report_id.is_(None)
+            )
+        )
     )
 
     if status_filter and status_filter != 'ALL':
@@ -792,8 +802,18 @@ def get_duplicates_for_report(report_id: int, db: Session = Depends(get_db)):
     However, if the report is still ongoing and another ongoing report exists, it will appear.
     """
     curr_rep = db.query(Report).filter(Report.report_id == report_id).first()
-    if not curr_rep or curr_rep.current_status_id in RESOLVED_STATUS_IDS or curr_rep.duplicate_of_report_id:
+    if not curr_rep:
         return []
+
+    # If report is closed/resolved (not duplicate 18) and not merged, check if any confirmed matches exist
+    if curr_rep.current_status_id in [3, 9, 10, 11, 12, 14, 17] and not curr_rep.duplicate_of_report_id:
+        has_confirmed = db.query(ReportMatch).filter(
+            ReportMatch.matched_report_id.isnot(None),
+            ReportMatch.status.in_(["CONFIRMED_MATCH", "NOT_A_MATCH", "UNABLE_TO_VERIFY"]),
+            or_(ReportMatch.source_report_id == report_id, ReportMatch.matched_report_id == report_id)
+        ).first()
+        if not has_confirmed:
+            return []
 
     SrcReport = aliased(Report)
     CandReport = aliased(Report)
@@ -817,13 +837,23 @@ def get_duplicates_for_report(report_id: int, db: Session = Depends(get_db)):
         ).join(
             SrcReport, ReportMatch.source_report_id == SrcReport.report_id
         ).filter(
-            SrcReport.current_status_id.notin_(RESOLVED_STATUS_IDS),
-            SrcReport.duplicate_of_report_id.is_(None)
+            or_(
+                ReportMatch.status.in_(["CONFIRMED_MATCH", "NOT_A_MATCH", "UNABLE_TO_VERIFY"]),
+                and_(
+                    SrcReport.current_status_id.notin_(RESOLVED_STATUS_IDS),
+                    SrcReport.duplicate_of_report_id.is_(None)
+                )
+            )
         ).join(
             CandReport, ReportMatch.matched_report_id == CandReport.report_id
         ).filter(
-            CandReport.current_status_id.notin_(RESOLVED_STATUS_IDS),
-            CandReport.duplicate_of_report_id.is_(None)
+            or_(
+                ReportMatch.status.in_(["CONFIRMED_MATCH", "NOT_A_MATCH", "UNABLE_TO_VERIFY"]),
+                and_(
+                    CandReport.current_status_id.notin_(RESOLVED_STATUS_IDS),
+                    CandReport.duplicate_of_report_id.is_(None)
+                )
+            )
         ).order_by(desc(ReportMatch.similarity_score))
 
     matches = build_query().all()
@@ -891,6 +921,9 @@ def verify_match(
     - Dispatches notifications to relevant parties
     - Prevents duplicate AI re-matching if rejected
     """
+    if payload.decision == "CONFIRMED_DUPLICATE":
+        payload.decision = "CONFIRMED_MATCH"
+
     allowed_decisions = ["CONFIRMED_MATCH", "NOT_A_MATCH", "UNABLE_TO_VERIFY"]
     if payload.decision not in allowed_decisions:
         raise HTTPException(
@@ -942,8 +975,27 @@ def verify_match(
             match.source_report.pet_id = match.matched_pet.pet_id
             match.source_report.is_possible_owned = True
         
-        # Deduplicate/reconcile holding records if both reports were admitted
+        # Link duplicate reports and set Duplicate status (18)
         if match.source_report_id and match.matched_report_id:
+            src = match.source_report
+            tgt = match.matched_report
+            if src and tgt:
+                # If neither is already merged, link tgt as duplicate of src
+                if not tgt.duplicate_of_report_id and not src.duplicate_of_report_id:
+                    tgt.duplicate_of_report_id = src.report_id
+                    tgt.current_status_id = 18
+                    tgt.merged_at = datetime.now()
+                    tgt.merged_by = current_user.user_id
+                    tgt.merge_notes = payload.notes
+                    if tgt.pet_id and not src.pet_id:
+                        src.pet_id = tgt.pet_id
+                elif tgt.duplicate_of_report_id:
+                    tgt.current_status_id = 18
+                    tgt.merged_at = tgt.merged_at or datetime.now()
+                    tgt.merged_by = tgt.merged_by or current_user.user_id
+                    tgt.merge_notes = payload.notes or tgt.merge_notes
+
+            # Deduplicate/reconcile holding records if both reports were admitted
             src_holding = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == match.source_report_id).first()
             tgt_holding = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == match.matched_report_id).first()
 

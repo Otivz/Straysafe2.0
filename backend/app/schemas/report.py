@@ -216,6 +216,16 @@ class ReportResponse(ReportBase):
     has_duplicate_flag: Optional[bool] = False
     duplicate_match_count: Optional[int] = 0
 
+    # Persistent Review & Matching Decision Tracking
+    review_status: Optional[str] = None
+    review_type: Optional[str] = None
+    reviewed_by_name: Optional[str] = None
+    reviewed_by_role: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    review_notes: Optional[str] = None
+    matched_pet_record: Optional[dict[str, Any]] = None
+    matched_report_record: Optional[dict[str, Any]] = None
+
     @field_validator("merged_reports", mode="before")
     @classmethod
     def serialize_merged_reports(cls, v):

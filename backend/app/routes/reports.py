@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from sqlalchemy.orm import Session, joinedload, selectinload, aliased
 from typing import List, Optional
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, desc
 
 # Statuses representing closed, resolved, terminal, or consolidated cases
 RESOLVED_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18]
@@ -443,8 +443,181 @@ def populate_duplicate_and_merge_info(rep_data: ReportResponse, rep: Report, db:
         else:
             rep_data.duplicate_match_count = 0
             rep_data.has_duplicate_flag = False
+
+        populate_review_decision_info(rep_data, rep, db)
     except Exception as err:
         print(f"Failed to populate duplicate/merge info for report {rep.report_id}: {err}")
+
+
+def populate_review_decision_info(rep_data: ReportResponse, rep: Report, db: Session):
+    """
+    Populates persistent review decision metadata for pet matching and duplicate review.
+    Guarantees that decisions made by Subdivision Leaders persist when forwarded to Barangay.
+    Distinguishes:
+    1. Unreviewed
+    2. Confirmed Duplicate
+    3. Confirmed Match
+    4. Not a Match
+    5. Unable to Verify
+    """
+    try:
+        review_status = "Unreviewed"
+        review_type = None
+        reviewed_by_name = None
+        reviewed_by_role = None
+        reviewed_at = None
+        review_notes = None
+        matched_pet_record = None
+        matched_report_record = None
+
+        # 1. Check if report is marked as a Duplicate
+        if rep.duplicate_of_report_id or rep.current_status_id == 18:
+            review_status = "Confirmed Duplicate"
+            review_type = "duplicate"
+            reviewed_at = rep.merged_at
+            review_notes = rep.merge_notes
+            if rep.merged_by:
+                m_user = db.query(User).filter(User.user_id == rep.merged_by).first()
+                if m_user:
+                    reviewed_by_name = m_user.name
+                    reviewed_by_role = "Subdivision Leader" if m_user.role_id == 2 else ("Barangay Staff" if m_user.role_id == 3 else "Admin")
+
+            parent_rep = db.query(Report).filter(Report.report_id == rep.duplicate_of_report_id).first() if rep.duplicate_of_report_id else None
+            if parent_rep:
+                matched_report_record = {
+                    "report_id": parent_rep.report_id,
+                    "animal_type": parent_rep.animal_type,
+                    "animal_breed": parent_rep.animal_breed,
+                    "landmark": parent_rep.landmark,
+                    "status_id": parent_rep.current_status_id
+                }
+
+            # If reviewer name not found from merged_by, check ReportMatch
+            dup_match = db.query(ReportMatch).options(joinedload(ReportMatch.reviewer)).filter(
+                ReportMatch.matched_report_id.isnot(None),
+                or_(
+                    and_(ReportMatch.source_report_id == rep.report_id, ReportMatch.matched_report_id == rep.duplicate_of_report_id),
+                    and_(ReportMatch.source_report_id == rep.duplicate_of_report_id, ReportMatch.matched_report_id == rep.report_id)
+                )
+            ).first()
+            if dup_match:
+                if dup_match.reviewer and not reviewed_by_name:
+                    reviewed_by_name = dup_match.reviewer.name
+                reviewed_by_role = dup_match.reviewer_role or reviewed_by_role
+                reviewed_at = dup_match.verified_at or reviewed_at
+                review_notes = dup_match.verification_notes or review_notes
+
+        # 2. Check if primary report with merged duplicate children
+        elif rep.merged_reports or (rep_data.merged_reports and len(rep_data.merged_reports) > 0):
+            first_m = rep.merged_reports[0] if rep.merged_reports else rep_data.merged_reports[0]
+            review_status = "Confirmed Duplicate"
+            review_type = "duplicate"
+            if isinstance(first_m, dict):
+                reviewed_at = first_m.get("merged_at")
+                review_notes = first_m.get("merge_notes")
+                matched_report_record = {
+                    "report_id": first_m.get("report_id"),
+                    "animal_type": first_m.get("animal_type"),
+                    "animal_breed": first_m.get("animal_breed"),
+                    "landmark": first_m.get("landmark"),
+                }
+            else:
+                reviewed_at = getattr(first_m, "merged_at", None)
+                review_notes = getattr(first_m, "merge_notes", None)
+                m_by = getattr(first_m, "merged_by", None)
+                if m_by:
+                    m_user = db.query(User).filter(User.user_id == m_by).first()
+                    if m_user:
+                        reviewed_by_name = m_user.name
+                        reviewed_by_role = "Subdivision Leader" if m_user.role_id == 2 else "Barangay Staff"
+                matched_report_record = {
+                    "report_id": first_m.report_id,
+                    "animal_type": first_m.animal_type,
+                    "animal_breed": first_m.animal_breed,
+                    "landmark": first_m.landmark,
+                    "status_id": first_m.current_status_id
+                }
+
+        # 3. Check for confirmed Pet Match (Report.pet_id is set or ReportMatch is CONFIRMED_MATCH)
+        if review_status == "Unreviewed" or rep.pet_id:
+            pet_match = db.query(ReportMatch).options(
+                joinedload(ReportMatch.matched_pet).joinedload(Pet.owner),
+                joinedload(ReportMatch.reviewer)
+            ).filter(
+                ReportMatch.source_report_id == rep.report_id,
+                ReportMatch.matched_pet_id.isnot(None),
+                ReportMatch.status == "CONFIRMED_MATCH"
+            ).order_by(desc(ReportMatch.verified_at)).first()
+
+            if pet_match:
+                review_status = "Confirmed Match"
+                review_type = "pet_match"
+                if pet_match.reviewer:
+                    reviewed_by_name = pet_match.reviewer.name
+                reviewed_by_role = pet_match.reviewer_role or ("Subdivision Leader" if (pet_match.reviewer and pet_match.reviewer.role_id == 2) else "Barangay Staff")
+                reviewed_at = pet_match.verified_at
+                review_notes = pet_match.verification_notes
+                if pet_match.matched_pet:
+                    p = pet_match.matched_pet
+                    matched_pet_record = {
+                        "pet_id": p.pet_id,
+                        "pet_name": p.pet_name,
+                        "breed": p.breed,
+                        "color": getattr(p, "color_markings", None) or getattr(p, "primary_color", None),
+                        "owner_name": p.owner.name if p.owner else "Registered Resident",
+                        "photo_url": p.photo_url
+                    }
+            elif rep.pet_id and review_status == "Unreviewed":
+                linked_p = db.query(Pet).options(joinedload(Pet.owner)).filter(Pet.pet_id == rep.pet_id).first()
+                if linked_p:
+                    review_status = "Confirmed Match"
+                    review_type = "pet_match"
+                    matched_pet_record = {
+                        "pet_id": linked_p.pet_id,
+                        "pet_name": linked_p.pet_name,
+                        "breed": linked_p.breed,
+                        "color": getattr(linked_p, "color_markings", None) or getattr(linked_p, "primary_color", None),
+                        "owner_name": linked_p.owner.name if linked_p.owner else "Registered Resident",
+                        "photo_url": linked_p.photo_url
+                    }
+
+        # 4. Check for other reviewed decisions: NOT_A_MATCH or UNABLE_TO_VERIFY if still Unreviewed
+        if review_status == "Unreviewed":
+            evaluated_match = db.query(ReportMatch).options(
+                joinedload(ReportMatch.reviewer),
+                joinedload(ReportMatch.matched_pet),
+                joinedload(ReportMatch.matched_report)
+            ).filter(
+                or_(
+                    ReportMatch.source_report_id == rep.report_id,
+                    ReportMatch.matched_report_id == rep.report_id
+                ),
+                ReportMatch.status.in_(["NOT_A_MATCH", "UNABLE_TO_VERIFY"])
+            ).order_by(desc(ReportMatch.verified_at)).first()
+
+            if evaluated_match:
+                if evaluated_match.status == "NOT_A_MATCH":
+                    review_status = "Not a Match"
+                elif evaluated_match.status == "UNABLE_TO_VERIFY":
+                    review_status = "Unable to Verify"
+
+                review_type = "pet_match" if evaluated_match.matched_pet_id else "duplicate"
+                if evaluated_match.reviewer:
+                    reviewed_by_name = evaluated_match.reviewer.name
+                reviewed_by_role = evaluated_match.reviewer_role or ("Subdivision Leader" if (evaluated_match.reviewer and evaluated_match.reviewer.role_id == 2) else "Barangay Staff")
+                reviewed_at = evaluated_match.verified_at
+                review_notes = evaluated_match.verification_notes
+
+        rep_data.review_status = review_status
+        rep_data.review_type = review_type
+        rep_data.reviewed_by_name = reviewed_by_name
+        rep_data.reviewed_by_role = reviewed_by_role
+        rep_data.reviewed_at = reviewed_at
+        rep_data.review_notes = review_notes
+        rep_data.matched_pet_record = matched_pet_record
+        rep_data.matched_report_record = matched_report_record
+    except Exception as r_err:
+        print(f"Failed to populate review decision info for report {rep.report_id}: {r_err}")
 
 
 @router.get("/", response_model=List[ReportResponse])
@@ -1909,7 +2082,13 @@ def update_report_status(
         report.custody_status = status_update.custody_status
 
     # Update current_status_id (DB column name)
-    report.current_status_id = status_update.status_id
+    # If this report was already confirmed as a duplicate (status 18 or duplicate_of_report_id is set),
+    # preserving the Duplicate status (18) is required so it does not reset on escalation or status update to 4.
+    if (report.current_status_id == 18 or report.duplicate_of_report_id) and status_update.status_id == 4:
+        # Keep status 18 while recording the escalation in history / endorsement
+        pass
+    else:
+        report.current_status_id = status_update.status_id
 
     # When a report transitions to a resolved status, clean up any unreviewed AI duplicate suggestions involving it
     if status_update.status_id in RESOLVED_STATUS_IDS:
@@ -2225,6 +2404,14 @@ def link_pet_to_report(report_id: int, pet_id: int, req: Request, db: Session = 
     pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not pet:
         raise HTTPException(status_code=404, detail="Pet not found")
+
+    if report.pet_id == pet_id:
+        return {
+            "status": "success",
+            "message": f"Report #{report_id} is already linked to Pet #{pet_id} ('{pet.pet_name}').",
+            "report_id": report_id,
+            "pet_id": pet_id
+        }
 
     report.pet_id = pet_id
     db.flush()
