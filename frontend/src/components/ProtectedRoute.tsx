@@ -99,6 +99,15 @@ const ProtectedRoute = ({ allowedRoles = [4] }: ProtectedRouteProps) => {
     }
 
     if (status === 'forbidden') {
+        if (allowedRoles.includes(1)) {
+            return <Navigate to="/login" replace state={{ from: location }} />;
+        }
+        if (allowedRoles.includes(2) || allowedRoles.includes(3)) {
+            return <Navigate to="/staff/login" replace state={{ from: location }} />;
+        }
+        if (allowedRoles.includes(4)) {
+            return <Navigate to="/admin/login" replace state={{ from: location }} />;
+        }
         if (userRole === 1) return <Navigate to="/resident-home" replace />;
         if (userRole === 2) return <Navigate to="/subd/dashboard" replace />;
         if (userRole === 3) return <Navigate to="/brgy/dashboard" replace />;

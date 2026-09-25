@@ -3,10 +3,12 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { notifyChatUpdated, markReportChatAsSeen, generateMemorableTitle } from '../../utils/chatUtils';
 import { api } from '../../utils/api';
-import { DEFAULT_AVATAR } from '../../utils/avatar';
+import { DEFAULT_AVATAR, DEFAULT_PET_AVATAR } from '../../utils/avatar';
 import { getMediaKind, validateFile, UPLOAD_ACCEPT } from '../../utils/uploadValidation';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import MediaPreview from '../Shared/MediaPreview';
+import PetDetailPanel from '../PetRecords/PetDetailPanel';
+import { type PetRecord, mapRawPetToPetRecord } from '../PetRecords/types';
 
 export interface ChatMessage {
     id: string;
@@ -124,6 +126,27 @@ export default function ReportChatDrawer({
     const [autoMatchId, setAutoMatchId] = useState<number | undefined>(matchId);
     const [localMatchedPet, setLocalMatchedPet] = useState<MatchedPetInfo | null>(matchedPet || null);
     const [canInteract, setCanInteract] = useState<boolean>(true);
+    const [selectedPetDetail, setSelectedPetDetail] = useState<PetRecord | null>(null);
+    const [isLoadingPetDetail, setIsLoadingPetDetail] = useState(false);
+
+    const handleOpenPetDetail = async (petData: any) => {
+        if (!petData) return;
+        setIsLoadingPetDetail(true);
+        try {
+            const petId = petData.pet_id || petData.id;
+            if (petId) {
+                const res = await api.get(`/pets/${petId}`);
+                setSelectedPetDetail(mapRawPetToPetRecord(res.data));
+            } else {
+                setSelectedPetDetail(mapRawPetToPetRecord(petData));
+            }
+        } catch (e) {
+            console.error("Failed to load pet details:", e);
+            setSelectedPetDetail(mapRawPetToPetRecord(petData));
+        } finally {
+            setIsLoadingPetDetail(false);
+        }
+    };
 
     const reportId = report?.report_id || 0;
     const rawStatusId = (report as any)?.current_status_id || report?.status_id;
@@ -161,11 +184,56 @@ export default function ReportChatDrawer({
         }
     }, [matchId]);
 
+    // Ensure report details & animal photo are loaded if report object was partially provided
     useEffect(() => {
+        if (!isOpen || !reportId) return;
+
+        const needsReportFetch = !(report as any)?.media_url && !(report as any)?.media?.length;
+        if (needsReportFetch) {
+            api.get(`/reports/${reportId}`)
+                .then(res => {
+                    if (res.data) {
+                        const repData = res.data;
+                        const sightingPhoto = repData.media?.[0]?.file_url || repData.media?.[0]?.media_url || repData.media_url || repData.photo_url || null;
+                        setLocalMatchedPet(prev => {
+                            if (!prev) return null;
+                            return {
+                                ...prev,
+                                sighting_photo_url: prev.sighting_photo_url || sightingPhoto || undefined,
+                                sighting_species: prev.sighting_species || repData.animal_type,
+                                sighting_breed: prev.sighting_breed || repData.animal_breed,
+                                sighting_color: prev.sighting_color || repData.animal_color,
+                                sighting_size: prev.sighting_size || repData.animal_size,
+                                sighting_landmark: prev.sighting_landmark || repData.landmark
+                            };
+                        });
+                    }
+                })
+                .catch(err => console.warn('Could not auto-fetch report details for drawer:', err));
+        }
+    }, [isOpen, reportId]);
+
+    useEffect(() => {
+        const resolvedSightingPhoto = 
+            (report as any)?.media_url || 
+            (report as any)?.media?.[0]?.file_url || 
+            (report as any)?.media?.[0]?.media_url || 
+            (report as any)?.photo_url || 
+            null;
+
         if (matchedPet) {
-            setLocalMatchedPet(matchedPet);
+            setLocalMatchedPet({
+                ...matchedPet,
+                sighting_photo_url: matchedPet.sighting_photo_url || resolvedSightingPhoto || undefined,
+                sighting_species: matchedPet.sighting_species || report?.animal_type,
+                sighting_breed: matchedPet.sighting_breed || (report as any)?.animal_breed,
+                sighting_color: matchedPet.sighting_color || (report as any)?.animal_color,
+                sighting_size: matchedPet.sighting_size || (report as any)?.animal_size,
+                sighting_landmark: matchedPet.sighting_landmark || report?.landmark
+            });
             return;
         }
+
         if (isOpen && reportId && threadMode !== 'report') {
             api.get(`/matches/report/${reportId}`)
                 .then(res => {
@@ -175,6 +243,12 @@ export default function ReportChatDrawer({
                             setAutoMatchId(myMatch.match_id);
                         }
                         if (myMatch && myMatch.matched_pet) {
+                            const sightingPhotoFromMatch = 
+                                myMatch.source_report?.media?.[0]?.file_url ||
+                                myMatch.source_report?.media?.[0]?.media_url ||
+                                myMatch.source_report?.media_url ||
+                                resolvedSightingPhoto;
+
                             setLocalMatchedPet({
                                 pet_id: myMatch.matched_pet.pet_id,
                                 pet_name: myMatch.matched_pet.pet_name,
@@ -186,12 +260,12 @@ export default function ReportChatDrawer({
                                 owner_name: myMatch.matched_pet.owner?.name,
                                 registered_address: myMatch.matched_pet.owner?.address || myMatch.matched_pet.registered_address,
                                 similarity_score: myMatch.similarity_score || 95,
-                                sighting_photo_url: (report as any)?.media?.[0]?.file_url || (report as any)?.reporter_photo || (report as any)?.photo_url,
-                                sighting_species: report?.animal_type,
-                                sighting_breed: (report as any)?.animal_breed || (report as any)?.ai_possible_breed,
-                                sighting_color: (report as any)?.animal_color || (report as any)?.ai_dominant_color,
-                                sighting_size: (report as any)?.animal_size || (report as any)?.ai_estimated_size,
-                                sighting_landmark: report?.landmark,
+                                sighting_photo_url: sightingPhotoFromMatch,
+                                sighting_species: myMatch.source_report?.animal_type || report?.animal_type,
+                                sighting_breed: myMatch.source_report?.animal_breed || (report as any)?.animal_breed,
+                                sighting_color: myMatch.source_report?.animal_color || (report as any)?.animal_color,
+                                sighting_size: myMatch.source_report?.animal_size || (report as any)?.animal_size,
+                                sighting_landmark: myMatch.source_report?.landmark || report?.landmark,
                                 key_evidence_bullets: myMatch.evidence_bullets || ['High visual and feature match score']
                             });
                         }
@@ -515,7 +589,7 @@ export default function ReportChatDrawer({
 
                     {/* Messages Body */}
                     <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-slate-50/60 dark:bg-[#0B0F19] custom-scrollbar">
-                        {/* Prominent AI Potential Match Card in Chat */}
+                        {/* Prominent AI Potential Match Card in Chat (Matched with Staff Layout) */}
                         {localMatchedPet && report?.report_id && (
                             <div className={`mb-3 bg-gradient-to-b from-orange-50/95 via-amber-50/40 to-white dark:from-[#1E2738] dark:via-[#151C2C] dark:to-[#151C2C] text-gray-900 dark:text-white border rounded-2xl p-3.5 space-y-3 shadow-xs transition-all ${
                                 shouldHighlightMatch ? 'border-[#F97316] ring-2 ring-orange-300 dark:ring-orange-800 shadow-md' : 'border-orange-200 dark:border-orange-900/50'
@@ -533,104 +607,141 @@ export default function ReportChatDrawer({
                                 </div>
 
                                 {/* Side-by-Side Comparison */}
-                                <div className="grid grid-cols-2 gap-2">
+                                <div className="grid grid-cols-2 gap-2.5">
                                     {/* Sighting Photo & Info */}
-                                    <div className="bg-white rounded-xl border border-gray-200 p-2 space-y-1.5 shadow-2xs">
-                                        <div className="flex items-center justify-between gap-1 text-[8px] font-bold text-gray-500">
+                                    <div className="bg-white dark:bg-[#151C2C] rounded-xl border border-gray-200 dark:border-gray-800 p-2.5 space-y-2 shadow-2xs">
+                                        <div className="flex items-center justify-between text-[9px] font-bold text-gray-500 dark:text-gray-400">
                                             <span className="px-1.5 py-0.2 bg-orange-100 text-[#F97316] rounded font-black">
                                                 Report #{report.report_id}
                                             </span>
-                                            <span>Sighting</span>
+                                            <span>Reported Sighting</span>
                                         </div>
-                                        <div className="h-24 rounded-lg overflow-hidden relative bg-gray-100 border border-gray-100">
+                                        <div className="h-28 rounded-lg overflow-hidden relative bg-gray-100 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
                                             <img
-                                                src={localMatchedPet.sighting_photo_url || (report as any)?.reporter_photo || DEFAULT_AVATAR}
+                                                src={
+                                                    localMatchedPet.sighting_photo_url || 
+                                                    (report as any)?.media_url || 
+                                                    (report as any)?.media?.[0]?.file_url || 
+                                                    (report as any)?.media?.[0]?.media_url || 
+                                                    (report as any)?.photo_url || 
+                                                    DEFAULT_PET_AVATAR
+                                                }
                                                 alt="Sighting"
                                                 className="w-full h-full object-cover"
-                                                onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
+                                                onError={(e: any) => { e.target.src = DEFAULT_PET_AVATAR; }}
                                             />
-                                            <span className="absolute bottom-1 left-1 px-1 py-0.2 bg-black/65 text-white text-[7px] font-black rounded">
+                                            <span className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/65 text-white text-[8px] font-black rounded">
                                                 Original Photo
                                             </span>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-1 text-[8px]">
-                                            <div className="bg-gray-50 p-1 rounded">
-                                                <span className="text-gray-400 block text-[7px]">SPECIES</span>
-                                                <span className="font-bold text-gray-800 truncate block">{localMatchedPet.sighting_species || report.animal_type || 'Dog'}</span>
+                                        <div className="grid grid-cols-2 gap-1 text-[9px]">
+                                            <div className="bg-gray-50 dark:bg-gray-800/60 p-1.5 rounded">
+                                                <span className="text-gray-400 block text-[8px]">SPECIES</span>
+                                                <span className="font-bold text-gray-800 dark:text-gray-200 truncate block">
+                                                    {localMatchedPet.sighting_species || report.animal_type || 'Dog'}
+                                                </span>
                                             </div>
-                                            <div className="bg-gray-50 p-1 rounded">
-                                                <span className="text-gray-400 block text-[7px]">BREED</span>
-                                                <span className="font-bold text-gray-800 truncate block">{localMatchedPet.sighting_breed || 'Shih Tzu'}</span>
+                                            <div className="bg-gray-50 dark:bg-gray-800/60 p-1.5 rounded">
+                                                <span className="text-gray-400 block text-[8px]">BREED</span>
+                                                <span className="font-bold text-gray-800 dark:text-gray-200 truncate block">
+                                                    {localMatchedPet.sighting_breed || (report as any)?.animal_breed || 'Reported Breed'}
+                                                </span>
                                             </div>
-                                            <div className="bg-gray-50 p-1 rounded">
-                                                <span className="text-gray-400 block text-[7px]">COLOR</span>
-                                                <span className="font-bold text-gray-800 truncate block">{localMatchedPet.sighting_color || 'White & Black'}</span>
+                                            <div className="bg-gray-50 dark:bg-gray-800/60 p-1.5 rounded">
+                                                <span className="text-gray-400 block text-[8px]">COLOR</span>
+                                                <span className="font-bold text-gray-800 dark:text-gray-200 truncate block">
+                                                    {localMatchedPet.sighting_color || (report as any)?.animal_color || 'Reported Color'}
+                                                </span>
                                             </div>
-                                            <div className="bg-gray-50 p-1 rounded">
-                                                <span className="text-gray-400 block text-[7px]">SIZE</span>
-                                                <span className="font-bold text-gray-800 truncate block">{localMatchedPet.sighting_size || 'Small'}</span>
+                                            <div className="bg-gray-50 dark:bg-gray-800/60 p-1.5 rounded">
+                                                <span className="text-gray-400 block text-[8px]">LOCATION</span>
+                                                <span className="font-bold text-gray-800 dark:text-gray-200 truncate block">
+                                                    {localMatchedPet.sighting_landmark || report.landmark || (report as any)?.street_address || 'Subdivision Area'}
+                                                </span>
                                             </div>
-                                        </div>
-                                        <div className="bg-gray-50 p-1 rounded text-[8px]">
-                                            <span className="text-gray-400 block text-[7px]">LOCATION</span>
-                                            <p className="font-bold text-gray-800 truncate">{localMatchedPet.sighting_landmark || report.landmark || 'Subdivision Area'}</p>
                                         </div>
                                     </div>
 
                                     {/* Candidate Pet Photo & Info */}
-                                    <div className="bg-white rounded-xl border border-amber-200 p-2 space-y-1.5 shadow-2xs">
-                                        <div className="flex items-center justify-between gap-1 text-[8px] font-bold text-amber-900">
-                                            <span className="px-1.5 py-0.2 bg-amber-100 text-amber-900 rounded font-black truncate">
+                                    <div className="bg-white dark:bg-[#151C2C] rounded-xl border border-amber-200 dark:border-amber-900/60 p-2.5 space-y-2 shadow-2xs">
+                                        <div className="flex items-center justify-between text-[9px] font-bold text-amber-900 dark:text-amber-300">
+                                            <span className="px-1.5 py-0.2 bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-300 rounded font-black truncate max-w-[95px]">
                                                 Pet: {localMatchedPet.pet_name || 'Candidate'}
                                             </span>
-                                            <span className="text-gray-400 truncate max-w-[50px]">{localMatchedPet.owner_name ? `Owner: ${localMatchedPet.owner_name}` : 'Registered'}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleOpenPetDetail(localMatchedPet)}
+                                                disabled={isLoadingPetDetail}
+                                                className="px-2 py-0.5 bg-amber-500 hover:bg-amber-600 text-white rounded text-[8px] font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer shadow-2xs shrink-0"
+                                            >
+                                                <span>🐾 View Record</span>
+                                                <span>↗</span>
+                                            </button>
                                         </div>
-                                        <div className="h-24 rounded-lg overflow-hidden relative bg-gray-100 border border-amber-100">
+                                        <div 
+                                            onClick={() => handleOpenPetDetail(localMatchedPet)}
+                                            className="h-28 rounded-lg overflow-hidden relative bg-gray-100 dark:bg-gray-800 border border-amber-100 dark:border-amber-900/40 cursor-pointer group"
+                                        >
                                             <img
-                                                src={localMatchedPet.photo_url || DEFAULT_AVATAR}
+                                                src={localMatchedPet.photo_url || DEFAULT_PET_AVATAR}
                                                 alt="Candidate"
-                                                className="w-full h-full object-cover"
-                                                onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                onError={(e: any) => { e.target.src = DEFAULT_PET_AVATAR; }}
                                             />
-                                            <span className="absolute bottom-1 left-1 px-1 py-0.2 bg-amber-600/90 text-white text-[7px] font-black rounded">
-                                                Registered Pet
+                                            <span className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-amber-600/90 text-white text-[8px] font-black rounded flex items-center gap-1">
+                                                <span>Registered Profile</span>
+                                                <span className="text-[7px] text-amber-200">• Click for details ↗</span>
                                             </span>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-1 text-[8px]">
-                                            <div className="bg-gray-50 p-1 rounded">
-                                                <span className="text-gray-400 block text-[7px]">SPECIES</span>
-                                                <span className="font-bold text-gray-800 truncate block">{localMatchedPet.species || 'Dog'}</span>
+                                        <div className="grid grid-cols-2 gap-1 text-[9px]">
+                                            <div className="bg-gray-50 dark:bg-gray-800/60 p-1.5 rounded">
+                                                <span className="text-gray-400 block text-[8px]">BREED</span>
+                                                <span className="font-bold text-gray-800 dark:text-gray-200 truncate block">
+                                                    {localMatchedPet.breed || 'Registered Breed'}
+                                                </span>
                                             </div>
-                                            <div className="bg-gray-50 p-1 rounded">
-                                                <span className="text-gray-400 block text-[7px]">BREED</span>
-                                                <span className="font-bold text-gray-800 truncate block">{localMatchedPet.breed || 'Shih Tzu'}</span>
+                                            <div className="bg-gray-50 dark:bg-gray-800/60 p-1.5 rounded">
+                                                <span className="text-gray-400 block text-[8px]">COLOR</span>
+                                                <span className="font-bold text-gray-800 dark:text-gray-200 truncate block">
+                                                    {localMatchedPet.color || 'Registered Color'}
+                                                </span>
                                             </div>
-                                            <div className="bg-gray-50 p-1 rounded">
-                                                <span className="text-gray-400 block text-[7px]">COLOR</span>
-                                                <span className="font-bold text-gray-800 truncate block">{localMatchedPet.color || 'White & Black'}</span>
+                                            <div className="bg-gray-50 dark:bg-gray-800/60 p-1.5 rounded">
+                                                <span className="text-gray-400 block text-[8px]">SIZE</span>
+                                                <span className="font-bold text-gray-800 dark:text-gray-200 truncate block">
+                                                    {localMatchedPet.size || 'Medium'}
+                                                </span>
                                             </div>
-                                            <div className="bg-gray-50 p-1 rounded">
-                                                <span className="text-gray-400 block text-[7px]">SIZE</span>
-                                                <span className="font-bold text-gray-800 truncate block">{localMatchedPet.size || 'Small'}</span>
+                                            <div className="bg-gray-50 dark:bg-gray-800/60 p-1.5 rounded">
+                                                <span className="text-gray-400 block text-[8px]">OWNER</span>
+                                                <span className="font-bold text-gray-800 dark:text-gray-200 truncate block">
+                                                    {localMatchedPet.owner_name || 'Resident'}
+                                                </span>
                                             </div>
                                         </div>
-                                        <div className="bg-gray-50 p-1 rounded text-[8px]">
-                                            <span className="text-gray-400 block text-[7px]">REGISTERED TO</span>
-                                            <p className="font-bold text-gray-800 truncate">{localMatchedPet.registered_address || (localMatchedPet.owner_name ? `Owned by ${localMatchedPet.owner_name}` : 'Registered Pet')}</p>
-                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => handleOpenPetDetail(localMatchedPet)}
+                                            disabled={isLoadingPetDetail}
+                                            className="w-full py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-300 rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs"
+                                        >
+                                            <span>📋 Open Full Animal Record Modal</span>
+                                            <span className="text-[10px]">↗</span>
+                                        </button>
                                     </div>
                                 </div>
 
-                                {/* Review Potential Match Button */}
+                                {/* Review Potential Match Sighting Button */}
                                 <button
                                     type="button"
                                     onClick={() => {
                                         onClose();
                                         navigate(`/resident/reports/${report.report_id}/match-review`);
                                     }}
-                                    className="w-full py-2.5 px-3 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-[0.98]"
+                                    className="w-full py-2.5 px-4 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-2xs transition-all cursor-pointer active:scale-[0.98]"
                                 >
-                                    <span>🔍 Review Potential Match</span>
+                                    <span>🔍 Review Potential Match Sighting</span>
                                     <span>→</span>
                                 </button>
                             </div>
@@ -833,16 +944,6 @@ export default function ReportChatDrawer({
 
                                                 <div className="flex items-center gap-1 mt-1 px-1 text-[9px] text-gray-400 font-semibold">
                                                     <span>{msg.timestamp}</span>
-                                                    {isMe && (
-                                                        msg.isRead ? (
-                                                            <span className="text-[#F97316] font-bold tracking-tight flex items-center gap-0.5 ml-0.5" title="Read by recipient">
-                                                                <span>✓</span>
-                                                                <span className="text-[9px] font-bold">Seen</span>
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-gray-400 font-bold ml-0.5" title="Delivered">✓</span>
-                                                        )
-                                                    )}
                                                 </div>
                                             </div>
                                         );
@@ -982,6 +1083,19 @@ export default function ReportChatDrawer({
                     </div>
                 </div>
             </div>
+
+            {/* Nested Pet Details Modal */}
+            {selectedPetDetail && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 sm:p-10 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="w-full max-w-6xl rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-200 bg-white dark:bg-[#151C2C] overflow-hidden flex flex-col max-h-[90vh] border border-gray-100 dark:border-gray-800">
+                        <PetDetailPanel
+                            pet={selectedPetDetail}
+                            onClose={() => setSelectedPetDetail(null)}
+                            hideRegisteredPets={isResidentUser}
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 

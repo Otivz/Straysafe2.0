@@ -589,9 +589,15 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                         reporter_name: activeChatThread.report?.reporter_name || undefined,
                         reporter_photo: activeChatThread.report?.reporter_photo || undefined,
                         animal_type: activeChatThread.report?.animal_type || undefined,
+                        animal_breed: activeChatThread.report?.animal_breed || undefined,
+                        animal_color: activeChatThread.report?.animal_color || undefined,
                         category_id: activeChatThread.report?.category_id || undefined,
                         status_id: activeChatThread.report?.status_id || undefined,
-                        landmark: activeChatThread.report?.landmark || undefined
+                        landmark: activeChatThread.report?.landmark || undefined,
+                        street_address: activeChatThread.report?.street_address || undefined,
+                        subdivision_name: activeChatThread.report?.subdivision_name || undefined,
+                        media_url: activeChatThread.report?.media_url || undefined,
+                        photo_url: activeChatThread.report?.media_url || undefined
                     }}
                     currentUser={{
                         user_id: user.user_id,

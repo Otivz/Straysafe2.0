@@ -58,8 +58,8 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const parsedUser = userStr ? JSON.parse(userStr) : null;
     const user = {
-        user_id: parsedUser?.user_id || parsedUser?.id || 1,
-        id: parsedUser?.user_id || parsedUser?.id || 1,
+        user_id: parsedUser?.user_id || parsedUser?.id || undefined,
+        id: parsedUser?.user_id || parsedUser?.id || undefined,
         email: parsedUser?.email || 'staff@straysafe.com',
         name: parsedUser?.name || 'Subdivision Staff',
         role_id: parsedUser?.role_id || 2,
@@ -105,14 +105,22 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
 
     // Fetch notifications for the logged-in staff user
     const fetchNotifications = async () => {
-        if (!user?.user_id) return;
         try {
-            const res = await api.get(`/notifications/user/${user.user_id}`);
+            const res = await api.get('/notifications/me');
             if (Array.isArray(res.data)) {
                 setLocalNotifications(res.data);
             }
-        } catch (err) {
-            console.error("Failed to fetch subdivision notifications:", err);
+        } catch (err: any) {
+            if (err.response?.status !== 401 && user?.user_id) {
+                try {
+                    const fallbackRes = await api.get(`/notifications/user/${user.user_id}`);
+                    if (Array.isArray(fallbackRes.data)) {
+                        setLocalNotifications(fallbackRes.data);
+                    }
+                } catch {
+                    // Suppress further noise
+                }
+            }
         }
     };
 
@@ -849,9 +857,15 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                         reporter_name: activeChatThread.report?.reporter_name || undefined,
                         reporter_photo: activeChatThread.report?.reporter_photo || undefined,
                         animal_type: activeChatThread.report?.animal_type || undefined,
+                        animal_breed: activeChatThread.report?.animal_breed || undefined,
+                        animal_color: activeChatThread.report?.animal_color || undefined,
                         category_id: activeChatThread.report?.category_id || undefined,
                         status_id: activeChatThread.report?.status_id || undefined,
-                        landmark: activeChatThread.report?.landmark || undefined
+                        landmark: activeChatThread.report?.landmark || undefined,
+                        street_address: activeChatThread.report?.street_address || undefined,
+                        subdivision_name: activeChatThread.report?.subdivision_name || undefined,
+                        media_url: activeChatThread.report?.media_url || undefined,
+                        photo_url: activeChatThread.report?.media_url || undefined
                     }}
                     currentUser={user ? {
                         user_id: user.user_id,

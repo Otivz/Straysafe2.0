@@ -3,6 +3,7 @@ import {
     PawPrint, ClipboardList, Bot, Dog, Cat, MapPin, Plus,
     User, Building2, Landmark, Settings, Search, Stethoscope, Zap, Compass
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import Button from '../../components/Button';
 import LandingPageNavbar from '../../components/Navbars/LandingPageNavbar';
 import { useTheme } from '../../context/ThemeContext';
@@ -97,12 +98,16 @@ const LandingPage = () => {
                         STRAY SAFE connects citizens, subdivision leaders, and barangay staff into a single coordinated platform — powered by AI — to rescue and manage stray animals faster.
                     </p>
                     <div className="flex flex-col sm:flex-row justify-center md:justify-start gap-4 reveal" style={{ animationDelay: '0.3s' }}>
-                        <Button variant="primary" size="lg" className="px-8 shadow-xl shadow-orange-500/30 w-full sm:w-auto">
-                            <span className="inline-flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Report a Stray</span>
-                        </Button>
-                        <Button variant="light" size="lg" className="px-8 border-gray-200 w-full sm:w-auto">
-                            Learn How It Works →
-                        </Button>
+                        <Link to="/resident/report/new">
+                            <Button variant="primary" size="lg" className="px-8 shadow-xl shadow-orange-500/30 w-full sm:w-auto">
+                                <span className="inline-flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Report a Stray</span>
+                            </Button>
+                        </Link>
+                        <a href="#how-it-works">
+                            <Button variant="light" size="lg" className="px-8 border-gray-200 w-full sm:w-auto">
+                                Learn How It Works →
+                            </Button>
+                        </a>
                     </div>
                 </div>
 
@@ -319,12 +324,16 @@ const LandingPage = () => {
                     <h2 className="text-4xl md:text-6xl font-extrabold font-plus-jakarta tracking-tight text-white mb-6 reveal">Every Stray<br />Deserves a Chance.</h2>
                     <p className="text-lg md:text-xl text-white/80 leading-relaxed mb-10 reveal" style={{ transitionDelay: '0.1s' }}>Join your barangay on STRAY SAFE. Report strays, track rescues, and help build a more humane community — one report at a time.</p>
                     <div className="flex flex-wrap justify-center gap-4 reveal" style={{ transitionDelay: '0.2s' }}>
-                        <Button variant="light" size="lg" className="px-10 shadow-2xl shadow-black/10 text-[#F97316]">
-                            <span className="inline-flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Report a Stray Now</span>
-                        </Button>
-                        <Button variant="ghost" size="lg" className="px-10 border-2 border-white/30 text-white hover:bg-white/10 hover:border-white">
-                            Login to Your Account
-                        </Button>
+                        <Link to="/resident/report/new">
+                            <Button variant="light" size="lg" className="px-10 shadow-2xl shadow-black/10 text-[#F97316]">
+                                <span className="inline-flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Report a Stray Now</span>
+                            </Button>
+                        </Link>
+                        <Link to="/login">
+                            <Button variant="ghost" size="lg" className="px-10 border-2 border-white/30 text-white hover:bg-white/10 hover:border-white">
+                                Login to Your Account
+                            </Button>
+                        </Link>
                     </div>
                 </div>
             </section>

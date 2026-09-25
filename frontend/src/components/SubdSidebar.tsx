@@ -44,7 +44,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
             try {
                 // Get set of claim IDs that have already been viewed by the leader
                 const viewedClaimIds = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_subd_claims') || '[]'));
-                const claimsRes = await axios.get('http://localhost:8000/claims/');
+                const claimsRes = await api.get('/claims/');
                 if (Array.isArray(claimsRes.data)) {
                     const unviewedClaims = claimsRes.data.filter((c: any) => {
                         const isPending = c.status === 'Pending Review' || c.status === 'Evidence Requested' || c.status === 'Potential Owner Match';
