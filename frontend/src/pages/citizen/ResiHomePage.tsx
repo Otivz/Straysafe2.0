@@ -26,7 +26,7 @@ import {
     Megaphone, MessageCircle, AlertTriangle, Camera, Video, X, Bandage, Dog, Cat,
     Bot, Check, Map, Pin, Home, Rocket, Users, Ban, Sparkles, Ruler, Phone,
     ClipboardList, Star, Info, LifeBuoy, ArrowLeft, ArrowRight, Upload,
-    Maximize2, Minimize2
+    Maximize2, Minimize2, ExternalLink
 } from 'lucide-react';
 import StraySafeLoading, { AnimalLoadingOverlay } from '../../components/StraySafeLoading';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
@@ -3269,11 +3269,11 @@ const ResiHomePage = () => {
                                                     <button
                                                         type="button"
                                                         onClick={(e) => { e.stopPropagation(); openReportDetail(report.report_id, report); }}
-                                                        className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-blue-600 bg-blue-50/90 hover:bg-blue-100 hover:text-blue-700 active:scale-95 rounded-xl transition-all border border-blue-200/60 shadow-xs cursor-pointer"
+                                                        className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs sm:text-[13px] font-bold text-[#EA580C] bg-white hover:bg-orange-50 active:scale-95 rounded-full transition-all border border-[#FDBA74] hover:border-[#EA580C] shadow-xs cursor-pointer"
                                                         title="View Full Report"
                                                     >
-                                                        <Eye className="w-3.5 h-3.5 shrink-0" />
-                                                        <span>View</span>
+                                                        <span>View Full Report</span>
+                                                        <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-[#EA580C]" />
                                                     </button>
                                                     {report.user_id === currentUserId && report.status_id === 1 && (
                                                         <>
