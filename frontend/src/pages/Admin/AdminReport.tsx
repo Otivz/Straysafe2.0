@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import { api } from '../../utils/api';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
@@ -187,12 +187,12 @@ const AdminReport = () => {
         mediaFiles: [] as File[]
     });
 
-    const API_URL = 'http://localhost:8000/reports';
+    const API_URL = '/reports';
 
     const fetchReports = async () => {
         try {
             setLoading(true);
-            const response = await axios.get(`${API_URL}/`);
+            const response = await api.get(`${API_URL}/`);
             // Sort by report_id descending to show new reports at the top
             const sortedData = (response.data || []).sort((a: any, b: any) => b.report_id - a.report_id);
             setReports(sortedData);
@@ -224,7 +224,7 @@ const AdminReport = () => {
 
         try {
             const parentId = replyingTo[reportId]?.commentId || null;
-            await axios.post(`${API_URL}/${reportId}/comments`, {
+            await api.post(`${API_URL}/${reportId}/comments`, {
                 comment: text.trim(),
                 user_id: currentUserId,
                 parent_comment_id: parentId
@@ -249,12 +249,12 @@ const AdminReport = () => {
             // 1. Upload the letter
             const formData = new FormData();
             formData.append('file', escalationData.endorsement_letter);
-            await axios.post(`${API_URL}/${escalatingReportId}/media`, formData, {
+            await api.post(`${API_URL}/${escalatingReportId}/media`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
             // 2. Create the Rescue Request
-            await axios.post('http://localhost:8000/rescue-requests/', {
+            await api.post('/rescue-requests/', {
                 report_id: escalatingReportId,
                 leader_id: currentUserId,
                 title: escalationData.title || 'Official Rescue Escalation',
@@ -263,7 +263,7 @@ const AdminReport = () => {
             });
 
             // 3. Update the report status to "Escalated to Barangay" (4)
-            await axios.patch(`${API_URL}/${escalatingReportId}/status`, { status_id: 4 });
+            await api.patch(`${API_URL}/${escalatingReportId}/status`, { status_id: 4 });
 
             setIsEscalateModalOpen(false);
             setEscalatingReportId(null);
@@ -278,7 +278,7 @@ const AdminReport = () => {
 
     const handleUpdateStatus = async (reportId: number, statusId: number) => {
         try {
-            await axios.patch(`${API_URL}/${reportId}/status`, { status_id: statusId });
+            await api.patch(`${API_URL}/${reportId}/status`, { status_id: statusId });
             fetchReports();
         } catch (error) {
             console.error('Error updating status:', error);
@@ -289,7 +289,7 @@ const AdminReport = () => {
     const handleDelete = async (id: number) => {
         if (window.confirm('Are you sure you want to delete this incident report?')) {
             try {
-                await axios.delete(`${API_URL}/${id}`);
+                await api.delete(`${API_URL}/${id}`);
                 fetchReports();
             } catch (error) {
                 console.error('Error deleting report:', error);
@@ -311,7 +311,7 @@ const AdminReport = () => {
             if (!userStr) throw new Error('User not authenticated');
             const user = JSON.parse(userStr);
 
-            const response = await axios.post(API_URL, {
+            const response = await api.post(API_URL, {
                 user_id: user.user_id,
                 subdivision_id: 1,
                 category_id: formData.category_id,
@@ -340,7 +340,7 @@ const AdminReport = () => {
                     mediaData.append("file", file);
 
                     try {
-                        await axios.post(`${API_URL}/${reportId}/media`, mediaData, {
+                        await api.post(`${API_URL}/${reportId}/media`, mediaData, {
                             headers: { 'Content-Type': 'multipart/form-data' }
                         });
                     } catch (err) {

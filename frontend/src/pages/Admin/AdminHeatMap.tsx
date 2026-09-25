@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
+import { api } from '../../utils/api';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import MapComponent from '../../components/MapComponent';
@@ -97,8 +97,8 @@ const AdminHeatMap = () => {
         try {
             setLoading(true);
             const [reportsRes, requestsRes] = await Promise.allSettled([
-                axios.get('http://localhost:8000/reports/'),
-                axios.get('http://localhost:8000/rescue-requests/')
+                api.get('/reports/'),
+                api.get('/rescue-requests/')
             ]);
             if (reportsRes.status === 'fulfilled') {
                 setReports(reportsRes.value.data || []);

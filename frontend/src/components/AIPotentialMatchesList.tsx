@@ -62,6 +62,10 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
             if (matchType === 'duplicates') {
                 const RESOLVED_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18];
                 data = data.filter((m: any) => {
+                    // Always retain confirmed matches and staff-verified records
+                    if (['CONFIRMED_MATCH', 'NOT_A_MATCH', 'UNABLE_TO_VERIFY'].includes(m.status)) {
+                        return true;
+                    }
                     const srcStatus = m.source_report?.current_status_id ?? m.source_report?.status_id;
                     const matchStatus = m.matched_report?.current_status_id ?? m.matched_report?.status_id;
                     const srcResolved = (srcStatus !== undefined && RESOLVED_STATUS_IDS.includes(Number(srcStatus))) || Boolean(m.source_report?.duplicate_of_report_id);
@@ -350,13 +354,40 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                                 {/* Review Action Button */}
                                 <button
                                     onClick={() => setActiveMatch(m)}
-                                    className="w-full py-2.5 bg-gradient-to-r from-orange-500 to-[#F97316] hover:from-orange-600 hover:to-orange-700 text-white font-bold text-xs rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 mt-2"
+                                    className={`w-full py-2.5 font-bold text-xs rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 mt-2 ${
+                                        m.status === 'CONFIRMED_MATCH'
+                                            ? 'bg-emerald-800 text-white shadow-emerald-800/20 opacity-80'
+                                            : m.status === 'NOT_A_MATCH'
+                                            ? 'bg-red-800 text-white border border-red-900 opacity-80'
+                                            : m.status === 'UNABLE_TO_VERIFY'
+                                            ? 'bg-amber-800 text-white border border-amber-900 opacity-80'
+                                            : 'bg-gradient-to-r from-orange-500 to-[#F97316] hover:from-orange-600 hover:to-orange-700 text-white'
+                                    }`}
                                 >
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                    </svg>
-                                    Review Match
+                                    {m.status === 'CONFIRMED_MATCH' ? (
+                                        <>
+                                            <span className="text-sm">✓</span>
+                                            <span>{isPet ? 'Match Confirmed' : 'Marked as Duplicate'}</span>
+                                        </>
+                                    ) : m.status === 'NOT_A_MATCH' ? (
+                                        <>
+                                            <span>✕</span>
+                                            <span>Marked Not a Match</span>
+                                        </>
+                                    ) : m.status === 'UNABLE_TO_VERIFY' ? (
+                                        <>
+                                            <span>?</span>
+                                            <span>Marked Unable to Verify</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                            </svg>
+                                            <span>Review Match</span>
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         );

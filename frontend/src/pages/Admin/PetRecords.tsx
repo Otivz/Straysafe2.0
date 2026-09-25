@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { api } from '../../utils/api';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import StatCard from '../../components/PetRecords/StatCard';
@@ -17,7 +17,7 @@ const PetRecords = () => {
     const fetchAllPets = async () => {
         try {
             setLoading(true);
-            const response = await axios.get('http://localhost:8000/pets/');
+            const response = await api.get('/pets/');
 
             // Map backend schema values into PetRecord structure
             const mappedPets: PetRecord[] = response.data.map((pet: any) => mapRawPetToPetRecord(pet));
