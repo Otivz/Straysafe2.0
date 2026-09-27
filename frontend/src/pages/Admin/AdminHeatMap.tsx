@@ -70,20 +70,19 @@ const AdminHeatMap = () => {
         }
     };
 
+    const isResolvedOrClosed = (statusId: number) => [3, 6, 9, 10, 11, 12, 14, 17, 18].includes(statusId);
+
     const getMarkerColor = (report: any, rescue: any) => {
         const statusId = report.status_id;
-        if (statusId === 6 || statusId === 11) return 'green'; // Resolved
-        if (statusId === 12) return 'red'; // Deceased
-        if (statusId === 3) return 'red'; // Rejected
+        if (isResolvedOrClosed(statusId)) return 'slate'; // Resolved / Location History
 
-        if (statusId === 7 || statusId === 8 || statusId === 9) return 'purple'; // Picked Up
+        if (statusId === 7 || statusId === 8) return 'purple'; // Picked Up / In Holding
 
         if (rescue) {
             const rescueStatus = rescue.status_id;
-            if (rescueStatus === 6) return 'green'; // Resolved
+            if (rescueStatus === 6) return 'slate'; // Resolved
             if (rescueStatus === 4) return 'yellow'; // In Progress
-            if (rescueStatus === 5) return 'blue'; // Assigned
-            if (rescue.staff_id) return 'blue'; // Assigned
+            if (rescueStatus === 5 || rescue.staff_id) return 'blue'; // Assigned
         }
 
         if (statusId === 5) return 'yellow'; // In Progress (fallback)
@@ -168,7 +167,7 @@ const AdminHeatMap = () => {
         }
 
         const points = filtered
-            .filter(r => r.latitude && r.longitude)
+            .filter(r => r.latitude && r.longitude && !isResolvedOrClosed(r.status_id || r.current_status_id || 1))
             .map((r: any) => [
                 parseFloat(r.latitude.toString()),
                 parseFloat(r.longitude.toString()),

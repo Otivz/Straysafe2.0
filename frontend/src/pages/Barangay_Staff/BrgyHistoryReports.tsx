@@ -26,6 +26,10 @@ interface Report {
     reporter_name?: string;
     media?: any[];
     history?: any[];
+    ai_suggested_priority?: string | null;
+    ai_suggested_risk_level?: string | null;
+    ai_possible_breed?: string | null;
+    ai_suggested_priority_reason?: string | null;
 }
 
 const statusMap = REPORT_STATUS_MAP;
@@ -444,15 +448,23 @@ const BrgyHistoryReports = () => {
                                     const isResolved = [11, 9, 10].includes(rep.status_id);
                                     const isDeceased = rep.status_id === 12;
 
-                                    const mediaList = rep.media || [];
-                                    const firstMedia = mediaList.find((m: any) =>
-                                        m.media_type !== 'Document' &&
-                                        !m.file_url?.toLowerCase().endsWith('.pdf') &&
-                                        !m.file_url?.toLowerCase().endsWith('.docx') &&
-                                        !m.file_url?.toLowerCase().endsWith('.doc')
-                                    );
+                                    const rawImages = (rep.media || []).filter((m: any) => {
+                                        const url = (m.file_url || m.url || '').toLowerCase();
+                                        return (
+                                            m.media_type !== 'Document' &&
+                                            !url.endsWith('.pdf') &&
+                                            !url.endsWith('.docx') &&
+                                            !url.endsWith('.doc')
+                                        );
+                                    });
+
+                                    const sightingImages = rawImages.filter((m: any) => !m.is_evidence);
+                                    const imagesList = sightingImages.length > 0 ? sightingImages : rawImages;
+                                    const firstMedia = imagesList[0] || null;
+
                                     const isVideo = firstMedia?.media_type === 'Video' || firstMedia?.file_url?.toLowerCase().match(/\.(mp4|mov|webm)$/i);
-                                    const mediaCount = mediaList.length;
+                                    const mediaCount = imagesList.length;
+                                    const priority = rep.ai_suggested_priority || rep.priority_level || 'Medium';
 
                                     const accentBarColor = isResolved 
                                         ? 'bg-emerald-500' 
@@ -481,13 +493,13 @@ const BrgyHistoryReports = () => {
                                                         </span>
                                                     </div>
                                                 </div>
-                                                <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shrink-0 ${getPriorityColor(rep.priority_level)}`}>
-                                                    {rep.priority_level}
+                                                <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shrink-0 ${getPriorityColor(priority)}`}>
+                                                    {priority}
                                                 </span>
                                             </div>
 
-                                            {/* Animal Photo Preview (if available) */}
-                                            {firstMedia && (
+                                            {/* Animal Photo Preview */}
+                                            {firstMedia ? (
                                                 <div className="w-full h-36 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 relative group-hover:shadow-inner transition-all">
                                                     {isVideo ? (
                                                         <video src={firstMedia.file_url} className="w-full h-full object-cover" />
@@ -503,6 +515,11 @@ const BrgyHistoryReports = () => {
                                                             +{mediaCount - 1} photos
                                                         </span>
                                                     )}
+                                                </div>
+                                            ) : (
+                                                <div className="w-full h-32 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-100 flex flex-col items-center justify-center text-orange-400 border border-orange-100">
+                                                    <span className="text-2xl mb-1">🐾</span>
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-orange-600">No Photo Uploaded</span>
                                                 </div>
                                             )}
 

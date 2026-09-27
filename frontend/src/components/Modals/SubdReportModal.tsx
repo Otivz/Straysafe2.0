@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { api } from '../../utils/api';
 import {
     Upload,
     Camera,
@@ -31,7 +32,7 @@ import {
 import SuccessModal from './SuccessModal';
 import StraySafeLoading, { AnimalLoadingOverlay } from '../StraySafeLoading';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
-import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMapEvents, Polygon, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMapEvents, Polygon, Circle, useMap } from 'react-leaflet';
 import { createLandmarkPinIcon, getLandmarkCategory } from '../../utils/landmarkIcons';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -39,6 +40,7 @@ import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import ReturnToSeleraButton from '../MapControls/ReturnToSeleraButton';
+import { fetchCoverageArea, isWithinCoverage, type CoverageAreaInfo, COVERAGE_OUTSIDE_ERROR_MESSAGE, SELERA_DEFAULT_CENTER, SELERA_DEFAULT_POLYGON } from '../../utils/coverageArea';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -52,12 +54,7 @@ const DefaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = DefaultIcon;
 
-const SELERA_POLYGON = [
-    { lat: 14.801496, lng: 121.005174 },
-    { lat: 14.799577, lng: 121.003911 },
-    { lat: 14.800634, lng: 121.002228 },
-    { lat: 14.802461, lng: 121.003280 }
-];
+const SELERA_POLYGON = SELERA_DEFAULT_POLYGON;
 
 const LocationPicker = ({ onLocationSelect, position, disabled }: { onLocationSelect: (lat: number, lng: number) => void, position: [number, number], disabled?: boolean }) => {
     useMapEvents({
@@ -187,6 +184,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
     } | null>(null);
     const [lastAnalyzedSignature, setLastAnalyzedSignature] = useState<string | null>(null);
     const [landmarks, setLandmarks] = useState<any[]>([]);
+    const [coverageArea, setCoverageArea] = useState<CoverageAreaInfo | null>(null);
 
     // Get current staff user info
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user') || localStorage.getItem('resident_user');
@@ -204,8 +202,12 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
             setIsSubmitting(false);
             setAiAnalysisResult(null);
             setLastAnalyzedSignature(null);
+        } else {
+            fetchCoverageArea().then(c => setCoverageArea(c));
         }
     }, [isOpen]);
+
+    const coverageCheck = isWithinCoverage(formData.latitude, formData.longitude, coverageArea);
 
     useEffect(() => {
         const fetchLandmarks = async () => {
@@ -346,7 +348,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
         try {
             const mediaData = new FormData();
             mediaData.append("file", primaryFile);
-            const res = await axios.post('http://localhost:8000/reports/analyze-media', mediaData);
+            const res = await api.post('/reports/analyze-media', mediaData);
             if (res.status === 200 && res.data) {
                 const ai = res.data;
                 const isDetected = ai.animal_detected !== false && !['unknown', 'none', ''].includes((ai.animal_type || '').toLowerCase());
@@ -437,6 +439,11 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
             return;
         }
 
+        if (currentStep === 6 && !coverageCheck.isInside) {
+            alert(COVERAGE_OUTSIDE_ERROR_MESSAGE);
+            return;
+        }
+
         if (currentStep < 9) {
             setCurrentStep(prev => prev + 1);
             const bodyEl = document.getElementById('subd-modal-scroll-body');
@@ -476,6 +483,11 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
     const handleSubmit = async () => {
         if (!declaration) {
             alert('Please confirm that the information provided is accurate by checking the declaration.');
+            return;
+        }
+
+        if (!coverageCheck.isInside) {
+            alert(COVERAGE_OUTSIDE_ERROR_MESSAGE);
             return;
         }
 
@@ -1353,6 +1365,21 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                         positions={SELERA_POLYGON.map(p => [p.lat, p.lng] as [number, number])}
                                         pathOptions={{ color: '#F97316', fillColor: '#F97316', fillOpacity: 0.1, weight: 2, dashArray: '5, 10' }}
                                     />
+                                    {/* Configurable Reporting Coverage Radius Circle centered on Selera Homes */}
+                                    <Circle
+                                        center={[
+                                            coverageArea?.center_latitude || SELERA_DEFAULT_CENTER[0],
+                                            coverageArea?.center_longitude || SELERA_DEFAULT_CENTER[1]
+                                        ]}
+                                        radius={coverageArea?.radius_meters || 1000}
+                                        pathOptions={{
+                                            color: '#10B981',
+                                            fillColor: '#34D399',
+                                            fillOpacity: 0.1,
+                                            weight: 2,
+                                            dashArray: '6, 6'
+                                        }}
+                                    />
 
                                     {landmarks.map((lm) => (
                                         <Marker
@@ -1407,6 +1434,17 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                     <ReturnToSeleraButton />
                                 </MapContainer>
                             </div>
+
+                            {/* Outside Coverage Warning Banner */}
+                            {!coverageCheck.isInside && (
+                                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 text-rose-800 text-xs animate-in fade-in duration-200">
+                                    <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="font-black text-rose-900 uppercase tracking-tight text-[11px] mb-0.5">Outside Coverage Area</p>
+                                        <p className="font-semibold text-rose-800 leading-snug">{COVERAGE_OUTSIDE_ERROR_MESSAGE}</p>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Address & Landmark inputs */}
                             <div>
@@ -1707,6 +1745,21 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                 <Polygon
                                     positions={SELERA_POLYGON.map(p => [p.lat, p.lng] as [number, number])}
                                     pathOptions={{ color: '#F97316', fillColor: '#F97316', fillOpacity: 0.1, weight: 2, dashArray: '5, 10' }}
+                                />
+                                {/* Configurable Reporting Coverage Radius Circle centered on Selera Homes */}
+                                <Circle
+                                    center={[
+                                        coverageArea?.center_latitude || SELERA_DEFAULT_CENTER[0],
+                                        coverageArea?.center_longitude || SELERA_DEFAULT_CENTER[1]
+                                    ]}
+                                    radius={coverageArea?.radius_meters || 1000}
+                                    pathOptions={{
+                                        color: '#10B981',
+                                        fillColor: '#34D399',
+                                        fillOpacity: 0.1,
+                                        weight: 2,
+                                        dashArray: '6, 6'
+                                    }}
                                 />
 
                                 {landmarks.map((lm) => (

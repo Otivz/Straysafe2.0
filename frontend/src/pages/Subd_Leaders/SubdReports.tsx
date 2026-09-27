@@ -19,6 +19,7 @@ import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import TakeoverReportModal from '../../components/Modals/TakeoverReportModal';
 import ResolveLostPetModal from '../../components/Modals/ResolveLostPetModal';
 import SubdReportModal from '../../components/Modals/SubdReportModal';
+import AddPetModal from '../../components/PetRecords/AddPetModal';
 import { getCachedData, setCachedData } from '../../utils/cache';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 
@@ -122,6 +123,7 @@ const SubdReports = () => {
     const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
     const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
     const [resolvingReportId, setResolvingReportId] = useState<number | null>(null);
+    const [isAddPetModalOpen, setIsAddPetModalOpen] = useState(false);
     
     // Warning Modal state
     const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
@@ -1016,19 +1018,31 @@ const SubdReports = () => {
 
                                                         {/* Animal Photo Preview */}
                                                         {(() => {
-                                                            const firstMedia = rep.media?.find((m: any) =>
-                                                                m.media_type !== 'Document' &&
-                                                                !m.file_url?.toLowerCase().endsWith('.pdf') &&
-                                                                !m.file_url?.toLowerCase().endsWith('.docx') &&
-                                                                !m.file_url?.toLowerCase().endsWith('.doc')
-                                                            );
-                                                            if (!firstMedia) return null;
-                                                            const isVideo = firstMedia.media_type === 'Video' || firstMedia.file_url?.toLowerCase().match(/\.(mp4|mov|webm)$/i);
-                                                            const mediaCount = rep.media?.filter((m: any) =>
-                                                                m.media_type !== 'Document' &&
-                                                                !m.file_url?.toLowerCase().endsWith('.pdf') &&
-                                                                !m.file_url?.toLowerCase().endsWith('.docx')
-                                                            ).length || 0;
+                                                            const rawImages = (rep.media || []).filter((m: any) => {
+                                                                const url = (m.file_url || m.url || '').toLowerCase();
+                                                                return (
+                                                                    m.media_type !== 'Document' &&
+                                                                    !url.endsWith('.pdf') &&
+                                                                    !url.endsWith('.docx') &&
+                                                                    !url.endsWith('.doc')
+                                                                );
+                                                            });
+
+                                                            const sightingImages = rawImages.filter((m: any) => !m.is_evidence);
+                                                            const imagesList = sightingImages.length > 0 ? sightingImages : rawImages;
+                                                            const firstMedia = imagesList[0] || null;
+
+                                                            const isVideo = firstMedia?.media_type === 'Video' || firstMedia?.file_url?.toLowerCase().match(/\.(mp4|mov|webm)$/i);
+                                                            const mediaCount = imagesList.length;
+
+                                                            if (!firstMedia) {
+                                                                return (
+                                                                    <div className="w-full h-40 rounded-2xl mb-4 bg-gradient-to-br from-orange-50 to-amber-100 flex flex-col items-center justify-center text-orange-400 border border-orange-100">
+                                                                        <span className="text-3xl mb-1">🐾</span>
+                                                                        <span className="text-[10px] font-bold uppercase tracking-wider text-orange-600">No Photo Uploaded</span>
+                                                                    </div>
+                                                                );
+                                                            }
 
                                                             return (
                                                                 <div className="w-full h-44 rounded-2xl overflow-hidden mb-4 bg-gray-100 border border-gray-100 relative group-hover:shadow-inner transition-all">
@@ -2024,6 +2038,32 @@ const SubdReports = () => {
                                                 {/* ACTION PANEL */}
                                                 <div className="mt-8 pt-8 border-t border-gray-100">
                                                     <div className="flex flex-col gap-3">
+                                                        {(viewReport as any).pet_id ? (
+                                                            <button
+                                                                type="button"
+                                                                disabled
+                                                                className="w-full py-3.5 border-2 border-gray-700 bg-gray-800 text-gray-200 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-xs cursor-not-allowed opacity-90"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-400" viewBox="0 0 20 20" fill="currentColor">
+                                                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                                </svg>
+                                                                <span>Record Already Added</span>
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setIsAddPetModalOpen(true);
+                                                                }}
+                                                                className="w-full py-3.5 border-2 border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 text-[#F97316] rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer hover:scale-[1.01] active:scale-95"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                                                </svg>
+                                                                <span>Add Record for this Animal in System</span>
+                                                            </button>
+                                                        )}
+
                                                         {/* STEP 1: VERIFY (Only for Pending reports) */}
                                                         {viewReport.status_id === 1 && (
                                                             <button
@@ -2494,6 +2534,31 @@ const SubdReports = () => {
                     }}
                 />
             )}
+
+            {/* Add Pet Record Modal */}
+            {isAddPetModalOpen && viewingReportId && (() => {
+                const rep = reports.find(r => r.report_id === viewingReportId);
+                if (!rep) return null;
+                return (
+                    <AddPetModal
+                        isOpen={isAddPetModalOpen}
+                        onClose={() => setIsAddPetModalOpen(false)}
+                        initialReportData={rep}
+                        onPetCreated={(createdPet: any) => {
+                            if (createdPet?.pet_id) {
+                                setReports(prev => prev.map(r => r.report_id === viewingReportId ? {
+                                    ...r,
+                                    pet_id: createdPet.pet_id,
+                                    pet_name: createdPet.pet_name || (r as any).pet_name
+                                } : r));
+                            }
+                            fetchReports();
+                            setShowSuccess(true);
+                            setTimeout(() => setShowSuccess(false), 3000);
+                        }}
+                    />
+                );
+            })()}
 
             {/* Reusable Mobile Bottom Navigation */}
             <SubdBottomNav activeTab="reports" />

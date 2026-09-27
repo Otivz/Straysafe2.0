@@ -39,6 +39,7 @@ from app.models.chat import ChatThread, ChatMessage  # noqa: F401
 from app.models.warning import OwnerWarning  # noqa: F401
 from app.models.report_match import ReportMatch  # noqa: F401
 from app.models.landmark import Landmark  # noqa: F401
+from app.models.coverage import CoverageSetting  # noqa: F401
 from app.tasks.unassigned_checker import start_unassigned_reports_watcher
 
 
@@ -848,6 +849,30 @@ def ensure_report_location_columns():
         except Exception:
             pass
 
+        # Clean up any resolved, impounded, or discharged reports so their location reflects original incident origin and not holding facility
+        try:
+            conn.execute(text("""
+                UPDATE reports r
+                LEFT JOIN holding_animals ha ON ha.report_id = r.report_id
+                SET 
+                    r.facility_id = NULL,
+                    r.latitude = COALESCE(r.initial_latitude, r.latitude),
+                    r.longitude = COALESCE(r.initial_longitude, r.longitude),
+                    r.landmark = CASE 
+                        WHEN r.initial_landmark IS NOT NULL AND r.initial_landmark != '' AND LOWER(r.initial_landmark) NOT LIKE '%holding%' THEN r.initial_landmark
+                        ELSE COALESCE((SELECT s.subdivision_name FROM subdivisions s WHERE s.subdivision_id = r.subdivision_id LIMIT 1), 'Incident Sighting Location')
+                    END,
+                    r.initial_landmark = CASE 
+                        WHEN r.initial_landmark IS NOT NULL AND r.initial_landmark != '' AND LOWER(r.initial_landmark) NOT LIKE '%holding%' THEN r.initial_landmark
+                        ELSE COALESCE((SELECT s.subdivision_name FROM subdivisions s WHERE s.subdivision_id = r.subdivision_id LIMIT 1), 'Incident Sighting Location')
+                    END
+                WHERE r.current_status_id IN (9, 10, 11, 12, 14, 17, 18)
+                   OR ha.facility_status IN (3, 4, 5, 7, 8)
+                   OR ha.discharge_date IS NOT NULL
+            """))
+        except Exception as e:
+            print(f"Error restoring resolved report origins: {e}")
+
         # 2. StatusHistory columns
         for col_name, col_def in [
             ("latitude", "DECIMAL(10,8) NULL"),
@@ -944,9 +969,43 @@ def ensure_revoked_tokens_table():
             )
         """))
 
+def ensure_coverage_settings_table():
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS coverage_settings (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                subdivision_id INT NULL,
+                center_label VARCHAR(100) NOT NULL DEFAULT 'Selera Homes',
+                center_latitude DECIMAL(10, 8) NOT NULL DEFAULT 14.80104200,
+                center_longitude DECIMAL(11, 8) NOT NULL DEFAULT 121.00364800,
+                radius_meters INT NOT NULL DEFAULT 1000,
+                boundary_polygon JSON NULL,
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                updated_by INT NULL,
+                INDEX idx_coverage_active (is_active)
+            )
+        """))
+        res = conn.execute(text("SELECT COUNT(*) FROM coverage_settings"))
+        if res.scalar() == 0:
+            default_boundary = json.dumps([
+                {"lat": 14.801496, "lng": 121.005174},
+                {"lat": 14.799577, "lng": 121.003911},
+                {"lat": 14.800634, "lng": 121.002228},
+                {"lat": 14.802461, "lng": 121.003280}
+            ])
+            conn.execute(text("""
+                INSERT INTO coverage_settings (
+                    id, subdivision_id, center_label, center_latitude, center_longitude, radius_meters, boundary_polygon, is_active
+                ) VALUES (
+                    1, 1, 'Selera Homes', 14.80104200, 121.00364800, 1000, :boundary, 1
+                )
+            """), {"boundary": default_boundary})
+
 ensure_holding_animals_columns()
 ensure_adoption_tables_and_columns()
 ensure_revoked_tokens_table()
+ensure_coverage_settings_table()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

@@ -481,9 +481,9 @@ const BrgyRescueRequests = () => {
 
     const getPriorityColor = (priority: string) => {
         const p = (priority || 'medium').toLowerCase();
-        if (p === 'emergency' || p === 'high') return 'bg-red-50 text-red-600 border-red-200';
-        if (p === 'regular' || p === 'medium') return 'bg-amber-50 text-amber-600 border-amber-200';
-        if (p === 'low') return 'bg-blue-50 text-blue-600 border-blue-200';
+        if (p.includes('emergency') || p.includes('high')) return 'bg-red-50 text-red-600 border-red-200';
+        if (p.includes('low')) return 'bg-blue-50 text-blue-600 border-blue-200';
+        if (p.includes('regular') || p.includes('medium') || p.includes('normal')) return 'bg-amber-50 text-amber-600 border-amber-200';
         return 'bg-gray-50 text-gray-600 border-gray-200';
     };
 
@@ -502,7 +502,7 @@ const BrgyRescueRequests = () => {
     const filteredRequests = requests.filter((req: RescueRequest) => {
         const report = req.report;
         const reportStatusId = report?.status_id || req.status_id;
-        const priority = report?.priority_level || 'Medium';
+        const priority = report?.ai_suggested_priority || report?.priority_level || 'Medium';
 
         // Search match
         const matchesSearch = searchTerm.trim() === '' || 
@@ -807,7 +807,7 @@ const BrgyRescueRequests = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {filteredRequests.map((req) => {
                                         const report = req.report;
-                                        const priority = report?.priority_level || 'Medium';
+                                        const priority = report?.ai_suggested_priority || report?.priority_level || 'Medium';
                                         const reportStatusId = report?.status_id || req.status_id;
                                         const statusLabel = reportStatusMap[reportStatusId] || statusMap[req.status_id] || 'Escalated';
                                         const reportId = req.report_id || report?.report_id || req.rescue_id;
@@ -924,20 +924,23 @@ const BrgyRescueRequests = () => {
 
                                                     {/* Animal Photo Preview */}
                                                     {(() => {
-                                                        const mediaList = report?.media || [];
-                                                        const firstMedia = mediaList.find((m: any) =>
-                                                            m.media_type !== 'Document' &&
-                                                            !m.file_url?.toLowerCase().endsWith('.pdf') &&
-                                                            !m.file_url?.toLowerCase().endsWith('.docx') &&
-                                                            !m.file_url?.toLowerCase().endsWith('.doc')
-                                                        );
+                                                        const rawImages = (report?.media || []).filter((m: any) => {
+                                                            const url = (m.file_url || m.url || '').toLowerCase();
+                                                            return (
+                                                                m.media_type !== 'Document' &&
+                                                                !url.endsWith('.pdf') &&
+                                                                !url.endsWith('.docx') &&
+                                                                !url.endsWith('.doc')
+                                                            );
+                                                        });
+
+                                                        // Prioritize original citizen sighting photos (is_evidence !== true) over operational letters/evidence
+                                                        const sightingImages = rawImages.filter((m: any) => !m.is_evidence);
+                                                        const imagesList = sightingImages.length > 0 ? sightingImages : rawImages;
+                                                        const firstMedia = imagesList[0] || null;
 
                                                         const isVideo = firstMedia?.media_type === 'Video' || firstMedia?.file_url?.toLowerCase().match(/\.(mp4|mov|webm)$/i);
-                                                        const mediaCount = mediaList.filter((m: any) =>
-                                                            m.media_type !== 'Document' &&
-                                                            !m.file_url?.toLowerCase().endsWith('.pdf') &&
-                                                            !m.file_url?.toLowerCase().endsWith('.docx')
-                                                        ).length;
+                                                        const mediaCount = imagesList.length;
 
                                                         if (!firstMedia) {
                                                             return (
@@ -1163,7 +1166,7 @@ const BrgyRescueRequests = () => {
                                         header: "Prioritization",
                                         key: "priority",
                                         render: (req) => {
-                                            const priority = req.report?.priority_level || 'Medium';
+                                            const priority = req.report?.ai_suggested_priority || req.report?.priority_level || 'Medium';
                                             return (
                                                 <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getPriorityColor(priority)}`}>
                                                     {priority}

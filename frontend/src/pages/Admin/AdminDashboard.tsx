@@ -133,9 +133,11 @@ const AdminDashboard = () => {
         return 'red';
     };
 
-    // Barangay-style Heatmap & Markers calculations
-    const heatmapPoints: [number, number, number][] = reports
-        .filter(r => r.latitude && r.longitude)
+    // Barangay-style Heatmap & Markers calculations (Active strays only)
+    const isResolvedOrClosed = (r: any) => [3, 6, 9, 10, 11, 12, 14, 17, 18].includes(r.status_id);
+    const activeMapReports = reports.filter(r => r.latitude && r.longitude && !isResolvedOrClosed(r));
+
+    const heatmapPoints: [number, number, number][] = activeMapReports
         .map((r: any) => [
             parseFloat(r.latitude),
             parseFloat(r.longitude),
@@ -150,8 +152,7 @@ const AdminDashboard = () => {
         { id: -105, lat: 14.7980, lng: 121.0010, title: "Greenwoods Cluster", category: "Low Activity", color: "green" }
     ];
 
-    const reportMarkers = reports
-        .filter(r => r.latitude && r.longitude)
+    const reportMarkers = activeMapReports
         .map((r: any) => {
             const associatedRescue = requests.find(req => req.report_id === r.report_id);
             const color = getMarkerColor(r, associatedRescue);

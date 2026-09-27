@@ -56,6 +56,7 @@ export interface PetRecord {
     photo_right_url?: string;
     owner_id?: number | string;
     
+    registered_by_user_id?: number | string | null;
     registeredByName?: string;
     registered_by_name?: string;
     registeredAt?: string;
@@ -99,7 +100,9 @@ export const mapRawPetToPetRecord = (pet: any): PetRecord => {
         healthCondition: pet.health_condition || pet.healthCondition || 'Healthy and active',
         notes: pet.notes || '',
         vaccineCardUrl: pet.vaccine_card_url || pet.vaccineCardUrl || null,
+        registered_by_user_id: pet.registered_by_user_id || pet.registered_by?.user_id || null,
         registeredByName: pet.registered_by_name || pet.registered_by?.name || (pet.owner?.name ? `${pet.owner.name} (Resident Owner)` : 'Subdivision Leader / Staff'),
+        registered_by_name: pet.registered_by_name || pet.registered_by?.name || (pet.owner?.name ? `${pet.owner.name} (Resident Owner)` : 'Subdivision Leader / Staff'),
         registeredAt: pet.created_at || pet.registeredAt || null,
         rawPetObj: pet
     };

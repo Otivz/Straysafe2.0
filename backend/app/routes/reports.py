@@ -20,6 +20,9 @@ from app.models.pet_qr import PetQRCode
 from app.models.pet_claim import PetClaim
 from app.models.report_dispute import ReportDispute
 from app.models.report_match import ReportMatch
+import math
+from app.models.coverage import CoverageSetting
+from app.schemas.coverage import CoverageAreaResponse, CoverageAreaUpdate
 from app.models.warning import OwnerWarning
 from app.models.chat import ChatThread
 from app.schemas.report import (
@@ -37,7 +40,7 @@ from app.utils.audit import log_activity
 from app.utils.ai_suggestions import call_gemini_with_fallback
 from app.utils.uploads import validate_cloudinary_url, read_and_validate_upload
 from app.utils.model_loader import get_yolo_model
-from app.utils.auth import get_current_staff_or_admin, verify_subdivision_scope
+from app.utils.auth import get_current_staff_or_admin, verify_subdivision_scope, get_current_user
 
 router = APIRouter(
     prefix="/reports",
@@ -297,13 +300,43 @@ def populate_location_and_facility_info(rep_data: ReportResponse, rep: Report, d
         rep_data.custody_status = rep.custody_status or "Sighting"
 
         holding_rec = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == rep.report_id).first()
-        is_in_custody = (rep.current_status_id in (6, 7, 8)) or (holding_rec is not None)
+        RESOLVED_HOLDING_STATUSES = (3, 4, 5, 7, 8)  # 3=Claimed, 4=Deceased, 5=Transferred, 7=Adopted, 8=Impounded
+        is_holding_resolved = holding_rec is not None and (
+            holding_rec.facility_status in RESOLVED_HOLDING_STATUSES or
+            holding_rec.discharge_date is not None
+        )
+        is_report_resolved = rep.current_status_id in (9, 10, 11, 12, 14, 17, 18)
 
-        if is_in_custody and (not rep_data.custody_status or rep_data.custody_status == "Sighting"):
-            rep_data.custody_status = "Secured in Facility"
+        is_in_custody = (rep.current_status_id in (7, 8)) and not is_report_resolved and not is_holding_resolved
+        if holding_rec and not is_holding_resolved and not is_report_resolved and rep.current_status_id not in (1, 2, 3, 4, 5, 6, 13, 14, 17, 18):
+            is_in_custody = True
+
+        if is_in_custody:
+            if not rep_data.custody_status or rep_data.custody_status == "Sighting":
+                rep_data.custody_status = "Secured in Facility"
+        elif is_report_resolved or is_holding_resolved or not is_in_custody:
+            # If resolved / discharged, ensure coordinates and landmark reflect original incident sighting
+            rep_data.facility_id = None
+            rep_data.facility = None
+            if rep_data.initial_latitude is not None and rep_data.initial_longitude is not None:
+                rep_data.latitude = rep_data.initial_latitude
+                rep_data.longitude = rep_data.initial_longitude
+            
+            facility_keywords = ["holding pen", "holding facility", "barangay holding", "subdivision holding"]
+            is_lmk_fac = not rep_data.landmark or any(k in (rep_data.landmark or "").lower() for k in facility_keywords)
+            is_init_fac = not rep_data.initial_landmark or any(k in (rep_data.initial_landmark or "").lower() for k in facility_keywords)
+            if is_lmk_fac or is_init_fac:
+                clean_name = (rep.subdivision.subdivision_name if hasattr(rep, 'subdivision') and rep.subdivision else None) or "Incident Sighting Location"
+                if is_init_fac or not rep_data.initial_landmark:
+                    rep_data.initial_landmark = clean_name
+                if is_lmk_fac or is_report_resolved or is_holding_resolved:
+                    rep_data.landmark = rep_data.initial_landmark or clean_name
+            elif is_report_resolved or is_holding_resolved:
+                if rep_data.initial_landmark:
+                    rep_data.landmark = rep_data.initial_landmark
 
         fac = None
-        if rep.facility_id:
+        if rep.facility_id and is_in_custody:
             fac = db.query(Landmark).filter(Landmark.landmark_id == rep.facility_id).first()
         elif is_in_custody:
             # Fallback to subdivision/barangay holding facility landmark
@@ -315,7 +348,7 @@ def populate_location_and_facility_info(rep_data: ReportResponse, rep: Report, d
             if not fac:
                 fac = db.query(Landmark).filter(Landmark.is_holding_facility == True).first()
 
-        if fac:
+        if fac and is_in_custody:
             rep_data.facility_id = fac.landmark_id
             rep_data.facility = {
                 "landmark_id": fac.landmark_id,
@@ -331,7 +364,7 @@ def populate_location_and_facility_info(rep_data: ReportResponse, rep: Report, d
                 "contact_number": fac.contact_number,
                 "status": fac.status
             }
-            if is_in_custody and (rep.latitude == rep.initial_latitude or rep.latitude == rep_data.initial_latitude):
+            if rep.latitude == rep.initial_latitude or rep.latitude == rep_data.initial_latitude:
                 rep_data.latitude = float(fac.latitude)
                 rep_data.longitude = float(fac.longitude)
                 if not rep.landmark or rep.landmark == rep.initial_landmark:
@@ -369,7 +402,10 @@ def populate_duplicate_and_merge_info(rep_data: ReportResponse, rep: Report, db:
             merged_list = []
             for m_rep in merged_children:
                 sec_user = m_rep.reporter.name if m_rep.reporter else f"Resident #{m_rep.user_id}"
-                sec_media = [{"file_url": med.file_url, "media_type": med.media_type} for med in (m_rep.media or [])]
+                sec_media = [{
+                    "file_url": med.file_url if (med.file_url and "res.cloudinary.com/test" not in med.file_url and not med.file_url.endswith("original_reporter_dog.jpg")) else "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop&q=80",
+                    "media_type": med.media_type
+                } for med in (m_rep.media or [])]
                 merged_list.append({
                     "report_id": m_rep.report_id,
                     "reporter_name": sec_user,
@@ -395,7 +431,10 @@ def populate_duplicate_and_merge_info(rep_data: ReportResponse, rep: Report, db:
                     merged_list = []
                     for m_rep in parent_rep.merged_reports:
                         sec_user = m_rep.reporter.name if m_rep.reporter else f"Resident #{m_rep.user_id}"
-                        sec_media = [{"file_url": med.file_url, "media_type": med.media_type} for med in (m_rep.media or [])]
+                        sec_media = [{
+                            "file_url": med.file_url if (med.file_url and "res.cloudinary.com/test" not in med.file_url and not med.file_url.endswith("original_reporter_dog.jpg")) else "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop&q=80",
+                            "media_type": med.media_type
+                        } for med in (m_rep.media or [])]
                         merged_list.append({
                             "report_id": m_rep.report_id,
                             "reporter_name": sec_user,
@@ -508,35 +547,38 @@ def populate_review_decision_info(rep_data: ReportResponse, rep: Report, db: Ses
                 review_notes = dup_match.verification_notes or review_notes
 
         # 2. Check if primary report with merged duplicate children
-        elif rep.merged_reports or (rep_data.merged_reports and len(rep_data.merged_reports) > 0):
-            first_m = rep.merged_reports[0] if rep.merged_reports else rep_data.merged_reports[0]
-            review_status = "Confirmed Duplicate"
-            review_type = "duplicate"
-            if isinstance(first_m, dict):
-                reviewed_at = first_m.get("merged_at")
-                review_notes = first_m.get("merge_notes")
-                matched_report_record = {
-                    "report_id": first_m.get("report_id"),
-                    "animal_type": first_m.get("animal_type"),
-                    "animal_breed": first_m.get("animal_breed"),
-                    "landmark": first_m.get("landmark"),
-                }
-            else:
-                reviewed_at = getattr(first_m, "merged_at", None)
-                review_notes = getattr(first_m, "merge_notes", None)
-                m_by = getattr(first_m, "merged_by", None)
-                if m_by:
-                    m_user = db.query(User).filter(User.user_id == m_by).first()
-                    if m_user:
-                        reviewed_by_name = m_user.name
-                        reviewed_by_role = "Subdivision Leader" if m_user.role_id == 2 else "Barangay Staff"
-                matched_report_record = {
-                    "report_id": first_m.report_id,
-                    "animal_type": first_m.animal_type,
-                    "animal_breed": first_m.animal_breed,
-                    "landmark": first_m.landmark,
-                    "status_id": first_m.current_status_id
-                }
+        elif (getattr(rep, "merged_reports", None) and len(rep.merged_reports) > 0) or (getattr(rep_data, "merged_reports", None) and len(rep_data.merged_reports) > 0):
+            merged_list = getattr(rep, "merged_reports", None) or getattr(rep_data, "merged_reports", None) or []
+            first_m = merged_list[0] if merged_list else None
+            if first_m:
+                review_status = "Confirmed Duplicate"
+                review_type = "duplicate"
+                if isinstance(first_m, dict):
+                    reviewed_at = first_m.get("merged_at")
+                    review_notes = first_m.get("merge_notes")
+                    matched_report_record = {
+                        "report_id": first_m.get("report_id"),
+                        "animal_type": first_m.get("animal_type"),
+                        "animal_breed": first_m.get("animal_breed"),
+                        "landmark": first_m.get("landmark"),
+                        "status_id": first_m.get("status_id") or first_m.get("current_status_id"),
+                    }
+                else:
+                    reviewed_at = getattr(first_m, "merged_at", None)
+                    review_notes = getattr(first_m, "merge_notes", None)
+                    m_by = getattr(first_m, "merged_by", None)
+                    if m_by:
+                        m_user = db.query(User).filter(User.user_id == m_by).first()
+                        if m_user:
+                            reviewed_by_name = m_user.name
+                            reviewed_by_role = "Subdivision Leader" if m_user.role_id == 2 else "Barangay Staff"
+                    matched_report_record = {
+                        "report_id": getattr(first_m, "report_id", None),
+                        "animal_type": getattr(first_m, "animal_type", None),
+                        "animal_breed": getattr(first_m, "animal_breed", None),
+                        "landmark": getattr(first_m, "landmark", None),
+                        "status_id": getattr(first_m, "current_status_id", None)
+                    }
 
         # 3. Check for confirmed Pet Match (Report.pet_id is set or ReportMatch is CONFIRMED_MATCH)
         if review_status == "Unreviewed" or rep.pet_id:
@@ -761,18 +803,131 @@ SELERA_POLYGON = [
     (14.800634, 121.002228),
     (14.802461, 121.003280)
 ]
+SELERA_CENTER_LAT = sum(p[0] for p in SELERA_POLYGON) / len(SELERA_POLYGON)
+SELERA_CENTER_LNG = sum(p[1] for p in SELERA_POLYGON) / len(SELERA_POLYGON)
 
-def is_inside_selera_homes(lat: float | None, lng: float | None) -> bool:
-    """Check if point is within the Selera Homes / Santa Maria, Bulacan area."""
+def calculate_distance_meters(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Calculate Great Circle distance between two coordinates in meters using the Haversine formula."""
+    R = 6371000.0  # Earth radius in meters
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lng2 - lng1)
+
+    a = math.sin(delta_phi / 2.0) ** 2 + \
+        math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2.0) ** 2
+    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+    return R * c
+
+def get_coverage_setting(db: Session) -> CoverageSetting:
+    """Fetch active coverage setting or create default centered on Selera Homes."""
+    setting = db.query(CoverageSetting).filter(CoverageSetting.is_active == True).order_by(CoverageSetting.id.asc()).first()
+    if not setting:
+        setting = CoverageSetting(
+            subdivision_id=1,
+            center_label="Selera Homes",
+            center_latitude=Decimal(str(round(SELERA_CENTER_LAT, 8))),
+            center_longitude=Decimal(str(round(SELERA_CENTER_LNG, 8))),
+            radius_meters=1000,
+            boundary_polygon=[{"lat": p[0], "lng": p[1]} for p in SELERA_POLYGON],
+            is_active=True
+        )
+        db.add(setting)
+        db.commit()
+        db.refresh(setting)
+    return setting
+
+def is_inside_reporting_coverage(lat: float | None, lng: float | None, db: Session) -> tuple[bool, float, int]:
+    """Check if point is within the configured radius from the fixed Selera Homes center."""
+    if lat is None or lng is None:
+        return False, 0.0, 1000
+    try:
+        setting = get_coverage_setting(db)
+        center_lat = float(setting.center_latitude)
+        center_lng = float(setting.center_longitude)
+        allowed_radius = setting.radius_meters
+        dist = calculate_distance_meters(float(lat), float(lng), center_lat, center_lng)
+        return (dist <= allowed_radius), dist, allowed_radius
+    except Exception as e:
+        print(f"Coverage check error: {e}")
+        dist = calculate_distance_meters(float(lat), float(lng), SELERA_CENTER_LAT, SELERA_CENTER_LNG)
+        return (dist <= 1000.0), dist, 1000
+
+def is_inside_selera_homes(lat: float | None, lng: float | None, db: Session | None = None) -> bool:
+    """Check if point is within the Selera Homes reporting coverage area."""
     if lat is None or lng is None:
         return True
+    if db is not None:
+        is_inside, _, _ = is_inside_reporting_coverage(lat, lng, db)
+        return is_inside
+    dist = calculate_distance_meters(float(lat), float(lng), SELERA_CENTER_LAT, SELERA_CENTER_LNG)
+    return dist <= 1000.0
+
+
+@router.get("/coverage-area", response_model=CoverageAreaResponse)
+def get_reporting_coverage_area(db: Session = Depends(get_db)):
+    """Retrieve current reporting coverage radius and fixed Selera Homes center."""
+    setting = get_coverage_setting(db)
+    boundary = setting.boundary_polygon or [{"lat": p[0], "lng": p[1]} for p in SELERA_POLYGON]
+    return CoverageAreaResponse(
+        id=setting.id,
+        subdivision_id=setting.subdivision_id or 1,
+        center_label=setting.center_label or "Selera Homes",
+        center_latitude=float(setting.center_latitude),
+        center_longitude=float(setting.center_longitude),
+        radius_meters=setting.radius_meters,
+        boundary_polygon=boundary,
+        is_active=setting.is_active,
+        updated_at=setting.updated_at
+    )
+
+
+@router.put("/coverage-area", response_model=CoverageAreaResponse)
+def update_reporting_coverage_area(
+    update_in: CoverageAreaUpdate,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
+    """Admin setting to configure reporting coverage radius around the fixed Selera Homes center."""
+    if current_user.role_id != 4 and not getattr(current_user, "is_head_officer", False):
+        raise HTTPException(
+            status_code=403, 
+            detail="Only System Administrators or Barangay Head Officers can configure the reporting coverage radius."
+        )
+
+    setting = get_coverage_setting(db)
+    old_radius = setting.radius_meters
+    setting.radius_meters = update_in.radius_meters
+    setting.updated_by = current_user.user_id
+    db.commit()
+    db.refresh(setting)
+
     try:
-        # Bounding box covering Selera Homes, San Vicente, and Santa Maria, Bulacan
-        if 14.70 <= lat <= 14.90 and 120.90 <= lng <= 121.10:
-            return True
-    except (ValueError, TypeError):
-        pass
-    return True
+        log_activity(
+            db=db,
+            user_id=current_user.user_id,
+            action="UPDATE_COVERAGE_RADIUS",
+            target_table="coverage_settings",
+            target_id=setting.id,
+            description=f"Updated reporting coverage radius from {old_radius}m to {setting.radius_meters}m centered on {setting.center_label}",
+            request=req
+        )
+    except Exception as e:
+        print(f"Error logging coverage radius audit: {e}")
+
+    boundary = setting.boundary_polygon or [{"lat": p[0], "lng": p[1]} for p in SELERA_POLYGON]
+    return CoverageAreaResponse(
+        id=setting.id,
+        subdivision_id=setting.subdivision_id or 1,
+        center_label=setting.center_label or "Selera Homes",
+        center_latitude=float(setting.center_latitude),
+        center_longitude=float(setting.center_longitude),
+        radius_meters=setting.radius_meters,
+        boundary_polygon=boundary,
+        is_active=setting.is_active,
+        updated_at=setting.updated_at
+    )
 
 
 def classify_category_from_description(description: str) -> int:
@@ -1263,11 +1418,12 @@ async def validate_report_images(
 @router.post("/", response_model=ReportResponse)
 def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(get_db)):
     try:
-        # Geofence validation
-        if not is_inside_selera_homes(report_in.latitude, report_in.longitude):
+        # Configurable Coverage Radius Validation (Centered on Selera Homes)
+        is_inside, dist, allowed_radius = is_inside_reporting_coverage(report_in.latitude, report_in.longitude, db)
+        if not is_inside:
             raise HTTPException(
                 status_code=400, 
-                detail="Location outside Selera Homes. Reports are only accepted within the subdivision boundary."
+                detail="This report location is outside the current STRAY-SAFE reporting coverage area."
             )
 
         report_data = report_in.model_dump()
@@ -1671,6 +1827,41 @@ def delete_report(
     )
     return {"message": "Report deleted successfully"}
 
+@router.patch("/{report_id}/cancel")
+def cancel_report_by_citizen(
+    report_id: int, 
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if report.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to cancel this report")
+    
+    # Status 14 is False Alarm / Dismissed, we can use it as cancelled.
+    old_status = report.current_status_id
+    report.current_status_id = 14
+    
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to cancel report: {str(e)}")
+
+    log_activity(
+        db=db,
+        action="CANCEL_REPORT",
+        target_table="reports",
+        target_id=report_id,
+        description=f"Reporter cancelled report #{report_id}",
+        log_type="operation",
+        old_values={"status_id": old_status},
+        new_values={"status_id": 14},
+        request=req
+    )
+    return {"message": "Report cancelled successfully"}
 
 @router.patch("/{report_id}", response_model=ReportResponse)
 def update_report(
@@ -2070,6 +2261,15 @@ def update_report_status(
     elif status_update.status_id == 6:
         # Picked up: animal is with responders in transit, NOT yet admitted into holding facility
         report.custody_status = status_update.custody_status or "Animal Picked Up"
+        report.facility_id = None
+        relocation_note = None
+    elif status_update.status_id in (9, 10, 11, 12, 14, 17, 18):
+        # Case resolved / animal adopted, impounded, claimed, or dismissed: restore original incident coordinates
+        if report.initial_latitude is not None and report.initial_longitude is not None:
+            report.latitude = report.initial_latitude
+            report.longitude = report.initial_longitude
+            if report.initial_landmark:
+                report.landmark = report.initial_landmark
         report.facility_id = None
         relocation_note = None
     elif status_update.latitude is not None and status_update.longitude is not None:

@@ -7,7 +7,7 @@ import {
     X, Calendar, Timer, Camera, FileText, Pencil, Sparkles, Paperclip, PlayCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import api from '../../utils/api';
+import api, { API_BASE_URL } from '../../utils/api';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
@@ -61,6 +61,7 @@ interface HoldingAnimal {
     total_duration_days?: number | null;
     total_duration_display?: string | null;
     current_facility_duration_display?: string | null;
+    original_photo_url?: string | null;
     timeline: TimelineEntry[];
     adoption_catalog_notes?: string | null;
     promoted_at?: string | null;
@@ -69,6 +70,8 @@ interface HoldingAnimal {
         file_url: string;
         media_type: string;
         is_evidence?: boolean;
+        history_id?: number | null;
+        holding_log_id?: number | null;
         uploaded_at?: string;
     }[];
 }
@@ -168,6 +171,99 @@ function animalIcon(type: string | null, className = 'w-6 h-6'): ReactNode {
     if (type === 'Cat') return <Cat className={className} />;
     if (type === 'Dog') return <Dog className={className} />;
     return <PawPrint className={className} />;
+}
+
+function getAnimalPhoto(animal: HoldingAnimal): string | undefined {
+    // 0. Primary: Explicit original photo resolved by backend from initial report submission
+    if (animal.original_photo_url) return animal.original_photo_url;
+
+    // 1. Initial report submission images (no history_id, no holding_log_id, not is_evidence, image file)
+    const initialReportImages = animal.report_media
+        ?.filter(m => {
+            if (m.is_evidence) return false;
+            if (m.history_id || m.holding_log_id) return false;
+            if (m.media_type && m.media_type.toLowerCase() === 'document') return false;
+            if (m.file_url) {
+                const lower = m.file_url.toLowerCase();
+                return !lower.endsWith('.pdf') && !lower.endsWith('.doc') && !lower.endsWith('.docx') && !lower.endsWith('.txt') && !lower.endsWith('.mp4') && !lower.endsWith('.mov') && !lower.endsWith('.webm') && !lower.endsWith('.avi');
+            }
+            return false;
+        })
+        .sort((a, b) => (a.media_id || 0) - (b.media_id || 0));
+
+    if (initialReportImages && initialReportImages.length > 0 && initialReportImages[0].file_url) {
+        return initialReportImages[0].file_url;
+    }
+
+    // 2. Fallback: Any initial report media without history_id or holding_log_id
+    const anyInitialMedia = animal.report_media
+        ?.filter(m => {
+            if (m.history_id || m.holding_log_id) return false;
+            if (m.media_type && m.media_type.toLowerCase() === 'document') return false;
+            if (m.file_url) {
+                const lower = m.file_url.toLowerCase();
+                return !lower.endsWith('.pdf') && !lower.endsWith('.doc') && !lower.endsWith('.docx') && !lower.endsWith('.txt') && !lower.endsWith('.mp4') && !lower.endsWith('.mov') && !lower.endsWith('.webm') && !lower.endsWith('.avi');
+            }
+            return false;
+        })
+        .sort((a, b) => (a.media_id || 0) - (b.media_id || 0));
+
+    if (anyInitialMedia && anyInitialMedia.length > 0 && anyInitialMedia[0].file_url) {
+        return anyInitialMedia[0].file_url;
+    }
+
+    // 3. Fallback: Earliest non-evidence image in report_media
+    const nonEvidenceMedia = animal.report_media
+        ?.filter(m => {
+            if (m.is_evidence) return false;
+            if (m.media_type && m.media_type.toLowerCase() === 'document') return false;
+            if (m.file_url) {
+                const lower = m.file_url.toLowerCase();
+                return !lower.endsWith('.pdf') && !lower.endsWith('.doc') && !lower.endsWith('.docx') && !lower.endsWith('.txt') && !lower.endsWith('.mp4') && !lower.endsWith('.mov') && !lower.endsWith('.webm') && !lower.endsWith('.avi');
+            }
+            return false;
+        })
+        .sort((a, b) => (a.media_id || 0) - (b.media_id || 0));
+
+    if (nonEvidenceMedia && nonEvidenceMedia.length > 0 && nonEvidenceMedia[0].file_url) {
+        return nonEvidenceMedia[0].file_url;
+    }
+
+    // 4. Fallback: Earliest image in report_media
+    const anyImageMedia = animal.report_media
+        ?.filter(m => {
+            if (m.media_type && m.media_type.toLowerCase() === 'document') return false;
+            if (m.file_url) {
+                const lower = m.file_url.toLowerCase();
+                return !lower.endsWith('.pdf') && !lower.endsWith('.doc') && !lower.endsWith('.docx') && !lower.endsWith('.txt') && !lower.endsWith('.mp4') && !lower.endsWith('.mov') && !lower.endsWith('.webm') && !lower.endsWith('.avi');
+            }
+            return false;
+        })
+        .sort((a, b) => (a.media_id || 0) - (b.media_id || 0));
+
+    if (anyImageMedia && anyImageMedia.length > 0 && anyImageMedia[0].file_url) {
+        return anyImageMedia[0].file_url;
+    }
+
+    // 5. Fallback: Timeline entries
+    if (animal.timeline) {
+        for (const t of animal.timeline) {
+            const tMedia = (t as any).media;
+            if (Array.isArray(tMedia)) {
+                const img = tMedia.find((m: any) => {
+                    if (m.media_type && m.media_type.toLowerCase() === 'document') return false;
+                    if (m.file_url) {
+                        const lower = m.file_url.toLowerCase();
+                        return !lower.endsWith('.pdf') && !lower.endsWith('.doc') && !lower.endsWith('.docx') && !lower.endsWith('.txt') && !lower.endsWith('.mp4') && !lower.endsWith('.mov') && !lower.endsWith('.webm') && !lower.endsWith('.avi');
+                    }
+                    return false;
+                });
+                if (img?.file_url) return img.file_url;
+            }
+        }
+    }
+
+    return undefined;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -874,9 +970,7 @@ const BrgyHoldingFacility = () => {
                                     {overdueAnimals.map((animal) => {
                                         const days = daysSince(animal.intake_date);
                                         const overDays = days - impoundStayDuration;
-                                        const thumbImg = animal.report_media?.find(
-                                            m => m.media_type === 'Image' || m.file_url.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i)
-                                        );
+                                        const thumbImg = getAnimalPhoto(animal);
 
                                         return (
                                             <div
@@ -886,7 +980,7 @@ const BrgyHoldingFacility = () => {
                                                 <div className="flex items-start gap-3">
                                                     <div className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 shrink-0 border border-gray-200 relative">
                                                         {thumbImg ? (
-                                                            <img src={thumbImg.file_url} alt={animal.animal_name || 'Animal'} className="w-full h-full object-cover" />
+                                                            <img src={thumbImg.startsWith('http') ? thumbImg : `${API_BASE_URL}${thumbImg}`} alt={animal.animal_name || 'Animal'} className="w-full h-full object-cover" />
                                                         ) : (
                                                             <div className="w-full h-full flex items-center justify-center">
                                                                 {animalIcon(animal.animal_type)}
@@ -1053,9 +1147,7 @@ const BrgyHoldingFacility = () => {
                                     const isResolved = RESOLVED_IDS.has(animal.facility_status);
                                     const isOverdue = !isResolved && days >= impoundStayDuration;
                                     const isNearExpiry = !isResolved && !isOverdue && remaining <= 2;
-                                    const firstImage = animal.report_media?.find(
-                                        m => m.media_type === 'Image' || m.file_url.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i)
-                                    ) || (animal.timeline ? animal.timeline.flatMap(t => (t as any).media || []).find((m: any) => m.file_url) : undefined);
+                                    const photo = getAnimalPhoto(animal);
 
                                     return (
                                         <div
@@ -1070,10 +1162,10 @@ const BrgyHoldingFacility = () => {
                                         >
                                             {/* Card Top / Prominent Image Hero */}
                                             <div className="relative w-full h-52 bg-slate-100 overflow-hidden">
-                                                {firstImage ? (
+                                                {photo ? (
                                                     <>
                                                         <img
-                                                            src={firstImage.file_url}
+                                                            src={photo.startsWith('http') ? photo : `${API_BASE_URL}${photo}`}
                                                             alt={animal.animal_name || 'Animal in Facility'}
                                                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                                         />
@@ -1105,7 +1197,7 @@ const BrgyHoldingFacility = () => {
                                                     )}
 
                                                     {/* Facility Status Badge */}
-                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-wider uppercase backdrop-blur-md shadow-sm border ${firstImage
+                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-wider uppercase backdrop-blur-md shadow-sm border ${photo
                                                             ? 'bg-white/95 text-gray-900 border-white/60'
                                                             : statusMeta.color
                                                         }`}>
@@ -1322,19 +1414,17 @@ const BrgyHoldingFacility = () => {
 
                                     {/* Resident Uploaded Image */}
                                     {(() => {
-                                        const residentImage = selected.report_media?.find(
-                                            m => !m.is_evidence && (m.media_type === 'Image' || m.file_url.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i))
-                                        );
+                                        const residentImage = getAnimalPhoto(selected);
                                         if (!residentImage) return null;
                                         return (
                                             <div className="relative w-full h-52 rounded-2xl overflow-hidden border border-gray-150 shadow-sm bg-gray-50 group">
                                                 <img
-                                                    src={residentImage.file_url}
+                                                    src={residentImage}
                                                     alt="Resident Uploaded Animal"
                                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                                 />
                                                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex flex-col justify-end p-4">
-                                                    <span className="text-[9px] font-black text-white/80 uppercase tracking-widest leading-none">Resident Uploaded Photo</span>
+                                                    <span className="text-[9px] font-black text-white/80 uppercase tracking-widest leading-none">Original Reporter Photo</span>
                                                     <h4 className="text-white font-bold text-sm mt-1">Stray Animal from Report #{selected.report_id}</h4>
                                                 </div>
                                             </div>

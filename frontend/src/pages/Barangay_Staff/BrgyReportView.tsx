@@ -4,7 +4,7 @@ import {
     User, PawPrint, Home, Flag, Building2, Phone, Mail, Lock, Users, Landmark,
     X, Rocket, Hospital, Settings, ScrollText, Shield,
     CheckCircle2, Ban, Ambulance, Lightbulb, Download, Camera,
-    ShieldCheck, ArrowRightCircle, GitMerge, Cpu, Clock, Sparkles, ArrowLeft
+    ShieldCheck, ArrowRightCircle, GitMerge, Cpu, Clock, Sparkles, ArrowLeft, Heart
 } from 'lucide-react';
 import axios from 'axios';
 import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
@@ -831,16 +831,17 @@ const BrgyReportView = () => {
     const imagesList = rawImages.filter(m => !m.is_evidence).length > 0 ? rawImages.filter(m => !m.is_evidence) : rawImages;
     const activeImage = imagesList[activeMediaIndex] || imagesList[0] || null;
 
-    const isRelocatedToFacility = report?.status_id !== 6 && !!(report?.facility_id || report?.facility || report?.custody_status === 'Secured in Facility' || report?.custody_status === 'In Barangay Facility' || report?.custody_status === 'In Subdivision Facility');
+    const isResolvedCase = [9, 10, 11, 12, 14, 17, 18].includes(report?.status_id as number) || ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(report?.custody_status || '');
+    const isRelocatedToFacility = !isResolvedCase && report?.status_id !== 6 && [7, 8].includes(report?.status_id as number) && !!(report?.facility_id || report?.facility || report?.custody_status === 'Secured in Facility' || report?.custody_status === 'In Barangay Facility' || report?.custody_status === 'In Subdivision Facility');
     const activeFacilityLat = report?.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : null;
     const activeFacilityLng = report?.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : null;
 
     const sightingLat = (isRelocatedToFacility && activeFacilityLat != null)
         ? activeFacilityLat
-        : (report?.latitude ? parseFloat(report.latitude.toString()) : BRGY_OFFICE_COORDS[0]);
+        : ((report?.initial_latitude || report?.latitude) ? parseFloat((report.initial_latitude || report.latitude).toString()) : BRGY_OFFICE_COORDS[0]);
     const sightingLng = (isRelocatedToFacility && activeFacilityLng != null)
         ? activeFacilityLng
-        : (report?.longitude ? parseFloat(report.longitude.toString()) : BRGY_OFFICE_COORDS[1]);
+        : ((report?.initial_longitude || report?.longitude) ? parseFloat((report.initial_longitude || report.longitude).toString()) : BRGY_OFFICE_COORDS[1]);
 
     // Compute Location and Custody Progression Steps
     const custodyProgression = (() => {
@@ -2016,13 +2017,50 @@ const BrgyReportView = () => {
                                                 </div>
 
                                                 {(() => {
-                                                    const isRelocated = report.status_id !== 6 && (!!report.facility_id || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || !!report.facility || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude)));
-                                                    const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : null;
-                                                    const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : null;
+                                                    const isRelocated = !isResolvedCase && [7, 8].includes(report.status_id) && (!!report.facility_id || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || !!report.facility);
+                                                    const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : (report.latitude ? parseFloat(report.latitude.toString()) : null);
+                                                    const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : (report.longitude ? parseFloat(report.longitude.toString()) : null);
                                                     const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
                                                     const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && (Math.abs(initLat - sightingLat) > 0.0001 || Math.abs(initLng - sightingLng) > 0.0001);
 
-                                                    const brgyMarkers = [
+                                                    const hadHoldingHistory = report.history?.some((h: any) => 
+                                                        [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
+                                                        (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
+                                                        (h.action && h.action.toLowerCase().includes('holding'))
+                                                    ) || Boolean(report.facility_id) || Boolean(report.facility);
+                                                    const histFacLat = 14.8069;
+                                                    const histFacLng = 121.0039;
+                                                    const histFacName = 'Barangay Holding Pen';
+
+                                                    const brgyMarkers = isResolvedCase ? [
+                                                        {
+                                                            id: 1,
+                                                            lat: initLat ?? sightingLat,
+                                                            lng: initLng ?? sightingLng,
+                                                            title: `1. Reported Incident Location: ${report.initial_landmark || resolvedAddress || report.landmark || 'Incident Location'}`,
+                                                            category: 'Historical Sighting',
+                                                            priority: report.priority_level || 'Medium',
+                                                            color: 'slate',
+                                                            rawData: { ...report, landmark: report.initial_landmark || report.landmark, is_resolved: true }
+                                                        },
+                                                        ...(hadHoldingHistory ? [{
+                                                            id: -999,
+                                                            lat: histFacLat,
+                                                            lng: histFacLng,
+                                                            title: `2. Holding Pen: ${histFacName}`,
+                                                            category: 'Historical Holding',
+                                                            priority: 'Low',
+                                                            color: 'slate',
+                                                            rawData: { ...report, landmark: histFacName, is_resolved: true }
+                                                        }] : []),
+                                                        {
+                                                            id: 2,
+                                                            lat: BRGY_OFFICE_COORDS[0],
+                                                            lng: BRGY_OFFICE_COORDS[1],
+                                                            title: 'Barangay San Vicente HQ',
+                                                            category: 'HQ'
+                                                        }
+                                                    ] : [
                                                         {
                                                             id: 1,
                                                             lat: sightingLat,
@@ -2057,12 +2095,19 @@ const BrgyReportView = () => {
                                                     return (
                                                         <MapComponent
                                                             height="100%"
-                                                            center={[sightingLat, sightingLng]}
+                                                            center={[isResolvedCase && initLat ? initLat : sightingLat, isResolvedCase && initLng ? initLng : sightingLng]}
                                                             zoom={15}
                                                             showHeatmap={false}
                                                             showGeofence={true}
                                                             showLandmarks={true}
                                                             showConnectingLine={false}
+                                                            polylines={isResolvedCase && hadHoldingHistory && initLat != null && initLng != null ? [{
+                                                                positions: [[initLat, initLng], [histFacLat, histFacLng]],
+                                                                color: '#64748B',
+                                                                weight: 3,
+                                                                dashArray: '6, 8',
+                                                                opacity: 0.85
+                                                            }] : undefined}
                                                             onRouteCalculated={(dist) => setRoadDistance(dist)}
                                                             markers={brgyMarkers}
                                                         />
@@ -2313,35 +2358,56 @@ const BrgyReportView = () => {
                                                                 IconComponent = Ambulance;
                                                                 description = 'Response team deployed to secure and contain the animal.';
                                                             }
-                                                            // 9. Relocation / Holding / Observation (check facility movement BEFORE animal secured so holding remarks don't get misclassified)
+                                                            // 9. Animal Adopted (check BEFORE holding/facility so adoption remarks don't get misclassified)
+                                                            else if (remarksLower.includes('adopted') || remarksLower.includes('adoption') || remarksLower.includes('adopter')) {
+                                                                actionTitle = 'ANIMAL ADOPTED';
+                                                                type = 'green';
+                                                                IconComponent = Heart;
+                                                                description = rawRemarks || 'Animal officially adopted and released into new care.';
+                                                            }
+                                                            // 10. Animal Impounded
+                                                            else if (statusId === 8 || remarksLower.includes('impound')) {
+                                                                actionTitle = 'ANIMAL IMPOUNDED';
+                                                                type = 'orange';
+                                                                IconComponent = Lock;
+                                                                description = rawRemarks || 'Animal officially impounded in facility custody.';
+                                                            }
+                                                            // 11. Stay Limit Notice
+                                                            else if (remarksLower.includes('stay limit')) {
+                                                                actionTitle = 'STAY LIMIT NOTICE';
+                                                                type = 'orange';
+                                                                IconComponent = Clock;
+                                                                description = rawRemarks || 'Facility stay limit notice issued.';
+                                                            }
+                                                            // 12. Relocation / Holding / Observation
                                                             else if (remarksLower.includes('relocated to') || remarksLower.includes('transferred to') || remarksLower.includes('relocation') || remarksLower.includes('transfer')) {
                                                                 actionTitle = 'FACILITY RELOCATION / TRANSFER';
                                                                 type = 'orange';
                                                                 IconComponent = Hospital;
                                                                 description = rawRemarks || 'Animal relocated to designated facility.';
                                                             }
-                                                            else if (remarksLower.includes('stay limit') || remarksLower.includes('observation note') || remarksLower.includes('daily note')) {
+                                                            else if (remarksLower.includes('observation note') || remarksLower.includes('daily note') || remarksLower.includes('medical note')) {
                                                                 actionTitle = 'FACILITY OBSERVATION';
                                                                 type = 'blue';
                                                                 IconComponent = Clock;
                                                                 description = rawRemarks || 'Facility observation recorded.';
                                                             }
-                                                            else if (statusId === 7 || statusId === 8 || remarksLower.includes('holding') || remarksLower.includes('facility') || remarksLower.includes('shelter')) {
+                                                            else if (statusId === 7 || remarksLower.includes('holding') || remarksLower.includes('facility') || remarksLower.includes('shelter')) {
                                                                 actionTitle = 'MOVED TO HOLDING FACILITY';
                                                                 type = 'orange';
                                                                 IconComponent = Hospital;
                                                                 description = rawRemarks || 'Animal safely admitted to temporary holding pen.';
                                                             }
-                                                            // 10. Animal Picked Up / Secured (Status 6 in-transit only)
+                                                            // 13. Animal Picked Up / Secured (Status 6 in-transit only)
                                                             else if (statusId === 6 || remarksLower.includes('picked up') || remarksLower.includes('animal secured')) {
                                                                 actionTitle = 'ANIMAL SECURED';
                                                                 type = 'green';
                                                                 IconComponent = PawPrint;
                                                                 description = 'Animal successfully captured and secured in transit.';
                                                             }
-                                                            // 11. Claim Approved / Pet Claimed
+                                                            // 14. Claim Approved / Pet Claimed
                                                             else if (remarksLower.includes('claim') || statusId === 9) {
-                                                                actionTitle = remarksLower.includes('approved') ? 'CLAIM APPROVED' : 'OWNERSHIP CLAIM FILED';
+                                                                actionTitle = remarksLower.includes('approved') ? 'CLAIM APPROVED' : (remarksLower.includes('claimed by') ? 'CLAIMED BY OWNER' : 'OWNERSHIP CLAIM FILED');
                                                                 type = 'green';
                                                                 IconComponent = Shield;
                                                                 description = rawRemarks || 'Pet ownership claim processed for custody handover.';
@@ -3281,13 +3347,50 @@ const BrgyReportView = () => {
                         {/* Map Area */}
                         <div className="flex-1 rounded-2xl overflow-hidden relative border border-gray-200 min-h-0 shadow-inner">
                             {(() => {
-                                const isRelocated = report.status_id !== 6 && (!!report.facility_id || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || !!report.facility || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude)));
-                                const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : null;
-                                const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : null;
+                                const isRelocated = !isResolvedCase && [7, 8].includes(report.status_id) && (!!report.facility_id || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || !!report.facility);
+                                const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : (report.latitude ? parseFloat(report.latitude.toString()) : null);
+                                const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : (report.longitude ? parseFloat(report.longitude.toString()) : null);
                                 const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
                                 const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && (Math.abs(initLat - sightingLat) > 0.0001 || Math.abs(initLng - sightingLng) > 0.0001);
 
-                                const brgyMarkers = [
+                                const hadHoldingHistory = report.history?.some((h: any) => 
+                                    [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
+                                    (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
+                                    (h.action && h.action.toLowerCase().includes('holding'))
+                                ) || Boolean(report.facility_id) || Boolean(report.facility);
+                                const histFacLat = 14.8069;
+                                const histFacLng = 121.0039;
+                                const histFacName = 'Barangay Holding Pen';
+
+                                const brgyMarkers = isResolvedCase ? [
+                                    {
+                                        id: 1,
+                                        lat: initLat ?? sightingLat,
+                                        lng: initLng ?? sightingLng,
+                                        title: `1. Reported Incident Location: ${report.initial_landmark || resolvedAddress || report.landmark || 'Incident Location'}`,
+                                        category: 'Historical Sighting',
+                                        priority: report.priority_level || 'Medium',
+                                        color: 'slate',
+                                        rawData: { ...report, landmark: report.initial_landmark || report.landmark, is_resolved: true }
+                                    },
+                                    ...(hadHoldingHistory ? [{
+                                        id: -999,
+                                        lat: histFacLat,
+                                        lng: histFacLng,
+                                        title: `2. Holding Pen: ${histFacName}`,
+                                        category: 'Historical Holding',
+                                        priority: 'Low',
+                                        color: 'slate',
+                                        rawData: { ...report, landmark: histFacName, is_resolved: true }
+                                    }] : []),
+                                    {
+                                        id: 2,
+                                        lat: BRGY_OFFICE_COORDS[0],
+                                        lng: BRGY_OFFICE_COORDS[1],
+                                        title: 'Barangay San Vicente HQ',
+                                        category: 'HQ'
+                                    }
+                                ] : [
                                     {
                                         id: 1,
                                         lat: sightingLat,
@@ -3322,12 +3425,19 @@ const BrgyReportView = () => {
                                 return (
                                     <MapComponent
                                         height="100%"
-                                        center={[sightingLat, sightingLng]}
+                                        center={[isResolvedCase && initLat ? initLat : sightingLat, isResolvedCase && initLng ? initLng : sightingLng]}
                                         zoom={16.5}
                                         showHeatmap={false}
                                         showGeofence={true}
                                         showLandmarks={true}
                                         showConnectingLine={false}
+                                        polylines={isResolvedCase && hadHoldingHistory && initLat != null && initLng != null ? [{
+                                            positions: [[initLat, initLng], [histFacLat, histFacLng]],
+                                            color: '#64748B',
+                                            weight: 3,
+                                            dashArray: '6, 8',
+                                            opacity: 0.85
+                                        }] : undefined}
                                         onRouteCalculated={(dist) => setRoadDistance(dist)}
                                         markers={brgyMarkers}
                                     />

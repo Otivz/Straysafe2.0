@@ -379,6 +379,7 @@ class HoldingAnimal(Base):
     total_duration_days: Optional[float] = None
     total_duration_display: Optional[str] = None
     current_facility_duration_display: Optional[str] = None
+    original_photo_url: Optional[str] = None
 
     # Relationships
     report       = relationship("Report")

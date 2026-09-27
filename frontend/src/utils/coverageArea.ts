@@ -1,0 +1,80 @@
+import { api } from './api';
+
+export const SELERA_DEFAULT_POLYGON = [
+    { lat: 14.801496, lng: 121.005174 },
+    { lat: 14.799577, lng: 121.003911 },
+    { lat: 14.800634, lng: 121.002228 },
+    { lat: 14.802461, lng: 121.003280 }
+];
+
+// Calculated centroid from Selera Homes boundary polygon
+export const SELERA_DEFAULT_CENTER: [number, number] = [14.801042, 121.003648];
+
+export const COVERAGE_OUTSIDE_ERROR_MESSAGE = "This report location is outside the current STRAY-SAFE reporting coverage area.";
+
+export interface CoverageAreaInfo {
+    id: number;
+    subdivision_id: number;
+    center_label: string;
+    center_latitude: number;
+    center_longitude: number;
+    radius_meters: number;
+    boundary_polygon: Array<{ lat: number; lng: number }>;
+    is_active: boolean;
+    updated_at?: string;
+}
+
+export const calculateDistanceMeters = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    const R = 6371000; // Earth radius in meters
+    const phi1 = (lat1 * Math.PI) / 180;
+    const phi2 = (lat2 * Math.PI) / 180;
+    const deltaPhi = ((lat2 - lat1) * Math.PI) / 180;
+    const deltaLambda = ((lng2 - lng1) * Math.PI) / 180;
+
+    const a =
+        Math.sin(deltaPhi / 2) ** 2 +
+        Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+};
+
+export const fetchCoverageArea = async (): Promise<CoverageAreaInfo> => {
+    try {
+        const res = await api.get<CoverageAreaInfo>('/reports/coverage-area');
+        if (res.data && res.data.center_latitude) {
+            return res.data;
+        }
+    } catch (e) {
+        console.warn('Failed to fetch coverage area from server, using default Selera Homes center:', e);
+    }
+    return {
+        id: 1,
+        subdivision_id: 1,
+        center_label: 'Selera Homes',
+        center_latitude: SELERA_DEFAULT_CENTER[0],
+        center_longitude: SELERA_DEFAULT_CENTER[1],
+        radius_meters: 1000,
+        boundary_polygon: SELERA_DEFAULT_POLYGON,
+        is_active: true
+    };
+};
+
+export const isWithinCoverage = (
+    lat: number,
+    lng: number,
+    coverage: CoverageAreaInfo | null
+): { isInside: boolean; distance: number; allowedRadius: number; message: string } => {
+    const centerLat = coverage?.center_latitude ?? SELERA_DEFAULT_CENTER[0];
+    const centerLng = coverage?.center_longitude ?? SELERA_DEFAULT_CENTER[1];
+    const allowedRadius = coverage?.radius_meters ?? 1000;
+
+    const distance = calculateDistanceMeters(lat, lng, centerLat, centerLng);
+    const isInside = distance <= allowedRadius;
+
+    return {
+        isInside,
+        distance,
+        allowedRadius,
+        message: isInside ? 'Location is within coverage area.' : COVERAGE_OUTSIDE_ERROR_MESSAGE
+    };
+};

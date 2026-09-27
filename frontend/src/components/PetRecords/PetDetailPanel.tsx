@@ -56,24 +56,28 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
     const photoInputRef = useRef<HTMLInputElement>(null);
 
     // Role detection
-    const getCurrentUserRole = () => {
+    const getCurrentUser = () => {
         try {
             const adminRaw = sessionStorage.getItem('admin_user') || localStorage.getItem('admin_user');
-            if (adminRaw) {
-                const u = JSON.parse(adminRaw);
-                if (Number(u?.role_id) === 4 || u?.role === 'Admin') return 4;
-            }
+            if (adminRaw) return JSON.parse(adminRaw);
             const staffRaw = sessionStorage.getItem('staff_user') || localStorage.getItem('staff_user');
-            if (staffRaw) {
-                const u = JSON.parse(staffRaw);
-                if (u?.role_id) return Number(u.role_id);
-            }
+            if (staffRaw) return JSON.parse(staffRaw);
             const resRaw = sessionStorage.getItem('resident_user') || localStorage.getItem('resident_user');
-            if (resRaw) {
-                const u = JSON.parse(resRaw);
-                if (u?.role_id) return Number(u.role_id);
-            }
+            if (resRaw) return JSON.parse(resRaw);
+            const userRaw = sessionStorage.getItem('user') || localStorage.getItem('user');
+            if (userRaw) return JSON.parse(userRaw);
         } catch {}
+        return null;
+    };
+
+    const currentUser = getCurrentUser();
+    const currentUserId = currentUser?.user_id || currentUser?.id;
+
+    const getCurrentUserRole = () => {
+        if (currentUser) {
+            if (Number(currentUser?.role_id) === 4 || currentUser?.role === 'Admin') return 4;
+            if (currentUser?.role_id) return Number(currentUser.role_id);
+        }
         const pathname = window.location.pathname;
         if (pathname.startsWith('/admin')) return 4;
         if (pathname.startsWith('/subd')) return 2;
@@ -484,6 +488,30 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
         !pet.ownerName.toLowerCase().includes('community')
     );
 
+    // Registrant check: Did current user register this pet?
+    const isRegistrant = Boolean(
+        currentUserId && (
+            (pet.registered_by_user_id && Number(pet.registered_by_user_id) === Number(currentUserId)) ||
+            (pet.rawPetObj?.registered_by_user_id && Number(pet.rawPetObj.registered_by_user_id) === Number(currentUserId)) ||
+            (pet.rawPetObj?.registered_by?.user_id && Number(pet.rawPetObj.registered_by.user_id) === Number(currentUserId)) ||
+            (pet.registeredByName && currentUser?.name && pet.registeredByName.toLowerCase().includes(currentUser.name.toLowerCase())) ||
+            (!pet.registered_by_user_id && !pet.rawPetObj?.registered_by_user_id) // Default fallback for existing records
+        )
+    );
+
+    const isPetOwner = Boolean(
+        currentUserId && (
+            (pet.owner_id && Number(pet.owner_id) === Number(currentUserId)) ||
+            (pet.rawPetObj?.owner_id && Number(pet.rawPetObj.owner_id) === Number(currentUserId))
+        )
+    );
+
+    // Edit permission rule:
+    // - Admin: always allowed
+    // - Resident / Citizen: only if they are the pet owner
+    // - Subdivision Leader / Staff: only as long as they are the one who registered AND no one has adopted the pet (!hasOwner && isRegistrant)
+    const canEditPet = isAdmin || (hideRegisteredPets ? isPetOwner : (!hasOwner && isRegistrant));
+
     // Status pill style helper
     const getStatusStyle = (status: string) => {
         switch (status?.toLowerCase()) {
@@ -665,15 +693,17 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                         {/* Action Buttons for Citizen Owner */}
                         {hideRegisteredPets && (
                             <div className="space-y-3">
-                                <button 
-                                    onClick={() => onEditClick && onEditClick(pet)}
-                                    className="w-full py-4 bg-[#F97316] hover:bg-[#E2620D] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
-                                    Edit Pet
-                                </button>
+                                {canEditPet && (
+                                    <button 
+                                        onClick={() => onEditClick && onEditClick(pet)}
+                                        className="w-full py-4 bg-[#F97316] hover:bg-[#E2620D] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                        Edit Pet
+                                    </button>
+                                )}
                                 
                                 {pet.status?.toLowerCase() !== 'lost' && (
                                     <button 
@@ -722,7 +752,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                         {/* Action Buttons for Subd Leader */}
                         {!hideRegisteredPets && (
                             <div className="space-y-3">
-                                {!hasOwner && (
+                                {canEditPet && (
                                     <button 
                                         onClick={() => onEditClick && onEditClick(pet)}
                                         className="w-full py-3.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] rounded-2xl font-black text-xs uppercase tracking-widest border border-orange-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"

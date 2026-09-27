@@ -6,6 +6,7 @@ import L from 'leaflet';
 import axios from 'axios';
 import { DEFAULT_AVATAR, DEFAULT_PET_AVATAR } from '../utils/avatar';
 import { createBarangayHQIcon, createHoldingFacilityPinIcon, createLandmarkPinIcon, getLandmarkCategory, getLandmarkZoomMetrics } from '../utils/landmarkIcons';
+import { getReportStatusLabel, getReportStatusBadgeStyle } from '../utils/reportStatus';
 
 
 const createUserLocationIcon = () => L.divIcon({
@@ -289,6 +290,56 @@ const createSelectedPinIcon = () => {
 };
 
 
+
+const createHistoricalPinIcon = (label: string = 'HISTORICAL SIGHTING', animalType?: string) => {
+    const isCat = (animalType || '').toLowerCase().includes('cat');
+    const defaultEmoji = isCat ? '🐱' : '🐶';
+    const isHolding = label.toUpperCase().includes('HOLDING') || label.toUpperCase().includes('FACILITY');
+    const badgeEmoji = isHolding ? '🏢' : defaultEmoji;
+    const bgGradient = isHolding 
+        ? 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)' 
+        : 'linear-gradient(135deg, #475569 0%, #334155 100%)';
+    const shadowColor = isHolding ? 'rgba(2, 132, 199, 0.4)' : 'rgba(71, 85, 105, 0.45)';
+
+    return L.divIcon({
+        html: `
+            <div style="position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer;">
+                <div style="
+                    background: ${bgGradient};
+                    width: 34px;
+                    height: 34px;
+                    border-radius: 50% 50% 50% 0;
+                    transform: rotate(-45deg);
+                    border: 2.5px solid white;
+                    box-shadow: 0 4px 12px ${shadowColor};
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                ">
+                    <div style="transform: rotate(45deg); font-size: 15px; color: white;">${badgeEmoji}</div>
+                </div>
+                <div style="
+                    background: #1E293B;
+                    color: #F8FAFC;
+                    font-size: 7.5px;
+                    font-weight: 900;
+                    padding: 2px 6px;
+                    border-radius: 5px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                    margin-top: 3px;
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+                    white-space: nowrap;
+                    border: 1px solid rgba(255,255,255,0.2);
+                ">${label}</div>
+            </div>
+        `,
+        className: 'historical-location-pin',
+        iconSize: [60, 56],
+        iconAnchor: [30, 50],
+        popupAnchor: [0, -50]
+    });
+};
 
 const InitialSightingIcon = L.divIcon({
     html: `
@@ -1124,8 +1175,10 @@ const MapComponent = ({
                 ))}
 
                 {markers.map((marker) => {
-                    const isUserLoc = marker.category === 'User Location' || marker.category === 'Operator';
-                    const isHoldingFacility = marker.category === 'Holding Facility' || marker.category === 'Facility Holding' || marker.category === 'Secured Facility';
+                    const isUserLoc = marker.category === 'User Location' || marker.id === -2;
+                    const isResolvedReport = [9, 10, 11, 12, 14, 17, 18].includes(marker.rawData?.status_id) || 
+                        ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(marker.rawData?.custody_status || '');
+                    const isHoldingFacility = !isResolvedReport && (marker.category === 'Holding Facility' || marker.category === 'Facility Holding' || marker.category === 'Secured Facility');
                     const isInitialSighting = marker.category === 'Initial Sighting' || marker.category === 'Found Location' || marker.category === 'Original Sighting';
 
                     if (isInitialSighting) {
@@ -1195,9 +1248,10 @@ const MapComponent = ({
                                 marker.category === 'Selected Location' ? createSelectedPinIcon() :
                                 (marker.category === 'Barangay Office' || marker.category === 'HQ') ? createBarangayHQIcon(currentZoom) :
                                     isUserLoc ? createUserLocationIcon() :
-                                        isHoldingFacility ? createHoldingFacilityPinIcon(facilityNameStr, currentZoom) :
-                                            isInitialSighting ? InitialSightingIcon :
-                                                marker.color ? createColoredIncidentIcon(marker.color, animalTypeStr || marker.category) : IncidentIcon
+                                        (marker.category === 'Historical Sighting' || marker.category === 'Archived Location' || marker.category === 'Historical Holding' || marker.category === 'Resolved') ? createHistoricalPinIcon(marker.category === 'Historical Holding' ? 'HISTORICAL HOLDING' : (marker.title?.includes('Found') ? 'FOUND SPOT' : 'HISTORICAL SIGHTING'), animalTypeStr) :
+                                            isHoldingFacility ? createHoldingFacilityPinIcon(facilityNameStr, currentZoom) :
+                                                isInitialSighting ? InitialSightingIcon :
+                                                    marker.color ? createColoredIncidentIcon(marker.color, animalTypeStr || marker.category) : IncidentIcon
                             }
                             eventHandlers={{
                                 click: () => {
@@ -1453,23 +1507,27 @@ const MapComponent = ({
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-1.5 shrink-0">
-                            <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${
-                                selectedReportMarker.rawData?.status_id === 2 || selectedReportMarker.rawData?.is_verified
-                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                    : 'bg-amber-50 text-amber-700 border border-amber-200'
-                            }`}>
-                                {selectedReportMarker.rawData?.statusName || selectedReportMarker.rawData?.status?.status_name || 'Under Review'}
-                            </span>
-                            <button
-                                type="button"
-                                onClick={() => setSelectedReportMarker(null)}
-                                className="w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-xs font-bold transition-colors cursor-pointer"
-                                title="Close"
-                            >
-                                ✕
-                            </button>
-                        </div>
+                        {(() => {
+                            const rawStatusId = selectedReportMarker.rawData?.status_id || selectedReportMarker.rawData?.current_status_id;
+                            const statusLabel = selectedReportMarker.rawData?.statusName || selectedReportMarker.rawData?.status_name || selectedReportMarker.rawData?.status?.status_name || (rawStatusId ? getReportStatusLabel(rawStatusId) : 'Under Review');
+                            const badgeStyle = rawStatusId ? getReportStatusBadgeStyle(rawStatusId) : 'bg-amber-50 text-amber-700 border-amber-200';
+                            
+                            return (
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border ${badgeStyle}`}>
+                                        {statusLabel}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedReportMarker(null)}
+                                        className="w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-xs font-bold transition-colors cursor-pointer"
+                                        title="Close"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     {/* Body: Thumbnail & Details */}
@@ -1483,32 +1541,54 @@ const MapComponent = ({
                             />
                         </div>
 
-                        <div className="flex-1 min-w-0 flex flex-col gap-1">
-                            <h4 className="text-xs sm:text-sm font-black text-slate-900 truncate leading-tight">
-                                {selectedReportMarker.rawData?.category_name || selectedReportMarker.rawData?.category || selectedReportMarker.title || 'Stray Animal Sighting'}
-                            </h4>
-                            
-                            <p className="text-[10px] font-bold text-slate-600 truncate flex items-center gap-1">
-                                <span>🐾</span>
-                                <span>{(selectedReportMarker.rawData?.animal_type || selectedReportMarker.category || 'Dog').toUpperCase()}</span>
-                                {selectedReportMarker.rawData?.animal_breed && selectedReportMarker.rawData.animal_breed.toLowerCase() !== 'unknown' && (
-                                    <span>• {selectedReportMarker.rawData.animal_breed}</span>
-                                )}
-                                {selectedReportMarker.rawData?.animal_color && selectedReportMarker.rawData.animal_color.toLowerCase() !== 'unknown' && (
-                                    <span>• {selectedReportMarker.rawData.animal_color}</span>
-                                )}
-                            </p>
+                        {(() => {
+                            const isFacWord = (val?: string | null) => {
+                                if (!val) return false;
+                                const l = val.toLowerCase();
+                                return l.includes('holding pen') || l.includes('holding facility') || l.includes('barangay holding');
+                            };
+                            const rawStatusId = selectedReportMarker.rawData?.status_id || selectedReportMarker.rawData?.current_status_id;
+                            const isDischarged = [9, 10, 11, 12, 14, 17, 18].includes(rawStatusId) || ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(selectedReportMarker.rawData?.custody_status || '');
+                            const displayLmk = (!isDischarged && selectedReportMarker.rawData?.facility?.name)
+                                || (!isFacWord(selectedReportMarker.rawData?.initial_landmark) && selectedReportMarker.rawData?.initial_landmark)
+                                || (!isFacWord(selectedReportMarker.rawData?.landmark) && selectedReportMarker.rawData?.landmark)
+                                || selectedReportMarker.rawData?.location_address
+                                || (selectedReportMarker.title && !isFacWord(selectedReportMarker.title) ? selectedReportMarker.title : null)
+                                || 'Incident Sighting Location';
 
-                            <p className="text-[10px] font-semibold text-slate-500 truncate flex items-center gap-1">
-                                <span className="text-rose-500">📍</span>
-                                <span>{selectedReportMarker.rawData?.landmark || selectedReportMarker.rawData?.location_address || selectedReportMarker.title || 'Selera Homes'}</span>
-                            </p>
+                            const displayCategory = selectedReportMarker.rawData?.category_name 
+                                || selectedReportMarker.rawData?.category 
+                                || (selectedReportMarker.title && !isFacWord(selectedReportMarker.title) ? selectedReportMarker.title : 'Stray Animal Sighting');
 
-                            <p className="text-[9px] text-slate-400 font-medium truncate flex items-center gap-1">
-                                <span>🕒 {selectedReportMarker.time || 'Recently'}</span>
-                                <span>• 👤 {selectedReportMarker.rawData?.reporterName || selectedReportMarker.rawData?.reporter_name || 'Citizen'}</span>
-                            </p>
-                        </div>
+                            return (
+                                <div className="flex-1 min-w-0 flex flex-col gap-1">
+                                    <h4 className="text-xs sm:text-sm font-black text-slate-900 truncate leading-tight">
+                                        {displayCategory}
+                                    </h4>
+                                    
+                                    <p className="text-[10px] font-bold text-slate-600 truncate flex items-center gap-1">
+                                        <span>🐾</span>
+                                        <span>{(selectedReportMarker.rawData?.animal_type || selectedReportMarker.category || 'Dog').toUpperCase()}</span>
+                                        {selectedReportMarker.rawData?.animal_breed && selectedReportMarker.rawData.animal_breed.toLowerCase() !== 'unknown' && (
+                                            <span>• {selectedReportMarker.rawData.animal_breed}</span>
+                                        )}
+                                        {selectedReportMarker.rawData?.animal_color && selectedReportMarker.rawData.animal_color.toLowerCase() !== 'unknown' && (
+                                            <span>• {selectedReportMarker.rawData.animal_color}</span>
+                                        )}
+                                    </p>
+
+                                    <p className="text-[10px] font-semibold text-slate-500 truncate flex items-center gap-1">
+                                        <span className="text-rose-500">📍</span>
+                                        <span>{displayLmk}</span>
+                                    </p>
+
+                                    <p className="text-[9px] text-slate-400 font-medium truncate flex items-center gap-1">
+                                        <span>🕒 {selectedReportMarker.time || 'Recently'}</span>
+                                        <span>• 👤 {selectedReportMarker.rawData?.reporterName || selectedReportMarker.rawData?.reporter_name || 'Citizen'}</span>
+                                    </p>
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     {/* Observed Conditions / Tags */}
@@ -1524,6 +1604,21 @@ const MapComponent = ({
                             ))}
                         </div>
                     )}
+
+                    {/* Historical / Resolved Record Pill */}
+                    {(() => {
+                        const rawStatusId = selectedReportMarker.rawData?.status_id || selectedReportMarker.rawData?.current_status_id;
+                        const isDischarged = [9, 10, 11, 12, 14, 17, 18].includes(rawStatusId) || ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(selectedReportMarker.rawData?.custody_status || '');
+                        if (isDischarged || selectedReportMarker.category?.includes('Historical')) {
+                            return (
+                                <div className="p-2 rounded-xl bg-slate-100/90 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[9.5px] font-bold border border-slate-200/80 dark:border-slate-700 flex items-center gap-1.5">
+                                    <span className="text-slate-500">📍</span>
+                                    <span>Preserved Location History Record • Case Resolved</span>
+                                </div>
+                            );
+                        }
+                        return null;
+                    })()}
 
                     {/* Action Button */}
                     {!hideViewDetailsButton && (

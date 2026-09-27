@@ -94,6 +94,57 @@ def _populate(animal: HoldingAnimal) -> HoldingAnimal:
             if animal.report.subdivision
             else None
         )  # type: ignore[attr-defined]
+
+        # Extract primary / original reporter image from initial report submission
+        original_photo = None
+        if animal.report.media:
+            # 1. Primary priority: Initial report submission media (no history_id, no holding_log_id, is_evidence=False, image file)
+            init_images = [
+                m for m in animal.report.media
+                if (m.media_type == 'Image' or (m.file_url and not m.file_url.lower().endswith(('.pdf', '.doc', '.docx', '.txt', '.mp4', '.mov', '.webm', '.avi'))))
+                and not getattr(m, 'is_evidence', False)
+                and getattr(m, 'history_id', None) is None
+                and getattr(m, 'holding_log_id', None) is None
+            ]
+            if init_images:
+                init_images.sort(key=lambda m: getattr(m, 'media_id', 0) or 0)
+                original_photo = init_images[0].file_url
+
+            if not original_photo:
+                # 2. Second priority: Any initial report media without history_id or holding_log_id
+                init_any = [
+                    m for m in animal.report.media
+                    if (m.media_type == 'Image' or (m.file_url and not m.file_url.lower().endswith(('.pdf', '.doc', '.docx', '.txt', '.mp4', '.mov', '.webm', '.avi'))))
+                    and getattr(m, 'history_id', None) is None
+                    and getattr(m, 'holding_log_id', None) is None
+                ]
+                if init_any:
+                    init_any.sort(key=lambda m: getattr(m, 'media_id', 0) or 0)
+                    original_photo = init_any[0].file_url
+
+            if not original_photo:
+                # 3. Third priority: Earliest non-evidence image in report.media
+                non_ev = [
+                    m for m in animal.report.media
+                    if (m.media_type == 'Image' or (m.file_url and not m.file_url.lower().endswith(('.pdf', '.doc', '.docx', '.txt', '.mp4', '.mov', '.webm', '.avi'))))
+                    and not getattr(m, 'is_evidence', False)
+                ]
+                if non_ev:
+                    non_ev.sort(key=lambda m: getattr(m, 'media_id', 0) or 0)
+                    original_photo = non_ev[0].file_url
+
+            if not original_photo:
+                # 4. Fallback: Earliest image in report.media
+                any_imgs = [
+                    m for m in animal.report.media
+                    if (m.media_type == 'Image' or (m.file_url and not m.file_url.lower().endswith(('.pdf', '.doc', '.docx', '.txt', '.mp4', '.mov', '.webm', '.avi'))))
+                ]
+                if any_imgs:
+                    any_imgs.sort(key=lambda m: getattr(m, 'media_id', 0) or 0)
+                    original_photo = any_imgs[0].file_url
+
+        animal.original_photo_url = original_photo  # type: ignore[attr-defined]
+
         if animal.report.facility:
             current_facility = animal.report.facility
             animal.facility_name = animal.report.facility.name  # type: ignore[attr-defined]
@@ -103,6 +154,7 @@ def _populate(animal: HoldingAnimal) -> HoldingAnimal:
             animal.facility_type = None  # type: ignore[attr-defined]
     else:
         animal.report_media = []  # type: ignore[attr-defined]
+        animal.original_photo_url = None  # type: ignore[attr-defined]
         animal.facility_id = None  # type: ignore[attr-defined]
         animal.facility_name = None  # type: ignore[attr-defined]
         animal.facility_type = None  # type: ignore[attr-defined]
@@ -526,6 +578,14 @@ def update_animal(
                     report.custody_status = "Claimed by Owner"
                 elif new_status == 4:
                     report.custody_status = "Deceased"
+
+                # Restore original incident coordinates so animal is no longer pinned to facility on map
+                if report.initial_latitude is not None and report.initial_longitude is not None:
+                    report.latitude = report.initial_latitude
+                    report.longitude = report.initial_longitude
+                    if report.initial_landmark:
+                        report.landmark = report.initial_landmark
+                report.facility_id = None
 
                 # Record official impoundment/resolution in status history
                 history_status_id = 8 if new_status == 8 else 11

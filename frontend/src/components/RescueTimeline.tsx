@@ -14,6 +14,8 @@ import {
     Shield,
     Ban,
     Camera,
+    Heart,
+    Lock,
     X
 } from 'lucide-react';
 import RelativeTimestamp from './RelativeTimestamp';
@@ -228,35 +230,56 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             IconComponent = Ambulance;
             description = 'Response team deployed to secure and contain the animal.';
         }
-        // 9. Relocation / Holding / Observation (check facility movement BEFORE animal secured so holding remarks don't get misclassified)
+        // 9. Animal Adopted (check BEFORE holding/facility so adoption remarks don't get misclassified)
+        else if (remarksLower.includes('adopted') || remarksLower.includes('adoption') || remarksLower.includes('adopter')) {
+            actionTitle = 'ANIMAL ADOPTED';
+            type = 'green';
+            IconComponent = Heart;
+            description = rawRemarks || 'Animal officially adopted and released into new care.';
+        }
+        // 10. Animal Impounded
+        else if (statusId === 8 || remarksLower.includes('impound')) {
+            actionTitle = 'ANIMAL IMPOUNDED';
+            type = 'orange';
+            IconComponent = Lock;
+            description = rawRemarks || 'Animal officially impounded in facility custody.';
+        }
+        // 11. Stay Limit Notice
+        else if (remarksLower.includes('stay limit')) {
+            actionTitle = 'STAY LIMIT NOTICE';
+            type = 'orange';
+            IconComponent = Clock;
+            description = rawRemarks || 'Facility stay limit notice issued.';
+        }
+        // 12. Relocation / Holding / Observation
         else if (remarksLower.includes('relocated to') || remarksLower.includes('transferred to') || remarksLower.includes('relocation') || remarksLower.includes('transfer')) {
             actionTitle = 'FACILITY RELOCATION / TRANSFER';
             type = 'orange';
             IconComponent = Hospital;
             description = rawRemarks || 'Animal relocated to designated facility.';
         }
-        else if (remarksLower.includes('stay limit') || remarksLower.includes('observation note') || remarksLower.includes('daily note')) {
+        else if (remarksLower.includes('observation note') || remarksLower.includes('daily note') || remarksLower.includes('medical note')) {
             actionTitle = 'FACILITY OBSERVATION';
             type = 'blue';
             IconComponent = Clock;
             description = rawRemarks || 'Facility observation recorded.';
         }
-        else if (statusId === 7 || statusId === 8 || remarksLower.includes('holding') || remarksLower.includes('facility') || remarksLower.includes('shelter')) {
+        else if (statusId === 7 || remarksLower.includes('holding') || remarksLower.includes('facility') || remarksLower.includes('shelter')) {
             actionTitle = 'MOVED TO HOLDING FACILITY';
             type = 'orange';
             IconComponent = Hospital;
             description = rawRemarks || 'Animal safely admitted to temporary holding pen.';
         }
-        // 10. Animal Picked Up / Secured (Status 6 in-transit only)
+        // 13. Animal Picked Up / Secured (Status 6 in-transit only)
         else if (statusId === 6 || remarksLower.includes('picked up') || remarksLower.includes('animal secured')) {
             actionTitle = 'ANIMAL SECURED';
             type = 'green';
             IconComponent = PawPrint;
             description = 'Animal successfully captured and secured in transit.';
         }
-        // 11. Claim Approved / Pet Claimed
+        // 14. Claim Approved / Pet Claimed
         else if (remarksLower.includes('claim') || statusId === 9) {
-            actionTitle = remarksLower.includes('approved') ? 'CLAIM APPROVED' : 'OWNERSHIP CLAIM FILED';
+            actionTitle = remarksLower.includes('approved') ? 'CLAIM APPROVED' : (remarksLower.includes('claimed by') ? 'CLAIMED BY OWNER' : 'OWNERSHIP CLAIM FILED');
             type = 'green';
             IconComponent = Shield;
             description = rawRemarks || 'Pet ownership claim processed for custody handover.';

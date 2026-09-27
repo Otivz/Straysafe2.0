@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { api } from '../../utils/api';
-import Button from '../Button';
 import { DEFAULT_AVATAR } from '../../utils/avatar';
 import AddPetModal from '../PetRecords/AddPetModal';
 import PetDetailPanel from '../PetRecords/PetDetailPanel';
@@ -561,54 +560,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                     {/* Staff Decision Controls */}
                     {isStaff ? (
                         <div>
-                            {selectedDecision ? (
-                                <div className="space-y-3 bg-white p-4 rounded-2xl border border-orange-200 shadow-sm animate-in fade-in">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
-                                            Applying Decision: 
-                                            {selectedDecision === 'CONFIRMED_MATCH' && <span className="text-green-600 font-extrabold">🟢 Confirm Match (Same Animal)</span>}
-                                            {selectedDecision === 'NOT_A_MATCH' && <span className="text-red-600 font-extrabold">🔴 Reject Match (Different Animals)</span>}
-                                            {selectedDecision === 'UNABLE_TO_VERIFY' && <span className="text-amber-600 font-extrabold">🟡 Unable to Verify (Inconclusive)</span>}
-                                        </span>
-                                        <button
-                                            onClick={() => setSelectedDecision(null)}
-                                            className="text-xs text-gray-400 hover:text-gray-600 font-bold"
-                                        >
-                                            Cancel
-                                        </button>
-                                    </div>
-
-                                    <textarea
-                                        value={verificationNotes}
-                                        onChange={(e) => setVerificationNotes(e.target.value)}
-                                        placeholder={
-                                            selectedDecision === 'CONFIRMED_MATCH'
-                                                ? 'State matching features (e.g., "Same distinctive black patch above left eye and white chest marking").'
-                                                : selectedDecision === 'NOT_A_MATCH'
-                                                ? 'State differences (e.g., "Different ear shape and distinct coat color variation").'
-                                                : 'State reason (e.g., "Photos too blurry to evaluate facial markings; keeping under observation").'
-                                        }
-                                        className="w-full text-xs p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#F97316] outline-none min-h-[70px]"
-                                    />
-
-                                    <div className="flex justify-end gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => setSelectedDecision(null)}
-                                            className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-all"
-                                        >
-                                            Back
-                                        </button>
-                                        <Button
-                                            onClick={handleVerifySubmit}
-                                            disabled={isSubmitting || verificationNotes.trim().length < 3}
-                                            className="!px-5 !py-2 !text-xs !bg-[#F97316] hover:!bg-[#ea580c] !text-white !font-bold !rounded-xl"
-                                        >
-                                            {isSubmitting ? 'Saving Decision...' : 'Confirm & Save Decision'}
-                                        </Button>
-                                    </div>
-                                </div>
-                            ) : isPetMatch ? (
+                            {isPetMatch ? (
                                 <div className="flex flex-col gap-3">
                                     {match.status && match.status !== 'AI_SUGGESTED' && (
                                         <div className="px-4 py-2.5 rounded-xl bg-gray-100 border border-gray-200 text-xs text-gray-700 flex items-center justify-between">
@@ -628,26 +580,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             <strong className="text-gray-800">Final Verification Rule:</strong> AI recommendations require staff confirmation before officially matching cases.
                                         </div>
                                         <div className="flex items-center gap-2 flex-wrap justify-end">
-                                            {source?.pet_id || targetPet?.pet_id || source?.pet_name || match.matched_pet_id ? (
-                                                <button
-                                                    type="button"
-                                                    disabled
-                                                    className="px-3.5 py-2.5 rounded-xl border border-emerald-900 bg-emerald-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-not-allowed opacity-80"
-                                                    title="Pet record is already registered and linked to this animal"
-                                                >
-                                                    <span className="text-emerald-200 font-black">✓</span> Record Already Added
-                                                </button>
-                                            ) : (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setIsAddPetModalOpen(true)}
-                                                    className="px-3.5 py-2.5 rounded-xl border border-orange-200 bg-orange-50 hover:bg-orange-100 text-[#F97316] text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                                    title="If this animal has no record in the system yet, register it now"
-                                                >
-                                                    <span>🐾</span> Add Record for this Animal
-                                                </button>
-                                            )}
-
+                                            {/* Not a Match Action */}
                                             {match.status === 'NOT_A_MATCH' ? (
                                                 <button
                                                     disabled
@@ -657,29 +590,27 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                 </button>
                                             ) : (
                                                 <button
-                                                    onClick={() => { setSelectedDecision('NOT_A_MATCH'); setVerificationNotes(''); }}
-                                                    className="px-4 py-2.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                                    type="button"
+                                                    disabled={match.status === 'CONFIRMED_MATCH'}
+                                                    onClick={() => {
+                                                        if (match.status !== 'CONFIRMED_MATCH') {
+                                                            setSelectedDecision('NOT_A_MATCH');
+                                                            setVerificationNotes('Staff confirmed these are different animals upon review.');
+                                                            setSubmitError('');
+                                                        }
+                                                    }}
+                                                    className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs ${
+                                                        match.status === 'CONFIRMED_MATCH'
+                                                            ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-50'
+                                                            : 'border-red-200 bg-red-50 hover:bg-red-100 text-red-700 cursor-pointer'
+                                                    }`}
+                                                    title={match.status === 'CONFIRMED_MATCH' ? 'Match is already confirmed' : undefined}
                                                 >
                                                     <span>✕</span> Not a Match
                                                 </button>
                                             )}
 
-                                            {match.status === 'UNABLE_TO_VERIFY' ? (
-                                                <button
-                                                    disabled
-                                                    className="px-4 py-2.5 rounded-xl border border-amber-900 bg-amber-800 text-white text-xs font-bold flex items-center gap-1.5 cursor-not-allowed opacity-80"
-                                                >
-                                                    <span>?</span> Marked Unable to Verify
-                                                </button>
-                                            ) : (
-                                                <button
-                                                    onClick={() => { setSelectedDecision('UNABLE_TO_VERIFY'); setVerificationNotes(''); }}
-                                                    className="px-4 py-2.5 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                                >
-                                                    <span>?</span> Unable to Verify
-                                                </button>
-                                            )}
-
+                                            {/* Confirm Match Action */}
                                             {match.status === 'CONFIRMED_MATCH' ? (
                                                 <button
                                                     disabled
@@ -689,8 +620,21 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                 </button>
                                             ) : (
                                                 <button
-                                                    onClick={() => { setSelectedDecision('CONFIRMED_MATCH'); setVerificationNotes(''); }}
-                                                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shadow-emerald-600/20 cursor-pointer"
+                                                    type="button"
+                                                    disabled={match.status === 'NOT_A_MATCH'}
+                                                    onClick={() => {
+                                                        if (match.status !== 'NOT_A_MATCH') {
+                                                            setSelectedDecision('CONFIRMED_MATCH');
+                                                            setVerificationNotes('Staff verified matching physical characteristics and visual evidence.');
+                                                            setSubmitError('');
+                                                        }
+                                                    }}
+                                                    className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+                                                        match.status === 'NOT_A_MATCH'
+                                                            ? 'border border-gray-300 bg-gray-200 text-gray-400 cursor-not-allowed opacity-50'
+                                                            : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20 cursor-pointer'
+                                                    }`}
+                                                    title={match.status === 'NOT_A_MATCH' ? 'Cannot confirm match because it is already marked as not a match' : undefined}
                                                 >
                                                     <span>✓</span> Confirm Match
                                                 </button>
@@ -727,26 +671,22 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                 </button>
                                             ) : (
                                                 <button
-                                                    onClick={() => { setSelectedDecision('NOT_A_MATCH'); setVerificationNotes('Staff confirmed these are separate/different stray animals.'); }}
-                                                    className="px-4 py-2.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                                    type="button"
+                                                    disabled={match.status === 'CONFIRMED_MATCH'}
+                                                    onClick={() => {
+                                                        if (match.status !== 'CONFIRMED_MATCH') {
+                                                            setSelectedDecision('NOT_A_MATCH');
+                                                            setVerificationNotes('Staff confirmed these are separate/different stray animals.');
+                                                            setSubmitError('');
+                                                        }
+                                                    }}
+                                                    className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs ${
+                                                        match.status === 'CONFIRMED_MATCH'
+                                                            ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-50'
+                                                            : 'border-red-200 bg-red-50 hover:bg-red-100 text-red-700 cursor-pointer'
+                                                    }`}
                                                 >
                                                     <span>✕</span> Separate / Different Animal
-                                                </button>
-                                            )}
-
-                                            {match.status === 'UNABLE_TO_VERIFY' ? (
-                                                <button
-                                                    disabled
-                                                    className="px-4 py-2.5 rounded-xl border border-amber-900 bg-amber-800 text-white text-xs font-bold flex items-center gap-1.5 cursor-not-allowed opacity-80"
-                                                >
-                                                    <span>?</span> Marked Unable to Verify
-                                                </button>
-                                            ) : (
-                                                <button
-                                                    onClick={() => { setSelectedDecision('UNABLE_TO_VERIFY'); setVerificationNotes('Inconclusive evidence to confirm duplicate sighting.'); }}
-                                                    className="px-4 py-2.5 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                                >
-                                                    <span>?</span> Unable to Verify
                                                 </button>
                                             )}
 
@@ -760,8 +700,18 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             ) : (
                                                 <button
                                                     type="button"
-                                                    onClick={() => setIsMergeModalOpen(true)}
-                                                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-[#F97316] hover:from-amber-700 hover:to-[#ea580c] text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shadow-orange-500/20 cursor-pointer"
+                                                    disabled={match.status === 'NOT_A_MATCH'}
+                                                    onClick={() => {
+                                                        if (match.status !== 'NOT_A_MATCH') {
+                                                            setIsMergeModalOpen(true);
+                                                        }
+                                                    }}
+                                                    className={`px-5 py-2.5 rounded-xl text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+                                                        match.status === 'NOT_A_MATCH'
+                                                            ? 'border border-gray-300 bg-gray-200 text-gray-400 cursor-not-allowed opacity-50'
+                                                            : 'bg-gradient-to-r from-amber-600 to-[#F97316] hover:from-amber-700 hover:to-[#ea580c] shadow-orange-500/20 cursor-pointer'
+                                                    }`}
+                                                    title={match.status === 'NOT_A_MATCH' ? 'Cannot merge duplicate because it is marked as separate animals' : undefined}
                                                 >
                                                     <span>🔗</span> Confirm Duplicate & Merge Reports
                                                 </button>
@@ -805,6 +755,118 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                 </div>
 
             </div>
+
+            {/* ── Confirmation Modal Dialog ── */}
+            {selectedDecision && (
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+                    <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-gray-100 flex flex-col gap-5 relative animate-in zoom-in-95 duration-150">
+                        {/* Header */}
+                        <div className="flex items-start justify-between gap-3 pb-3 border-b border-gray-100">
+                            <div className="flex items-center gap-3">
+                                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-xl font-black ${
+                                    selectedDecision === 'CONFIRMED_MATCH'
+                                        ? 'bg-emerald-100 text-emerald-600'
+                                        : 'bg-red-100 text-red-600'
+                                }`}>
+                                    {selectedDecision === 'CONFIRMED_MATCH' ? '✓' : '✕'}
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-black text-gray-900 tracking-tight">
+                                        {selectedDecision === 'CONFIRMED_MATCH'
+                                            ? (isPetMatch ? 'Confirm Match Confirmation' : 'Confirm Duplicate Match')
+                                            : (isPetMatch ? 'Mark as Not a Match' : 'Mark as Separate Animals')}
+                                    </h3>
+                                    <p className="text-xs text-gray-500 font-medium">
+                                        {selectedDecision === 'CONFIRMED_MATCH'
+                                            ? `Match #${match.match_id} • ${match.similarity_score}% AI Similarity`
+                                            : `Reject potential correlation for Match #${match.match_id}`}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => { setSelectedDecision(null); setVerificationNotes(''); setSubmitError(''); }}
+                                disabled={isSubmitting}
+                                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-all cursor-pointer text-sm font-bold"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Explanation / Warning Alert */}
+                        <div className={`p-3.5 rounded-2xl border text-xs font-medium leading-relaxed ${
+                            selectedDecision === 'CONFIRMED_MATCH'
+                                ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900'
+                                : 'bg-red-50/80 border-red-200 text-red-900'
+                        }`}>
+                            {selectedDecision === 'CONFIRMED_MATCH' ? (
+                                <span>
+                                    <strong>Confirmation Notice:</strong> Officially verifying this match links Report #{source?.report_id || match.source_report_id} to <strong>{targetPet?.name || targetPet?.pet_name || 'the registered pet record'}</strong>.
+                                </span>
+                            ) : (
+                                <span>
+                                    <strong>Rejection Notice:</strong> Marking as <strong>Not a Match</strong> will reject this candidate correlation. You will no longer be able to click &quot;Confirm Match&quot; for this pair once marked.
+                                </span>
+                            )}
+                        </div>
+
+                        {submitError && (
+                            <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl font-semibold flex items-center gap-2">
+                                <span>⚠️</span>
+                                <span>{submitError}</span>
+                            </div>
+                        )}
+
+                        {/* Verification Reason / Notes */}
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] font-bold text-gray-700 flex items-center justify-between">
+                                <span>Verification Notes / Reason <span className="text-red-500">*</span></span>
+                                <span className="text-[10px] text-gray-400 font-normal">Min. 3 characters</span>
+                            </label>
+                            <textarea
+                                value={verificationNotes}
+                                onChange={(e) => setVerificationNotes(e.target.value)}
+                                placeholder={
+                                    selectedDecision === 'CONFIRMED_MATCH'
+                                        ? 'State matching features (e.g., "Distinctive coat pattern and markings match the registered pet").'
+                                        : 'State differences (e.g., "Different ear shape and distinct coat color variation upon inspection").'
+                                }
+                                rows={3}
+                                className="w-full text-xs p-3 bg-gray-50 border border-gray-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-[#F97316] outline-none transition-all resize-none font-medium text-gray-800"
+                            />
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                            <button
+                                type="button"
+                                onClick={() => { setSelectedDecision(null); setVerificationNotes(''); setSubmitError(''); }}
+                                disabled={isSubmitting}
+                                className="px-4 py-2.5 rounded-xl text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-all cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleVerifySubmit}
+                                disabled={isSubmitting || verificationNotes.trim().length < 3}
+                                className={`px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                                    selectedDecision === 'CONFIRMED_MATCH'
+                                        ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
+                                        : 'bg-red-600 hover:bg-red-700 shadow-red-600/20'
+                                }`}
+                            >
+                                {isSubmitting ? (
+                                    <span>Saving Decision...</span>
+                                ) : (
+                                    <span>
+                                        {selectedDecision === 'CONFIRMED_MATCH' ? '✓ Confirm & Save Match' : '✕ Confirm Not a Match'}
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Add Pet Record Modal */}
             {isAddPetModalOpen && source && (

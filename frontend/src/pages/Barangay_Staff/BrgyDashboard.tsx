@@ -277,7 +277,7 @@ const BrgyDashboard = () => {
         const lng = parseFloat(r.longitude);
         if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return false;
         // Only active reports that are endorsed/escalated to the Barangay
-        return isReportEscalated(r) && [4, 5, 7, 8, 9, 13].includes(r.status_id);
+        return isReportEscalated(r) && [4, 5, 7, 8, 13].includes(r.status_id);
     });
     const assignedReportsCount = requests.filter(req => req.staff_id && [1, 2, 4, 5].includes(req.status_id)).length;
     const inProgressReportsCount = requests.filter(req => req.status_id === 4).length;

@@ -6,9 +6,10 @@ import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
-import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMapEvents, Polygon, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMapEvents, Polygon, Circle, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { fetchCoverageArea, isWithinCoverage, type CoverageAreaInfo, COVERAGE_OUTSIDE_ERROR_MESSAGE, SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
 
 // Fix for default marker icon issue in React Leaflet
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -76,28 +77,12 @@ const getSwatchStyle = (colorStr?: string | null): string => {
     return `linear-gradient(135deg, ${hex1} 50%, ${hex2} 50%)`;
 };
 
+let globalCoverageCache: CoverageAreaInfo | null = null;
+fetchCoverageArea().then(c => { globalCoverageCache = c; });
+
 const isInsideSeleraHomes = (lat: number, lng: number) => {
-    let n = SELERA_POLYGON.length;
-    let inside = false;
-    let p1 = SELERA_POLYGON[0];
-    for (let i = 0; i <= n; i++) {
-        let p2 = SELERA_POLYGON[i % n];
-        if (lat > Math.min(p1.lat, p2.lat)) {
-            if (lat <= Math.max(p1.lat, p2.lat)) {
-                if (lng <= Math.max(p1.lng, p2.lng)) {
-                    let xints = 0;
-                    if (p1.lat !== p2.lat) {
-                        xints = (lat - p1.lat) * (p2.lng - p1.lng) / (p2.lat - p1.lat) + p1.lng;
-                    }
-                    if (p1.lng === p2.lng || lng <= xints) {
-                        inside = !inside;
-                    }
-                }
-            }
-        }
-        p1 = p2;
-    }
-    return inside;
+    const check = isWithinCoverage(lat, lng, globalCoverageCache);
+    return check.isInside;
 };
 
 
@@ -805,18 +790,12 @@ const ResiHomePage = () => {
     const handleCancelReport = async (reportId: number) => {
         if (!window.confirm('Are you sure you want to cancel this report? This will withdraw the report from the active feed.')) return;
         try {
-            const response = await fetch(`http://localhost:8000/reports/${reportId}`, {
-                method: 'DELETE'
-            });
-            if (response.ok) {
-                toast.success('Report cancelled successfully');
-                fetchReports();
-            } else {
-                toast.error('Failed to cancel report');
-            }
+            await api.patch(`/reports/${reportId}/cancel`);
+            toast.success('Report cancelled successfully');
+            fetchReports();
         } catch (error) {
             console.error('Error cancelling report:', error);
-            toast.error('An error occurred while connecting to the server.');
+            toast.error('Failed to cancel report or an error occurred.');
         }
     };
 
@@ -1286,9 +1265,9 @@ const ResiHomePage = () => {
     };
 
     const handlePreSubmitValidation = async () => {
-        // Geofence validation
+        // Geofence validation (Reporting radius centered on Selera Homes)
         if (!isInsideSeleraHomes(formData.latitude, formData.longitude)) {
-            toast.warning('Location outside Selera Homes', 'Reports are only accepted within the subdivision boundary.');
+            toast.warning('Outside Coverage Area', COVERAGE_OUTSIDE_ERROR_MESSAGE);
             return;
         }
 
@@ -1365,9 +1344,9 @@ const ResiHomePage = () => {
     const handleSubmit = async () => {
         if (isSubmitting) return;
 
-        // Geofence validation
+        // Geofence validation (Reporting radius centered on Selera Homes)
         if (!isInsideSeleraHomes(formData.latitude, formData.longitude)) {
-            toast.warning('Location outside Selera Homes', 'Reports are only accepted within the subdivision boundary.');
+            toast.warning('Outside Coverage Area', COVERAGE_OUTSIDE_ERROR_MESSAGE);
             return;
         }
 
@@ -2388,6 +2367,21 @@ const ResiHomePage = () => {
                                                     <Polygon
                                                         positions={SELERA_POLYGON.map(p => [p.lat, p.lng] as [number, number])}
                                                         pathOptions={{ color: '#F97316', fillColor: '#F97316', fillOpacity: 0.1, weight: 2, dashArray: '5, 10' }}
+                                                    />
+                                                    {/* Configurable Reporting Coverage Radius Circle centered on Selera Homes */}
+                                                    <Circle
+                                                        center={[
+                                                            globalCoverageCache?.center_latitude || SELERA_DEFAULT_CENTER[0],
+                                                            globalCoverageCache?.center_longitude || SELERA_DEFAULT_CENTER[1]
+                                                        ]}
+                                                        radius={globalCoverageCache?.radius_meters || 1000}
+                                                        pathOptions={{
+                                                            color: '#10B981',
+                                                            fillColor: '#34D399',
+                                                            fillOpacity: 0.1,
+                                                            weight: 2,
+                                                            dashArray: '6, 6'
+                                                        }}
                                                     />
 
                                                     {/* Registered Landmarks on Map */}
@@ -3552,6 +3546,9 @@ const ResiHomePage = () => {
                                                                                 src={m.file_url}
                                                                                 alt="Media"
                                                                                 className="w-full h-full object-cover hover:scale-105 transition-all duration-1000 ease-out"
+                                                                                onError={(e) => {
+                                                                                    (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop&q=80';
+                                                                                }}
                                                                             />
                                                                         )}
                                                                         {idx === 3 && originalMedia.length > 4 && (
@@ -4093,6 +4090,21 @@ const ResiHomePage = () => {
                                         fillOpacity: 0.1,
                                         weight: 2,
                                         dashArray: '5, 10'
+                                    }}
+                                />
+                                {/* Configurable Reporting Coverage Radius Circle centered on Selera Homes */}
+                                <Circle
+                                    center={[
+                                        globalCoverageCache?.center_latitude || SELERA_DEFAULT_CENTER[0],
+                                        globalCoverageCache?.center_longitude || SELERA_DEFAULT_CENTER[1]
+                                    ]}
+                                    radius={globalCoverageCache?.radius_meters || 1000}
+                                    pathOptions={{
+                                        color: '#10B981',
+                                        fillColor: '#34D399',
+                                        fillOpacity: 0.1,
+                                        weight: 2,
+                                        dashArray: '6, 6'
                                     }}
                                 />
 
