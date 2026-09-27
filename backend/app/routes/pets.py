@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File, Form
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, aliased
 from typing import List, cast, Any, Optional
 from sqlalchemy import or_, and_
 from app.database import get_db
 from app.models.pet import Pet
-from app.models.user import User
+from app.models.user import User, Subdivision
 from app.schemas.pet import PetCreate, PetUpdate, PetResponse
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.audit import log_activity
@@ -49,6 +49,10 @@ def check_pet_access(
 
     pet_subdivision_id = (owner.subdivision_id if owner else None) or (registered_by.subdivision_id if registered_by else None)
     pet_barangay_id = (owner.barangay_id if owner else None) or (registered_by.barangay_id if registered_by else None)
+    if not pet_barangay_id and pet_subdivision_id:
+        subd = db.query(Subdivision).filter(Subdivision.subdivision_id == pet_subdivision_id).first()
+        if subd:
+            pet_barangay_id = subd.barangay_id
 
     verify_subdivision_scope(
         current_user=current_user,
@@ -56,6 +60,19 @@ def check_pet_access(
         resource_barangay_id=pet_barangay_id,
         db=db
     )
+
+    if for_write and current_user.role_id in [2, 3]:
+        if pet.owner_id and pet.owner_id != current_user.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: This pet has already been claimed or adopted and can only be updated by the registered owner or administrator."
+            )
+        if pet.registered_by_user_id and pet.registered_by_user_id != current_user.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: You can only edit pet records that you registered."
+            )
+
     return True
 
 @router.get("/", response_model=List[PetResponse])
@@ -73,18 +90,41 @@ def get_pets(
         query = query.filter(Pet.owner_id == current_user.user_id)
     elif current_user.role_id == 2:
         # Subdivision leaders can view pets within their subdivision registry
-        query = query.outerjoin(User, Pet.owner_id == User.user_id).filter(
-            or_(
-                User.subdivision_id == current_user.subdivision_id,
-                and_(Pet.owner_id.is_(None), Pet.registered_by_user_id == current_user.user_id)
+        OwnerUser = aliased(User, name="owner_user")
+        RegUser = aliased(User, name="reg_user")
+        query = (
+            query
+            .outerjoin(OwnerUser, Pet.owner_id == OwnerUser.user_id)
+            .outerjoin(RegUser, Pet.registered_by_user_id == RegUser.user_id)
+            .filter(
+                or_(
+                    OwnerUser.subdivision_id == current_user.subdivision_id,
+                    RegUser.subdivision_id == current_user.subdivision_id,
+                    Pet.registered_by_user_id == current_user.user_id,
+                    and_(Pet.owner_id.is_(None), Pet.registered_by_user_id.is_(None))
+                )
             )
         )
     elif current_user.role_id == 3:
-        # Barangay staff can view pets within their barangay
-        query = query.outerjoin(User, Pet.owner_id == User.user_id).filter(
-            or_(
-                User.barangay_id == current_user.barangay_id,
-                and_(Pet.owner_id.is_(None), Pet.registered_by_user_id == current_user.user_id)
+        # Barangay staff can view pets within their barangay (including all constituent subdivisions)
+        OwnerUser = aliased(User, name="owner_user")
+        OwnerSubd = aliased(Subdivision, name="owner_subd")
+        RegUser = aliased(User, name="reg_user")
+        RegSubd = aliased(Subdivision, name="reg_subd")
+        query = (
+            query
+            .outerjoin(OwnerUser, Pet.owner_id == OwnerUser.user_id)
+            .outerjoin(OwnerSubd, OwnerUser.subdivision_id == OwnerSubd.subdivision_id)
+            .outerjoin(RegUser, Pet.registered_by_user_id == RegUser.user_id)
+            .outerjoin(RegSubd, RegUser.subdivision_id == RegSubd.subdivision_id)
+            .filter(
+                or_(
+                    OwnerUser.barangay_id == current_user.barangay_id,
+                    OwnerSubd.barangay_id == current_user.barangay_id,
+                    RegUser.barangay_id == current_user.barangay_id,
+                    RegSubd.barangay_id == current_user.barangay_id,
+                    and_(Pet.owner_id.is_(None), Pet.registered_by_user_id.is_(None))
+                )
             )
         )
     return query.all()
@@ -100,16 +140,46 @@ def get_removed_pets(
     if current_user.role_id == 1:
         query = query.filter(Pet.owner_id == current_user.user_id)
     elif current_user.role_id == 2:
-        query = query.outerjoin(User, Pet.owner_id == User.user_id).filter(
-            or_(User.subdivision_id == current_user.subdivision_id, Pet.owner_id.is_(None))
+        OwnerUser = aliased(User, name="rem_owner_user")
+        RegUser = aliased(User, name="rem_reg_user")
+        query = (
+            query
+            .outerjoin(OwnerUser, Pet.owner_id == OwnerUser.user_id)
+            .outerjoin(RegUser, Pet.registered_by_user_id == RegUser.user_id)
+            .filter(
+                or_(
+                    OwnerUser.subdivision_id == current_user.subdivision_id,
+                    RegUser.subdivision_id == current_user.subdivision_id,
+                    Pet.registered_by_user_id == current_user.user_id,
+                    and_(Pet.owner_id.is_(None), Pet.registered_by_user_id.is_(None))
+                )
+            )
         )
     elif current_user.role_id == 3:
-        query = query.outerjoin(User, Pet.owner_id == User.user_id).filter(
-            or_(User.barangay_id == current_user.barangay_id, Pet.owner_id.is_(None))
+        OwnerUser = aliased(User, name="rem_owner_user")
+        OwnerSubd = aliased(Subdivision, name="rem_owner_subd")
+        RegUser = aliased(User, name="rem_reg_user")
+        RegSubd = aliased(Subdivision, name="rem_reg_subd")
+        query = (
+            query
+            .outerjoin(OwnerUser, Pet.owner_id == OwnerUser.user_id)
+            .outerjoin(OwnerSubd, OwnerUser.subdivision_id == OwnerSubd.subdivision_id)
+            .outerjoin(RegUser, Pet.registered_by_user_id == RegUser.user_id)
+            .outerjoin(RegSubd, RegUser.subdivision_id == RegSubd.subdivision_id)
+            .filter(
+                or_(
+                    OwnerUser.barangay_id == current_user.barangay_id,
+                    OwnerSubd.barangay_id == current_user.barangay_id,
+                    RegUser.barangay_id == current_user.barangay_id,
+                    RegSubd.barangay_id == current_user.barangay_id,
+                    and_(Pet.owner_id.is_(None), Pet.registered_by_user_id.is_(None))
+                )
+            )
         )
     elif current_user.role_id == 4 and subdivision_id is not None:
-        query = query.outerjoin(User, Pet.owner_id == User.user_id).filter(
-            or_(User.subdivision_id == subdivision_id, Pet.owner_id.is_(None))
+        OwnerUser = aliased(User, name="rem_owner_user")
+        query = query.outerjoin(OwnerUser, Pet.owner_id == OwnerUser.user_id).filter(
+            or_(OwnerUser.subdivision_id == subdivision_id, Pet.owner_id.is_(None))
         )
     return query.order_by(Pet.updated_at.desc()).all()
 
@@ -137,16 +207,23 @@ def get_owner_pets(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: Citizens can only view their own registered pets."
         )
+    target_owner = db.query(User).filter(User.user_id == owner_id).first()
+    if not target_owner:
+        raise HTTPException(status_code=404, detail="Owner not found")
+
     if current_user.role_id == 2:
-        target_owner = db.query(User).filter(User.user_id == owner_id).first()
-        if not target_owner or target_owner.subdivision_id != current_user.subdivision_id:
+        if target_owner.subdivision_id != current_user.subdivision_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied: Owner is outside your subdivision jurisdiction."
             )
     if current_user.role_id == 3:
-        target_owner = db.query(User).filter(User.user_id == owner_id).first()
-        if not target_owner or target_owner.barangay_id != current_user.barangay_id:
+        owner_brgy = target_owner.barangay_id
+        if not owner_brgy and target_owner.subdivision_id:
+            subd = db.query(Subdivision).filter(Subdivision.subdivision_id == target_owner.subdivision_id).first()
+            if subd:
+                owner_brgy = subd.barangay_id
+        if owner_brgy != current_user.barangay_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied: Owner is outside your barangay jurisdiction."
@@ -356,11 +433,17 @@ def create_pet(
     elif current_user.role_id == 3:
         if pet_dict.get("owner_id"):
             owner_user = db.query(User).filter(User.user_id == pet_dict["owner_id"]).first()
-            if owner_user and owner_user.barangay_id != current_user.barangay_id:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Access denied: You can only register pets for residents within your barangay."
-                )
+            if owner_user:
+                owner_brgy = owner_user.barangay_id
+                if not owner_brgy and owner_user.subdivision_id:
+                    subd = db.query(Subdivision).filter(Subdivision.subdivision_id == owner_user.subdivision_id).first()
+                    if subd:
+                        owner_brgy = subd.barangay_id
+                if owner_brgy != current_user.barangay_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Access denied: You can only register pets for residents within your barangay."
+                    )
         pet_dict["registered_by_user_id"] = current_user.user_id
         pet_dict["registered_by_name"] = current_user.name
     elif current_user.role_id == 4:

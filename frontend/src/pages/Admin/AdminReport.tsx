@@ -7,9 +7,10 @@ import Button from '../../components/Button';
 import SuccessModal from '../../components/Modals/SuccessModal';
 import Select from '../../components/Dropdown';
 import MapComponent from '../../components/MapComponent';
-import { MapContainer, TileLayer, Marker, useMapEvents, Polygon } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, useMapEvents, Polygon, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { fetchCoverageArea, isWithinCoverage, type CoverageAreaInfo, COVERAGE_OUTSIDE_ERROR_MESSAGE, SELERA_DEFAULT_CENTER, SELERA_DEFAULT_POLYGON } from '../../utils/coverageArea';
 
 // Fix for default marker icon issue in React Leaflet
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -31,35 +32,14 @@ const DefaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = DefaultIcon;
 
-const SELERA_POLYGON = [
-    { lat: 14.801496, lng: 121.005174 },
-    { lat: 14.799577, lng: 121.003911 },
-    { lat: 14.800634, lng: 121.002228 },
-    { lat: 14.802461, lng: 121.003280 }
-];
+const SELERA_POLYGON = SELERA_DEFAULT_POLYGON;
+
+let globalCoverageCache: CoverageAreaInfo | null = null;
+fetchCoverageArea().then(c => { globalCoverageCache = c; });
 
 const isInsideSeleraHomes = (lat: number, lng: number) => {
-    let n = SELERA_POLYGON.length;
-    let inside = false;
-    let p1 = SELERA_POLYGON[0];
-    for (let i = 0; i <= n; i++) {
-        let p2 = SELERA_POLYGON[i % n];
-        if (lat > Math.min(p1.lat, p2.lat)) {
-            if (lat <= Math.max(p1.lat, p2.lat)) {
-                if (lng <= Math.max(p1.lng, p2.lng)) {
-                    let xints = 0;
-                    if (p1.lat !== p2.lat) {
-                        xints = (lat - p1.lat) * (p2.lng - p1.lng) / (p2.lat - p1.lat) + p1.lng;
-                    }
-                    if (p1.lng === p2.lng || lng <= xints) {
-                        inside = !inside;
-                    }
-                }
-            }
-        }
-        p1 = p2;
-    }
-    return inside;
+    const check = isWithinCoverage(lat, lng, globalCoverageCache);
+    return check.isInside;
 };
 
 // Custom component to handle map clicks and move marker
@@ -123,6 +103,11 @@ interface Report {
     duplicate_of_report_id?: number | null;
     has_duplicate_flag?: boolean;
     duplicate_match_count?: number;
+    initial_latitude?: number | string | null;
+    initial_longitude?: number | string | null;
+    initial_landmark?: string | null;
+    facility_id?: number | null;
+    facility?: any;
 }
 
 const statusMap = REPORT_STATUS_MAP;
@@ -160,6 +145,14 @@ const AdminReport = () => {
     const [replyingTo, setReplyingTo] = useState<Record<number, { commentId: number, userName: string } | null>>({});
     const [expandedComments, setExpandedComments] = useState<Record<number, boolean>>({});
     const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
+    const [coverageArea, setCoverageArea] = useState<CoverageAreaInfo | null>(globalCoverageCache);
+
+    useEffect(() => {
+        fetchCoverageArea().then(c => {
+            globalCoverageCache = c;
+            setCoverageArea(c);
+        });
+    }, []);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -300,9 +293,9 @@ const AdminReport = () => {
     const handleSaveReport = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Geofence validation
+        // Configurable Coverage Radius Validation (Centered on Selera Homes)
         if (!isInsideSeleraHomes(formData.latitude, formData.longitude)) {
-            alert('Location outside Selera Homes. Incident reports are only accepted within the subdivision boundary.');
+            alert(COVERAGE_OUTSIDE_ERROR_MESSAGE);
             return;
         }
 
@@ -910,11 +903,69 @@ const AdminReport = () => {
                                             <div>
                                                 <h5 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Incident Location Map</h5>
                                                 <div className="w-full h-64 rounded-2xl overflow-hidden border border-gray-100 shadow-sm bg-gray-50">
-                                                    <MapComponent
-                                                        center={[viewReport.latitude, viewReport.longitude]}
-                                                        zoom={17}
-                                                        showHeatmap={false}
-                                                    />
+                                                    {(() => {
+                                                        const isResolvedCase = RESOLVED_STATUS_IDS.includes(viewReport.status_id);
+                                                        const initLat = viewReport.initial_latitude ? parseFloat(viewReport.initial_latitude.toString()) : (viewReport.latitude ? parseFloat(viewReport.latitude.toString()) : 14.8018);
+                                                        const initLng = viewReport.initial_longitude ? parseFloat(viewReport.initial_longitude.toString()) : (viewReport.longitude ? parseFloat(viewReport.longitude.toString()) : 121.0028);
+                                                        const hadHoldingHistory = viewReport.history?.some((h: any) => 
+                                                            [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
+                                                            (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
+                                                            (h.action && h.action.toLowerCase().includes('holding'))
+                                                        ) || Boolean(viewReport.facility_id) || Boolean(viewReport.facility);
+                                                        const histFacLat = 14.8069;
+                                                        const histFacLng = 121.0039;
+                                                        const histFacName = 'Barangay Holding Pen';
+
+                                                        const markers = isResolvedCase ? [
+                                                            {
+                                                                id: viewReport.report_id,
+                                                                lat: initLat,
+                                                                lng: initLng,
+                                                                title: `1. Reported Incident Location: ${viewReport.initial_landmark || viewReport.landmark || 'Incident Location'}`,
+                                                                category: 'Historical Sighting',
+                                                                priority: viewReport.priority_level || 'Medium',
+                                                                color: 'slate',
+                                                                rawData: { ...viewReport, landmark: viewReport.initial_landmark || viewReport.landmark, is_resolved: true }
+                                                            },
+                                                            ...(hadHoldingHistory ? [{
+                                                                id: -999,
+                                                                lat: histFacLat,
+                                                                lng: histFacLng,
+                                                                title: `2. Holding Pen: ${histFacName}`,
+                                                                category: 'Historical Holding',
+                                                                priority: 'Low',
+                                                                color: 'slate',
+                                                                rawData: { ...viewReport, landmark: histFacName, is_resolved: true }
+                                                            }] : [])
+                                                        ] : [
+                                                            {
+                                                                id: viewReport.report_id,
+                                                                lat: initLat,
+                                                                lng: initLng,
+                                                                title: viewReport.initial_landmark || viewReport.landmark || 'Incident Location',
+                                                                category: statusMap[viewReport.status_id] || 'Stray Animal',
+                                                                priority: viewReport.priority_level || 'Medium',
+                                                                color: 'red',
+                                                                rawData: viewReport
+                                                            }
+                                                        ];
+
+                                                        return (
+                                                            <MapComponent
+                                                                center={[initLat, initLng]}
+                                                                zoom={17}
+                                                                showHeatmap={false}
+                                                                markers={markers}
+                                                                polylines={isResolvedCase && hadHoldingHistory ? [{
+                                                                    positions: [[initLat, initLng], [histFacLat, histFacLng]],
+                                                                    color: '#64748B',
+                                                                    weight: 3,
+                                                                    dashArray: '6, 8',
+                                                                    opacity: 0.85
+                                                                }] : undefined}
+                                                            />
+                                                        );
+                                                    })()}
                                                 </div>
                                             </div>
 
@@ -1567,6 +1618,21 @@ const AdminReport = () => {
                                                     fillOpacity: 0.1,
                                                     weight: 2,
                                                     dashArray: '5, 10'
+                                                }}
+                                            />
+                                            {/* Configurable Reporting Coverage Radius Circle centered on Selera Homes */}
+                                            <Circle
+                                                center={[
+                                                    coverageArea?.center_latitude || SELERA_DEFAULT_CENTER[0],
+                                                    coverageArea?.center_longitude || SELERA_DEFAULT_CENTER[1]
+                                                ]}
+                                                radius={coverageArea?.radius_meters || 1000}
+                                                pathOptions={{
+                                                    color: '#10B981',
+                                                    fillColor: '#34D399',
+                                                    fillOpacity: 0.1,
+                                                    weight: 2,
+                                                    dashArray: '6, 6'
                                                 }}
                                             />
                                             <ReturnToSeleraButton />

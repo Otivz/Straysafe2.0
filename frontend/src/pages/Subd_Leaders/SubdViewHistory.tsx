@@ -7,6 +7,7 @@ import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import MapComponent from '../../components/MapComponent';
+import RescueTimeline from '../../components/RescueTimeline';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 
@@ -18,6 +19,11 @@ interface Report {
     latitude: number;
     longitude: number;
     landmark: string;
+    initial_latitude?: number | null;
+    initial_longitude?: number | null;
+    initial_landmark?: string | null;
+    facility_id?: number | null;
+    facility?: any;
     animal_count: number;
     animal_type: string;
     animal_color?: string | null;
@@ -48,6 +54,8 @@ interface Report {
     verified_by_user_id?: number | null;
     verified_by_name?: string | null;
     false_alarm_reason?: string | null;
+    subdivision_id?: number | null;
+    assigned_leader_name?: string | null;
 }
 
 interface RescueRequest {
@@ -85,23 +93,18 @@ const SubdViewHistory = () => {
 
     const [report, setReport] = useState<Report | null>(null);
     const [rescue, setRescue] = useState<RescueRequest | null>(null);
+    const [holdingAnimal, setHoldingAnimal] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
     const [isMapExpanded, setIsMapExpanded] = useState(false);
     
     // Image gallery state
     const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
     
-    // Timeline expand state
-    const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
 
     // Reverse geocoding address state
     const [viewReportAddress, setViewReportAddress] = useState('');
     const [isViewReportAddressLoading, setIsViewReportAddressLoading] = useState(false);
 
-    // Navigation state
-    const [isNavigating, setIsNavigating] = useState(false);
-    const [navSource, setNavSource] = useState<'brgy' | 'current'>('brgy');
-    const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const BRGY_OFFICE: [number, number] = [14.8069, 121.0039]; // Santa Maria, Bulacan
 
@@ -142,13 +145,94 @@ const SubdViewHistory = () => {
                 console.log('No rescue request associated with this report or error fetching:', err);
                 setRescue(null);
             }
+
+            // 3. Fetch holding animal details if report has/had holding records
+            try {
+                const holdingRes = await api.get('/holding/');
+                const targetReportId = reportResponse.data?.duplicate_of_report_id ? Number(reportResponse.data.duplicate_of_report_id) : Number(id);
+                const matchingAnimal = (holdingRes.data || []).find((a: any) => a.report_id === Number(id) || a.report_id === targetReportId);
+                if (matchingAnimal) {
+                    const detailRes = await api.get(`/holding/${matchingAnimal.holding_id}`);
+                    setHoldingAnimal(detailRes.data);
+                } else {
+                    setHoldingAnimal(null);
+                }
+            } catch (err) {
+                console.log('No holding record for this report or error fetching:', err);
+                setHoldingAnimal(null);
+            }
         } catch (error) {
             console.error('Error fetching details:', error);
             setReport(null);
+            setHoldingAnimal(null);
         } finally {
             setLoading(false);
         }
     };
+
+    const mergedHistory = (() => {
+        if (!report) return [];
+        const h = [...(report.history || [])];
+        if (holdingAnimal && holdingAnimal.timeline) {
+            holdingAnimal.timeline.forEach((log: any) => {
+                let logMedia = log.media || [];
+                if (logMedia.length === 0) {
+                    logMedia = report.media?.filter((m: any) => {
+                        if (!m.is_evidence) return false;
+                        if (m.media_type === 'Document' || (m.file_url && m.file_url.toLowerCase().endsWith('.pdf'))) return false;
+                        if (m.status_id === 4) return false;
+                        if (m.holding_log_id) return m.holding_log_id === log.log_id;
+                        return false;
+                    }) || [];
+                }
+                logMedia = logMedia.filter((m: any) => m && m.file_url && typeof m.file_url === 'string' && m.file_url.trim() !== '' && m.file_url !== 'null' && m.file_url !== 'undefined');
+
+                if (log.event_type === 'intake' || log.event_type === 'transfer') {
+                    const existingHistIndex = h.findIndex((rh: any) => {
+                        const isFac = rh.report_status_id === 7 || rh.report_status_id === 8 ||
+                            (rh.remarks && (rh.remarks.toLowerCase().includes('holding') || rh.remarks.toLowerCase().includes('facility') || rh.remarks.toLowerCase().includes('relocat') || rh.remarks.toLowerCase().includes('transfer')));
+                        if (!isFac) return false;
+                        const timeDiff = Math.abs(new Date(rh.created_at || rh.timestamp || 0).getTime() - new Date(log.logged_at).getTime());
+                        return timeDiff <= 300000;
+                    });
+
+                    if (existingHistIndex !== -1) {
+                        if (logMedia.length > 0) {
+                            const existingMedia = h[existingHistIndex].media || [];
+                            const existingIds = new Set(existingMedia.map((m: any) => m.media_id || m.file_url));
+                            const freshMedia = logMedia.filter((m: any) => !existingIds.has(m.media_id || m.file_url));
+                            h[existingHistIndex].media = [...existingMedia, ...freshMedia];
+                        }
+                        return;
+                    }
+                }
+
+                let statusId = 16;
+                const titleLower = (log.title || '').toLowerCase();
+                if (log.event_type === 'outcome') {
+                    if (titleLower.includes('deceased')) statusId = 12;
+                    else if (titleLower.includes('claimed')) statusId = 9;
+                    else if (titleLower.includes('released')) statusId = 10;
+                    else statusId = 11;
+                } else if (log.event_type === 'intake') {
+                    statusId = 7;
+                }
+
+                const fallbackAuthor = (report as any).assigned_leader_name || (report.subdivision_id ? 'Subdivision Officer' : 'Facility Caretaker');
+                const effectiveUpdater = log.staff_name || (log.logged_by ? fallbackAuthor : 'System Monitor');
+
+                h.push({
+                    history_id: 100000 + log.log_id,
+                    report_status_id: statusId,
+                    remarks: `${log.title}${log.notes ? ` — ${log.notes}` : ''}`,
+                    created_at: log.logged_at,
+                    updater_name: effectiveUpdater,
+                    media: logMedia
+                });
+            });
+        }
+        return h.sort((a: any, b: any) => new Date(a.created_at || a.timestamp || 0).getTime() - new Date(b.created_at || b.timestamp || 0).getTime());
+    })();
 
     useEffect(() => {
         fetchData();
@@ -199,22 +283,6 @@ const SubdViewHistory = () => {
         fetchAddress();
     }, [report]);
 
-    useEffect(() => {
-        if (isNavigating && navSource === 'current') {
-            if ("geolocation" in navigator) {
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        setUserLocation([position.coords.latitude, position.coords.longitude]);
-                    },
-                    (error) => {
-                        console.error("Error getting location:", error);
-                        setNavSource('brgy');
-                    }
-                );
-            }
-        }
-    }, [isNavigating, navSource]);
-
     const getPriorityColor = (priority: string) => {
         switch (priority?.toLowerCase()) {
             case 'emergency':
@@ -246,182 +314,6 @@ const SubdViewHistory = () => {
         }
     };
 
-    interface TimelineStep {
-        label: string;
-        status: 'Pending' | 'In Progress' | 'Resolved' | 'Not Started';
-        timestamp: string;
-        note?: string;
-    }
-
-    const getTimelineData = () => {
-        const steps: TimelineStep[] = [];
-        if (!report) return steps;
-
-        // 1. Report Received
-        steps.push({
-            label: 'Report Received',
-            status: 'Resolved',
-            timestamp: report.created_at ? new Date(report.created_at).toLocaleString() : 'N/A',
-            note: `Initial report registered successfully by ${report.reporter_name || 'Citizen'}.`
-        });
-
-        // If dismissed as false alarm, short circuit
-        if (report.status_id === 14) {
-            const falseAlarmHistory = report.history?.find((h: any) => h.report_status_id === 14);
-            steps.push({
-                label: 'Dismissed (False Alarm)',
-                status: 'Resolved',
-                timestamp: falseAlarmHistory?.created_at ? new Date(falseAlarmHistory.created_at).toLocaleString() : (report.verified_at ? new Date(report.verified_at).toLocaleString() : 'N/A'),
-                note: falseAlarmHistory?.remarks || (report.verification_notes || `Report dismissed as false alarm: ${report.false_alarm_reason || 'Invalid Report'}`)
-            });
-            return steps;
-        }
-
-        // If rejected, short circuit
-        if (report.status_id === 3) {
-            const rejectedHistory = report.history?.find((h: any) => h.report_status_id === 3);
-            steps.push({
-                label: 'Report Rejected',
-                status: 'Resolved',
-                timestamp: rejectedHistory?.created_at ? new Date(rejectedHistory.created_at).toLocaleString() : 'N/A',
-                note: rejectedHistory?.remarks || 'Report was rejected based on verification criteria.'
-            });
-            return steps;
-        }
-
-        // 2. Report Verified
-        const verifiedHistory = report.history?.find((h: any) => h.report_status_id === 2);
-        const isVerified = !!verifiedHistory || report.status_id >= 2;
-        if (isVerified) {
-            steps.push({
-                label: 'Report Verified',
-                status: 'Resolved',
-                timestamp: verifiedHistory?.created_at ? new Date(verifiedHistory.created_at).toLocaleString() : '-',
-                note: verifiedHistory?.remarks || 'Incident report has been officially verified by the Subdivision Leader.'
-            });
-        }
-
-        // 3. Endorsed to Barangay (only if escalated or rescue exists)
-        const escalatedHistory = report.history?.find((h: any) => h.report_status_id === 4);
-        const isEscalated = !!escalatedHistory || (rescue && rescue.status_id >= 1);
-
-        if (isEscalated) {
-            steps.push({
-                label: 'Endorsed to Barangay',
-                status: 'Resolved',
-                timestamp: escalatedHistory?.created_at ? new Date(escalatedHistory.created_at).toLocaleString() : '-',
-                note: escalatedHistory?.remarks || 'Official subdivision endorsement sent to Barangay.'
-            });
-
-            // 4. Rescue Team Assigned
-            const assignedHistory = report.history?.find((h: any) => h.report_status_id === 13);
-            const hasAssignment = !!assignedHistory || (rescue && (rescue.assigned_staff_name || (rescue.assignments && rescue.assignments.length > 0)));
-            steps.push({
-                label: 'Rescue Team Assigned',
-                status: hasAssignment ? 'Resolved' : 'Not Started',
-                timestamp: assignedHistory?.created_at ? new Date(assignedHistory.created_at).toLocaleString() : (rescue?.assignments?.[0]?.assigned_at ? new Date(rescue.assignments[0].assigned_at).toLocaleString() : '-'),
-                note: hasAssignment ? (assignedHistory?.remarks || `Dispatched ${rescue?.assigned_staff_name || 'Barangay Rescue Team'}.`) : '-'
-            });
-
-            // 5. Rescue In Progress
-            const inProgressHistory = report.history?.find((h: any) => h.report_status_id === 5);
-            const isInProgress = !!inProgressHistory || (report.status_id >= 5 && report.status_id !== 13);
-            steps.push({
-                label: 'Rescue In Progress',
-                status: isInProgress ? 'Resolved' : 'Not Started',
-                timestamp: inProgressHistory?.created_at ? new Date(inProgressHistory.created_at).toLocaleString() : '-',
-                note: isInProgress ? (inProgressHistory?.remarks || `Barangay rescue squad dispatched and on-site at ${report.landmark || 'Subdivision Boundary'}.`) : '-'
-            });
-
-            // 6. Animal Picked Up
-            const pickedUpHistory = report.history?.find((h: any) => h.report_status_id === 6);
-            const isPickedUp = !!pickedUpHistory || (report.status_id >= 6 && report.status_id !== 13 && report.status_id !== 5);
-            steps.push({
-                label: 'Animal Picked Up',
-                status: isPickedUp ? 'Resolved' : 'Not Started',
-                timestamp: pickedUpHistory?.created_at ? new Date(pickedUpHistory.created_at).toLocaleString() : '-',
-                note: isPickedUp ? (pickedUpHistory?.remarks || 'Animal safely secured by the rescue team.') : '-'
-            });
-        }
-
-        // 7. Mission Resolved
-        const resolvedHistory = report.history?.find((h: any) => [9, 10, 11, 12].includes(h.report_status_id));
-        const isResolved = !!resolvedHistory || [9, 10, 11, 12].includes(report.status_id);
-        steps.push({
-            label: 'Mission Resolved',
-            status: isResolved ? 'Resolved' : 'Not Started',
-            timestamp: resolvedHistory?.created_at ? new Date(resolvedHistory.created_at).toLocaleString() : '-',
-            note: isResolved ? (resolvedHistory?.remarks || 'Incident resolved successfully.') : '-'
-        });
-
-        return steps;
-    };
-
-    const getStepDetails = (stepLabel: string) => {
-        if (!report) return null;
-
-        const historyList = report.history || [];
-        let matchedHistory = null;
-        if (stepLabel === 'Report Received') {
-            matchedHistory = historyList.find((h: any) => h.report_status_id === 1);
-        } else if (stepLabel === 'Report Verified') {
-            matchedHistory = historyList.find((h: any) => h.report_status_id === 2);
-        } else if (stepLabel === 'Dismissed (False Alarm)') {
-            matchedHistory = historyList.find((h: any) => h.report_status_id === 14);
-        } else if (stepLabel === 'Report Rejected') {
-            matchedHistory = historyList.find((h: any) => h.report_status_id === 3);
-        } else if (stepLabel === 'Endorsed to Barangay') {
-            matchedHistory = historyList.find((h: any) => h.report_status_id === 4);
-        } else if (stepLabel === 'Rescue Team Assigned') {
-            matchedHistory = historyList.find((h: any) => h.report_status_id === 13) ||
-                             historyList.find((h: any) => h.report_status_id === 5);
-        } else if (stepLabel === 'Rescue In Progress') {
-            matchedHistory = historyList.find((h: any) => h.report_status_id === 5);
-        } else if (stepLabel === 'Animal Picked Up') {
-            matchedHistory = historyList.find((h: any) => h.report_status_id === 6 || h.report_status_id === 7 || h.report_status_id === 8);
-        } else if (stepLabel === 'Mission Resolved') {
-            matchedHistory = historyList.find((h: any) => [9, 10, 11, 12].includes(h.report_status_id));
-        }
-
-        const getStepMedia = (statusIds: number[]) => {
-            return report.media?.filter((m: any) => {
-                if (matchedHistory?.history_id && m.history_id === matchedHistory.history_id) {
-                    return true;
-                }
-                return m.status_id && statusIds.includes(m.status_id);
-            }) || [];
-        };
-
-        let stepStatusIds: number[] = [];
-        if (stepLabel === 'Report Received') stepStatusIds = [1];
-        else if (stepLabel === 'Report Verified') stepStatusIds = [2];
-        else if (stepLabel === 'Dismissed (False Alarm)') stepStatusIds = [14];
-        else if (stepLabel === 'Report Rejected') stepStatusIds = [3];
-        else if (stepLabel === 'Endorsed to Barangay') stepStatusIds = [4];
-        else if (stepLabel === 'Rescue Team Assigned') stepStatusIds = [13];
-        else if (stepLabel === 'Rescue In Progress') stepStatusIds = [5];
-        else if (stepLabel === 'Animal Picked Up') stepStatusIds = [6, 7, 8];
-        else if (stepLabel === 'Mission Resolved') stepStatusIds = [9, 10, 11, 12];
-
-        const stepMedia = getStepMedia(stepStatusIds);
-
-        const condition = report.condition || 'No information provided.';
-        const message = matchedHistory?.remarks || 'No information provided.';
-        const timestamp = matchedHistory?.created_at ? new Date(matchedHistory.created_at).toLocaleString() : '-';
-        const updatedBy = matchedHistory?.updater_name || (stepLabel === 'Report Received' ? (report.reporter_name || 'Resident') : (rescue?.assigned_staff_name && stepLabel === 'Rescue Team Assigned' ? rescue.assigned_staff_name : 'System'));
-        const updatedPhoto = matchedHistory?.updater_photo || (stepLabel === 'Report Received' ? report.reporter_photo : (rescue?.assigned_staff_name && stepLabel === 'Rescue Team Assigned' ? rescue?.assigned_staff_photo : null));
-
-        return {
-            media: stepMedia,
-            condition,
-            message,
-            timestamp,
-            updatedBy,
-            updatedPhoto
-        };
-    };
-
-    const timeline = getTimelineData();
     const missionId = rescue ? `MSN-2026-${rescue.rescue_id.toString().padStart(3, '0')}` : 'N/A';
     const missionTitle = rescue?.title || (report ? `Rescue: ${report.animal_type} at ${report.landmark}` : 'N/A');
     const escalatedDateFormatted = rescue?.created_at ? new Date(rescue.created_at).toLocaleString('en-US', {
@@ -647,58 +539,64 @@ const SubdViewHistory = () => {
                                             </button>
                                         </div>
                                         <div className="w-full h-64 rounded-2xl overflow-hidden border border-gray-100 shadow-sm bg-gray-50">
-                                            <MapComponent
-                                                center={[report.latitude, report.longitude]}
-                                                zoom={17}
-                                                showHeatmap={false}
-                                                markers={[
+                                            {(() => {
+                                                const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : (report.latitude ? parseFloat(report.latitude.toString()) : 14.8018);
+                                                const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : (report.longitude ? parseFloat(report.longitude.toString()) : 121.0028);
+                                                const hadHoldingHistory = report.history?.some((h: any) => 
+                                                    [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
+                                                    (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
+                                                    (h.action && h.action.toLowerCase().includes('holding'))
+                                                ) || Boolean(report.facility_id) || Boolean(report.facility);
+                                                const histFacLat = 14.8069;
+                                                const histFacLng = 121.0039;
+                                                const histFacName = 'Barangay Holding Pen';
+
+                                                const histMarkers = [
                                                     {
                                                         id: report.report_id,
-                                                        lat: report.latitude,
-                                                        lng: report.longitude,
-                                                        title: report.landmark || 'Incident Location',
-                                                        category: categoryMap[report.category_id],
-                                                        priority: report.priority_level
+                                                        lat: initLat,
+                                                        lng: initLng,
+                                                        title: `1. Reported Incident Location: ${report.initial_landmark || report.landmark || 'Incident Location'}`,
+                                                        category: 'Historical Sighting',
+                                                        priority: report.priority_level || 'Medium',
+                                                        color: 'slate',
+                                                        rawData: { ...report, landmark: report.initial_landmark || report.landmark, is_resolved: true }
                                                     },
+                                                    ...(hadHoldingHistory ? [{
+                                                        id: -999,
+                                                        lat: histFacLat,
+                                                        lng: histFacLng,
+                                                        title: `2. Holding Pen: ${histFacName}`,
+                                                        category: 'Historical Holding',
+                                                        priority: 'Low',
+                                                        color: 'slate',
+                                                        rawData: { ...report, landmark: histFacName, is_resolved: true }
+                                                    }] : []),
                                                     {
                                                         id: -1,
                                                         lat: BRGY_OFFICE[0],
                                                         lng: BRGY_OFFICE[1],
                                                         title: "Barangay Hall HQ",
                                                         category: "Barangay Office"
-                                                    },
-                                                    ...(userLocation ? [{
-                                                        id: -2,
-                                                        lat: userLocation[0],
-                                                        lng: userLocation[1],
-                                                        title: "Your Location",
-                                                        category: "User Location"
-                                                    }] : [])
-                                                ]}
-                                                routing={isNavigating ? (() => {
-                                                    const repLoc: [number, number] = [report.latitude, report.longitude];
-                                                    const destName = report.landmark || 'Incident Location';
-                                                    if (navSource === 'current' && userLocation) {
-                                                        return {
-                                                            start: userLocation,
-                                                            end: repLoc,
-                                                            waypointNames: ["Your Location", destName] as [string, string],
-                                                            onClose: () => setIsNavigating(false)
-                                                        };
-                                                    } else {
-                                                        return {
-                                                            start: BRGY_OFFICE,
-                                                            end: repLoc,
-                                                            waypointNames: ["Barangay Office", destName] as [string, string],
-                                                            onClose: () => setIsNavigating(false)
-                                                        };
                                                     }
-                                                })() : undefined}
-                                                onMarkerClick={(m) => {
-                                                    setNavSource(m.source || 'brgy');
-                                                    setIsNavigating(true);
-                                                }}
-                                            />
+                                                ];
+
+                                                return (
+                                                    <MapComponent
+                                                        center={[initLat, initLng]}
+                                                        zoom={17}
+                                                        showHeatmap={false}
+                                                        markers={histMarkers}
+                                                        polylines={hadHoldingHistory ? [{
+                                                            positions: [[initLat, initLng], [histFacLat, histFacLng]],
+                                                            color: '#64748B',
+                                                            weight: 3,
+                                                            dashArray: '6, 8',
+                                                            opacity: 0.85
+                                                        }] : undefined}
+                                                    />
+                                                );
+                                            })()}
                                         </div>
                                     </div>
 
@@ -793,139 +691,43 @@ const SubdViewHistory = () => {
 
                                         {/* Timeline */}
                                         <div className="space-y-6">
-                                            <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Mission Timeline</h3>
+                                            <div className="flex items-center justify-between gap-4 border-b border-gray-50 pb-4">
+                                                <div>
+                                                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">
+                                                        Mission & Activity Timeline
+                                                    </h3>
+                                                    <p className="text-[10px] font-bold text-gray-500 mt-0.5">
+                                                        Official Audit Trail & Officer Activity Log
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    {(() => {
+                                                        const validHistory = (report.history || []).filter((h: any) => h.report_status_id !== 1);
+                                                        const holdingCount = (holdingAnimal && holdingAnimal.timeline) ? holdingAnimal.timeline.length : 0;
+                                                        const totalEvents = validHistory.length + holdingCount + 1;
+                                                        return (
+                                                            <span className="text-[10px] font-black text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full border border-gray-200">
+                                                                {totalEvents} {totalEvents === 1 ? 'Event' : 'Events'}
+                                                            </span>
+                                                        );
+                                                    })()}
+                                                    <div className="flex items-center gap-1 px-2 py-0.5 bg-green-50 rounded-full border border-green-100">
+                                                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                                                        <span className="text-[8px] font-black text-green-600 uppercase tracking-widest">Live</span>
+                                                    </div>
+                                                </div>
+                                            </div>
                                             <div className="pl-1">
-                                                {timeline.map((step, idx) => {
-                                                    const isLast = idx === timeline.length - 1;
-                                                    const isCompleted = step.status === 'Resolved';
-                                                    const isActive = isCompleted;
-                                                    const isExpanded = !!expandedSteps[step.label];
-                                                    const stepDetail = isActive ? getStepDetails(step.label) : null;
-
-                                                    let circleBg = 'bg-gray-50 border-gray-200 text-gray-400';
-                                                    let lineBg = 'bg-gray-100';
-
-                                                    if (isCompleted) {
-                                                        circleBg = 'bg-purple-600 text-white border-purple-600 shadow-lg shadow-purple-500/25';
-                                                        lineBg = 'bg-purple-600';
-                                                    }
-
-                                                    return (
-                                                        <div key={idx} className="flex items-start relative pb-6 last:pb-0">
-                                                            {/* Vertical Line */}
-                                                            {!isLast && (
-                                                                <div className={`absolute left-[13px] top-[26px] bottom-0 w-[2px] ${lineBg} transition-all duration-300`}></div>
-                                                            )}
-
-                                                            {/* Circle/Number */}
-                                                            <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center z-10 shrink-0 font-extrabold text-[10px] ${circleBg}`}>
-                                                                {isCompleted ? (
-                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                                                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                                                    </svg>
-                                                                ) : (
-                                                                    <span>{idx + 1}</span>
-                                                                )}
-                                                            </div>
-
-                                                            {/* Content */}
-                                                            <div className="ml-3.5 flex-1">
-                                                                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-1 mb-0.5">
-                                                                    <h4 className="text-xs font-black text-gray-900">{step.label}</h4>
-                                                                    {step.timestamp && step.timestamp !== '-' && (
-                                                                        <span className="text-[9px] font-bold text-gray-400 font-mono bg-gray-50 px-2 py-0.5 rounded border border-gray-100">{step.timestamp}</span>
-                                                                    )}
-                                                                </div>
-                                                                {step.note && (
-                                                                    <p className="text-[11px] leading-relaxed text-gray-500 font-semibold">{step.note}</p>
-                                                                )}
-
-                                                                {/* Expand Toggle */}
-                                                                {isActive && (
-                                                                    <button
-                                                                        onClick={() => setExpandedSteps(prev => ({ ...prev, [step.label]: !prev[step.label] }))}
-                                                                        className="mt-2.5 flex items-center gap-1 text-[9px] font-black text-purple-600 hover:text-purple-700 uppercase tracking-wider transition-colors"
-                                                                    >
-                                                                        <svg className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                                                                        </svg>
-                                                                        {isExpanded ? 'Hide' : 'View More'}
-                                                                    </button>
-                                                                )}
-
-                                                                {/* Expanded Details Panel */}
-                                                                {isActive && isExpanded && stepDetail && (
-                                                                    <div className="mt-3 rounded-2xl border border-gray-100 bg-gray-50/60 overflow-hidden animate-in slide-in-from-top-2 duration-200">
-                                                                        {/* Personnel */}
-                                                                        <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2.5">
-                                                                            <div className="w-6.5 h-6.5 rounded-full overflow-hidden bg-purple-100 text-purple-600 flex items-center justify-center font-bold text-[9px] shrink-0 border border-purple-200">
-                                                                                {stepDetail.updatedPhoto ? (
-                                                                                    <img src={getProfilePicture(stepDetail.updatedPhoto)} alt={stepDetail.updatedBy} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
-                                                                                ) : (
-                                                                                    (stepDetail.updatedBy || 'S').charAt(0).toUpperCase()
-                                                                                )}
-                                                                            </div>
-                                                                            <div>
-                                                                                <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest leading-none">Assigned Personnel</p>
-                                                                                <p className="text-xs font-bold text-gray-800 mt-0.5">{stepDetail.updatedBy}</p>
-                                                                            </div>
-                                                                        </div>
-
-                                                                        {/* Message */}
-                                                                        <div className="px-4 py-2.5 border-b border-gray-100">
-                                                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Status Message</p>
-                                                                            <p className="text-xs font-semibold text-gray-700 leading-relaxed">
-                                                                                {stepDetail.message || 'No status message provided.'}
-                                                                            </p>
-                                                                        </div>
-
-                                                                        {/* Condition */}
-                                                                        <div className="px-4 py-2.5 border-b border-gray-100">
-                                                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Current Animal Condition</p>
-                                                                            <span className="inline-flex px-2 py-0.5 rounded-md text-[9px] font-black bg-purple-50 text-purple-600 border border-purple-100 uppercase tracking-wide">
-                                                                                {stepDetail.condition}
-                                                                            </span>
-                                                                        </div>
-
-                                                                        {/* Evidence Gallery */}
-                                                                        {stepDetail.media && stepDetail.media.length > 0 && (
-                                                                            <div className="px-4 py-3">
-                                                                                <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-2">Step Evidence</p>
-                                                                                <div className="flex gap-2 flex-wrap">
-                                                                                    {stepDetail.media.map((mediaFile: any, mi: number) => {
-                                                                                        const isVideo = mediaFile.media_type === 'Video' || mediaFile.file_url.toLowerCase().match(/\.(mp4|mov|avi|webm)$/i);
-                                                                                        return (
-                                                                                            <div
-                                                                                                key={mi}
-                                                                                                onClick={() => {
-                                                                                                    setActiveGallery({
-                                                                                                        media: stepDetail.media,
-                                                                                                        index: mi
-                                                                                                    });
-                                                                                                }}
-                                                                                                className="relative w-12 h-12 rounded-lg overflow-hidden border border-gray-100 shadow-sm cursor-pointer hover:border-purple-500 transition-all bg-black flex items-center justify-center group shrink-0"
-                                                                                            >
-                                                                                                {isVideo ? (
-                                                                                                    <div className="flex flex-col items-center justify-center text-white">
-                                                                                                        <svg className="w-4 h-4 text-white/80" fill="currentColor" viewBox="0 0 20 20">
-                                                                                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-                                                                                                        </svg>
-                                                                                                    </div>
-                                                                                                ) : (
-                                                                                                    <img src={mediaFile.file_url} alt="Timeline evidence preview" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                                                                                )}
-                                                                                            </div>
-                                                                                        );
-                                                                                    })}
-                                                                                </div>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                                <RescueTimeline
+                                                    history={mergedHistory}
+                                                    currentStatusId={report.status_id}
+                                                    assignedLeaderName={report.assigned_leader_name || undefined}
+                                                    reporterName={report.reporter_name}
+                                                    reportCreatedAt={report.created_at}
+                                                    animalType={report.animal_type}
+                                                    landmark={report.landmark}
+                                                    endorsementLetter={report.endorsement_letter}
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -997,59 +799,65 @@ const SubdViewHistory = () => {
                             </button>
                         </div>
                         <div className="flex-1 rounded-2xl overflow-hidden relative border border-gray-100 min-h-0">
-                            <MapComponent
-                                height="100%"
-                                center={[report.latitude, report.longitude]}
-                                zoom={18}
-                                showHeatmap={false}
-                                markers={[
+                            {(() => {
+                                const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : (report.latitude ? parseFloat(report.latitude.toString()) : 14.8018);
+                                const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : (report.longitude ? parseFloat(report.longitude.toString()) : 121.0028);
+                                const hadHoldingHistory = report.history?.some((h: any) => 
+                                    [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
+                                    (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
+                                    (h.action && h.action.toLowerCase().includes('holding'))
+                                ) || Boolean(report.facility_id) || Boolean(report.facility);
+                                const histFacLat = 14.8069;
+                                const histFacLng = 121.0039;
+                                const histFacName = 'Barangay Holding Pen';
+
+                                const histMarkers = [
                                     {
                                         id: report.report_id,
-                                        lat: report.latitude,
-                                        lng: report.longitude,
-                                        title: report.landmark || 'Incident Location',
-                                        category: categoryMap[report.category_id],
-                                        priority: report.priority_level
+                                        lat: initLat,
+                                        lng: initLng,
+                                        title: `1. Reported Incident Location: ${report.initial_landmark || report.landmark || 'Incident Location'}`,
+                                        category: 'Historical Sighting',
+                                        priority: report.priority_level || 'Medium',
+                                        color: 'slate',
+                                        rawData: { ...report, landmark: report.initial_landmark || report.landmark, is_resolved: true }
                                     },
+                                    ...(hadHoldingHistory ? [{
+                                        id: -999,
+                                        lat: histFacLat,
+                                        lng: histFacLng,
+                                        title: `2. Holding Pen: ${histFacName}`,
+                                        category: 'Historical Holding',
+                                        priority: 'Low',
+                                        color: 'slate',
+                                        rawData: { ...report, landmark: histFacName, is_resolved: true }
+                                    }] : []),
                                     {
                                         id: -1,
                                         lat: BRGY_OFFICE[0],
                                         lng: BRGY_OFFICE[1],
                                         title: "Barangay Hall HQ",
                                         category: "Barangay Office"
-                                    },
-                                    ...(userLocation ? [{
-                                        id: -2,
-                                        lat: userLocation[0],
-                                        lng: userLocation[1],
-                                        title: "Your Location",
-                                        category: "User Location"
-                                    }] : [])
-                                ]}
-                                routing={isNavigating ? (() => {
-                                    const repLoc: [number, number] = [report.latitude, report.longitude];
-                                    const destName = report.landmark || 'Incident Location';
-                                    if (navSource === 'current' && userLocation) {
-                                        return {
-                                            start: userLocation,
-                                            end: repLoc,
-                                            waypointNames: ["Your Location", destName] as [string, string],
-                                            onClose: () => setIsNavigating(false)
-                                        };
-                                    } else {
-                                        return {
-                                            start: BRGY_OFFICE,
-                                            end: repLoc,
-                                            waypointNames: ["Barangay Office", destName] as [string, string],
-                                            onClose: () => setIsNavigating(false)
-                                        };
                                     }
-                                })() : undefined}
-                                onMarkerClick={(m) => {
-                                    setNavSource(m.source || 'brgy');
-                                    setIsNavigating(true);
-                                }}
-                            />
+                                ];
+
+                                return (
+                                    <MapComponent
+                                        height="100%"
+                                        center={[initLat, initLng]}
+                                        zoom={18}
+                                        showHeatmap={false}
+                                        markers={histMarkers}
+                                        polylines={hadHoldingHistory ? [{
+                                            positions: [[initLat, initLng], [histFacLat, histFacLng]],
+                                            color: '#64748B',
+                                            weight: 3,
+                                            dashArray: '6, 8',
+                                            opacity: 0.85
+                                        }] : undefined}
+                                    />
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>

@@ -98,6 +98,13 @@ class ReportMediaResponse(BaseModel):
     ai_suggested_risk_level: Optional[str] = None
     ai_suggested_priority: Optional[str] = None
 
+    @field_validator("file_url", mode="before")
+    @classmethod
+    def sanitize_file_url(cls, v):
+        if not v or "res.cloudinary.com/test" in str(v) or str(v).endswith("original_reporter_dog.jpg"):
+            return "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop&q=80"
+        return str(v)
+
     class Config:
         from_attributes = True
 

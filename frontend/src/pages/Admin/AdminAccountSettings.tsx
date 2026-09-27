@@ -4,9 +4,10 @@ import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import Button from '../../components/Button';
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents, Polygon, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { fetchCoverageArea, type CoverageAreaInfo, SELERA_DEFAULT_CENTER, SELERA_DEFAULT_POLYGON } from '../../utils/coverageArea';
 
 // Fix Leaflet default icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -16,7 +17,12 @@ L.Icon.Default.mergeOptions({
     shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-
+const seleraCenterIcon = new L.DivIcon({
+    className: 'custom-selera-center-marker',
+    html: `<div style="background-color:#F97316; color:white; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:3px solid white; box-shadow:0 4px 12px rgba(249,115,22,0.5); font-size:20px;">🏡</div>`,
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
+});
 
 const hqMarkerIcon = new L.DivIcon({
     className: 'custom-hq-marker',
@@ -89,7 +95,7 @@ interface LandmarkItem {
     barangay_name?: string | null;
 }
 
-type AdminSettingsTab = 'profile' | 'barangay_hq' | 'landmarks';
+type AdminSettingsTab = 'profile' | 'barangay_hq' | 'landmarks' | 'reporting_radius';
 
 const AdminAccountSettings = () => {
     const [activeTab, setActiveTab] = useState<AdminSettingsTab>('profile');
@@ -145,6 +151,20 @@ const AdminAccountSettings = () => {
         contact_number: ''
     });
     const [isSavingLandmark, setIsSavingLandmark] = useState(false);
+
+    // Reporting Radius & Coverage State (Centered on Selera Homes)
+    const [coverageData, setCoverageData] = useState<CoverageAreaInfo>({
+        id: 1,
+        subdivision_id: 1,
+        center_label: 'Selera Homes',
+        center_latitude: SELERA_DEFAULT_CENTER[0],
+        center_longitude: SELERA_DEFAULT_CENTER[1],
+        radius_meters: 1000,
+        boundary_polygon: SELERA_DEFAULT_POLYGON,
+        is_active: true
+    });
+    const [radiusInput, setRadiusInput] = useState<number>(1000);
+    const [isSavingCoverage, setIsSavingCoverage] = useState(false);
 
     const showToast = (type: 'success' | 'error', text: string) => {
         setToastMessage({ type, text });
@@ -223,12 +243,44 @@ const AdminAccountSettings = () => {
         }
     };
 
+    const fetchCoverage = async () => {
+        try {
+            const data = await fetchCoverageArea();
+            setCoverageData(data);
+            setRadiusInput(data.radius_meters);
+        } catch (e) {
+            console.error('Failed to load coverage area:', e);
+        }
+    };
+
     useEffect(() => {
         fetchProfile();
         fetchBarangayHQ();
         fetchLandmarks();
         fetchAccounts();
+        fetchCoverage();
     }, []);
+
+    // Save Coverage Radius Settings
+    const handleSaveCoverage = async () => {
+        if (!radiusInput || radiusInput < 50 || radiusInput > 50000) {
+            showToast('error', 'Radius must be between 50 and 50,000 meters.');
+            return;
+        }
+        setIsSavingCoverage(true);
+        try {
+            const res = await api.put<CoverageAreaInfo>('/reports/coverage-area', {
+                radius_meters: radiusInput
+            });
+            setCoverageData(res.data);
+            setRadiusInput(res.data.radius_meters);
+            showToast('success', `Reporting radius successfully updated to ${res.data.radius_meters}m around Selera Homes.`);
+        } catch (err: any) {
+            showToast('error', err.response?.data?.detail || 'Failed to update reporting radius.');
+        } finally {
+            setIsSavingCoverage(false);
+        }
+    };
 
     // Save Admin Profile
     const handleSaveProfile = async (e: React.FormEvent) => {
@@ -521,6 +573,18 @@ const AdminAccountSettings = () => {
                             >
                                 <span>📍</span>
                                 <span>Landmarks & Holding Facilities</span>
+                            </button>
+
+                            <button
+                                onClick={() => setActiveTab('reporting_radius')}
+                                className={`flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                                    activeTab === 'reporting_radius'
+                                        ? 'bg-[#F97316] text-white shadow-xs'
+                                        : 'text-gray-600 hover:bg-gray-50'
+                                }`}
+                            >
+                                <span>🌐</span>
+                                <span>Reporting Coverage Radius</span>
                             </button>
                         </div>
 
@@ -1197,6 +1261,324 @@ const AdminAccountSettings = () => {
                                             })}
                                         </div>
                                     )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TAB 4: Reporting Radius Control Centered on Selera Homes */}
+                        {activeTab === 'reporting_radius' && (
+                            <div className="bg-white rounded-3xl p-6 md:p-8 border border-gray-100 shadow-sm space-y-6">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-5">
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xl">🌐</span>
+                                            <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Reporting Coverage Radius</h3>
+                                            <span className="bg-orange-100 text-orange-800 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                                Selera Homes Center
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 font-medium mt-1">
+                                            Citizens can only submit stray animal reports within this perimeter expanding outward from the fixed center of Selera Homes.
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <Button
+                                            type="button"
+                                            variant="primary"
+                                            onClick={handleSaveCoverage}
+                                            disabled={isSavingCoverage}
+                                            className="!py-2.5 !px-6 text-xs font-black shadow-xs cursor-pointer flex items-center gap-2"
+                                        >
+                                            {isSavingCoverage ? (
+                                                <>
+                                                    <span className="animate-spin text-sm">⏳</span>
+                                                    <span>Saving...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span>💾</span>
+                                                    <span>Save Radius Settings</span>
+                                                </>
+                                            )}
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* Current Status Info Cards */}
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <div className="bg-orange-50/70 border border-orange-200/80 rounded-2xl p-4">
+                                        <div className="flex items-center gap-2 text-orange-700 text-xs font-black uppercase tracking-wider mb-1">
+                                            <span>🏡</span>
+                                            <span>Fixed Reference Center</span>
+                                        </div>
+                                        <p className="text-base font-black text-gray-900">Selera Homes Centroid</p>
+                                        <p className="text-[11px] text-gray-500 font-mono mt-0.5">
+                                            {coverageData.center_latitude.toFixed(6)}°N, {coverageData.center_longitude.toFixed(6)}°E
+                                        </p>
+                                    </div>
+
+                                    <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-4">
+                                        <div className="flex items-center gap-2 text-emerald-700 text-xs font-black uppercase tracking-wider mb-1">
+                                            <span>📏</span>
+                                            <span>Active Saved Radius</span>
+                                        </div>
+                                        <p className="text-base font-black text-gray-900">
+                                            {coverageData.radius_meters >= 1000
+                                                ? `${(coverageData.radius_meters / 1000).toFixed(2)} km (${coverageData.radius_meters} m)`
+                                                : `${coverageData.radius_meters} meters`}
+                                        </p>
+                                        <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">
+                                            Currently enforced in backend
+                                        </p>
+                                    </div>
+
+                                    <div className="bg-blue-50/70 border border-blue-200/80 rounded-2xl p-4">
+                                        <div className="flex items-center gap-2 text-blue-700 text-xs font-black uppercase tracking-wider mb-1">
+                                            <span>👁️</span>
+                                            <span>Live Preview Radius</span>
+                                        </div>
+                                        <p className="text-base font-black text-gray-900">
+                                            {radiusInput >= 1000
+                                                ? `${(radiusInput / 1000).toFixed(2)} km (${radiusInput} m)`
+                                                : `${radiusInput} meters`}
+                                        </p>
+                                        <p className="text-[11px] text-blue-600 font-semibold mt-0.5">
+                                            Interactive preview on map below
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Radius Controls Box */}
+                                <div className="bg-gray-50/80 border border-gray-200/80 rounded-2xl p-5 space-y-4">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                        <label className="text-xs font-black text-gray-800 uppercase tracking-wider">
+                                            Adjust Coverage Radius
+                                        </label>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-gray-500">Quick Adjust:</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setRadiusInput(prev => Math.max(50, prev - 100))}
+                                                className="px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-xs font-bold hover:bg-gray-100 cursor-pointer"
+                                            >
+                                                -100m
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setRadiusInput(prev => prev + 100)}
+                                                className="px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-xs font-bold hover:bg-gray-100 cursor-pointer"
+                                            >
+                                                +100m
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setRadiusInput(prev => Math.max(50, prev - 500))}
+                                                className="px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-xs font-bold hover:bg-gray-100 cursor-pointer"
+                                            >
+                                                -500m
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setRadiusInput(prev => prev + 500)}
+                                                className="px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-xs font-bold hover:bg-gray-100 cursor-pointer"
+                                            >
+                                                +500m
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Slider */}
+                                    <div>
+                                        <input
+                                            type="range"
+                                            min={100}
+                                            max={10000}
+                                            step={50}
+                                            value={radiusInput}
+                                            onChange={(e) => setRadiusInput(Number(e.target.value))}
+                                            className="w-full h-2.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#F97316]"
+                                        />
+                                        <div className="flex justify-between text-[10px] font-bold text-gray-400 mt-1">
+                                            <span>100 m</span>
+                                            <span>500 m</span>
+                                            <span>1.0 km</span>
+                                            <span>2.5 km</span>
+                                            <span>5.0 km</span>
+                                            <span>10.0 km</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Inputs in Meters and Kilometers */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                                        <div>
+                                            <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                                                Radius in Meters (m)
+                                            </label>
+                                            <div className="relative">
+                                                <input
+                                                    type="number"
+                                                    min={50}
+                                                    max={50000}
+                                                    step={10}
+                                                    value={radiusInput}
+                                                    onChange={(e) => setRadiusInput(Math.max(0, Number(e.target.value)))}
+                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                />
+                                                <span className="absolute right-3.5 top-2.5 text-xs font-bold text-gray-400">meters</span>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                                                Radius in Kilometers (km)
+                                            </label>
+                                            <div className="relative">
+                                                <input
+                                                    type="number"
+                                                    min={0.05}
+                                                    max={50}
+                                                    step={0.1}
+                                                    value={Number((radiusInput / 1000).toFixed(2))}
+                                                    onChange={(e) => setRadiusInput(Math.max(50, Math.round(Number(e.target.value) * 1000)))}
+                                                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                />
+                                                <span className="absolute right-3.5 top-2.5 text-xs font-bold text-gray-400">km</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Presets */}
+                                    <div className="pt-2 border-t border-gray-200/60">
+                                        <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-2">
+                                            Quick Presets:
+                                        </span>
+                                        <div className="flex flex-wrap gap-2">
+                                            {[
+                                                { label: '300 m', value: 300, desc: 'Immediate Vicinity' },
+                                                { label: '500 m', value: 500, desc: 'Adjacent Streets' },
+                                                { label: '1.0 km', value: 1000, desc: 'Standard Coverage' },
+                                                { label: '1.5 km', value: 1500, desc: 'Extended Sector' },
+                                                { label: '2.0 km', value: 2000, desc: 'Outer Ring' },
+                                                { label: '3.0 km', value: 3000, desc: 'Wide District' },
+                                                { label: '5.0 km', value: 5000, desc: 'Municipal Bounds' },
+                                            ].map((preset) => (
+                                                <button
+                                                    key={preset.value}
+                                                    type="button"
+                                                    onClick={() => setRadiusInput(preset.value)}
+                                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                                                        radiusInput === preset.value
+                                                            ? 'bg-[#F97316] text-white border-[#F97316] shadow-xs'
+                                                            : 'bg-white text-gray-700 border-gray-200 hover:border-orange-300 hover:bg-orange-50/50'
+                                                    }`}
+                                                >
+                                                    <span>{preset.label}</span>
+                                                    <span className="text-[10px] opacity-75 ml-1">({preset.desc})</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Map Header & Legend */}
+                                <div className="space-y-2">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                        <label className="text-xs font-black text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                                            <span>🗺️</span>
+                                            <span>Live Geofence Map Preview</span>
+                                        </label>
+                                        <div className="flex flex-wrap items-center gap-3 text-[11px] font-bold">
+                                            <span className="flex items-center gap-1.5">
+                                                <span className="w-3 h-3 rounded-full bg-emerald-500/20 border-2 border-emerald-500 border-dashed inline-block"></span>
+                                                <span className="text-gray-700">Allowed Reporting Zone ({radiusInput >= 1000 ? `${(radiusInput/1000).toFixed(2)} km` : `${radiusInput} m`})</span>
+                                            </span>
+                                            <span className="flex items-center gap-1.5">
+                                                <span className="w-3 h-3 rounded bg-orange-400/40 border border-[#F97316] inline-block"></span>
+                                                <span className="text-gray-700">Selera Homes Boundary</span>
+                                            </span>
+                                            <span className="flex items-center gap-1.5">
+                                                <span>🏡</span>
+                                                <span className="text-gray-700">Fixed Center</span>
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Map Container */}
+                                    <div className="w-full h-[520px] rounded-2xl overflow-hidden border border-gray-200 shadow-inner relative z-0">
+                                        <MapContainer
+                                            center={[coverageData.center_latitude, coverageData.center_longitude]}
+                                            zoom={15}
+                                            scrollWheelZoom={true}
+                                            className="w-full h-full"
+                                        >
+                                            <TileLayer
+                                                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                            />
+
+                                            {/* Fixed Reference Center Marker */}
+                                            <Marker
+                                                position={[coverageData.center_latitude, coverageData.center_longitude]}
+                                                icon={seleraCenterIcon}
+                                            >
+                                                <Popup>
+                                                    <div className="p-2 text-xs">
+                                                        <p className="font-black text-orange-600 text-sm mb-0.5">🏡 Selera Homes Center</p>
+                                                        <p className="text-[11px] text-gray-600 font-medium">
+                                                            Fixed centroid reference point for all reporting coverage radius calculations.
+                                                        </p>
+                                                        <p className="text-[10px] text-gray-400 font-mono mt-1">
+                                                            {coverageData.center_latitude.toFixed(6)}, {coverageData.center_longitude.toFixed(6)}
+                                                        </p>
+                                                    </div>
+                                                </Popup>
+                                            </Marker>
+
+                                            {/* Selera Homes Official Subdivision Boundary Polygon */}
+                                            <Polygon
+                                                positions={(coverageData.boundary_polygon || []).map(p => [p.lat, p.lng] as [number, number])}
+                                                pathOptions={{
+                                                    color: '#F97316',
+                                                    fillColor: '#FB923C',
+                                                    fillOpacity: 0.35,
+                                                    weight: 2
+                                                }}
+                                            >
+                                                <Popup>
+                                                    <div className="p-1 text-xs font-bold text-orange-700">
+                                                        Official Selera Homes Boundary
+                                                    </div>
+                                                </Popup>
+                                            </Polygon>
+
+                                            {/* Configurable Reporting Coverage Radius Circle */}
+                                            <Circle
+                                                center={[coverageData.center_latitude, coverageData.center_longitude]}
+                                                radius={radiusInput}
+                                                pathOptions={{
+                                                    color: '#10B981',
+                                                    fillColor: '#34D399',
+                                                    fillOpacity: 0.16,
+                                                    weight: 3,
+                                                    dashArray: '8, 8'
+                                                }}
+                                            >
+                                                <Popup>
+                                                    <div className="p-2 text-xs">
+                                                        <p className="font-black text-emerald-700 text-sm mb-0.5">Coverage Perimeter</p>
+                                                        <p className="text-[11px] text-gray-700 font-medium">
+                                                            Radius: <strong>{radiusInput} meters</strong> ({ (radiusInput / 1000).toFixed(2) } km)
+                                                        </p>
+                                                        <p className="text-[10px] text-gray-500 mt-1">
+                                                            Stray reports submitted within this circle will be accepted by StraySafe.
+                                                        </p>
+                                                    </div>
+                                                </Popup>
+                                            </Circle>
+
+                                            <RecenterMap position={[coverageData.center_latitude, coverageData.center_longitude]} />
+                                        </MapContainer>
+                                    </div>
                                 </div>
                             </div>
                         )}

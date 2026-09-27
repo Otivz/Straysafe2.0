@@ -18,6 +18,7 @@ from app.models.announcement import (
 )
 from app.models.audit_log import AuditLog
 from app.models.revoked_token import RevokedToken
+from app.models.coverage import CoverageSetting
 
 __all__ = [
     "Role", "Position", "Barangay", "Subdivision", "User",
@@ -35,5 +36,6 @@ __all__ = [
     "AnnouncementCategory", "Announcement", "AnnouncementMedia",
     "AnnouncementComment", "AnnouncementReaction",
     "AuditLog",
-    "RevokedToken"
+    "RevokedToken",
+    "CoverageSetting"
 ]

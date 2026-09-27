@@ -59,12 +59,15 @@ interface HoldingAnimal {
     total_duration_days?: number | null;
     total_duration_display?: string | null;
     current_facility_duration_display?: string | null;
+    original_photo_url?: string | null;
     timeline: TimelineEntry[];
     report_media?: {
         media_id: number;
         file_url: string;
         media_type: string;
         is_evidence?: boolean;
+        history_id?: number | null;
+        holding_log_id?: number | null;
         uploaded_at?: string;
     }[];
 }
@@ -143,19 +146,78 @@ function animalIcon(type: string | null, className = 'w-6 h-6'): ReactNode {
 }
 
 function getAnimalPhoto(animal: HoldingAnimal): string | undefined {
-    // 1. Look for genuine image files in report_media (ignore documents/PDFs/Word docs)
-    const imageMedia = animal.report_media?.find(m => {
-        if (m.media_type && m.media_type.toLowerCase() === 'document') return false;
-        if (m.file_url) {
-            const lower = m.file_url.toLowerCase();
-            return !lower.endsWith('.pdf') && !lower.endsWith('.doc') && !lower.endsWith('.docx') && !lower.endsWith('.txt');
-        }
-        return false;
-    });
+    // 0. Primary: Explicit original photo resolved by backend from initial report submission
+    if (animal.original_photo_url) return animal.original_photo_url;
 
-    if (imageMedia?.file_url) return imageMedia.file_url;
+    // 1. Initial report submission images (no history_id, no holding_log_id, not is_evidence, image file)
+    const initialReportImages = animal.report_media
+        ?.filter(m => {
+            if (m.is_evidence) return false;
+            if (m.history_id || m.holding_log_id) return false;
+            if (m.media_type && m.media_type.toLowerCase() === 'document') return false;
+            if (m.file_url) {
+                const lower = m.file_url.toLowerCase();
+                return !lower.endsWith('.pdf') && !lower.endsWith('.doc') && !lower.endsWith('.docx') && !lower.endsWith('.txt') && !lower.endsWith('.mp4') && !lower.endsWith('.mov') && !lower.endsWith('.webm') && !lower.endsWith('.avi');
+            }
+            return false;
+        })
+        .sort((a, b) => (a.media_id || 0) - (b.media_id || 0));
 
-    // 2. Look in timeline entries
+    if (initialReportImages && initialReportImages.length > 0 && initialReportImages[0].file_url) {
+        return initialReportImages[0].file_url;
+    }
+
+    // 2. Fallback: Any initial report media without history_id or holding_log_id
+    const anyInitialMedia = animal.report_media
+        ?.filter(m => {
+            if (m.history_id || m.holding_log_id) return false;
+            if (m.media_type && m.media_type.toLowerCase() === 'document') return false;
+            if (m.file_url) {
+                const lower = m.file_url.toLowerCase();
+                return !lower.endsWith('.pdf') && !lower.endsWith('.doc') && !lower.endsWith('.docx') && !lower.endsWith('.txt') && !lower.endsWith('.mp4') && !lower.endsWith('.mov') && !lower.endsWith('.webm') && !lower.endsWith('.avi');
+            }
+            return false;
+        })
+        .sort((a, b) => (a.media_id || 0) - (b.media_id || 0));
+
+    if (anyInitialMedia && anyInitialMedia.length > 0 && anyInitialMedia[0].file_url) {
+        return anyInitialMedia[0].file_url;
+    }
+
+    // 3. Fallback: Earliest non-evidence image in report_media
+    const nonEvidenceMedia = animal.report_media
+        ?.filter(m => {
+            if (m.is_evidence) return false;
+            if (m.media_type && m.media_type.toLowerCase() === 'document') return false;
+            if (m.file_url) {
+                const lower = m.file_url.toLowerCase();
+                return !lower.endsWith('.pdf') && !lower.endsWith('.doc') && !lower.endsWith('.docx') && !lower.endsWith('.txt') && !lower.endsWith('.mp4') && !lower.endsWith('.mov') && !lower.endsWith('.webm') && !lower.endsWith('.avi');
+            }
+            return false;
+        })
+        .sort((a, b) => (a.media_id || 0) - (b.media_id || 0));
+
+    if (nonEvidenceMedia && nonEvidenceMedia.length > 0 && nonEvidenceMedia[0].file_url) {
+        return nonEvidenceMedia[0].file_url;
+    }
+
+    // 4. Fallback: Earliest image in report_media
+    const anyImageMedia = animal.report_media
+        ?.filter(m => {
+            if (m.media_type && m.media_type.toLowerCase() === 'document') return false;
+            if (m.file_url) {
+                const lower = m.file_url.toLowerCase();
+                return !lower.endsWith('.pdf') && !lower.endsWith('.doc') && !lower.endsWith('.docx') && !lower.endsWith('.txt') && !lower.endsWith('.mp4') && !lower.endsWith('.mov') && !lower.endsWith('.webm') && !lower.endsWith('.avi');
+            }
+            return false;
+        })
+        .sort((a, b) => (a.media_id || 0) - (b.media_id || 0));
+
+    if (anyImageMedia && anyImageMedia.length > 0 && anyImageMedia[0].file_url) {
+        return anyImageMedia[0].file_url;
+    }
+
+    // 5. Fallback: Timeline entries
     if (animal.timeline) {
         for (const t of animal.timeline) {
             const tMedia = (t as any).media;
@@ -164,7 +226,7 @@ function getAnimalPhoto(animal: HoldingAnimal): string | undefined {
                     if (m.media_type && m.media_type.toLowerCase() === 'document') return false;
                     if (m.file_url) {
                         const lower = m.file_url.toLowerCase();
-                        return !lower.endsWith('.pdf') && !lower.endsWith('.doc') && !lower.endsWith('.docx') && !lower.endsWith('.txt');
+                        return !lower.endsWith('.pdf') && !lower.endsWith('.doc') && !lower.endsWith('.docx') && !lower.endsWith('.txt') && !lower.endsWith('.mp4') && !lower.endsWith('.mov') && !lower.endsWith('.webm') && !lower.endsWith('.avi');
                     }
                     return false;
                 });
@@ -1163,19 +1225,17 @@ const SubdHoldingFacility = () => {
 
                                         {/* Resident Uploaded Image */}
                                         {(() => {
-                                            const residentImage = selected.report_media?.find(
-                                                m => !m.is_evidence && (m.media_type === 'Image' || m.file_url.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i))
-                                            );
+                                            const residentImage = getAnimalPhoto(selected);
                                             if (!residentImage) return null;
                                             return (
                                                 <div className="relative w-full h-52 rounded-2xl overflow-hidden border border-gray-150 shadow-sm bg-gray-50 group">
                                                     <img
-                                                        src={residentImage.file_url}
+                                                        src={residentImage}
                                                         alt="Resident Uploaded Animal"
                                                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                                     />
                                                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex flex-col justify-end p-4">
-                                                        <span className="text-[9px] font-black text-white/80 uppercase tracking-widest leading-none">Resident Uploaded Photo</span>
+                                                        <span className="text-[9px] font-black text-white/80 uppercase tracking-widest leading-none">Original Reporter Photo</span>
                                                         <h4 className="text-white font-bold text-sm mt-1">Stray Animal from Report #{selected.report_id}</h4>
                                                     </div>
                                                 </div>

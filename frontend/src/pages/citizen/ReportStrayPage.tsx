@@ -35,7 +35,7 @@ import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import SuccessModal from '../../components/Modals/SuccessModal';
 import StraySafeLoading, { AnimalLoadingOverlay } from '../../components/StraySafeLoading';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
-import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMapEvents, Polygon, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMapEvents, Polygon, Circle, useMap } from 'react-leaflet';
 import { createLandmarkPinIcon, getLandmarkCategory } from '../../utils/landmarkIcons';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -43,6 +43,7 @@ import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import ReturnToSeleraButton from '../../components/MapControls/ReturnToSeleraButton';
+import { fetchCoverageArea, isWithinCoverage, type CoverageAreaInfo, COVERAGE_OUTSIDE_ERROR_MESSAGE, SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -226,6 +227,15 @@ export default function ReportStrayPage() {
     } | null>(null);
     const [lastAnalyzedSignature, setLastAnalyzedSignature] = useState<string | null>(null);
 
+    // Coverage Area State (Centered on Selera Homes)
+    const [coverageArea, setCoverageArea] = useState<CoverageAreaInfo | null>(null);
+    const [coverageCheck, setCoverageCheck] = useState<{ isInside: boolean; distance: number; allowedRadius: number; message: string }>({
+        isInside: true,
+        distance: 0,
+        allowedRadius: 1000,
+        message: ''
+    });
+
     const userStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
     const currentUserId = currentUser ? Number(currentUser.user_id || currentUser.id) : null;
@@ -244,7 +254,21 @@ export default function ReportStrayPage() {
             }
         };
         fetchLandmarks();
+
+        fetchCoverageArea().then((cov) => {
+            setCoverageArea(cov);
+            const check = isWithinCoverage(formData.latitude, formData.longitude, cov);
+            setCoverageCheck(check);
+        });
     }, []);
+
+    // Validate coordinates against coverage whenever pin location changes
+    useEffect(() => {
+        if (coverageArea) {
+            const check = isWithinCoverage(formData.latitude, formData.longitude, coverageArea);
+            setCoverageCheck(check);
+        }
+    }, [formData.latitude, formData.longitude, coverageArea]);
 
     // Auto Reverse Geocode Location
     useEffect(() => {
@@ -417,6 +441,15 @@ export default function ReportStrayPage() {
             triggerAiAnalysis();
         }
 
+        // Step 6: Location & Custody coverage validation
+        if (currentStep === 6) {
+            const check = isWithinCoverage(formData.latitude, formData.longitude, coverageArea);
+            if (!check.isInside) {
+                alert(COVERAGE_OUTSIDE_ERROR_MESSAGE);
+                return;
+            }
+        }
+
         if (currentStep === 5 && formData.observedConditions.length === 0) {
             alert('Please select at least one observed condition.');
             return;
@@ -441,11 +474,20 @@ export default function ReportStrayPage() {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
                     setFormData(prev => ({
                         ...prev,
-                        latitude: pos.coords.latitude,
-                        longitude: pos.coords.longitude
+                        latitude: lat,
+                        longitude: lng
                     }));
+                    if (coverageArea) {
+                        const check = isWithinCoverage(lat, lng, coverageArea);
+                        setCoverageCheck(check);
+                        if (!check.isInside) {
+                            alert(COVERAGE_OUTSIDE_ERROR_MESSAGE);
+                        }
+                    }
                 },
                 (err) => {
                     alert('Could not retrieve GPS location: ' + err.message);
@@ -459,6 +501,12 @@ export default function ReportStrayPage() {
     const handleSubmit = async () => {
         if (!declaration) {
             alert('Please confirm that the information provided is accurate by checking the declaration.');
+            return;
+        }
+
+        const check = isWithinCoverage(formData.latitude, formData.longitude, coverageArea);
+        if (!check.isInside) {
+            alert(COVERAGE_OUTSIDE_ERROR_MESSAGE);
             return;
         }
 
@@ -1325,8 +1373,13 @@ export default function ReportStrayPage() {
                                         onLocationSelect={(lat, lng) => setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }))}
                                     />
                                     <Polygon
-                                        positions={SELERA_POLYGON.map(p => [p.lat, p.lng] as [number, number])}
+                                        positions={(coverageArea?.boundary_polygon || SELERA_POLYGON).map(p => [p.lat, p.lng] as [number, number])}
                                         pathOptions={{ color: '#F97316', fillColor: '#F97316', fillOpacity: 0.1, weight: 2, dashArray: '5, 10' }}
+                                    />
+                                    <Circle
+                                        center={[coverageArea?.center_latitude ?? SELERA_DEFAULT_CENTER[0], coverageArea?.center_longitude ?? SELERA_DEFAULT_CENTER[1]]}
+                                        radius={coverageArea?.radius_meters ?? 1000}
+                                        pathOptions={{ color: '#10B981', fillColor: '#34D399', fillOpacity: 0.12, weight: 2, dashArray: '6, 6' }}
                                     />
 
                                     {/* Registered Landmarks on Map (exact style as SubdSettings) */}
@@ -1391,6 +1444,40 @@ export default function ReportStrayPage() {
                                     <ReturnToSeleraButton />
                                 </MapContainer>
                             </div>
+
+                            {/* Coverage Warning Banner if pin is outside coverage */}
+                            {!coverageCheck.isInside && (
+                                <div className="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4 flex items-start gap-3 text-rose-800">
+                                    <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                                    <div className="flex-1">
+                                        <p className="text-xs font-black uppercase tracking-wider text-rose-900">
+                                            Outside Reporting Coverage Area
+                                        </p>
+                                        <p className="text-xs font-bold mt-0.5 text-rose-800">
+                                            {COVERAGE_OUTSIDE_ERROR_MESSAGE}
+                                        </p>
+                                        <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                                            Selected pin is <strong>{Math.round(coverageCheck.distance)} m</strong> from Selera Homes center (Maximum allowed: <strong>{coverageCheck.allowedRadius} m</strong>).
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const cLat = coverageArea?.center_latitude ?? SELERA_DEFAULT_CENTER[0];
+                                                const cLng = coverageArea?.center_longitude ?? SELERA_DEFAULT_CENTER[1];
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    latitude: cLat,
+                                                    longitude: cLng
+                                                }));
+                                            }}
+                                            className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer transition-all"
+                                        >
+                                            <span>🏡</span>
+                                            <span>Reset Pin to Selera Homes Center</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Fields */}
                             <div>
@@ -1694,8 +1781,13 @@ export default function ReportStrayPage() {
                                     onLocationSelect={(lat, lng) => setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }))}
                                 />
                                 <Polygon
-                                    positions={SELERA_POLYGON.map(p => [p.lat, p.lng] as [number, number])}
+                                    positions={(coverageArea?.boundary_polygon || SELERA_POLYGON).map(p => [p.lat, p.lng] as [number, number])}
                                     pathOptions={{ color: '#F97316', fillColor: '#F97316', fillOpacity: 0.1, weight: 2, dashArray: '5, 10' }}
+                                />
+                                <Circle
+                                    center={[coverageArea?.center_latitude ?? SELERA_DEFAULT_CENTER[0], coverageArea?.center_longitude ?? SELERA_DEFAULT_CENTER[1]]}
+                                    radius={coverageArea?.radius_meters ?? 1000}
+                                    pathOptions={{ color: '#10B981', fillColor: '#34D399', fillOpacity: 0.12, weight: 2, dashArray: '6, 6' }}
                                 />
 
                                 {/* Registered Landmarks on Modal Map */}
@@ -1762,10 +1854,17 @@ export default function ReportStrayPage() {
                         </div>
 
                         {/* Modal Footer Controls */}
-                        <div className="flex items-center justify-between pt-3 sm:pt-4 border-t border-gray-100 shrink-0 gap-3">
-                            <span className="text-xs text-gray-400 font-medium hidden sm:inline items-center gap-1 sm:inline-flex">
-                                <Lightbulb className="w-3.5 h-3.5" /> Tip: You can drag, zoom, and click anywhere to reposition the pin accurately.
-                            </span>
+                        <div className="flex flex-col sm:flex-row items-center justify-between pt-3 sm:pt-4 border-t border-gray-100 shrink-0 gap-3">
+                            {!coverageCheck.isInside ? (
+                                <span className="text-xs text-rose-600 font-bold flex items-center gap-1.5">
+                                    <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+                                    <span>Selected pin is outside the allowed reporting radius.</span>
+                                </span>
+                            ) : (
+                                <span className="text-xs text-gray-400 font-medium hidden sm:inline items-center gap-1 sm:inline-flex">
+                                    <Lightbulb className="w-3.5 h-3.5" /> Tip: You can drag, zoom, and click anywhere to reposition the pin accurately.
+                                </span>
+                            )}
                             <div className="flex items-center gap-2 ml-auto">
                                 <button
                                     type="button"
@@ -1777,8 +1876,15 @@ export default function ReportStrayPage() {
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => setIsMapExpandedModal(false)}
-                                    className="px-5 py-2.5 bg-[#F97316] hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center gap-1.5"
+                                    onClick={() => {
+                                        if (!coverageCheck.isInside) {
+                                            alert(COVERAGE_OUTSIDE_ERROR_MESSAGE);
+                                        }
+                                        setIsMapExpandedModal(false);
+                                    }}
+                                    className={`px-5 py-2.5 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5 ${
+                                        !coverageCheck.isInside ? 'bg-rose-500 hover:bg-rose-600' : 'bg-[#F97316] hover:bg-orange-600 hover:shadow-lg'
+                                    }`}
                                 >
                                     <Check className="w-4 h-4" />
                                     <span>Confirm Location</span>

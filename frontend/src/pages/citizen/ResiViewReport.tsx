@@ -5,7 +5,7 @@ import {
     Siren, MapPin, PawPrint, Palette, Tag, User, Gift, FileText, Megaphone,
     Crosshair, Search, MessageCircle, Scale, Link2, Shield, AlertTriangle, Phone,
     Hourglass, Compass, Home, Landmark, Ruler, Timer, Flag, X, Lightbulb, Check,
-    Syringe, Camera, Info, Map as MapIcon, ScrollText, Maximize2, Minimize2
+    Syringe, Camera, Info, Map as MapIcon, ScrollText, Maximize2, Minimize2, CheckCircle2
 } from 'lucide-react';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import MapComponent from '../../components/MapComponent';
@@ -1349,135 +1349,157 @@ const ResiViewReport = () => {
                 <div className="bg-gray-900 text-white p-3.5 sm:p-6 md:p-8 rounded-2xl sm:rounded-[2.5rem] shadow-xl relative overflow-hidden group mt-6 sm:mt-10">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-150 transition-transform duration-700" />
                     <div className="relative z-10">
-                        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                            <h4 className="text-[10px] font-black text-orange-400 uppercase tracking-[0.2em]">Location Intelligence</h4>
-                            <div className="flex items-center gap-2">
-                                {([6, 7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status?.toLowerCase().includes('facility') || report.custody_status?.toLowerCase().includes('secured')) && (
-                                    <span className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-400/30 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
-                                        <PawPrint className="w-3 h-3" />
-                                        <span className="hidden sm:inline">Animal Secured at Holding Facility</span>
-                                        <span className="sm:hidden">Secured</span>
-                                    </span>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={() => setIsMapMaximized(prev => !prev)}
-                                    className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-wider border border-white/15 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer hover:scale-105 active:scale-95"
-                                    title={isMapMaximized ? "Reset to Standard Size" : "Maximize Map Height"}
-                                >
-                                    {isMapMaximized ? <Minimize2 className="w-3.5 h-3.5 text-amber-300" /> : <Maximize2 className="w-3.5 h-3.5 text-amber-300" />}
-                                    <span>{isMapMaximized ? "Standard" : "Maximize"}</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsMapExpanded(true)}
-                                    className="px-3.5 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-wider border border-white/15 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer hover:scale-105 active:scale-95"
-                                    title="Open Fullscreen Expanded Map"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-amber-300" viewBox="0 0 20 20" fill="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h3a1 1 0 010 2H5v2a1 1 0 01-2 0V4zm14 0a1 1 0 00-1-1h-3a1 1 0 110 2h2v2a1 1 0 112 0V4zM3 16a1 1 0 001 1h3a1 1 0 100-2H5v-2a1 1 0 10-2 0v3zm14 0a1 1 0 01-1 1h-3a1 1 0 100-2h2v-2a1 1 0 102 0v3z" />
-                                    </svg>
-                                    <span className="hidden xs:inline">Fullscreen</span>
-                                    <span className="xs:hidden">Expand</span>
-                                </button>
-                            </div>
-                        </div>
+                        {(() => {
+                            const isResolvedCase = [9, 10, 11, 12, 14, 17, 18].includes(report.status_id) || 
+                                ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(report.custody_status || '');
+                            const isSecuredInHolding = !isResolvedCase && report.status_id !== 6 && ([7, 8].includes(report.status_id) || ['Secured in Facility', 'In Barangay Facility', 'In Subdivision Facility'].includes(report.custody_status || ''));
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                            <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
-                                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
-                                    {([6, 7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status?.toLowerCase().includes('facility') || report.custody_status?.toLowerCase().includes('secured')) ? <PawPrint className="w-5 h-5" /> : <MapPin className="w-5 h-5" />}
-                                </div>
-                                <div className="overflow-hidden">
-                                    <p className="text-[9px] font-black text-white/50 uppercase tracking-widest">
-                                        {([6, 7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status?.toLowerCase().includes('facility') || report.custody_status?.toLowerCase().includes('secured')) ? 'Current Facility Holding Location' : 'Current Active Location'}
-                                    </p>
-                                    <p className="text-sm font-black tracking-tight text-white truncate">
-                                        {report.facility?.name || report.landmark || 'Barangay Holding Facility'}
-                                    </p>
-                                    <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-0.5">
-                                        {isGeocoding ? 'Resolving street...' : resolvedAddress || 'Santa Maria, Bulacan • Selera Homes'}
-                                    </p>
-                                    {report.facility?.caretaker_name && (
-                                        <p className="text-[10px] text-amber-300 font-semibold mt-1">
-                                            Caretaker: <span className="font-extrabold">{report.facility.caretaker_name}</span>
-                                            {report.facility.caretaker_phone ? ` (${report.facility.caretaker_phone})` : ''}
-                                        </p>
-                                    )}
-                                    <div className="mt-2.5 pt-2 border-t border-white/10 flex flex-wrap items-center gap-2">
-                                        <button
-                                            onClick={() => handleGetDirections('gps')}
-                                            disabled={isLocatingRoute}
-                                            className={`px-3 py-1.5 text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ${
-                                                routingState?.isRealtime
-                                                    ? 'bg-emerald-600 hover:bg-emerald-700 ring-2 ring-emerald-400/40' 
-                                                    : 'bg-[#F97316] hover:bg-[#EA580C]'
-                                            }`}
-                                            title="Use device GPS sensor"
-                                        >
-                                            {isLocatingRoute ? <Hourglass className="w-3.5 h-3.5" /> : routingState?.isRealtime ? <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> : <Compass className="w-3.5 h-3.5" />}
-                                            <span>
-                                                {isLocatingRoute 
-                                                    ? 'Checking Location...' 
-                                                    : routingState?.isRealtime 
-                                                        ? 'Live GPS Active (Click to Hide)' 
-                                                        : 'Directions (Live GPS)'}
-                                            </span>
-                                        </button>
-                                        <button
-                                            onClick={() => handleGetDirections('home')}
-                                            className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold rounded-xl transition-all border border-white/10 flex items-center gap-1.5 cursor-pointer"
-                                            title="Route from your registered home coordinates"
-                                        >
-                                            <Home className="w-3.5 h-3.5" />
-                                            <span>From My Home</span>
-                                        </button>
-                                        <button
-                                            onClick={() => handleGetDirections('hq')}
-                                            className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold rounded-xl transition-all border border-white/10 flex items-center gap-1.5 cursor-pointer"
-                                            title="Route from Barangay San Vicente HQ"
-                                        >
-                                            <Landmark className="w-3.5 h-3.5" />
-                                            <span>From Brgy HQ</span>
-                                        </button>
-                                        <button
-                                            onClick={handleSetStartingPointMode}
-                                            className={`px-2.5 py-1.5 text-white text-[11px] font-bold rounded-xl transition-all border flex items-center gap-1.5 cursor-pointer ${
-                                                isSettingStartingPoint
-                                                    ? 'bg-blue-600 border-blue-400 ring-2 ring-blue-400/40'
-                                                    : 'bg-white/10 hover:bg-white/20 border-white/10'
-                                            }`}
-                                            title="Click anywhere on the map or drag the pin to set your starting location"
-                                        >
-                                            <Crosshair className="w-3.5 h-3.5" />
-                                            <span>Set Starting Point</span>
-                                        </button>
-                                        {routingState?.distance && (
-                                            <span className="px-2.5 py-1 bg-white/10 border border-white/15 rounded-xl text-[11px] font-black text-amber-300 inline-flex items-center gap-1">
-                                                <Ruler className="w-3 h-3" /> {routingState.distance} {routingState.time ? <><span className="mx-0.5">•</span> <Timer className="w-3 h-3" /> {routingState.time}</> : ''}
-                                            </span>
+                            return (
+                                <>
+                                    <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                                        <h4 className="text-[10px] font-black text-orange-400 uppercase tracking-[0.2em]">Location Intelligence</h4>
+                                        <div className="flex items-center gap-2">
+                                            {isResolvedCase ? (
+                                                <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
+                                                    <CheckCircle2 className="w-3 h-3" />
+                                                    <span>Incident Resolved • Location History</span>
+                                                </span>
+                                            ) : isSecuredInHolding ? (
+                                                <span className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-400/30 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
+                                                    <PawPrint className="w-3 h-3" />
+                                                    <span className="hidden sm:inline">Animal Secured at Holding Facility</span>
+                                                    <span className="sm:hidden">Secured</span>
+                                                </span>
+                                            ) : null}
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsMapMaximized(prev => !prev)}
+                                                className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-wider border border-white/15 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer hover:scale-105 active:scale-95"
+                                                title={isMapMaximized ? "Reset to Standard Size" : "Maximize Map Height"}
+                                            >
+                                                {isMapMaximized ? <Minimize2 className="w-3.5 h-3.5 text-amber-300" /> : <Maximize2 className="w-3.5 h-3.5 text-amber-300" />}
+                                                <span>{isMapMaximized ? "Standard" : "Maximize"}</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsMapExpanded(true)}
+                                                className="px-3.5 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-wider border border-white/15 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer hover:scale-105 active:scale-95"
+                                                title="Open Fullscreen Expanded Map"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-amber-300" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h3a1 1 0 010 2H5v2a1 1 0 01-2 0V4zm14 0a1 1 0 00-1-1h-3a1 1 0 110 2h2v2a1 1 0 112 0V4zM3 16a1 1 0 001 1h3a1 1 0 100-2H5v-2a1 1 0 10-2 0v3zm14 0a1 1 0 01-1 1h-3a1 1 0 100-2h2v-2a1 1 0 102 0v3z" />
+                                                </svg>
+                                                <span className="hidden xs:inline">Fullscreen</span>
+                                                <span className="xs:hidden">Expand</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className={`grid grid-cols-1 ${isSecuredInHolding ? 'md:grid-cols-2' : ''} gap-4 mb-6`}>
+                                        <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
+                                            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                                                {isSecuredInHolding ? <PawPrint className="w-5 h-5" /> : <MapPin className="w-5 h-5" />}
+                                            </div>
+                                            <div className="overflow-hidden">
+                                                <p className="text-[9px] font-black text-white/50 uppercase tracking-widest">
+                                                    {isResolvedCase ? 'Incident Sighting Origin (Resolved)' : isSecuredInHolding ? 'Current Facility Holding Location' : 'Incident Sighting Location'}
+                                                </p>
+                                                <p className="text-sm font-black tracking-tight text-white truncate">
+                                                    {isSecuredInHolding ? (report.facility?.name || report.landmark || 'Holding Facility') : (report.initial_landmark || report.landmark || 'Incident Location')}
+                                                </p>
+                                                <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-0.5">
+                                                    {isResolvedCase ? 'Preserved incident location • Pet no longer loose on active map' : (isGeocoding ? 'Resolving street...' : resolvedAddress || 'Santa Maria, Bulacan • Selera Homes')}
+                                                </p>
+                                                {isSecuredInHolding && report.facility?.caretaker_name && (
+                                                    <p className="text-[10px] text-amber-300 font-semibold mt-1">
+                                                        Caretaker: <span className="font-extrabold">{report.facility.caretaker_name}</span>
+                                                        {report.facility.caretaker_phone ? ` (${report.facility.caretaker_phone})` : ''}
+                                                    </p>
+                                                )}
+                                                {!isResolvedCase ? (
+                                                    <div className="mt-2.5 pt-2 border-t border-white/10 flex flex-wrap items-center gap-2">
+                                                        <button
+                                                            onClick={() => handleGetDirections('gps')}
+                                                            disabled={isLocatingRoute}
+                                                            className={`px-3 py-1.5 text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ${
+                                                                routingState?.isRealtime
+                                                                    ? 'bg-emerald-600 hover:bg-emerald-700 ring-2 ring-emerald-400/40' 
+                                                                    : 'bg-[#F97316] hover:bg-[#EA580C]'
+                                                            }`}
+                                                            title="Use device GPS sensor"
+                                                        >
+                                                            {isLocatingRoute ? <Hourglass className="w-3.5 h-3.5" /> : routingState?.isRealtime ? <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> : <Compass className="w-3.5 h-3.5" />}
+                                                            <span>
+                                                                {isLocatingRoute 
+                                                                    ? 'Checking Location...' 
+                                                                    : routingState?.isRealtime 
+                                                                        ? 'Live GPS Active (Click to Hide)' 
+                                                                        : 'Directions (Live GPS)'}
+                                                            </span>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleGetDirections('home')}
+                                                            className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold rounded-xl transition-all border border-white/10 flex items-center gap-1.5 cursor-pointer"
+                                                            title="Route from your registered home coordinates"
+                                                        >
+                                                            <Home className="w-3.5 h-3.5" />
+                                                            <span>From My Home</span>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleGetDirections('hq')}
+                                                            className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold rounded-xl transition-all border border-white/10 flex items-center gap-1.5 cursor-pointer"
+                                                            title="Route from Barangay San Vicente HQ"
+                                                        >
+                                                            <Landmark className="w-3.5 h-3.5" />
+                                                            <span>From Brgy HQ</span>
+                                                        </button>
+                                                        <button
+                                                            onClick={handleSetStartingPointMode}
+                                                            className={`px-2.5 py-1.5 text-white text-[11px] font-bold rounded-xl transition-all border flex items-center gap-1.5 cursor-pointer ${
+                                                                isSettingStartingPoint
+                                                                    ? 'bg-blue-600 border-blue-400 ring-2 ring-blue-400/40'
+                                                                    : 'bg-white/10 hover:bg-white/20 border-white/10'
+                                                            }`}
+                                                            title="Click anywhere on the map or drag the pin to set your starting location"
+                                                        >
+                                                            <Crosshair className="w-3.5 h-3.5" />
+                                                            <span>Set Starting Point</span>
+                                                        </button>
+                                                        {routingState?.distance && (
+                                                            <span className="px-2.5 py-1 bg-white/10 border border-white/15 rounded-xl text-[11px] font-black text-amber-300 inline-flex items-center gap-1">
+                                                                <Ruler className="w-3 h-3" /> {routingState.distance} {routingState.time ? <><span className="mx-0.5">•</span> <Timer className="w-3 h-3" /> {routingState.time}</> : ''}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center gap-2 text-slate-300 text-[11px] font-medium">
+                                                        <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                                        <span>Case Resolved: The map displays the preserved location history record.</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {isSecuredInHolding && (
+                                            <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
+                                                <div className="w-10 h-10 rounded-2xl bg-slate-700 flex items-center justify-center text-slate-300 shrink-0">
+                                                    <Flag className="w-5 h-5" />
+                                                </div>
+                                                <div className="overflow-hidden">
+                                                    <p className="text-[9px] font-black text-white/50 uppercase tracking-widest">Initial Found / Sighting Spot</p>
+                                                    <p className="text-sm font-black tracking-tight text-slate-200 truncate">
+                                                        {report.initial_landmark || report.landmark || 'Original Reported Location'}
+                                                    </p>
+                                                    <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-0.5">
+                                                        Preserved Incident Origin
+                                                    </p>
+                                                </div>
+                                            </div>
                                         )}
                                     </div>
-                                </div>
-                            </div>
-
-                            {([6, 7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status?.toLowerCase().includes('facility') || report.custody_status?.toLowerCase().includes('secured') || (report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude))) && (
-                                <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
-                                    <div className="w-10 h-10 rounded-2xl bg-slate-700 flex items-center justify-center text-slate-300 shrink-0">
-                                        <Flag className="w-5 h-5" />
-                                    </div>
-                                    <div className="overflow-hidden">
-                                        <p className="text-[9px] font-black text-white/50 uppercase tracking-widest">Initial Found / Sighting Spot</p>
-                                        <p className="text-sm font-black tracking-tight text-slate-200 truncate">
-                                            {report.initial_landmark || 'Original Reported Location'}
-                                        </p>
-                                        <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-0.5">
-                                            Preserved Incident Origin
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                                </>
+                            );
+                        })()}
 
                         {/* Location Unreliable Message & Resolution Options */}
                         {locationAmbiguous && (
@@ -1622,18 +1644,52 @@ const ResiViewReport = () => {
                             </div>
 
                             {(() => {
-                                const isRelocated = report.status_id !== 6 && ([7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || report.custody_status === 'In Subdivision Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude)));
+                                const isResolvedCase = [9, 10, 11, 12, 14, 17, 18].includes(report.status_id) || 
+                                    ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(report.custody_status || '');
+                                const isRelocated = !isResolvedCase && report.status_id !== 6 && ([7, 8].includes(report.status_id) || ['Secured in Facility', 'In Barangay Facility', 'In Subdivision Facility'].includes(report.custody_status || ''));
                                 const activeFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : null;
                                 const activeFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : null;
 
-                                const currentLat = (isRelocated && activeFacLat != null) ? activeFacLat : parseFloat(report.latitude);
-                                const currentLng = (isRelocated && activeFacLng != null) ? activeFacLng : parseFloat(report.longitude);
-                                const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : (isRelocated ? parseFloat(report.latitude.toString()) : null);
-                                const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : (isRelocated ? parseFloat(report.longitude.toString()) : null);
+                                const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : parseFloat(report.latitude);
+                                const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : parseFloat(report.longitude);
+                                const currentLat = (isRelocated && activeFacLat != null) ? activeFacLat : initLat;
+                                const currentLng = (isRelocated && activeFacLng != null) ? activeFacLng : initLng;
                                 const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
                                 const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && (Math.abs(initLat - currentLat) > 0.0001 || Math.abs(initLng - currentLng) > 0.0001);
 
-                                const resiMarkers = [
+                                const hadHoldingHistory = report.history?.some((h: any) => 
+                                    [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
+                                    (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
+                                    (h.action && h.action.toLowerCase().includes('holding'))
+                                ) || Boolean(report.facility_id) || Boolean(report.facility);
+                                const histFacLat = 14.8069;
+                                const histFacLng = 121.0039;
+                                const histFacName = 'Barangay Holding Pen';
+
+                                const resiMarkers = isResolvedCase ? [
+                                    {
+                                        id: report.report_id,
+                                        lat: initLat,
+                                        lng: initLng,
+                                        title: `1. Reported Incident Location: ${report.initial_landmark || report.landmark || 'Incident Location'}`,
+                                        category: 'Historical Sighting',
+                                        priority: report.priority_level || 'Medium',
+                                        color: 'slate',
+                                        time: 'Incident Origin',
+                                        rawData: { ...report, landmark: report.initial_landmark || report.landmark, is_resolved: true }
+                                    },
+                                    ...(hadHoldingHistory ? [{
+                                        id: -999,
+                                        lat: histFacLat,
+                                        lng: histFacLng,
+                                        title: `2. Holding Pen: ${histFacName}`,
+                                        category: 'Historical Holding',
+                                        priority: 'Low',
+                                        color: 'slate',
+                                        time: 'Historical Facility',
+                                        rawData: { ...report, landmark: histFacName, is_resolved: true }
+                                    }] : [])
+                                ] : [
                                     ...(routingState ? [{
                                         id: -888,
                                         lat: routingState.start[0],
@@ -1656,7 +1712,7 @@ const ResiViewReport = () => {
                                                 ? `Animal Picked Up: ${report.landmark || 'Incident Location'}` 
                                                 : (report.landmark || 'Incident Location')),
                                         category: isRelocated ? 'Holding Facility' : (report.animal_type || 'Stray Animal'),
-                                        color: (report.status_id === 6) ? 'blue' : ((report.status_id === 11) ? 'green' : (report.status_id === 4 || report.status_id === 13) ? 'orange' : (report.status_id === 5) ? 'yellow' : 'red'),
+                                        color: (report.status_id === 6) ? 'blue' : ((report.status_id === 4 || report.status_id === 13) ? 'orange' : (report.status_id === 5) ? 'yellow' : 'red'),
                                         priority: report.priority_level || 'Medium',
                                         time: report.created_at ? new Date(report.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Live',
                                         rawData: {
@@ -1684,11 +1740,18 @@ const ResiViewReport = () => {
                                         showHeatmap={false}
                                         showGeofence={true}
                                         showLandmarks={false}
-                                        showHoldingFacilities={true}
+                                        showHoldingFacilities={isRelocated}
                                         hideViewDetailsButton={true}
                                         markers={resiMarkers}
+                                        polylines={isResolvedCase && hadHoldingHistory && initLat && initLng ? [{
+                                            positions: [[initLat, initLng], [histFacLat, histFacLng]],
+                                            color: '#64748B',
+                                            weight: 3,
+                                            dashArray: '6, 8',
+                                            opacity: 0.85
+                                        }] : undefined}
                                         onMapClick={(routingState || isSettingStartingPoint) ? (clickedLat, clickedLng) => handlePinReposition(clickedLat, clickedLng) : undefined}
-                                        routing={routingState ? {
+                                        routing={(!isResolvedCase && routingState) ? {
                                             start: routingState.start,
                                             end: routingState.end,
                                             waypointNames: routingState.waypointNames,
@@ -1820,18 +1883,52 @@ const ResiViewReport = () => {
                             {/* Expanded Map Canvas */}
                             <div className="flex-1 rounded-none sm:rounded-2xl overflow-hidden relative border-0 sm:border border-white/10 min-h-0">
                                 {(() => {
-                                    const isRelocated = report.status_id !== 6 && ([7, 8, 9, 10, 11].includes(report.status_id) || !!report.facility_id || !!report.facility || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || report.custody_status === 'In Subdivision Facility' || !!(report.initial_latitude && (report.initial_latitude !== report.latitude || report.initial_longitude !== report.longitude)));
+                                    const isResolvedCase = [9, 10, 11, 12, 14, 17, 18].includes(report.status_id) || 
+                                        ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(report.custody_status || '');
+                                    const isRelocated = !isResolvedCase && report.status_id !== 6 && ([7, 8].includes(report.status_id) || ['Secured in Facility', 'In Barangay Facility', 'In Subdivision Facility'].includes(report.custody_status || ''));
                                     const activeFacLat = report.facility?.latitude != null ? parseFloat(report.facility.latitude.toString()) : null;
                                     const activeFacLng = report.facility?.longitude != null ? parseFloat(report.facility.longitude.toString()) : null;
 
-                                    const currentLat = (isRelocated && activeFacLat != null) ? activeFacLat : parseFloat(report.latitude);
-                                    const currentLng = (isRelocated && activeFacLng != null) ? activeFacLng : parseFloat(report.longitude);
-                                    const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : (isRelocated ? parseFloat(report.latitude.toString()) : null);
-                                    const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : (isRelocated ? parseFloat(report.longitude.toString()) : null);
+                                    const initLat = report.initial_latitude ? parseFloat(report.initial_latitude.toString()) : parseFloat(report.latitude);
+                                    const initLng = report.initial_longitude ? parseFloat(report.initial_longitude.toString()) : parseFloat(report.longitude);
+                                    const currentLat = (isRelocated && activeFacLat != null) ? activeFacLat : initLat;
+                                    const currentLng = (isRelocated && activeFacLng != null) ? activeFacLng : initLng;
                                     const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
                                     const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && (Math.abs(initLat - currentLat) > 0.0001 || Math.abs(initLng - currentLng) > 0.0001);
 
-                                    const resiMarkers = [
+                                    const hadHoldingHistory = report.history?.some((h: any) => 
+                                        [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
+                                        (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
+                                        (h.action && h.action.toLowerCase().includes('holding'))
+                                    ) || Boolean(report.facility_id) || Boolean(report.facility);
+                                    const histFacLat = 14.8069;
+                                    const histFacLng = 121.0039;
+                                    const histFacName = 'Barangay Holding Pen';
+
+                                    const resiMarkers = isResolvedCase ? [
+                                        {
+                                            id: report.report_id,
+                                            lat: initLat,
+                                            lng: initLng,
+                                            title: `1. Reported Incident Location: ${report.initial_landmark || report.landmark || 'Incident Location'}`,
+                                            category: 'Historical Sighting',
+                                            priority: report.priority_level || 'Medium',
+                                            color: 'slate',
+                                            time: 'Incident Origin',
+                                            rawData: { ...report, landmark: report.initial_landmark || report.landmark, is_resolved: true }
+                                        },
+                                        ...(hadHoldingHistory ? [{
+                                            id: -999,
+                                            lat: histFacLat,
+                                            lng: histFacLng,
+                                            title: `2. Holding Pen: ${histFacName}`,
+                                            category: 'Historical Holding',
+                                            priority: 'Low',
+                                            color: 'slate',
+                                            time: 'Historical Facility',
+                                            rawData: { ...report, landmark: histFacName, is_resolved: true }
+                                        }] : [])
+                                    ] : [
                                         ...(routingState ? [{
                                             id: -888,
                                             lat: routingState.start[0],
@@ -1854,7 +1951,7 @@ const ResiViewReport = () => {
                                                     ? `Animal Picked Up: ${report.landmark || 'Incident Location'}` 
                                                     : (report.landmark || 'Incident Location')),
                                             category: isRelocated ? 'Holding Facility' : (report.animal_type || 'Stray Animal'),
-                                            color: (report.status_id === 6) ? 'blue' : ((report.status_id === 11) ? 'green' : (report.status_id === 4 || report.status_id === 13) ? 'orange' : (report.status_id === 5) ? 'yellow' : 'red'),
+                                            color: (report.status_id === 6) ? 'blue' : ((report.status_id === 4 || report.status_id === 13) ? 'orange' : (report.status_id === 5) ? 'yellow' : 'red'),
                                             priority: report.priority_level || 'Medium',
                                             time: report.created_at ? new Date(report.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Live',
                                             rawData: {
@@ -1882,11 +1979,18 @@ const ResiViewReport = () => {
                                             showHeatmap={false}
                                             showGeofence={true}
                                             showLandmarks={true}
-                                            showHoldingFacilities={true}
+                                            showHoldingFacilities={isRelocated}
                                             hideViewDetailsButton={true}
                                             markers={resiMarkers}
+                                            polylines={isResolvedCase && hadHoldingHistory && initLat && initLng ? [{
+                                                positions: [[initLat, initLng], [histFacLat, histFacLng]],
+                                                color: '#64748B',
+                                                weight: 3,
+                                                dashArray: '6, 8',
+                                                opacity: 0.85
+                                            }] : undefined}
                                             onMapClick={(routingState || isSettingStartingPoint) ? (clickedLat, clickedLng) => handlePinReposition(clickedLat, clickedLng) : undefined}
-                                            routing={routingState ? {
+                                            routing={(!isResolvedCase && routingState) ? {
                                                 start: routingState.start,
                                                 end: routingState.end,
                                                 waypointNames: routingState.waypointNames,
