@@ -3,37 +3,34 @@ import React, { useState, useEffect } from 'react';
 // Directly bundle the GIFs in the component so it is 100% self-contained and reusable anywhere
 import catGifAsset from '../assets/straysafe_running_cat.gif';
 import dogGifAsset from '../assets/straysafe_dog_running.gif';
+import dogCatGifAsset from '../assets/dog_and_cat_running.gif';
 
 export const CAT_LOADING_GIF: string = catGifAsset;
 export const DOG_LOADING_GIF: string = dogGifAsset;
+export const DOG_CAT_LOADING_GIF: string = dogCatGifAsset;
 
-// Automatic silent preloader so both animations appear instantly with 0ms lag
+// Automatic silent preloader so all animations appear instantly with 0ms lag
 if (typeof window !== 'undefined') {
     try {
         const p1 = new Image();
         p1.src = CAT_LOADING_GIF;
         const p2 = new Image();
         p2.src = DOG_LOADING_GIF;
-        if (catGifAsset) {
-            const p3 = new Image();
-            p3.src = catGifAsset;
-        }
-        if (dogGifAsset) {
-            const p4 = new Image();
-            p4.src = dogGifAsset;
-        }
+        const p3 = new Image();
+        p3.src = DOG_CAT_LOADING_GIF;
     } catch {
         // Safe ignore during SSR or non-browser environments
     }
 }
 
-export type AnimalType = 'Cat' | 'Dog' | 'cat' | 'dog' | 'Unknown' | string | null | undefined;
+export type AnimalType = 'Cat' | 'Dog' | 'cat' | 'dog' | 'both' | 'all' | 'verify' | 'verification' | 'dog_cat' | 'dog_and_cat' | 'Unknown' | string | null | undefined;
 
 export interface StraySafeLoadingProps {
     /** 
      * Target animal type. 
      * - 'cat' (or containing 'cat', 'kitten', 'puspin', 'feline') -> Running Cat GIF
      * - 'dog' (or containing 'dog', 'puppy', 'aspin', 'canine')   -> Running Dog GIF
+     * - 'both' / 'verify' / 'dog_cat'                           -> Dog & Cat Running GIF
      * Automatically defaults to 'dog' if undefined.
      */
     animalType?: AnimalType;
@@ -56,11 +53,21 @@ export interface StraySafeLoadingProps {
 }
 
 /**
- * Normalizes an animal type string to 'cat' or 'dog'.
+ * Normalizes an animal type string to 'cat', 'dog', or 'both'.
  */
-export const normalizeAnimalType = (animal?: AnimalType): 'cat' | 'dog' => {
+export const normalizeAnimalType = (animal?: AnimalType): 'cat' | 'dog' | 'both' => {
     if (!animal) return 'dog';
     const lower = String(animal).trim().toLowerCase();
+    if (
+        lower.includes('both') ||
+        lower.includes('all') ||
+        lower.includes('verify') ||
+        lower.includes('verification') ||
+        lower.includes('dog_cat') ||
+        lower.includes('dog_and_cat')
+    ) {
+        return 'both';
+    }
     if (
         lower.includes('cat') ||
         lower.includes('feline') ||
@@ -76,13 +83,14 @@ export const normalizeAnimalType = (animal?: AnimalType): 'cat' | 'dog' => {
  * Get the corresponding GIF asset for any given animal type.
  */
 export const getAnimalGif = (animal?: AnimalType): string => {
-    return normalizeAnimalType(animal) === 'cat' ? CAT_LOADING_GIF : DOG_LOADING_GIF;
+    const normalized = normalizeAnimalType(animal);
+    if (normalized === 'both') return DOG_CAT_LOADING_GIF;
+    return normalized === 'cat' ? CAT_LOADING_GIF : DOG_LOADING_GIF;
 };
 
 /**
  * Main Dynamic Loading Component.
- * Automatically chooses running cat GIF or running dog GIF based on animalType.
- * Never displays both simultaneously.
+ * Automatically chooses running cat GIF, running dog GIF, or dual dog & cat running GIF.
  */
 export const StraySafeLoading: React.FC<StraySafeLoadingProps> = ({
     animalType = 'Dog',
@@ -95,8 +103,8 @@ export const StraySafeLoading: React.FC<StraySafeLoadingProps> = ({
     badgeText,
     progressText,
 }) => {
-    const isCat = normalizeAnimalType(animalType) === 'cat';
-    const primaryAsset = isCat ? CAT_LOADING_GIF : DOG_LOADING_GIF;
+    const normType = normalizeAnimalType(animalType);
+    const primaryAsset = normType === 'both' ? DOG_CAT_LOADING_GIF : (normType === 'cat' ? CAT_LOADING_GIF : DOG_LOADING_GIF);
 
     const [imgSrc, setImgSrc] = useState<string>(primaryAsset);
     const [isImgLoaded, setIsImgLoaded] = useState<boolean>(false);
@@ -108,28 +116,32 @@ export const StraySafeLoading: React.FC<StraySafeLoadingProps> = ({
     }, [primaryAsset]);
 
     const handleImgError = () => {
-        if (isCat) {
+        if (normType === 'both') {
+            if (imgSrc !== DOG_CAT_LOADING_GIF) {
+                setImgSrc(DOG_CAT_LOADING_GIF);
+            } else {
+                setImgSrc('/assets/dog_and_cat_running.gif');
+            }
+        } else if (normType === 'cat') {
             if (imgSrc !== catGifAsset && catGifAsset) {
                 setImgSrc(catGifAsset);
             } else if (imgSrc !== DOG_LOADING_GIF) {
                 setImgSrc(DOG_LOADING_GIF);
-            } else if (dogGifAsset) {
-                setImgSrc(dogGifAsset);
             }
         } else {
             if (imgSrc !== dogGifAsset && dogGifAsset) {
                 setImgSrc(dogGifAsset);
             } else if (imgSrc !== CAT_LOADING_GIF) {
                 setImgSrc(CAT_LOADING_GIF);
-            } else if (catGifAsset) {
-                setImgSrc(catGifAsset);
             }
         }
     };
 
     // Default badge and title if not explicitly provided
-    const effectiveBadge = badgeText || (isCat ? '🐱 Cat Sighting Dispatch' : '🐶 Dog Sighting Dispatch');
-    const effectiveMessage = message || (isCat ? 'Processing Cat Report' : 'Processing Dog Report');
+    const isCat = normType === 'cat';
+    const isBoth = normType === 'both';
+    const effectiveBadge = badgeText || (isBoth ? '🐾 StraySafe Animal Vision' : (isCat ? '🐱 Cat Sighting Dispatch' : '🐶 Dog Sighting Dispatch'));
+    const effectiveMessage = message || (isBoth ? 'Processing Animal Report' : (isCat ? 'Processing Cat Report' : 'Processing Dog Report'));
 
     const sizeConfig = {
         sm: {
@@ -178,22 +190,22 @@ export const StraySafeLoading: React.FC<StraySafeLoadingProps> = ({
                     </div>
                 )}
 
-                {/* Animated Mascot Artwork (Either Cat OR Dog - Never Both) */}
-                <div className={`relative w-full ${sizeConfig.imgWrap} rounded-2xl sm:rounded-[2rem] overflow-hidden shadow-md border border-amber-200/50 dark:border-gray-700/60 bg-[#F4ECE2] dark:bg-[#1a2338] p-1.5 flex items-center justify-center`}>
+                {/* Animated Mascot Artwork */}
+                <div className={`relative w-full ${isBoth ? 'max-w-[280px] sm:max-w-[340px] aspect-[16/9] p-0' : `${sizeConfig.imgWrap} p-1.5`} rounded-2xl sm:rounded-[2rem] overflow-hidden shadow-md border border-amber-200/50 dark:border-gray-700/60 bg-[#FAF7F2] dark:bg-[#1a2338] flex items-center justify-center`}>
                     {!isImgLoaded && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center bg-orange-50/50 dark:bg-gray-800/50 animate-pulse z-0">
-                            <span className="text-2xl animate-bounce">{isCat ? '🐱' : '🐶'}</span>
+                            <span className="text-2xl animate-bounce">{isBoth ? '🐾' : (isCat ? '🐱' : '🐶')}</span>
                         </div>
                     )}
                     <img
                         key={imgSrc}
                         src={imgSrc}
-                        alt={isCat ? "STRAY-SAFE Running Cat Loading Animation" : "STRAY-SAFE Running Dog Loading Animation"}
+                        alt={isBoth ? "STRAY-SAFE Dog and Cat Verification Animation" : (isCat ? "STRAY-SAFE Running Cat Loading Animation" : "STRAY-SAFE Running Dog Loading Animation")}
                         onLoad={() => setIsImgLoaded(true)}
                         onError={handleImgError}
                         loading="eager"
                         decoding="async"
-                        className={`w-full h-auto min-h-[120px] max-h-[170px] sm:max-h-[240px] rounded-xl sm:rounded-[1.6rem] block object-contain select-none pointer-events-none transition-opacity duration-300 z-10 ${isImgLoaded ? 'opacity-100' : 'opacity-90'}`}
+                        className={`w-full h-full rounded-xl sm:rounded-[1.6rem] block object-contain object-center select-none pointer-events-none transition-opacity duration-300 z-10 ${isImgLoaded ? 'opacity-100' : 'opacity-90'}`}
                     />
                 </div>
 

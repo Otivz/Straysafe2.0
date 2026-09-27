@@ -288,73 +288,25 @@ const SubdReports = () => {
     useEffect(() => {
         if (!reports || reports.length === 0) return;
 
-        let isMounted = true;
-        const fetchAllAddresses = async () => {
-            for (const r of reports) {
-                if (!isMounted) break;
-                if (reportAddresses[r.report_id]) continue;
-
-                // Priority 1: If report already has a descriptive landmark, use it directly
-                if (r.landmark && r.landmark.trim() && 
-                    !r.landmark.toLowerCase().includes('no landmark') &&
-                    r.landmark.trim().length > 3) {
-                    setReportAddresses(prev => ({ ...prev, [r.report_id]: r.landmark! }));
-                    continue;
-                }
-
-                if (!r.latitude || !r.longitude) continue;
-
-                // Priority 2: Check sessionStorage cache
+        const mapped: Record<number, string> = {};
+        for (const r of reports) {
+            if (r.location_address && r.location_address.trim()) {
+                mapped[r.report_id] = r.location_address.trim();
+            } else if (r.landmark && r.landmark.trim() && !r.landmark.toLowerCase().includes('no landmark')) {
+                mapped[r.report_id] = r.landmark.trim();
+            } else if (r.initial_landmark && r.initial_landmark.trim()) {
+                mapped[r.report_id] = r.initial_landmark.trim();
+            } else if (r.latitude && r.longitude) {
                 const cacheKey = `straysafe_geo_${parseFloat(r.latitude.toString()).toFixed(4)}_${parseFloat(r.longitude.toString()).toFixed(4)}`;
                 try {
                     const cached = sessionStorage.getItem(cacheKey);
-                    if (cached) {
-                        setReportAddresses(prev => ({ ...prev, [r.report_id]: cached }));
-                        continue;
-                    }
+                    if (cached) mapped[r.report_id] = cached;
                 } catch {
-                    // Ignore storage access errors
+                    // Ignore storage errors
                 }
-
-                // Priority 3: Query Nominatim with safe rate limiting
-                try {
-                    const res = await axios.get('https://nominatim.openstreetmap.org/reverse', {
-                        params: {
-                            format: 'jsonv2',
-                            lat: r.latitude,
-                            lon: r.longitude,
-                            addressdetails: 1
-                        },
-                        headers: { 'Accept-Language': 'en' }
-                    });
-                    if (!isMounted) break;
-                    if (res.data && res.data.address) {
-                        const addr = res.data.address;
-                        const parts = [];
-                        const road = addr.road || addr.pedestrian || addr.path || '';
-                        if (road) parts.push(road);
-                        const neighbourhood = addr.neighbourhood || addr.village || addr.suburb || '';
-                        if (neighbourhood && neighbourhood !== road) parts.push(neighbourhood);
-                        const city = addr.city || addr.town || addr.municipality || '';
-                        if (city) parts.push(city);
-                        const fullAddr = parts.join(', ') || res.data.display_name;
-
-                        if (fullAddr) {
-                            try { sessionStorage.setItem(cacheKey, fullAddr); } catch { /* ignore */ }
-                            setReportAddresses(prev => ({ ...prev, [r.report_id]: fullAddr }));
-                        }
-                    }
-                } catch {
-                    // Ignore errors silently (rate limit 429 or network fail)
-                }
-                // Adhere to Nominatim 1 req/sec policy
-                await new Promise(resolve => setTimeout(resolve, 1000));
             }
-        };
-
-        fetchAllAddresses();
-
-        return () => { isMounted = false; };
+        }
+        setReportAddresses(prev => ({ ...mapped, ...prev }));
     }, [reports]);
 
     const getExactLocationText = (rep: Report) => {
@@ -1605,6 +1557,10 @@ const SubdReports = () => {
                                                     behaviorInjury={(viewReport as any).ai_behavior_injury}
                                                     behaviorAggressive={(viewReport as any).ai_behavior_aggressive}
                                                     behaviorExplanation={(viewReport as any).ai_behavior_explanation}
+                                                    aiPhotoLikelihood={(viewReport as any).ai_photo_likelihood}
+                                                    aiPhotoStatus={(viewReport as any).ai_photo_status}
+                                                    aiPhotoRecommendation={(viewReport as any).ai_photo_recommendation}
+                                                    aiPhotoDetails={(viewReport as any).ai_photo_details}
                                                     verificationStatus={viewReport.verification_status}
                                                     verifiedActualBite={(viewReport as any).verified_actual_bite}
                                                     verifiedChasing={(viewReport as any).verified_chasing}
@@ -1619,12 +1575,57 @@ const SubdReports = () => {
 
                                                 {/* Map Location */}
                                                 <div>
-                                                    <h5 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Incident Location Map</h5>
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <h5 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Incident Location Map</h5>
+                                                        {isNavigating ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setIsNavigating(false)}
+                                                                className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                                            >
+                                                                <span>✕ Clear Route</span>
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setNavSource('current');
+                                                                    if ("geolocation" in navigator) {
+                                                                        navigator.geolocation.getCurrentPosition(
+                                                                            (position) => {
+                                                                                setUserLocation([position.coords.latitude, position.coords.longitude]);
+                                                                                setIsNavigating(true);
+                                                                            },
+                                                                            (error) => {
+                                                                                console.error("Error getting location:", error);
+                                                                                setIsNavigating(false);
+                                                                                alert("Unable to retrieve your current location. Please enable GPS permissions in your browser.");
+                                                                            },
+                                                                            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                                                                        );
+                                                                    } else {
+                                                                        alert("Geolocation is not supported by your browser.");
+                                                                        setIsNavigating(false);
+                                                                    }
+                                                                }}
+                                                                className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] border border-orange-200 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+                                                            >
+                                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                </svg>
+                                                                <span>Directions from Me</span>
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                     <div className="w-full h-64 rounded-2xl overflow-hidden border border-gray-100 shadow-sm bg-gray-50">
                                                         <MapComponent
                                                             center={[viewReport.latitude, viewReport.longitude]}
                                                             zoom={17}
                                                             showHeatmap={false}
+                                                            showGeofence={true}
+                                                            showLandmarks={true}
+                                                            showHQ={true}
                                                             markers={[
                                                                 {
                                                                     id: viewReport.report_id,
@@ -1649,28 +1650,38 @@ const SubdReports = () => {
                                                                     category: "User Location"
                                                                 }] : [])
                                                             ]}
-                                                            routing={isNavigating ? (() => {
+                                                            routing={isNavigating && userLocation ? (() => {
                                                                 const repLoc: [number, number] = [viewReport.latitude, viewReport.longitude];
                                                                 const destName = viewReport.landmark || 'Incident Location';
-                                                                if (navSource === 'current' && userLocation) {
-                                                                    return {
-                                                                        start: userLocation,
-                                                                        end: repLoc,
-                                                                        waypointNames: ["Your Location", destName] as [string, string],
-                                                                        onClose: () => setIsNavigating(false)
-                                                                    };
-                                                                } else {
-                                                                    return {
-                                                                        start: BRGY_OFFICE,
-                                                                        end: repLoc,
-                                                                        waypointNames: ["Barangay Office", destName] as [string, string],
-                                                                        onClose: () => setIsNavigating(false)
-                                                                    };
-                                                                }
+                                                                return {
+                                                                    start: userLocation,
+                                                                    end: repLoc,
+                                                                    waypointNames: ["My Current Location", destName] as [string, string],
+                                                                    onClose: () => setIsNavigating(false)
+                                                                };
                                                             })() : undefined}
-                                                            onMarkerClick={(m) => {
-                                                                setNavSource(m.source || 'brgy');
-                                                                setIsNavigating(true);
+                                                            onMarkerClick={() => {
+                                                                // Marker clicked: do not automatically start directions
+                                                            }}
+                                                            onDirectionsClick={() => {
+                                                                setNavSource('current');
+                                                                if ("geolocation" in navigator) {
+                                                                    navigator.geolocation.getCurrentPosition(
+                                                                        (pos) => {
+                                                                            setUserLocation([pos.coords.latitude, pos.coords.longitude]);
+                                                                            setIsNavigating(true);
+                                                                        },
+                                                                        (err) => {
+                                                                            console.error("Error getting user location:", err);
+                                                                            setIsNavigating(false);
+                                                                            alert("Unable to retrieve your current location. Please enable GPS permissions in your browser.");
+                                                                        },
+                                                                        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                                                                    );
+                                                                } else {
+                                                                    alert("Geolocation is not supported by your browser.");
+                                                                    setIsNavigating(false);
+                                                                }
                                                             }}
                                                         />
                                                     </div>

@@ -96,8 +96,22 @@ const AppRoutes = () => {
                 <Route path="/resident/settings" element={<ResidentSettings />} />
                 <Route path="/resident/reports/:reportId/match-review" element={<PetMatchReview />} />
                 <Route path="/resident/pet/:petId/claims-dashboard" element={<PetClaimsDashboard />} />
+            </Route>
+
+            {/* Authenticated Adoption Application, Journey & Tracking (Residents, Staff, Admin) */}
+            <Route element={<ProtectedRoute allowedRoles={[1, 2, 3, 4]} />}>
                 <Route path="/adopt/apply/:id" element={<AdoptionApplyForm />} />
                 <Route path="/adopt/applications" element={<MyAdoptionApplications />} />
+                <Route path="/adopt/journey" element={<AnimalJourneyMap />} />
+                <Route path="/adopt/journey/:id" element={<AnimalJourneyMap />} />
+                <Route path="/resident/adopt/journey" element={<AnimalJourneyMap />} />
+                <Route path="/resident/adopt/journey/:id" element={<AnimalJourneyMap />} />
+                <Route path="/brgy/adopt/journey" element={<AnimalJourneyMap />} />
+                <Route path="/brgy/adopt/journey/:id" element={<AnimalJourneyMap />} />
+                <Route path="/subd/adopt/journey" element={<AnimalJourneyMap />} />
+                <Route path="/subd/adopt/journey/:id" element={<AnimalJourneyMap />} />
+                <Route path="/admin/adopt/journey" element={<AnimalJourneyMap />} />
+                <Route path="/admin/adopt/journey/:id" element={<AnimalJourneyMap />} />
             </Route>
 
             {/* Protected Subdivision Leader Routes (Role ID = 2) */}

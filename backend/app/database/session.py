@@ -15,7 +15,19 @@ if not DATABASE_URL:
 
 
 
-engine = create_engine(DATABASE_URL)
+is_sqlite = DATABASE_URL.startswith("sqlite")
+engine_kwargs = {}
+if is_sqlite:
+    engine_kwargs = {"connect_args": {"check_same_thread": False}}
+else:
+    engine_kwargs = {
+        "pool_size": 15,
+        "max_overflow": 25,
+        "pool_pre_ping": True,
+        "pool_recycle": 300
+    }
+
+engine = create_engine(DATABASE_URL, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 class Base(DeclarativeBase):

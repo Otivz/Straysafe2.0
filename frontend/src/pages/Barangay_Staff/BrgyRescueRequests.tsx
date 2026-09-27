@@ -1489,6 +1489,10 @@ const BrgyRescueRequests = () => {
                                     behaviorInjury={(viewingRequest.report as any)?.ai_behavior_injury}
                                     behaviorAggressive={(viewingRequest.report as any)?.ai_behavior_aggressive}
                                     behaviorExplanation={(viewingRequest.report as any)?.ai_behavior_explanation}
+                                    aiPhotoLikelihood={(viewingRequest.report as any)?.ai_photo_likelihood}
+                                    aiPhotoStatus={(viewingRequest.report as any)?.ai_photo_status}
+                                    aiPhotoRecommendation={(viewingRequest.report as any)?.ai_photo_recommendation}
+                                    aiPhotoDetails={(viewingRequest.report as any)?.ai_photo_details}
                                     verificationStatus={viewingRequest.report?.verification_status}
                                     verifiedActualBite={(viewingRequest.report as any)?.verified_actual_bite}
                                     verifiedChasing={(viewingRequest.report as any)?.verified_chasing}
@@ -1580,20 +1584,38 @@ const BrgyRescueRequests = () => {
                                                                 category: "User Location"
                                                             }] : [])
                                                         ]}
-                                                        routing={isNavigating ? {
-                                                            start: navSource === 'brgy' ? BRGY_OFFICE : (userLocation || BRGY_OFFICE),
+                                                        routing={isNavigating && (navSource === 'brgy' || userLocation) ? {
+                                                            start: navSource === 'brgy' ? BRGY_OFFICE : userLocation!,
                                                             end: [currentLat, currentLng],
-                                                            waypointNames: [navSource === 'brgy' ? "Barangay Office" : "Your Location", isFac ? (rep?.facility?.name || 'Holding Facility') : (rep?.landmark || "Rescue Site")],
+                                                            waypointNames: [navSource === 'brgy' ? "Barangay Hall HQ" : "My Current Location", isFac ? (rep?.facility?.name || 'Holding Facility') : (rep?.landmark || "Rescue Site")],
                                                             onClose: () => setIsNavigating(false)
                                                         } : undefined}
-                                                        onMarkerClick={(m) => {
-                                                            if (m.source) {
-                                                                setNavSource(m.source);
-                                                                setIsNavigating(true);
+                                                        onMarkerClick={() => {
+                                                            // Do not auto-navigate on marker click
+                                                        }}
+                                                        onDirectionsClick={() => {
+                                                            setNavSource('current');
+                                                            if ("geolocation" in navigator) {
+                                                                navigator.geolocation.getCurrentPosition(
+                                                                    (pos) => {
+                                                                        setUserLocation([pos.coords.latitude, pos.coords.longitude]);
+                                                                        setIsNavigating(true);
+                                                                    },
+                                                                    (err) => {
+                                                                        console.error("Error getting user location:", err);
+                                                                        setIsNavigating(false);
+                                                                        alert("Unable to retrieve your current location. Please enable GPS permissions in your browser.");
+                                                                    },
+                                                                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                                                                );
                                                             } else {
-                                                                setIsNavigating(true);
-                                                                setNavSource('brgy');
+                                                                alert("Geolocation is not supported by your browser.");
+                                                                setIsNavigating(false);
                                                             }
+                                                        }}
+                                                        onDirectionsFromBrgyClick={() => {
+                                                            setNavSource('brgy');
+                                                            setIsNavigating(true);
                                                         }}
                                                     />
                                                 );

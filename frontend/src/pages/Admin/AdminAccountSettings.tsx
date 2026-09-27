@@ -7,7 +7,7 @@ import Button from '../../components/Button';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents, Polygon, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { fetchCoverageArea, type CoverageAreaInfo, SELERA_DEFAULT_CENTER, SELERA_DEFAULT_POLYGON } from '../../utils/coverageArea';
+import { fetchCoverageArea, type CoverageAreaInfo, SELERA_DEFAULT_CENTER, SELERA_DEFAULT_POLYGON, SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS, getPolygonLatLngs } from '../../utils/coverageArea';
 
 // Fix Leaflet default icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -1536,13 +1536,8 @@ const AdminAccountSettings = () => {
 
                                             {/* Selera Homes Official Subdivision Boundary Polygon */}
                                             <Polygon
-                                                positions={(coverageData.boundary_polygon || []).map(p => [p.lat, p.lng] as [number, number])}
-                                                pathOptions={{
-                                                    color: '#F97316',
-                                                    fillColor: '#FB923C',
-                                                    fillOpacity: 0.35,
-                                                    weight: 2
-                                                }}
+                                                positions={getPolygonLatLngs(coverageData.boundary_polygon)}
+                                                pathOptions={SELERA_BOUNDARY_PATH_OPTIONS}
                                             >
                                                 <Popup>
                                                     <div className="p-1 text-xs font-bold text-orange-700">

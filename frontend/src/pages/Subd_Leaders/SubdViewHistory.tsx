@@ -586,6 +586,7 @@ const SubdViewHistory = () => {
                                                         center={[initLat, initLng]}
                                                         zoom={17}
                                                         showHeatmap={false}
+                                                        hideViewDetailsButton={true}
                                                         markers={histMarkers}
                                                         polylines={hadHoldingHistory ? [{
                                                             positions: [[initLat, initLng], [histFacLat, histFacLng]],

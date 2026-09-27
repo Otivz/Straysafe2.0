@@ -27,6 +27,11 @@ class LoginResponse(BaseModel):
     created_at: Optional[datetime] = None
     access_token: Optional[str] = None
     token_type: Optional[str] = "bearer"
+    is_new_user: Optional[bool] = False
+    requires_profile_completion: Optional[bool] = False
+    requires_otp: Optional[bool] = False
+    dev_otp: Optional[str] = None
+    message: Optional[str] = None
 
     model_config = {
         "from_attributes": True
@@ -39,6 +44,38 @@ class GoogleAuthRequest(BaseModel):
     google_id: Optional[str] = None
     profile_picture: Optional[str] = None
     credential: Optional[str] = None
+
+
+class CompleteProfileRequest(BaseModel):
+    user_id: Optional[int] = None
+    email: Optional[EmailStr] = None
+    name: str
+    phone: str
+    subdivision_id: int
+    address: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+class CompleteProfileResponse(BaseModel):
+    status: str
+    message: str
+    user_id: int
+    email: str
+    phone: Optional[str] = None
+    expires_in: int = 300
+    dev_otp: Optional[str] = None
+
+
+class VerifyOtpRequest(BaseModel):
+    user_id: Optional[int] = None
+    email: Optional[EmailStr] = None
+    otp: str
+
+
+class ResendOtpRequest(BaseModel):
+    user_id: Optional[int] = None
+    email: Optional[EmailStr] = None
 
 
 class UserPublicResponse(BaseModel):
@@ -60,5 +97,3 @@ class UserPublicResponse(BaseModel):
     model_config = {
         "from_attributes": True
     }
-
-

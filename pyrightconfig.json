@@ -1,0 +1,11 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonPlatform": "Windows",
+  "include": ["backend/app"],
+  "extraPaths": [
+    "backend",
+    "backend/app",
+    ".venv/Lib/site-packages"
+  ]
+}

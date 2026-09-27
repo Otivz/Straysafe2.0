@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import api from '../../utils/api';
+import { api, getStoredToken } from '../../utils/api';
 import { getPetPicture } from '../../utils/avatar';
 import { Heart, Search, MapPin, Phone, User, Shield, ArrowRight, Sparkles, AlertCircle, ArrowLeft, ClipboardList } from 'lucide-react';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
@@ -41,16 +41,42 @@ const AdoptionCatalog = () => {
     const [typeFilter, setTypeFilter] = useState<'all' | 'dog' | 'cat'>('all');
     const [searchQuery, setSearchQuery] = useState('');
 
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token') || localStorage.getItem('access_token');
-    const rawUser = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
-    const residentObj = rawUser ? JSON.parse(rawUser) : null;
-    const isResidentLoggedIn = Boolean((token || residentObj) && residentObj);
+    const token = getStoredToken();
+    const getSafeUser = () => {
+        try {
+            const rawUser = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user') ||
+                            localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user') ||
+                            localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user');
+            return rawUser ? JSON.parse(rawUser) : null;
+        } catch {
+            return null;
+        }
+    };
+    const residentObj = getSafeUser();
+    const isUserLoggedIn = Boolean(residentObj || token);
 
     const handleBack = () => {
-        if (window.history.length > 2) {
-            navigate(-1);
-        } else {
+        const rawResident = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
+        const rawStaff = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
+        const rawAdmin = localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user');
+
+        if (rawResident) {
             navigate('/resident-home');
+        } else if (rawStaff) {
+            try {
+                const staff = JSON.parse(rawStaff);
+                if (staff.role_id === 2 || staff.role_id === '2') {
+                    navigate('/subd/dashboard');
+                } else {
+                    navigate('/brgy/dashboard');
+                }
+            } catch {
+                navigate('/brgy/dashboard');
+            }
+        } else if (rawAdmin) {
+            navigate('/admin/dashboard');
+        } else {
+            navigate('/');
         }
     };
 
@@ -91,7 +117,7 @@ const AdoptionCatalog = () => {
     }, [animals, typeFilter, searchQuery]);
 
     const handleApplyClick = (holdingId: number) => {
-        if (!isResidentLoggedIn) {
+        if (!isUserLoggedIn) {
             navigate('/login', { state: { from: `/adopt/apply/${holdingId}` } });
         } else {
             navigate(`/adopt/apply/${holdingId}`);
@@ -113,7 +139,7 @@ const AdoptionCatalog = () => {
                     <button
                         onClick={handleBack}
                         className="flex items-center gap-2 group text-gray-500 dark:text-gray-400 hover:text-[#F97316] dark:hover:text-[#F97316] transition-colors cursor-pointer"
-                        title="Go Back"
+                        title="Back to Homepage"
                     >
                         <div className="w-10 h-10 rounded-xl bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-800 flex items-center justify-center text-gray-400 group-hover:text-[#F97316] group-hover:border-orange-200 dark:group-hover:border-orange-500/30 transition-all shadow-sm">
                             <ArrowLeft className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
@@ -185,22 +211,22 @@ const AdoptionCatalog = () => {
             {/* Catalog Grid Section */}
             <main className="max-w-6xl mx-auto px-4 sm:px-8 pb-20">
                 {/* Logged-in Resident Account Card */}
-                {isResidentLoggedIn && residentObj && (
+                {isUserLoggedIn && residentObj && (
                     <div className="bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 rounded-3xl p-6 sm:p-7 mb-8 text-white shadow-lg border border-orange-400/30">
                         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
                             <div className="flex items-start sm:items-center gap-4">
                                 <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center font-black text-2xl border border-white/30 text-white shrink-0 shadow-xs">
-                                    {residentObj.name?.[0]?.toUpperCase() || 'R'}
+                                    {((residentObj.name || residentObj.email || 'R')[0] || 'R').toUpperCase()}
                                 </div>
                                 <div>
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <h2 className="text-xl font-black tracking-tight text-white">{residentObj.name}</h2>
+                                        <h2 className="text-xl font-black tracking-tight text-white">{residentObj.name || residentObj.email || 'Resident'}</h2>
                                         <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-white/25 backdrop-blur-md text-white font-bold tracking-wide uppercase">
-                                            Logged-In Resident
+                                            {residentObj.role_id === 1 ? 'Logged-In Resident' : (residentObj.role_id === 2 ? 'Subdivision Leader' : (residentObj.role_id === 3 ? 'Barangay Staff' : 'Administrator'))}
                                         </span>
                                     </div>
                                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-orange-100 mt-1.5 font-medium">
-                                        <span>📧 {residentObj.email}</span>
+                                        {residentObj.email && <span>📧 {residentObj.email}</span>}
                                         {residentObj.phone && <span>📞 {residentObj.phone}</span>}
                                         {residentObj.address && <span>📍 {residentObj.address}</span>}
                                     </div>

@@ -88,6 +88,7 @@ const SubdDashboard = () => {
     const [selectedMapCoords, setSelectedMapCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [isNavigating, setIsNavigating] = useState(false);
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+    const [geoToast, setGeoToast] = useState<{ message: string; type: 'error' | 'info' } | null>(null);
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [trendFilter, setTrendFilter] = useState<'7D' | '4W' | '6M' | '1Y'>('7D');
@@ -99,6 +100,14 @@ const SubdDashboard = () => {
 
     const mapSectionRef = useRef<HTMLDivElement>(null);
     const chartScrollRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!geoToast) return;
+        const timer = setTimeout(() => {
+            setGeoToast(null);
+        }, 6000);
+        return () => clearTimeout(timer);
+    }, [geoToast]);
 
     useEffect(() => {
         if (chartScrollRef.current) {
@@ -449,17 +458,57 @@ const SubdDashboard = () => {
         }
     };
 
+    const handleDirectionsFromMe = (markerOrReport: any) => {
+        const fullReport = reports.find(r => r.report_id?.toString() === markerOrReport?.id?.toString()) || markerOrReport?.rawData || markerOrReport;
+        if (!fullReport) return;
+
+        if (!("geolocation" in navigator)) {
+            setGeoToast({
+                message: "Geolocation is not supported by your browser.",
+                type: 'error'
+            });
+            setIsNavigating(false);
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const coords: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+                setUserLocation(coords);
+                setSelectedReport(fullReport);
+                setIsNavigating(true);
+            },
+            (err) => {
+                console.error("Error getting user location:", err);
+                setIsNavigating(false);
+                let errMsg = "Unable to retrieve your current location. Please enable GPS/location permissions in your browser to get directions.";
+                if (err.code === err.PERMISSION_DENIED) {
+                    errMsg = "Location permission denied. Please allow location access in your browser settings to get directions from your current location.";
+                } else if (err.code === err.POSITION_UNAVAILABLE) {
+                    errMsg = "Current GPS position is unavailable. Please check your network or device location settings.";
+                } else if (err.code === err.TIMEOUT) {
+                    errMsg = "Location request timed out. Please try again.";
+                }
+                setGeoToast({
+                    message: errMsg,
+                    type: 'error'
+                });
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    };
+
     const getRoutingConfig = () => {
-        if (!isNavigating || !selectedReport) return undefined;
+        if (!isNavigating || !selectedReport || !userLocation) return undefined;
         const repLat = parseFloat(selectedReport.latitude || selectedReport.lat);
         const repLng = parseFloat(selectedReport.longitude || selectedReport.lng);
         if (isNaN(repLat) || isNaN(repLng)) return undefined;
         const destName = selectedReport.landmark || selectedReport.title || `Report #${selectedReport.report_id}`;
 
         return {
-            start: userLocation || ADMIN_HQ,
+            start: userLocation,
             end: [repLat, repLng] as [number, number],
-            waypointNames: ["Your Position", destName] as [string, string],
+            waypointNames: ["My Current Location", destName] as [string, string],
             onClose: () => setIsNavigating(false)
         };
     };
@@ -562,7 +611,31 @@ const SubdDashboard = () => {
     const leaderName = currentUser?.name || currentUser?.full_name || 'Kyla Joy Arriola';
 
     return (
-        <div className="min-h-screen w-full flex bg-[#F8FAFC] font-sans text-slate-800">
+        <div className="min-h-screen w-full flex bg-[#F8FAFC] font-sans text-slate-800 relative">
+            {/* Geolocation Toast Notification */}
+            {geoToast && (
+                <div className="fixed top-5 right-5 z-[9999] max-w-md bg-white border border-rose-200 shadow-2xl rounded-2xl p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+                    <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                    <div className="flex-1 min-w-0 pt-0.5">
+                        <h4 className="text-xs font-black text-rose-900 tracking-wide">Location Required</h4>
+                        <p className="text-xs text-rose-700 mt-0.5 leading-relaxed font-medium">{geoToast.message}</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setGeoToast(null)}
+                        className="text-rose-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-colors"
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            )}
+
             {/* Sidebar */}
             <SubdSidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
 
@@ -905,13 +978,13 @@ const SubdDashboard = () => {
                                                 setSelectedReport(null);
                                                 setIsNavigating(false);
                                             } else {
-                                                const fullReport = reports.find(r => r.report_id.toString() === m.id.toString());
+                                                const fullReport = reports.find(r => r.report_id.toString() === m.id.toString()) || m.rawData;
                                                 if (fullReport) {
                                                     setSelectedReport(fullReport);
-                                                    setIsNavigating(true);
                                                 }
                                             }
                                         }}
+                                        onDirectionsClick={handleDirectionsFromMe}
                                     />
 
                                     {/* Mobile Tap-to-Expand Indicator Overlay */}
@@ -1789,6 +1862,18 @@ const SubdDashboard = () => {
                                     }
                                 }}
                                 routing={getRoutingConfig()}
+                                onMarkerClick={(m) => {
+                                    if (m.id < 0) {
+                                        setSelectedReport(null);
+                                        setIsNavigating(false);
+                                    } else {
+                                        const fullReport = reports.find(r => r.report_id.toString() === m.id.toString()) || m.rawData;
+                                        if (fullReport) {
+                                            setSelectedReport(fullReport);
+                                        }
+                                    }
+                                }}
+                                onDirectionsClick={handleDirectionsFromMe}
                             />
 
                             {/* Floating Coordinate Pill Overlay in expanded modal */}

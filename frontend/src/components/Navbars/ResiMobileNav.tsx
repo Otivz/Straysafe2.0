@@ -19,8 +19,15 @@ const ResiMobileNav = ({
     onFeedTabChange
 }: ResiMobileNavProps) => {
     const location = useLocation();
-    const userStr = localStorage.getItem('resident_user');
-    const user = userStr ? JSON.parse(userStr) : null;
+    let user = null;
+    try {
+        const userStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user') ||
+                        localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user') ||
+                        localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user');
+        user = userStr ? JSON.parse(userStr) : null;
+    } catch {
+        user = null;
+    }
 
     if (isNavbarMenuOpen || isSearchOpen) return null;
 

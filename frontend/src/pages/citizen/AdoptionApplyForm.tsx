@@ -37,12 +37,21 @@ const AdoptionApplyForm = () => {
     const [loadingAnimal, setLoadingAnimal] = useState(true);
 
     // Form fields
-    const rawUser = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
-    const user = rawUser ? JSON.parse(rawUser) : null;
+    const getSafeUser = () => {
+        try {
+            const rawUser = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user') ||
+                            localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user') ||
+                            localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user');
+            return rawUser ? JSON.parse(rawUser) : null;
+        } catch {
+            return null;
+        }
+    };
+    const user = getSafeUser();
 
-    const [fullName, setFullName] = useState(user?.name || '');
-    const [address, setAddress] = useState(user?.address || '');
-    const [contactNo, setContactNo] = useState(user?.phone || '');
+    const [fullName, setFullName] = useState(user?.name || user?.full_name || '');
+    const [address, setAddress] = useState(user?.address || user?.complete_address || '');
+    const [contactNo, setContactNo] = useState(user?.phone || user?.contact_no || user?.phone_number || '');
     const [hasOtherPets, setHasOtherPets] = useState(false);
     const [livingSpace, setLivingSpace] = useState('House with yard');
     const [reason, setReason] = useState('');
@@ -59,6 +68,21 @@ const AdoptionApplyForm = () => {
     const [submitting, setSubmitting] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+    // Sync pre-populated user details if loaded/updated
+    useEffect(() => {
+        if (user) {
+            if (!fullName && (user.name || user.full_name)) {
+                setFullName(user.name || user.full_name);
+            }
+            if (!address && (user.address || user.complete_address)) {
+                setAddress(user.address || user.complete_address);
+            }
+            if (!contactNo && (user.phone || user.contact_no || user.phone_number)) {
+                setContactNo(user.phone || user.contact_no || user.phone_number);
+            }
+        }
+    }, [user]);
 
     useEffect(() => {
         const checkRegisteredPets = async () => {

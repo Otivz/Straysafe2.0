@@ -4,9 +4,12 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import axios from 'axios';
+import { api } from '../utils/api';
+import { getCachedData, setCachedData } from '../utils/cache';
 import { DEFAULT_AVATAR, DEFAULT_PET_AVATAR } from '../utils/avatar';
 import { createBarangayHQIcon, createHoldingFacilityPinIcon, createLandmarkPinIcon, getLandmarkCategory, getLandmarkZoomMetrics } from '../utils/landmarkIcons';
 import { getReportStatusLabel, getReportStatusBadgeStyle } from '../utils/reportStatus';
+import { SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS } from '../utils/coverageArea';
 
 
 const createUserLocationIcon = () => L.divIcon({
@@ -692,6 +695,8 @@ interface MapComponentProps {
     };
     onMarkerClick?: (marker: any) => void;
     onViewDetails?: (marker: any) => void;
+    onDirectionsClick?: (marker: any) => void;
+    onDirectionsFromBrgyClick?: (marker: any) => void;
     showGeofence?: boolean;
     showLandmarks?: boolean;
     showHQ?: boolean;
@@ -780,11 +785,6 @@ const MapEventsHandler = ({
             }
             if (onLocationChange) {
                 onLocationChange(e.latlng.lat, e.latlng.lng);
-            }
-        },
-        zoom(e) {
-            if (onZoomChange) {
-                onZoomChange(Math.round(e.target.getZoom()));
             }
         },
         zoomend(e) {
@@ -899,6 +899,8 @@ const MapComponent = ({
     routing,
     onMarkerClick,
     onViewDetails,
+    onDirectionsClick,
+    onDirectionsFromBrgyClick,
     showGeofence = true,
     showLandmarks = true,
     showHQ = true,
@@ -913,15 +915,9 @@ const MapComponent = ({
 }: MapComponentProps) => {
     const navigate = useNavigate();
     const [selectedReportMarker, setSelectedReportMarker] = useState<any>(null);
-    const SELERA_BOUNDS: [number, number][] = [
-        [14.801496, 121.005174],
-        [14.799577, 121.003911],
-        [14.800634, 121.002228],
-        [14.802461, 121.003280]
-    ];
 
-    const [dbLandmarks, setDbLandmarks] = useState<any[]>([]);
-    const [barangayHQ, setBarangayHQ] = useState<any>(null);
+    const [dbLandmarks, setDbLandmarks] = useState<any[]>(() => getCachedData<any[]>('straysafe_landmarks') || []);
+    const [barangayHQ, setBarangayHQ] = useState<any>(() => getCachedData<any>('straysafe_brgy_hq') || null);
     const [currentZoom, setCurrentZoom] = useState<number>(zoom || 14);
 
     useEffect(() => {
@@ -962,38 +958,54 @@ const MapComponent = ({
     useEffect(() => {
         let isMounted = true;
         const fetchFeatures = async () => {
-            try {
-                const lmkRes = await axios.get('http://localhost:8000/landmarks');
-                if (isMounted && Array.isArray(lmkRes.data)) {
-                    setDbLandmarks(lmkRes.data);
+            const cachedLmk = getCachedData<any[]>('straysafe_landmarks');
+            const cachedHq = getCachedData<any>('straysafe_brgy_hq');
+
+            if (!cachedLmk) {
+                try {
+                    const lmkRes = await api.get('/landmarks');
+                    if (isMounted && Array.isArray(lmkRes.data)) {
+                        setDbLandmarks(lmkRes.data);
+                        setCachedData('straysafe_landmarks', lmkRes.data, 30 * 60 * 1000);
+                    }
+                } catch (err) {
+                    console.warn("Could not load dynamic landmarks:", err);
                 }
-            } catch (err) {
-                console.warn("Could not load dynamic landmarks:", err);
+            } else if (isMounted) {
+                setDbLandmarks(cachedLmk);
             }
 
-            try {
-                const hqRes = await axios.get('http://localhost:8000/landmarks/barangay/1/hq');
-                if (isMounted && hqRes.data && hqRes.data.hq_lat && hqRes.data.hq_lng) {
-                    setBarangayHQ(hqRes.data);
-                } else if (isMounted) {
-                    setBarangayHQ({
-                        barangay_name: 'San Vicente',
-                        city: 'Santa Maria',
-                        contact_no: '(044) 123-4567',
-                        hq_lat: 14.8069,
-                        hq_lng: 121.0039,
-                    });
+            if (!cachedHq) {
+                try {
+                    const hqRes = await api.get('/landmarks/barangay/1/hq');
+                    if (isMounted && hqRes.data && hqRes.data.hq_lat && hqRes.data.hq_lng) {
+                        setBarangayHQ(hqRes.data);
+                        setCachedData('straysafe_brgy_hq', hqRes.data, 30 * 60 * 1000);
+                    } else if (isMounted) {
+                        const fallbackHq = {
+                            barangay_name: 'San Vicente',
+                            city: 'Santa Maria',
+                            contact_no: '(044) 123-4567',
+                            hq_lat: 14.8069,
+                            hq_lng: 121.0039,
+                        };
+                        setBarangayHQ(fallbackHq);
+                        setCachedData('straysafe_brgy_hq', fallbackHq, 30 * 60 * 1000);
+                    }
+                } catch (err) {
+                    if (isMounted) {
+                        const fallbackHq = {
+                            barangay_name: 'San Vicente',
+                            city: 'Santa Maria',
+                            contact_no: '(044) 123-4567',
+                            hq_lat: 14.8069,
+                            hq_lng: 121.0039,
+                        };
+                        setBarangayHQ(fallbackHq);
+                    }
                 }
-            } catch (err) {
-                if (isMounted) {
-                    setBarangayHQ({
-                        barangay_name: 'San Vicente',
-                        city: 'Santa Maria',
-                        contact_no: '(044) 123-4567',
-                        hq_lat: 14.8069,
-                        hq_lng: 121.0039,
-                    });
-                }
+            } else if (isMounted) {
+                setBarangayHQ(cachedHq);
             }
         };
 
@@ -1034,19 +1046,14 @@ const MapComponent = ({
                 <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    maxZoom={19}
+                    keepBuffer={4}
                 />
 
                 {showGeofence && (
                     <Polygon
-                        positions={SELERA_BOUNDS}
-                        pathOptions={{
-                            color: '#F97316',
-                            fillColor: '#F97316',
-                            fillOpacity: 0.12,
-                            weight: 2.5,
-                            dashArray: '6, 8',
-                            className: 'outline-none focus:outline-none'
-                        }}
+                        positions={SELERA_POLYGON_BOUNDS}
+                        pathOptions={SELERA_BOUNDARY_PATH_OPTIONS}
                         eventHandlers={{
                             click: (e) => {
                                 if (e.originalEvent?.target && typeof (e.originalEvent.target as any).blur === 'function') {
@@ -1421,33 +1428,6 @@ const MapComponent = ({
                                     </div>
                                 </Tooltip>
                             ) : null}
-                            {!isUserLoc && !isHoldingFacility && showPopups && (
-                                <Popup className="custom-popup">
-                                    <div className="p-3 w-[250px] text-gray-800 flex flex-col gap-2 select-none">
-                                        <div className="flex items-center justify-between gap-1.5 pb-1 border-b border-gray-100">
-                                            <span className="font-black text-gray-900 text-xs">#{marker.id.toString().padStart(4, '0')}</span>
-                                            <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${marker.priority === 'High' ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-amber-50 text-amber-600 border border-amber-200'}`}>
-                                                {marker.priority || 'Medium'}
-                                            </span>
-                                        </div>
-                                        <p className="text-[11px] font-bold text-gray-800 line-clamp-2">{marker.title}</p>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (onViewDetails) {
-                                                    onViewDetails(marker);
-                                                } else {
-                                                    const rId = marker.rawData?.report_id || (marker.id > 0 ? marker.id : null);
-                                                    if (rId) navigate(`/subd/reports/${rId}`);
-                                                }
-                                            }}
-                                            className="w-full py-1.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-[9px] font-black uppercase rounded-xl transition-all text-center cursor-pointer"
-                                        >
-                                            View Report Card
-                                        </button>
-                                    </div>
-                                </Popup>
-                            )}
                         </Marker>
                     );
                 })}
@@ -1483,8 +1463,8 @@ const MapComponent = ({
             </MapContainer>
 
             {/* ─── FLOATING REPORT INFO CARD OVERLAY (Appears when clicking any report pin) ─── */}
-            {selectedReportMarker && (selectedReportMarker.rawData || selectedReportMarker.id > 0) && (
-                <div className="absolute bottom-3 left-3 right-3 sm:left-auto sm:right-4 sm:bottom-4 sm:w-[380px] z-[1000] bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl border border-slate-200/90 p-3.5 sm:p-4.5 flex flex-col gap-2.5 animate-in fade-in slide-in-from-bottom-4 duration-200">
+            {!routing && selectedReportMarker && (selectedReportMarker.rawData || selectedReportMarker.id > 0) && (
+                <div className={`absolute bottom-3 left-3 right-3 sm:left-auto sm:right-4 sm:bottom-4 ${onDirectionsFromBrgyClick ? 'sm:w-[420px]' : 'sm:w-[380px]'} z-[1000] bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl border border-slate-200/90 p-3.5 sm:p-4 flex flex-col gap-2.5 animate-in fade-in slide-in-from-bottom-4 duration-200`}>
                     {/* Header Row */}
                     <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100">
                         <div className="flex items-center gap-2 min-w-0">
@@ -1570,7 +1550,7 @@ const MapComponent = ({
                                         <span>🐾</span>
                                         <span>{(selectedReportMarker.rawData?.animal_type || selectedReportMarker.category || 'Dog').toUpperCase()}</span>
                                         {selectedReportMarker.rawData?.animal_breed && selectedReportMarker.rawData.animal_breed.toLowerCase() !== 'unknown' && (
-                                            <span>• {selectedReportMarker.rawData.animal_breed}</span>
+                                             <span>• {selectedReportMarker.rawData.animal_breed}</span>
                                         )}
                                         {selectedReportMarker.rawData?.animal_color && selectedReportMarker.rawData.animal_color.toLowerCase() !== 'unknown' && (
                                             <span>• {selectedReportMarker.rawData.animal_color}</span>
@@ -1620,26 +1600,67 @@ const MapComponent = ({
                         return null;
                     })()}
 
-                    {/* Action Button */}
-                    {!hideViewDetailsButton && (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                if (onViewDetails) {
-                                    onViewDetails(selectedReportMarker);
-                                } else {
-                                    const rId = selectedReportMarker.rawData?.report_id || (selectedReportMarker.id > 0 ? selectedReportMarker.id : null);
-                                    if (rId) navigate(`/subd/reports/${rId}`);
-                                }
-                            }}
-                            className="w-full py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-2xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
-                        >
-                            <span>View Full Report Details</span>
-                            <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                            </svg>
-                        </button>
-                    )}
+                    {/* Action Buttons: VIEW + DIRECTIONS FROM ME + DIRECTIONS FROM BARANGAY HALL (Barangay side only) */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+                        {!hideViewDetailsButton && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (onViewDetails) {
+                                        onViewDetails(selectedReportMarker);
+                                    } else {
+                                        const rId = selectedReportMarker.rawData?.report_id || (selectedReportMarker.id > 0 ? selectedReportMarker.id : null);
+                                        if (rId) navigate(`/subd/reports/${rId}`);
+                                    }
+                                }}
+                                className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] border border-slate-200/80 shrink-0"
+                            >
+                                <span>View</span>
+                                <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                </svg>
+                            </button>
+                        )}
+
+                        <div className={`flex-1 grid ${onDirectionsFromBrgyClick ? 'grid-cols-1 xs:grid-cols-2' : 'grid-cols-1'} gap-2`}>
+                            {onDirectionsClick && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const markerToRoute = selectedReportMarker;
+                                        setSelectedReportMarker(null);
+                                        onDirectionsClick(markerToRoute);
+                                    }}
+                                    className="w-full py-2.5 px-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-[10.5px] font-black uppercase tracking-wider rounded-2xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] text-center"
+                                    title="Directions starting from your current GPS location"
+                                >
+                                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                    <span className="truncate">Directions from Me</span>
+                                </button>
+                            )}
+
+                            {onDirectionsFromBrgyClick && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const markerToRoute = selectedReportMarker;
+                                        setSelectedReportMarker(null);
+                                        onDirectionsFromBrgyClick(markerToRoute);
+                                    }}
+                                    className="w-full py-2.5 px-2.5 bg-slate-900 hover:bg-slate-800 text-white text-[10.5px] font-black uppercase tracking-wider rounded-2xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] border border-slate-700/60 text-center"
+                                    title="Directions starting from registered Barangay Hall location"
+                                >
+                                    <svg className="w-3.5 h-3.5 shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                    </svg>
+                                    <span className="truncate">From Brgy Hall</span>
+                                </button>
+                            )}
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

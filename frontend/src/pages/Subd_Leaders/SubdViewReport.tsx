@@ -1759,6 +1759,10 @@ const SubdViewReport = () => {
                                     verificationNotes={report.verification_notes}
                                     verifiedByName={report.verified_by_name}
                                     verifiedAt={report.verified_at ? String(report.verified_at) : null}
+                                    aiPhotoLikelihood={(report as any).ai_photo_likelihood}
+                                    aiPhotoStatus={(report as any).ai_photo_status}
+                                    aiPhotoRecommendation={(report as any).ai_photo_recommendation}
+                                    aiPhotoDetails={(report as any).ai_photo_details}
                                 />
 
                                 {/* AI Potential Matches Review Section */}

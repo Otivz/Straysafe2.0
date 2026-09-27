@@ -257,12 +257,17 @@ def get_current_resident(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """
-    Ensure current user has the Resident/Citizen role (role_id = 1).
+    Ensure current user has the Resident/Citizen role (role_id = 1) and is fully verified.
     """
     if current_user.role_id != 1:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access forbidden: Resident role required"
+        )
+    if not current_user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: Resident account verification required. Please complete profile and OTP verification."
         )
     return current_user
 

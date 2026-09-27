@@ -43,7 +43,7 @@ const categoryMap: Record<number, string> = {
     4: 'Roaming Pack', 5: 'Animal Rescue Needed', 6: 'Lost Pet'
 };
 
-const HISTORY_STATUSES = [11, 12, 3, 9, 10, 14]; // Resolved (11), Deceased (12), Rejected (3), Claimed by Owner (9), Released (10), False Alarm / Dismissed (14)
+const HISTORY_STATUSES = [11, 12, 3, 9, 10, 14, 8, 7, 17, 18]; // Resolved (11), Deceased (12), Rejected (3), Claimed (9), Released (10), Dismissed (14), Impounded (8), Observation (7), Cannot Be Found (17), Merged (18)
 
 const SubdHistoryReport = () => {
     const navigate = useNavigate();
@@ -103,7 +103,7 @@ const SubdHistoryReport = () => {
         fetchReports();
     }, []);
 
-    // Only include history (closed) reports
+    // Only include history (closed/impounded/resolved) reports
     const historyReports = reports.filter(rep => HISTORY_STATUSES.includes(rep.status_id));
 
     const filteredReports = historyReports.filter(rep => {
@@ -116,7 +116,23 @@ const SubdHistoryReport = () => {
             reporter.includes(searchTerm.toLowerCase());
 
         const statName = statusMap[rep.status_id] || '';
-        const matchesStatus = statusFilter === 'all' || statName.toLowerCase() === statusFilter.toLowerCase();
+        let matchesStatus = true;
+        if (statusFilter !== 'all') {
+            const sf = statusFilter.toLowerCase();
+            if (sf === 'resolved') {
+                matchesStatus = [11, 9, 10].includes(rep.status_id);
+            } else if (sf === 'impounded' || sf.includes('impound')) {
+                matchesStatus = [8, 7].includes(rep.status_id);
+            } else if (sf === 'dismissed' || sf.includes('dismissed') || sf.includes('false alarm')) {
+                matchesStatus = [14, 17].includes(rep.status_id);
+            } else if (sf === 'deceased') {
+                matchesStatus = rep.status_id === 12;
+            } else if (sf === 'rejected') {
+                matchesStatus = rep.status_id === 3;
+            } else {
+                matchesStatus = statName.toLowerCase().includes(sf);
+            }
+        }
 
         return matchesSearch && matchesStatus;
     });
@@ -124,8 +140,9 @@ const SubdHistoryReport = () => {
     // Metrics
     const totalHistory = historyReports.length;
     const resolvedCount = historyReports.filter(r => r.status_id === 11 || r.status_id === 9 || r.status_id === 10).length;
+    const impoundedCount = historyReports.filter(r => r.status_id === 8 || r.status_id === 7).length;
     const deceasedCount = historyReports.filter(r => r.status_id === 12).length;
-    const dismissedCount = historyReports.filter(r => r.status_id === 14).length;
+    const dismissedCount = historyReports.filter(r => r.status_id === 14 || r.status_id === 17).length;
     const rejectedCount = historyReports.filter(r => r.status_id === 3).length;
 
     const getPriorityColor = (priority: string) => {
@@ -142,16 +159,26 @@ const SubdHistoryReport = () => {
     const getStatusColor = (status: string) => {
         switch (status.toLowerCase()) {
             case 'resolved':
+            case 'incident resolved':
                 return 'bg-green-50 text-green-600 border-green-100';
             case 'claimed by owner':
                 return 'bg-emerald-50 text-emerald-700 border-emerald-200';
             case 'released':
                 return 'bg-teal-50 text-teal-700 border-teal-200';
+            case 'impounded':
+                return 'bg-amber-50 text-amber-800 border-amber-300';
+            case 'under observation':
+                return 'bg-blue-50 text-blue-700 border-blue-200';
             case 'deceased':
                 return 'bg-gray-100 text-gray-600 border-gray-200';
+            case 'animal cannot be found':
+                return 'bg-amber-50 text-amber-800 border-amber-300';
             case 'false alarm / dismissed':
             case 'dismissed':
                 return 'bg-amber-50 text-amber-700 border-amber-200';
+            case 'merged — duplicate':
+            case 'merged':
+                return 'bg-stone-100 text-stone-700 border-stone-200';
             case 'rejected':
                 return 'bg-red-50 text-red-600 border-red-100';
             default:
@@ -165,12 +192,17 @@ const SubdHistoryReport = () => {
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
             </svg>
         );
+        if (statusId === 8 || statusId === 7) return (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
+            </svg>
+        );
         if (statusId === 12) return (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
             </svg>
         );
-        if (statusId === 14) return (
+        if (statusId === 14 || statusId === 17) return (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524L13.477 14.89zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
             </svg>
@@ -205,6 +237,18 @@ const SubdHistoryReport = () => {
             icon: (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+            )
+        },
+        {
+            label: 'Impounded',
+            value: impoundedCount,
+            color: 'bg-amber-500',
+            lightColor: 'bg-amber-50',
+            textColor: 'text-amber-700',
+            icon: (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
                 </svg>
             )
         },
@@ -266,7 +310,7 @@ const SubdHistoryReport = () => {
                     <div className="max-w-7xl mx-auto space-y-8">
 
                         {/* Metrics Row */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                             {metrics.map((metric, i) => (
                                 <div
                                     key={i}
@@ -306,6 +350,7 @@ const SubdHistoryReport = () => {
                                     options={[
                                         { value: 'all', label: 'All Status' },
                                         { value: 'Resolved', label: 'Resolved' },
+                                        { value: 'Impounded', label: 'Impounded' },
                                         { value: 'False Alarm / Dismissed', label: 'Dismissed' },
                                         { value: 'Deceased', label: 'Deceased' },
                                         { value: 'Rejected', label: 'Rejected' },
@@ -376,16 +421,7 @@ const SubdHistoryReport = () => {
                                     key: "status",
                                     render: (rep) => (
                                         <div className="flex items-center gap-2">
-                                            <ReportChatBadge
-                                                reportId={rep.report_id}
-                                                currentUserId={currentUser?.user_id}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setSelectedChatReport(rep);
-                                                    setIsChatOpen(true);
-                                                }}
-                                            />
-                                            <span className={`${[11, 9, 10].includes(rep.status_id) ? 'text-green-500' : rep.status_id === 12 ? 'text-gray-500' : 'text-red-500'}`}>
+                                            <span className={`${[11, 9, 10].includes(rep.status_id) ? 'text-green-500' : [8, 7].includes(rep.status_id) ? 'text-amber-500' : rep.status_id === 12 ? 'text-gray-500' : 'text-red-500'}`}>
                                                 {getStatusIcon(rep.status_id)}
                                             </span>
                                             <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || '')}`}>
@@ -424,19 +460,30 @@ const SubdHistoryReport = () => {
                                     key: "action",
                                     className: "text-right",
                                     render: (rep) => (
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                navigate(`/subd/history/${rep.report_id}`);
-                                            }}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-purple-600 bg-purple-50 border border-purple-100 rounded-lg hover:bg-purple-100 transition-all uppercase tracking-widest"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                            </svg>
-                                            View
-                                        </button>
+                                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                                            <ReportChatBadge
+                                                reportId={rep.report_id}
+                                                currentUserId={currentUser?.user_id}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedChatReport(rep);
+                                                    setIsChatOpen(true);
+                                                }}
+                                            />
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    navigate(`/subd/history/${rep.report_id}`);
+                                                }}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-purple-600 bg-purple-50 border border-purple-100 rounded-lg hover:bg-purple-100 transition-all uppercase tracking-widest cursor-pointer"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                </svg>
+                                                View
+                                            </button>
+                                        </div>
                                     )
                                 }
                             ]}

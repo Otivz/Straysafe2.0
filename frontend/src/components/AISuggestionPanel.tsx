@@ -17,6 +17,11 @@ interface AISuggestionPanelProps {
     behaviorInjury?: boolean | null;
     behaviorAggressive?: boolean | null;
     behaviorExplanation?: string | null;
+    // AI Photo Analysis (Authenticity / Synthetic Detection)
+    aiPhotoLikelihood?: number | null;
+    aiPhotoStatus?: string | null;
+    aiPhotoRecommendation?: string | null;
+    aiPhotoDetails?: string | null;
     // Verified Field Investigation Findings
     verificationStatus?: string | null;
     verifiedActualBite?: boolean | null;
@@ -73,6 +78,10 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
     behaviorInjury,
     behaviorAggressive,
     behaviorExplanation,
+    aiPhotoLikelihood,
+    aiPhotoStatus,
+    aiPhotoRecommendation,
+    aiPhotoDetails,
     verificationStatus,
     verifiedActualBite,
     verifiedChasing,
@@ -315,6 +324,118 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                     </div>
                 </div>
             </div>
+
+            {/* STAGE 1.5: AI PHOTO ANALYSIS (Authenticity / AI Detection Estimate) */}
+            {(aiPhotoLikelihood !== undefined && aiPhotoLikelihood !== null || aiPhotoStatus || aiPhotoRecommendation) && (() => {
+                const rawLikelihood = typeof aiPhotoLikelihood === 'number' ? aiPhotoLikelihood : null;
+                const likelihoodPct = rawLikelihood !== null ? Math.round(rawLikelihood > 1 ? rawLikelihood : rawLikelihood * 100) : null;
+                const normStatus = (aiPhotoStatus || '').toLowerCase();
+                const isUnable = normStatus.includes('unable') || normStatus === 'unable_to_analyze' || (likelihoodPct === null && !normStatus);
+                const isHigh = !isUnable && (normStatus.includes('potentially ai') || normStatus.includes('ai_generated') || (likelihoodPct !== null && likelihoodPct >= 60));
+                const isUncertain = !isUnable && !isHigh && (normStatus.includes('uncertain') || (likelihoodPct !== null && likelihoodPct > 35 && likelihoodPct < 60));
+                
+                const statusDisplay = isUnable
+                    ? 'Unable to analyze image'
+                    : (isHigh ? 'Potentially AI-generated' : (isUncertain ? 'Uncertain' : 'Likely Authentic'));
+                
+                const recDisplay = aiPhotoRecommendation || (
+                    isUnable
+                        ? 'Unable to analyze image. Please ensure a clear photo of the animal is uploaded.'
+                        : (isHigh || isUncertain
+                            ? 'Please verify the authenticity of the uploaded photo.'
+                            : 'Photo appears authentic.')
+                );
+
+                return (
+                    <div className={`mt-3 p-4 rounded-2xl border transition-all ${
+                        isUnable
+                            ? 'bg-slate-900/60 border-slate-700/60 text-slate-200'
+                            : (isHigh
+                                ? 'bg-gradient-to-r from-amber-950/50 via-orange-950/40 to-slate-900/80 border-amber-500/40 text-amber-100 shadow-md shadow-amber-950/40'
+                                : (isUncertain
+                                    ? 'bg-yellow-950/30 border-yellow-500/30 text-yellow-200'
+                                    : 'bg-emerald-950/30 border-emerald-500/30 text-emerald-200'))
+                    }`}>
+                        <div className="flex items-center justify-between pb-3 border-b border-white/10 flex-wrap gap-2">
+                            <div className="flex items-center gap-2.5">
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm ${
+                                    isUnable
+                                        ? 'bg-slate-800 text-slate-300 border border-slate-700'
+                                        : (isHigh
+                                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                            : (isUncertain
+                                                ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40'
+                                                : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'))
+                                }`}>
+                                    {isUnable ? '🔍' : (isHigh ? '⚠️' : (isUncertain ? '🟡' : '🛡️'))}
+                                </div>
+                                <div>
+                                    <h5 className="text-[11px] font-black uppercase tracking-widest text-white flex items-center gap-2">
+                                        AI Photo Analysis
+                                        <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider ${
+                                            isUnable
+                                                ? 'bg-slate-500/20 text-slate-300 border border-slate-500/30'
+                                                : (isHigh
+                                                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                                    : (isUncertain
+                                                        ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40'
+                                                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'))
+                                        }`}>
+                                            {statusDisplay}
+                                        </span>
+                                    </h5>
+                                    <p className="text-[9px] text-slate-400 font-medium">
+                                        AI detection estimate • Decision support for officer review
+                                    </p>
+                                </div>
+                            </div>
+
+                            {likelihoodPct !== null ? (
+                                <div className="text-right">
+                                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-xl border inline-block ${
+                                        isHigh
+                                            ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                                            : (isUncertain
+                                                ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-300'
+                                                : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300')
+                                    }`}>
+                                        AI-Generated Likelihood: <strong>{likelihoodPct}%</strong>
+                                    </span>
+                                </div>
+                            ) : (
+                                <span className="text-[9px] font-black px-2 py-0.5 rounded-lg border bg-slate-800 border-slate-700 text-slate-300">
+                                    Unable to analyze image
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 text-xs">
+                            <div className="bg-black/30 p-2.5 rounded-xl border border-white/5 space-y-0.5">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Status</span>
+                                <span className={`text-xs font-black uppercase ${
+                                    isHigh ? 'text-amber-300' : (isUncertain ? 'text-yellow-300' : (isUnable ? 'text-slate-300' : 'text-emerald-300'))
+                                }`}>
+                                    {statusDisplay}
+                                </span>
+                            </div>
+
+                            <div className="bg-black/30 p-2.5 rounded-xl border border-white/5 space-y-0.5">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Recommendation</span>
+                                <span className="text-xs font-bold text-slate-200 block leading-snug">
+                                    {recDisplay}
+                                </span>
+                            </div>
+                        </div>
+
+                        {aiPhotoDetails && (
+                            <div className="mt-2.5 text-[10px] text-slate-300 bg-black/20 p-2.5 rounded-xl border border-white/5">
+                                <strong className="text-slate-100">Forensic Analysis: </strong>
+                                {aiPhotoDetails}
+                            </div>
+                        )}
+                    </div>
+                );
+            })()}
 
             {/* STAGE 2: OFFICIAL STAFF INVESTIGATION & FINAL VERIFIED RECORD */}
             {isVerifiedTrue && (

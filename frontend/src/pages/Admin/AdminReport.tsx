@@ -10,7 +10,7 @@ import MapComponent from '../../components/MapComponent';
 import { MapContainer, TileLayer, Marker, useMapEvents, Polygon, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { fetchCoverageArea, isWithinCoverage, type CoverageAreaInfo, COVERAGE_OUTSIDE_ERROR_MESSAGE, SELERA_DEFAULT_CENTER, SELERA_DEFAULT_POLYGON } from '../../utils/coverageArea';
+import { fetchCoverageArea, isWithinCoverage, type CoverageAreaInfo, COVERAGE_OUTSIDE_ERROR_MESSAGE, SELERA_DEFAULT_CENTER, SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS } from '../../utils/coverageArea';
 
 // Fix for default marker icon issue in React Leaflet
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -31,8 +31,6 @@ const DefaultIcon = L.icon({
 });
 
 L.Marker.prototype.options.icon = DefaultIcon;
-
-const SELERA_POLYGON = SELERA_DEFAULT_POLYGON;
 
 let globalCoverageCache: CoverageAreaInfo | null = null;
 fetchCoverageArea().then(c => { globalCoverageCache = c; });
@@ -873,6 +871,10 @@ const AdminReport = () => {
                                                  behaviorInjury={(viewReport as any).ai_behavior_injury}
                                                  behaviorAggressive={(viewReport as any).ai_behavior_aggressive}
                                                  behaviorExplanation={(viewReport as any).ai_behavior_explanation}
+                                                 aiPhotoLikelihood={(viewReport as any).ai_photo_likelihood}
+                                                 aiPhotoStatus={(viewReport as any).ai_photo_status}
+                                                 aiPhotoRecommendation={(viewReport as any).ai_photo_recommendation}
+                                                 aiPhotoDetails={(viewReport as any).ai_photo_details}
                                                  verificationStatus={viewReport.verification_status}
                                                  verifiedActualBite={(viewReport as any).verified_actual_bite}
                                                  verifiedChasing={(viewReport as any).verified_chasing}
@@ -1611,14 +1613,8 @@ const AdminReport = () => {
                                                 onLocationSelect={(lat, lng) => setFormData({ ...formData, latitude: lat, longitude: lng })}
                                             />
                                             <Polygon
-                                                positions={SELERA_POLYGON.map(p => [p.lat, p.lng] as [number, number])}
-                                                pathOptions={{
-                                                    color: '#F97316',
-                                                    fillColor: '#F97316',
-                                                    fillOpacity: 0.1,
-                                                    weight: 2,
-                                                    dashArray: '5, 10'
-                                                }}
+                                                positions={SELERA_POLYGON_BOUNDS}
+                                                pathOptions={SELERA_BOUNDARY_PATH_OPTIONS}
                                             />
                                             {/* Configurable Reporting Coverage Radius Circle centered on Selera Homes */}
                                             <Circle

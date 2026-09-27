@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import SuccessModal from './SuccessModal';
 import StraySafeLoading, { AnimalLoadingOverlay } from '../StraySafeLoading';
+import AiImageVerificationBadge, { type VerificationStatus } from '../AiImageVerificationBadge';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMapEvents, Polygon, Circle, useMap } from 'react-leaflet';
 import { createLandmarkPinIcon, getLandmarkCategory } from '../../utils/landmarkIcons';
@@ -40,7 +41,7 @@ import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import ReturnToSeleraButton from '../MapControls/ReturnToSeleraButton';
-import { fetchCoverageArea, isWithinCoverage, type CoverageAreaInfo, COVERAGE_OUTSIDE_ERROR_MESSAGE, SELERA_DEFAULT_CENTER, SELERA_DEFAULT_POLYGON } from '../../utils/coverageArea';
+import { fetchCoverageArea, isWithinCoverage, type CoverageAreaInfo, COVERAGE_OUTSIDE_ERROR_MESSAGE, SELERA_DEFAULT_CENTER, SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS } from '../../utils/coverageArea';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -53,8 +54,6 @@ const DefaultIcon = L.icon({
 });
 
 L.Marker.prototype.options.icon = DefaultIcon;
-
-const SELERA_POLYGON = SELERA_DEFAULT_POLYGON;
 
 const LocationPicker = ({ onLocationSelect, position, disabled }: { onLocationSelect: (lat: number, lng: number) => void, position: [number, number], disabled?: boolean }) => {
     useMapEvents({
@@ -180,6 +179,14 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
         possibleBreed: string;
         collarDetected: boolean;
         qrTagDetected: boolean;
+        isAiGenerated?: boolean;
+        aiGenerationConfidence?: number | null;
+        aiPhotoLikelihood?: number | null;
+        aiPhotoStatus?: string | null;
+        aiPhotoRecommendation?: string | null;
+        verificationStatus?: VerificationStatus;
+        verificationMessage?: string;
+        authenticityDetails?: string;
         message?: string;
     } | null>(null);
     const [lastAnalyzedSignature, setLastAnalyzedSignature] = useState<string | null>(null);
@@ -320,24 +327,39 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
     const handleFileChange = (files: FileList | null) => {
         if (!files) return;
         const newFiles = Array.from(files);
+        const updatedFiles = [...formData.mediaFiles, ...newFiles];
+        setAiAnalysisResult(null);
+        setLastAnalyzedSignature(null);
         setFormData(prev => ({
             ...prev,
-            mediaFiles: [...prev.mediaFiles, ...newFiles]
+            mediaFiles: updatedFiles
         }));
+        if (updatedFiles.length > 0) {
+            triggerAiAnalysis(true, updatedFiles);
+        }
     };
 
     const handleRemoveFile = (index: number) => {
+        const remaining = formData.mediaFiles.filter((_, i) => i !== index);
         setFormData(prev => ({
             ...prev,
-            mediaFiles: prev.mediaFiles.filter((_, i) => i !== index)
+            mediaFiles: remaining
         }));
+        if (remaining.length === 0) {
+            setAiAnalysisResult(null);
+            setLastAnalyzedSignature(null);
+        } else if (index === 0) {
+            setAiAnalysisResult(null);
+            triggerAiAnalysis(true, remaining);
+        }
     };
 
     // AI Analysis
-    const triggerAiAnalysis = async (forceReanalyze = false) => {
-        if (!formData.mediaFiles || formData.mediaFiles.length === 0) return;
+    const triggerAiAnalysis = async (forceReanalyze = false, overrideFiles?: File[]) => {
+        const filesToAnalyze = overrideFiles || formData.mediaFiles;
+        if (!filesToAnalyze || filesToAnalyze.length === 0) return;
 
-        const primaryFile = formData.mediaFiles[0];
+        const primaryFile = filesToAnalyze[0];
         const currentSignature = `${primaryFile.name}-${primaryFile.size}-${primaryFile.lastModified}`;
 
         if (!forceReanalyze && aiAnalysisResult && lastAnalyzedSignature === currentSignature) {
@@ -353,6 +375,44 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                 const ai = res.data;
                 const isDetected = ai.animal_detected !== false && !['unknown', 'none', ''].includes((ai.animal_type || '').toLowerCase());
 
+                const isAiGen = Boolean(ai.is_ai_generated);
+                const aiLikelihood = typeof ai.ai_photo_likelihood === 'number' ? ai.ai_photo_likelihood : (
+                    typeof ai.ai_generation_confidence === 'number' ? Math.round(ai.ai_generation_confidence * 100) : (isAiGen ? 95 : 10)
+                );
+                const aiConf = typeof ai.ai_generation_confidence === 'number' ? ai.ai_generation_confidence : (aiLikelihood ? aiLikelihood / 100 : (isAiGen ? 0.95 : 0.10));
+                
+                const vPhotoStatus = ai.ai_photo_status || (
+                    ai.verification_status === 'unable_to_analyze' ? 'Unable to analyze image' : (
+                        aiLikelihood !== null && aiLikelihood >= 60 ? 'Potentially AI-generated' : (
+                            aiLikelihood !== null && aiLikelihood <= 35 ? 'Likely Authentic' : 'Uncertain'
+                        )
+                    )
+                );
+                
+                const vRec = ai.ai_photo_recommendation || (
+                    vPhotoStatus === 'Potentially AI-generated' || vPhotoStatus === 'Uncertain'
+                        ? 'Please verify the authenticity of the uploaded photo.'
+                        : (vPhotoStatus === 'Likely Authentic' ? 'Photo appears authentic.' : 'Unable to analyze image. Please ensure a clear photo of the animal is uploaded.')
+                );
+
+                const vStatus: VerificationStatus = (ai.verification_status as VerificationStatus) || (
+                    vPhotoStatus === 'Unable to analyze image' ? 'unable_to_analyze' : (
+                        aiLikelihood !== null && aiLikelihood >= 60 ? 'ai_generated' : (
+                            aiLikelihood !== null && aiLikelihood <= 35 ? 'authentic' : 'uncertain'
+                        )
+                    )
+                );
+
+                const vMsg = ai.verification_message || (
+                    vPhotoStatus === 'Potentially AI-generated'
+                        ? "This image may be AI-generated. Please make sure the uploaded photo is an actual photo of the reported animal."
+                        : (vPhotoStatus === 'Likely Authentic'
+                            ? "Photo verified — appears to be an authentic animal photograph."
+                            : (vPhotoStatus === 'Uncertain'
+                                ? "Image authenticity is uncertain. Please ensure the photo is clear and taken with a camera."
+                                : "Unable to analyze image. Please ensure a clear photo of the animal is uploaded."))
+                );
+
                 if (!isDetected) {
                     setAiAnalysisResult({
                         animalDetected: false,
@@ -365,6 +425,14 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                         possibleBreed: 'Unknown',
                         collarDetected: false,
                         qrTagDetected: false,
+                        isAiGenerated: isAiGen,
+                        aiGenerationConfidence: aiConf,
+                        aiPhotoLikelihood: aiLikelihood,
+                        aiPhotoStatus: vPhotoStatus,
+                        aiPhotoRecommendation: vRec,
+                        verificationStatus: vStatus,
+                        verificationMessage: vMsg,
+                        authenticityDetails: ai.authenticity_details,
                         message: ai.message || 'No cat or dog was detected in the uploaded image. Please ensure your photo clearly shows the stray animal.'
                     });
                 } else {
@@ -386,7 +454,15 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                         possibleBreed: ai.possible_breed || (normType === 'Cat' ? 'Puspin' : 'Aspin'),
                         collarDetected: Boolean(ai.collar_detected),
                         qrTagDetected: Boolean(ai.qr_tag_detected),
-                        message: ai.message || 'Animal detected successfully.'
+                        isAiGenerated: isAiGen,
+                        aiGenerationConfidence: aiConf,
+                        aiPhotoLikelihood: aiLikelihood,
+                        aiPhotoStatus: vPhotoStatus,
+                        aiPhotoRecommendation: vRec,
+                        verificationStatus: vStatus,
+                        verificationMessage: vMsg,
+                        authenticityDetails: ai.authenticity_details,
+                        message: ai.message || (vStatus === 'ai_generated' ? vMsg : 'Animal detected successfully.')
                     };
                     setAiAnalysisResult(resultObj);
                     setFormData(prev => ({
@@ -417,6 +493,14 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                 possibleBreed: 'Unknown',
                 collarDetected: false,
                 qrTagDetected: false,
+                isAiGenerated: false,
+                aiGenerationConfidence: null,
+                aiPhotoLikelihood: null,
+                aiPhotoStatus: 'Unable to analyze image',
+                aiPhotoRecommendation: 'Unable to analyze image. Please ensure a clear photo of the animal is uploaded.',
+                verificationStatus: 'unable_to_analyze',
+                verificationMessage: 'Unable to analyze image. Please ensure the photo is clear and taken with a camera.',
+                authenticityDetails: 'AI verification service was unreachable or returned an error.',
                 message: 'Unable to analyze image. Please ensure a clear photo of a dog or cat.'
             });
         } finally {
@@ -425,9 +509,15 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
     };
 
     const handleNext = () => {
-        if (currentStep === 1 && formData.mediaFiles.length === 0) {
-            alert('Please upload at least one photo or video before proceeding.');
-            return;
+        if (currentStep === 1) {
+            if (formData.mediaFiles.length === 0) {
+                alert('Please upload at least one photo or video before proceeding.');
+                return;
+            }
+            if (isAiProcessing) {
+                alert('Please wait a moment while the AI photo verification analysis completes.');
+                return;
+            }
         }
 
         if (currentStep === 2) {
@@ -540,10 +630,14 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                 ai_estimated_size: aiAnalysisResult?.estimatedSize || formData.estimatedSize,
                 ai_possible_breed: aiAnalysisResult?.possibleBreed || formData.animalBreed || 'Unknown',
                 ai_suggested_risk_level: 'Low Risk',
-                ai_suggested_priority: formData.priorityLevel
+                ai_suggested_priority: formData.priorityLevel,
+                ai_photo_likelihood: aiAnalysisResult?.aiPhotoLikelihood ?? null,
+                ai_photo_status: aiAnalysisResult?.aiPhotoStatus ?? null,
+                ai_photo_recommendation: aiAnalysisResult?.aiPhotoRecommendation ?? null,
+                ai_photo_details: aiAnalysisResult?.authenticityDetails ?? null
             };
 
-            const response = await axios.post('http://localhost:8000/reports/', payload);
+            const response = await api.post('/reports/', payload);
             if (response.status === 200 || response.status === 201) {
                 const actualReportId = response.data.report_id;
                 if (actualReportId && formData.mediaFiles && formData.mediaFiles.length > 0) {
@@ -581,7 +675,13 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                 mediaData.append("media_type", mediaItem.kind === 'video' ? 'Video' : 'Image');
                                 mediaData.append("status_id", "1");
                                 mediaData.append("is_evidence", "false");
-                                await axios.post(`http://localhost:8000/reports/${actualReportId}/media`, mediaData);
+                                if (aiAnalysisResult?.aiPhotoLikelihood !== undefined && aiAnalysisResult?.aiPhotoLikelihood !== null) {
+                                    mediaData.append("ai_photo_likelihood", String(aiAnalysisResult.aiPhotoLikelihood));
+                                }
+                                if (aiAnalysisResult?.aiPhotoStatus) {
+                                    mediaData.append("ai_photo_status", aiAnalysisResult.aiPhotoStatus);
+                                }
+                                await api.post(`/reports/${actualReportId}/media`, mediaData);
                             } catch (err: any) {
                                 console.error('Media URL registration error:', err?.response?.data || err);
                             }
@@ -797,6 +897,14 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                             </div>
                                         ))}
                                     </div>
+
+                                    {/* AI Image Verification Badge for Step 1 */}
+                                    <AiImageVerificationBadge
+                                        isAnalyzing={isAiProcessing}
+                                        verification={aiAnalysisResult}
+                                        onRetry={() => triggerAiAnalysis(true)}
+                                        onRemove={() => handleRemoveFile(0)}
+                                    />
                                 </div>
                             )}
                         </div>
@@ -862,11 +970,11 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                 {isAiProcessing ? (
                                     <div className="py-8 sm:py-12 flex flex-col items-center justify-center">
                                         <StraySafeLoading
-                                            animalType={formData.animalType || 'dog'}
+                                            animalType="both"
                                             size="md"
-                                            badgeText="🤖 AI Vision Analysis"
-                                            message={isPrimaryVideo ? "Analyzing Video Footage" : "Analyzing Stray Photo"}
-                                            subMessage={isPrimaryVideo ? "Sampling key frames to classify species, coat pattern, and traits..." : "Detecting animal type (dog/cat), primary colors, breed likelihood, and collar metrics..."}
+                                            badgeText="🤖 AI Vision & Authenticity Verification"
+                                            message={isPrimaryVideo ? "AI is analyzing your video footage…" : "AI is analyzing your photo…"}
+                                            subMessage="Please wait while we verify the image."
                                             showProgressBar={true}
                                         />
                                     </div>
@@ -937,6 +1045,13 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                             )}
                                         </div>
                                     </div>
+
+                                    {/* Verification Status Badge in Step 3 */}
+                                    <AiImageVerificationBadge
+                                        isAnalyzing={isAiProcessing}
+                                        verification={aiAnalysisResult}
+                                        onRetry={() => triggerAiAnalysis(true)}
+                                    />
 
                                     {/* Alert Info */}
                                     <div className="flex items-start gap-3 p-4 bg-blue-50/80 border border-blue-100 rounded-2xl text-xs font-bold text-blue-700">
@@ -1362,8 +1477,8 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                         onLocationSelect={(lat, lng) => setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }))}
                                     />
                                     <Polygon
-                                        positions={SELERA_POLYGON.map(p => [p.lat, p.lng] as [number, number])}
-                                        pathOptions={{ color: '#F97316', fillColor: '#F97316', fillOpacity: 0.1, weight: 2, dashArray: '5, 10' }}
+                                        positions={SELERA_POLYGON_BOUNDS}
+                                        pathOptions={SELERA_BOUNDARY_PATH_OPTIONS}
                                     />
                                     {/* Configurable Reporting Coverage Radius Circle centered on Selera Homes */}
                                     <Circle
@@ -1653,17 +1768,22 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                     {currentStep < 9 ? (
                         <button
                             type="button"
+                            disabled={isAiProcessing || (currentStep === 1 && formData.mediaFiles.length === 0)}
                             onClick={handleNext}
-                            className="px-8 py-3.5 bg-[#F97316] hover:bg-orange-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-orange-100 transition-all hover:scale-105 flex items-center gap-2 cursor-pointer"
+                            className={`px-8 py-3.5 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg transition-all flex items-center gap-2 ${
+                                (isAiProcessing || (currentStep === 1 && formData.mediaFiles.length === 0))
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+                                    : 'bg-[#F97316] hover:bg-orange-600 shadow-orange-100 hover:scale-105 cursor-pointer'
+                            }`}
                         >
                             Next <ArrowRight className="w-4 h-4" />
                         </button>
                     ) : (
                         <button
                             type="button"
-                            disabled={isSubmitting}
+                            disabled={isSubmitting || isAiProcessing}
                             onClick={handleSubmit}
-                            className={`px-10 py-3.5 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl transition-all flex items-center gap-2 cursor-pointer ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#F97316] hover:scale-105'}`}
+                            className={`px-10 py-3.5 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl transition-all flex items-center gap-2 ${(isSubmitting || isAiProcessing) ? 'bg-gray-400 cursor-not-allowed shadow-none' : 'bg-[#F97316] hover:scale-105 cursor-pointer'}`}
                         >
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                             {isSubmitting ? 'Submitting...' : 'Submit Report'}
@@ -1743,8 +1863,8 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                     onLocationSelect={(lat, lng) => setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }))}
                                 />
                                 <Polygon
-                                    positions={SELERA_POLYGON.map(p => [p.lat, p.lng] as [number, number])}
-                                    pathOptions={{ color: '#F97316', fillColor: '#F97316', fillOpacity: 0.1, weight: 2, dashArray: '5, 10' }}
+                                    positions={SELERA_POLYGON_BOUNDS}
+                                    pathOptions={SELERA_BOUNDARY_PATH_OPTIONS}
                                 />
                                 {/* Configurable Reporting Coverage Radius Circle centered on Selera Homes */}
                                 <Circle

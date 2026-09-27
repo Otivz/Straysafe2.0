@@ -18,27 +18,26 @@ const ProtectedRoute = ({ allowedRoles = [4] }: ProtectedRouteProps) => {
         const verify = async () => {
             const token = getStoredToken();
             
-            // Prioritize retrieving user matching the current route's expected role
+            // Check any existing authenticated session (resident, staff, admin)
             let rawUser: string | null = null;
-            if (allowedRoles.includes(4)) {
-                rawUser = sessionStorage.getItem('admin_user') || localStorage.getItem('admin_user');
+            if (allowedRoles.includes(1)) {
+                rawUser = sessionStorage.getItem('resident_user') || localStorage.getItem('resident_user');
             }
             if (!rawUser && (allowedRoles.includes(2) || allowedRoles.includes(3))) {
                 rawUser = sessionStorage.getItem('staff_user') || localStorage.getItem('staff_user');
             }
-            if (!rawUser && allowedRoles.includes(1)) {
-                rawUser = sessionStorage.getItem('resident_user') || localStorage.getItem('resident_user');
+            if (!rawUser && allowedRoles.includes(4)) {
+                rawUser = sessionStorage.getItem('admin_user') || localStorage.getItem('admin_user');
             }
 
             if (!rawUser) {
                 rawUser = 
-                    sessionStorage.getItem('staff_user') || localStorage.getItem('staff_user') ||
                     sessionStorage.getItem('resident_user') || localStorage.getItem('resident_user') ||
+                    sessionStorage.getItem('staff_user') || localStorage.getItem('staff_user') ||
                     sessionStorage.getItem('admin_user') || localStorage.getItem('admin_user');
             }
 
             if (!token || !rawUser) {
-                clearAuthStorage();
                 if (isMounted) setStatus('unauthorized');
                 return;
             }
@@ -51,6 +50,13 @@ const ProtectedRoute = ({ allowedRoles = [4] }: ProtectedRouteProps) => {
                 const res = await api.get('/auth/verify-session');
                 if (res.status === 200 && res.data && res.data.status === 'valid') {
                     const activeRole = res.data.role_id || roleId;
+                    
+                    // For residents, strictly enforce verification & profile completion
+                    if (activeRole === 1 && (!res.data.is_verified || res.data.is_profile_complete === false)) {
+                        if (isMounted) setStatus('unauthorized');
+                        return;
+                    }
+
                     if (isMounted) {
                         setUserRole(activeRole);
                         if (allowedRoles.includes(activeRole)) {
@@ -65,7 +71,9 @@ const ProtectedRoute = ({ allowedRoles = [4] }: ProtectedRouteProps) => {
                 }
             } catch (err: any) {
                 console.error('ProtectedRoute session verification failed:', err);
-                clearAuthStorage();
+                if (err.response && err.response.status === 401) {
+                    clearAuthStorage();
+                }
                 if (isMounted) setStatus('unauthorized');
             }
         };
@@ -89,17 +97,20 @@ const ProtectedRoute = ({ allowedRoles = [4] }: ProtectedRouteProps) => {
     }
 
     if (status === 'unauthorized') {
-        if (allowedRoles.includes(4)) {
-            return <Navigate to="/admin/login" replace state={{ from: location }} />;
+        if (allowedRoles.includes(1)) {
+            return <Navigate to="/login" replace state={{ from: location }} />;
         }
         if (allowedRoles.includes(2) || allowedRoles.includes(3)) {
             return <Navigate to="/staff/login" replace state={{ from: location }} />;
+        }
+        if (allowedRoles.includes(4)) {
+            return <Navigate to="/admin/login" replace state={{ from: location }} />;
         }
         return <Navigate to="/login" replace state={{ from: location }} />;
     }
 
     if (status === 'forbidden') {
-        if (allowedRoles.includes(1)) {
+        if (allowedRoles.includes(1) && !allowedRoles.includes(userRole || 0)) {
             return <Navigate to="/login" replace state={{ from: location }} />;
         }
         if (allowedRoles.includes(2) || allowedRoles.includes(3)) {

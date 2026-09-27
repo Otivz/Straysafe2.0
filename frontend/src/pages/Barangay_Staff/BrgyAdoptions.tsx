@@ -20,14 +20,19 @@ import {
     ExternalLink,
     CreditCard,
     Eye,
-    Sparkles
+    Sparkles,
+    User,
+    Phone,
+    Home,
+    PawPrint
 } from 'lucide-react';
+import MaskedIdDisplay from '../../components/MaskedIdDisplay';
 
 interface AdoptionApp {
     adoption_id: number;
     holding_id: number;
     applicant_id: number;
-    status: 'Pending' | 'Approved' | 'Rejected';
+    status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
     full_name: string;
     address: string;
     contact_no: string;
@@ -54,6 +59,8 @@ interface AdoptionApp {
     animal_type: string | null;
     animal_breed: string | null;
     animal_photo: string | null;
+    cancellation_reason?: string | null;
+    cancelled_at?: string | null;
 }
 
 interface CatalogAnimal {
@@ -83,7 +90,7 @@ const BrgyAdoptions = () => {
     // Navigation & state
     const [mobileOpen, setMobileOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'applications' | 'catalog'>('applications');
-    const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('Pending');
+    const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected' | 'Cancelled'>('Pending');
     const [searchQuery, setSearchQuery] = useState('');
 
     // Data
@@ -486,7 +493,7 @@ const BrgyAdoptions = () => {
                             {/* Controls Bar */}
                             <div className="bg-white rounded-2xl p-3 sm:p-4 border border-gray-200/90 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-                                    {(['All', 'Pending', 'Approved', 'Rejected'] as const).map((tab) => (
+                                    {(['All', 'Pending', 'Approved', 'Rejected', 'Cancelled'] as const).map((tab) => (
                                         <button
                                             key={tab}
                                             onClick={() => setStatusFilter(tab)}
@@ -536,189 +543,308 @@ const BrgyAdoptions = () => {
                                     </p>
                                 </div>
                             ) : (
-                                <div className="space-y-3.5">
+                                <div className="space-y-4">
                                     {filteredApplications.map((app) => (
                                         <div
                                             key={app.adoption_id}
-                                            className="bg-white rounded-2xl sm:rounded-3xl border border-gray-200/90 hover:border-gray-300/90 p-4 sm:p-6 shadow-2xs hover:shadow-xs transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-5"
+                                            className="bg-white rounded-3xl border border-gray-200/90 hover:border-gray-300 p-4 sm:p-6 shadow-xs hover:shadow-md transition-all space-y-4"
                                         >
-                                            {/* Animal & Applicant Summary */}
-                                            <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
-                                                <img
-                                                    src={getPetPicture(app.animal_photo)}
-                                                    alt={app.animal_name || 'Pet'}
-                                                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border border-gray-100 shrink-0 shadow-2xs"
-                                                />
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                                        <h3 className="font-black text-base sm:text-lg text-gray-900 truncate">
-                                                            {app.animal_name || `Rescue Animal #${app.holding_id}`}
-                                                        </h3>
-                                                        <span className="text-[11px] px-2 py-0.5 rounded-lg bg-orange-50 text-orange-700 font-bold border border-orange-100">
-                                                            {app.animal_type || 'Rescue'}
-                                                        </span>
-                                                        <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-md">
-                                                            App #{app.adoption_id}
-                                                        </span>
-                                                    </div>
-
-                                                    {/* Applicant Info Grid */}
-                                                    <div className="bg-gray-50/80 rounded-xl p-2.5 sm:p-3 border border-gray-100/90 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-gray-600 mt-2">
-                                                        <p><strong className="text-gray-900 font-bold">Applicant:</strong> {app.full_name}</p>
-                                                        <p><strong className="text-gray-900 font-bold">Contact:</strong> {app.contact_no}</p>
-                                                        <p><strong className="text-gray-900 font-bold">Living Space:</strong> {app.living_space}</p>
-                                                        <p><strong className="text-gray-900 font-bold">Other Pets:</strong> {app.has_other_pets ? 'Yes' : 'No'}</p>
-                                                    </div>
-
-                                                    {/* Government ID Info */}
-                                                    {app.id_type && (
-                                                        <div className="mt-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200/70 flex items-center justify-between flex-wrap gap-2 text-xs">
-                                                            <div className="flex items-center gap-2 min-w-0">
-                                                                <CreditCard className="w-4 h-4 text-orange-500 shrink-0" />
-                                                                <span className="font-bold text-gray-900">Gov ID:</span>
-                                                                <span className="text-gray-700 truncate">{app.id_type} (#{app.id_number || 'Registered'})</span>
-                                                            </div>
-                                                            {app.id_photo_url && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setPreviewIdPhotoUrl(app.id_photo_url || null)}
-                                                                    className="text-xs font-black text-orange-600 hover:text-orange-700 inline-flex items-center gap-1 cursor-pointer bg-white px-2 py-1 rounded-lg border border-orange-200/80 shadow-2xs hover:bg-orange-50 transition-colors"
-                                                                >
-                                                                    <Eye className="w-3.5 h-3.5" /> View ID Photo
-                                                                </button>
-                                                            )}
+                                            {/* ─── CARD HEADER: Pet Info + Status + Top Actions ─── */}
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100">
+                                                <div className="flex items-center gap-3.5 min-w-0">
+                                                    <img
+                                                        src={getPetPicture(app.animal_photo)}
+                                                        alt={app.animal_name || 'Pet'}
+                                                        className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border border-gray-100 shrink-0 shadow-2xs"
+                                                    />
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                                                            <h3 className="font-black text-base sm:text-lg text-gray-900 truncate">
+                                                                {app.animal_name || `Rescue Animal #${app.holding_id}`}
+                                                            </h3>
+                                                            <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-700 font-bold border border-orange-200/80">
+                                                                {app.animal_type || 'Rescue'} {app.animal_breed ? `• ${app.animal_breed}` : ''}
+                                                            </span>
+                                                            <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
+                                                                App #{app.adoption_id}
+                                                            </span>
                                                         </div>
-                                                    )}
-
-                                                    {app.reason && (
-                                                        <p className="text-xs text-gray-600 mt-2 line-clamp-2 bg-gray-50/70 p-2.5 rounded-xl border border-gray-100 italic">
-                                                            "{app.reason}"
+                                                        <p className="text-[11px] text-gray-400 font-medium flex items-center gap-1">
+                                                            <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                                            <span>Submitted on {new Date(app.created_at).toLocaleDateString(undefined, {
+                                                                year: 'numeric',
+                                                                month: 'short',
+                                                                day: 'numeric',
+                                                                hour: '2-digit',
+                                                                minute: '2-digit'
+                                                            })}</span>
                                                         </p>
-                                                    )}
-
-                                                    {/* Two-Way Handover Status Box for Approved Applications */}
-                                                    {app.status === 'Approved' && (
-                                                        <div className="mt-3 p-3 sm:p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200 text-xs space-y-2.5">
-                                                            <div className="flex items-center justify-between flex-wrap gap-2 font-black text-amber-950">
-                                                                <span className="flex items-center gap-1.5">
-                                                                    <Shield className="w-4 h-4 text-amber-600 shrink-0" />
-                                                                    Handover & Claiming Status:
-                                                                </span>
-                                                                {app.staff_handed_over && app.is_handed_over ? (
-                                                                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-black border border-emerald-300 flex items-center gap-1 text-[11px]">
-                                                                        <Sparkles className="w-3 h-3 text-emerald-600" /> Completed & Registered
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold border border-amber-300 text-[11px]">
-                                                                        Awaiting Physical Claiming
-                                                                    </span>
-                                                                )}
-                                                            </div>
-
-                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] bg-white/90 p-2.5 rounded-xl border border-amber-100 shadow-2xs">
-                                                                <div>
-                                                                    <span className="text-gray-500 font-semibold block">1. Barangay Staff Release:</span>
-                                                                    {app.staff_handed_over ? (
-                                                                        <span className="font-black text-emerald-700 flex items-center gap-1 mt-0.5">
-                                                                            <CheckCircle2 className="w-3.5 h-3.5" /> Handed Over ({app.staff_handover_name || 'Staff'})
-                                                                        </span>
-                                                                    ) : (
-                                                                        <span className="font-bold text-amber-700 flex items-center gap-1 mt-0.5">
-                                                                            <Clock className="w-3.5 h-3.5" /> Pending Physical Release
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-
-                                                                <div>
-                                                                    <span className="text-gray-500 font-semibold block">2. Adopter Receipt:</span>
-                                                                    {app.is_handed_over ? (
-                                                                        <span className="font-black text-emerald-700 flex items-center gap-1 mt-0.5">
-                                                                            <CheckCircle2 className="w-3.5 h-3.5" /> Confirmed by Adopter
-                                                                        </span>
-                                                                    ) : (
-                                                                        <span className="font-bold text-amber-700 flex items-center gap-1 mt-0.5">
-                                                                            <Clock className="w-3.5 h-3.5" /> Pending Adopter Receipt
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-
-                                                            {!app.staff_handed_over && (
-                                                                <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
-                                                                    <span className="text-[11px] text-gray-500">
-                                                                        Verify applicant identity before releasing pet.
-                                                                    </span>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setHandoverModalApp(app)}
-                                                                        className="w-full sm:w-auto px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
-                                                                    >
-                                                                        <CheckCircle2 className="w-3.5 h-3.5" />
-                                                                        <span>Confirm Pet Handed Over</span>
-                                                                    </button>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                    </div>
                                                 </div>
-                                            </div>
 
-                                            {/* Status & Review Controls */}
-                                            <div className="flex flex-row md:flex-col items-center md:items-end justify-between gap-3 shrink-0 pt-3 md:pt-0 border-t md:border-t-0 border-gray-100">
-                                                <div>
+                                                {/* Status Badge & Actions */}
+                                                <div className="flex items-center gap-2 flex-wrap sm:justify-end shrink-0 pt-1 sm:pt-0">
                                                     {app.status === 'Approved' && (
                                                         app.staff_handed_over && app.is_handed_over ? (
-                                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black border border-emerald-300 shadow-2xs">
+                                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black border border-emerald-300 shadow-2xs">
                                                                 <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Officially Adopted
                                                             </span>
                                                         ) : (
-                                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-black border border-emerald-200">
+                                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-black border border-emerald-200">
                                                                 <CheckCircle2 className="w-3.5 h-3.5" /> Approved
                                                             </span>
                                                         )
                                                     )}
                                                     {app.status === 'Rejected' && (
-                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-700 text-xs font-black border border-red-200">
+                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-50 text-red-700 text-xs font-black border border-red-200">
                                                             <XCircle className="w-3.5 h-3.5" /> Rejected
                                                         </span>
                                                     )}
+                                                    {app.status === 'Cancelled' && (
+                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-black border border-gray-300 shadow-2xs">
+                                                            <XCircle className="w-3.5 h-3.5 text-gray-500" /> Cancelled
+                                                        </span>
+                                                    )}
                                                     {app.status === 'Pending' && (
-                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-black border border-amber-200">
+                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 text-xs font-black border border-amber-200">
                                                             <Clock className="w-3.5 h-3.5" /> Pending Review
                                                         </span>
                                                     )}
-                                                </div>
 
-                                                <div className="flex items-center gap-2">
                                                     <Link
                                                         to={`/adopt/journey/${app.holding_id}`}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs"
-                                                        title="View Journey Map"
+                                                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs"
+                                                        title="View Journey Trail"
                                                     >
-                                                        <ExternalLink className="w-3.5 h-3.5" />
+                                                        <ExternalLink className="w-3.5 h-3.5 text-orange-500" />
                                                         <span className="hidden sm:inline">Journey Trail</span>
                                                     </Link>
 
                                                     {app.status === 'Pending' && isHeadOfficer && (
                                                         <div className="flex items-center gap-1.5">
                                                             <button
+                                                                type="button"
                                                                 onClick={() => handleOpenReviewModal(app, 'approve')}
-                                                                className="px-3 sm:px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-colors shadow-xs cursor-pointer"
+                                                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1"
                                                             >
-                                                                Approve
+                                                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                                                <span>Approve</span>
                                                             </button>
                                                             <button
+                                                                type="button"
                                                                 onClick={() => handleOpenReviewModal(app, 'reject')}
-                                                                className="px-3 sm:px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-black transition-colors border border-red-200 cursor-pointer"
+                                                                className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-black transition-all border border-red-200 cursor-pointer active:scale-95 flex items-center gap-1"
                                                             >
-                                                                Reject
+                                                                <XCircle className="w-3.5 h-3.5" />
+                                                                <span>Reject</span>
                                                             </button>
                                                         </div>
                                                     )}
                                                 </div>
                                             </div>
+
+                                            {/* ─── APPLICANT PROFILE & CONTACT DETAILS (Clean Grid) ─── */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                                                <div className="bg-gray-50/90 rounded-2xl p-3 border border-gray-100/90 flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-xl bg-orange-100/80 text-orange-600 flex items-center justify-center shrink-0">
+                                                        <User className="w-4 h-4" />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Applicant Name</div>
+                                                        <div className="text-xs font-extrabold text-gray-900 truncate" title={app.full_name}>
+                                                            {app.full_name}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="bg-gray-50/90 rounded-2xl p-3 border border-gray-100/90 flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-xl bg-blue-100/80 text-blue-600 flex items-center justify-center shrink-0">
+                                                        <Phone className="w-4 h-4" />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Contact Number</div>
+                                                        <div className="text-xs font-extrabold text-gray-900 truncate">
+                                                            {app.contact_no}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="bg-gray-50/90 rounded-2xl p-3 border border-gray-100/90 flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-xl bg-emerald-100/80 text-emerald-600 flex items-center justify-center shrink-0">
+                                                        <Home className="w-4 h-4" />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Living Space</div>
+                                                        <div className="text-xs font-extrabold text-gray-900 truncate" title={app.living_space}>
+                                                            {app.living_space}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="bg-gray-50/90 rounded-2xl p-3 border border-gray-100/90 flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-xl bg-purple-100/80 text-purple-600 flex items-center justify-center shrink-0">
+                                                        <PawPrint className="w-4 h-4" />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Other Pets in Home</div>
+                                                        <div className="text-xs font-extrabold text-gray-900">
+                                                            {app.has_other_pets ? 'Yes (Has pets)' : 'No other pets'}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* ─── GOVERNMENT ID ROW ─── */}
+                                            {app.id_type && (
+                                                <div className="bg-slate-50/90 rounded-2xl p-3 border border-slate-200/80 flex items-center justify-between flex-wrap gap-2 text-xs">
+                                                    <div className="flex items-center gap-2.5 min-w-0">
+                                                        <div className="w-7 h-7 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                                                            <CreditCard className="w-4 h-4" />
+                                                        </div>
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <span className="font-bold text-gray-900">Government ID:</span>
+                                                            <span className="font-extrabold text-gray-800">{app.id_type}</span>
+                                                            {app.id_number && (
+                                                                <MaskedIdDisplay idNumber={app.id_number} idType={app.id_type} />
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {app.id_photo_url && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setPreviewIdPhotoUrl(app.id_photo_url || null)}
+                                                            className="text-xs font-black text-orange-600 hover:text-orange-700 inline-flex items-center gap-1.5 cursor-pointer bg-white px-3 py-1.5 rounded-xl border border-orange-200/90 shadow-2xs hover:bg-orange-50 transition-colors"
+                                                        >
+                                                            <Eye className="w-3.5 h-3.5" />
+                                                            <span>View ID Photo</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* ─── APPLICANT'S STATED MOTIVATION & REASON (Scrollable Container) ─── */}
+                                            {app.reason && (
+                                                <div className="bg-amber-50/40 rounded-2xl p-3.5 sm:p-4 border border-amber-200/70 text-xs space-y-1.5">
+                                                    <div className="flex items-center justify-between gap-2 text-amber-950 font-bold">
+                                                        <span className="flex items-center gap-1.5">
+                                                            <FileText className="w-4 h-4 text-amber-600 shrink-0" />
+                                                            Applicant's Stated Motivation & Reason:
+                                                        </span>
+                                                        <span className="text-[10px] text-amber-700/70 font-semibold">
+                                                            Scrollable message view
+                                                        </span>
+                                                    </div>
+                                                    <div className="max-h-28 sm:max-h-36 overflow-y-auto pr-2 text-xs text-gray-700 leading-relaxed whitespace-pre-wrap break-words bg-white/90 p-3 rounded-xl border border-amber-100 shadow-2xs font-medium">
+                                                        "{app.reason}"
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* ─── CANCELLED DETAILS BANNER ─── */}
+                                            {app.status === 'Cancelled' && (
+                                                <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-200 text-xs space-y-1.5">
+                                                    <div className="flex items-center justify-between flex-wrap gap-2 text-gray-700 font-bold">
+                                                        <span className="flex items-center gap-1.5 text-gray-800">
+                                                            <XCircle className="w-4 h-4 text-gray-500" /> Cancelled by Applicant
+                                                        </span>
+                                                        {app.cancelled_at && (
+                                                            <span className="text-[11px] text-gray-500 font-normal">
+                                                                Cancelled on {new Date(app.cancelled_at).toLocaleDateString(undefined, {
+                                                                    year: 'numeric',
+                                                                    month: 'short',
+                                                                    day: 'numeric',
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit'
+                                                                })}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {app.cancellation_reason && (
+                                                        <div className="text-xs text-gray-600 bg-white p-3 rounded-xl border border-gray-200/80">
+                                                            <span className="font-bold text-gray-700 block mb-0.5">Cancellation Reason:</span>
+                                                            <p className="whitespace-pre-wrap break-words leading-relaxed">{app.cancellation_reason}</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* ─── TWO-WAY HANDOVER STATUS BOX (Approved Applications) ─── */}
+                                            {app.status === 'Approved' && (
+                                                <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50/90 border border-amber-200 text-xs space-y-2.5">
+                                                    <div className="flex items-center justify-between flex-wrap gap-2 font-black text-amber-950">
+                                                        <span className="flex items-center gap-1.5">
+                                                            <Shield className="w-4 h-4 text-amber-600 shrink-0" />
+                                                            Handover & Claiming Status:
+                                                        </span>
+                                                        {app.staff_handed_over && app.is_handed_over ? (
+                                                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-black border border-emerald-300 flex items-center gap-1 text-[11px]">
+                                                                <Sparkles className="w-3 h-3 text-emerald-600" /> Completed & Registered
+                                                            </span>
+                                                        ) : (
+                                                            <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold border border-amber-300 text-[11px]">
+                                                                Awaiting Physical Claiming
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] bg-white/90 p-2.5 rounded-xl border border-amber-100 shadow-2xs">
+                                                        <div>
+                                                            <span className="text-gray-500 font-semibold block">1. Barangay Staff Release:</span>
+                                                            {app.staff_handed_over ? (
+                                                                <span className="font-black text-emerald-700 flex items-center gap-1 mt-0.5">
+                                                                    <CheckCircle2 className="w-3.5 h-3.5" /> Handed Over ({app.staff_handover_name || 'Staff'})
+                                                                </span>
+                                                            ) : (
+                                                                <span className="font-bold text-amber-700 flex items-center gap-1 mt-0.5">
+                                                                    <Clock className="w-3.5 h-3.5" /> Pending Physical Release
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        <div>
+                                                            <span className="text-gray-500 font-semibold block">2. Adopter Receipt:</span>
+                                                            {app.is_handed_over ? (
+                                                                <span className="font-black text-emerald-700 flex items-center gap-1 mt-0.5">
+                                                                    <CheckCircle2 className="w-3.5 h-3.5" /> Confirmed by Adopter
+                                                                </span>
+                                                            ) : (
+                                                                <span className="font-bold text-amber-700 flex items-center gap-1 mt-0.5">
+                                                                    <Clock className="w-3.5 h-3.5" /> Pending Adopter Receipt
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {!app.staff_handed_over && (
+                                                        <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
+                                                            <span className="text-[11px] text-gray-500">
+                                                                Verify applicant identity before releasing pet.
+                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setHandoverModalApp(app)}
+                                                                className="w-full sm:w-auto px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                                                            >
+                                                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                                                <span>Confirm Pet Handed Over</span>
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* ─── BARANGAY REVIEW REMARKS (if reviewed) ─── */}
+                                            {app.review_notes && (
+                                                <div className="p-3.5 rounded-2xl bg-orange-50/60 border border-orange-200/80 text-xs text-orange-950 space-y-1">
+                                                    <span className="font-bold text-orange-900 flex items-center gap-1.5">
+                                                        <Shield className="w-3.5 h-3.5 text-orange-600" />
+                                                        Barangay Review Remarks ({app.reviewer_name || 'Officer'}):
+                                                    </span>
+                                                    <p className="whitespace-pre-wrap break-words text-orange-900/90 leading-relaxed bg-white/80 p-2.5 rounded-xl border border-orange-100">
+                                                        {app.review_notes}
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -922,9 +1048,16 @@ const BrgyAdoptions = () => {
                                 has been physically claimed and handed over to applicant{' '}
                                 <strong>{handoverModalApp.full_name}</strong>.
                             </p>
-                            <div className="bg-white/90 p-2.5 rounded-xl border border-amber-200/80 text-[11px] space-y-1 shadow-2xs">
+                            <div className="bg-white/90 p-2.5 rounded-xl border border-amber-200/80 text-[11px] space-y-1.5 shadow-2xs">
                                 <div><strong>ID Document Type:</strong> {handoverModalApp.id_type || 'Government ID'}</div>
-                                <div><strong>ID Number:</strong> {handoverModalApp.id_number || 'Registered on file'}</div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    <strong>ID Number:</strong>
+                                    {handoverModalApp.id_number ? (
+                                        <MaskedIdDisplay idNumber={handoverModalApp.id_number} idType={handoverModalApp.id_type} compact={true} />
+                                    ) : (
+                                        <span>Registered on file</span>
+                                    )}
+                                </div>
                                 <div><strong>Applicant Contact:</strong> {handoverModalApp.contact_no}</div>
                             </div>
                         </div>

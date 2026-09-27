@@ -19,6 +19,7 @@ import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import { useReportChatCount } from '../../utils/chatUtils';
 import SuccessModal from '../../components/Modals/SuccessModal';
 import { api } from '../../utils/api';
+import { getCachedData } from '../../utils/cache';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
 import MergeReportModal from '../../components/Modals/MergeReportModal';
@@ -198,12 +199,20 @@ const BrgyReportView = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
 
-    const [report, setReport] = useState<Report | null>(null);
+    const [report, setReport] = useState<Report | null>(() => {
+        if (!id) return null;
+        const cachedList = getCachedData<Report[]>('brgy_dashboard_reports') || [];
+        return cachedList.find(r => r.report_id.toString() === id.toString()) || null;
+    });
     const [rescueRequest, setRescueRequest] = useState<RescueRequest | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState<boolean>(() => {
+        if (!id) return false;
+        const cachedList = getCachedData<Report[]>('brgy_dashboard_reports') || [];
+        return !cachedList.some(r => r.report_id.toString() === id.toString());
+    });
     const [resolvedAddress, setResolvedAddress] = useState('');
     const [isGeocoding, setIsGeocoding] = useState(false);
-    const [personnel, setPersonnel] = useState<any[]>([]);
+    const [personnel, setPersonnel] = useState<any[]>(() => getCachedData<any[]>('brgy_dashboard_personnel') || []);
     const [roadDistance, setRoadDistance] = useState<number | null>(null);
     const [showSuccess, setShowSuccess] = useState(false);
     const [successMessage, setSuccessMessage] = useState('Operation completed successfully.');
@@ -283,7 +292,7 @@ const BrgyReportView = () => {
 
     const fetchReportDetails = async () => {
         if (!id) return;
-        setLoading(true);
+        if (!report) setLoading(true);
         try {
             let loadedReport: Report | null = null;
             let loadedRescue: RescueRequest | null = null;
@@ -1410,6 +1419,10 @@ const BrgyReportView = () => {
                                                 behaviorInjury={(report as any).ai_behavior_injury}
                                                 behaviorAggressive={(report as any).ai_behavior_aggressive}
                                                 behaviorExplanation={(report as any).ai_behavior_explanation}
+                                                aiPhotoLikelihood={(report as any).ai_photo_likelihood}
+                                                aiPhotoStatus={(report as any).ai_photo_status}
+                                                aiPhotoRecommendation={(report as any).ai_photo_recommendation}
+                                                aiPhotoDetails={(report as any).ai_photo_details}
                                                 verificationStatus={report.verification_status}
                                                 verifiedActualBite={(report as any).verified_actual_bite}
                                                 verifiedChasing={(report as any).verified_chasing}
@@ -2101,6 +2114,7 @@ const BrgyReportView = () => {
                                                             showGeofence={true}
                                                             showLandmarks={true}
                                                             showConnectingLine={false}
+                                                            hideViewDetailsButton={true}
                                                             polylines={isResolvedCase && hadHoldingHistory && initLat != null && initLng != null ? [{
                                                                 positions: [[initLat, initLng], [histFacLat, histFacLng]],
                                                                 color: '#64748B',
