@@ -17,6 +17,16 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
  * or Admin account, even within the same browser session or device.
  */
 function getThemeStorageKey(pathname: string): string {
+    const isPublicAuthRoute = 
+        pathname === '/' || 
+        pathname === '/login' || 
+        pathname === '/staff/login' || 
+        pathname === '/admin/login';
+
+    if (isPublicAuthRoute) {
+        return 'straysafe_theme_public';
+    }
+
     if (pathname.startsWith('/subd') || pathname.startsWith('/staff')) {
         try {
             const staff = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
@@ -70,6 +80,7 @@ function getThemeStorageKey(pathname: string): string {
 }
 
 function getStoredTheme(key: string): Theme {
+    if (key === 'straysafe_theme_public') return 'light';
     const saved = localStorage.getItem(key);
     return (saved === 'dark' || saved === 'light') ? saved : 'light';
 }

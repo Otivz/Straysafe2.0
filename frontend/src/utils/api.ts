@@ -142,17 +142,6 @@ api.interceptors.response.use(
                 processQueue(refreshErr, null);
                 console.warn('Session expired or unauthorized request. Clearing session...');
                 clearAuthStorage();
-                if (!window.location.pathname.includes('/login')) {
-                    const isStaff = window.location.pathname.startsWith('/subd') || window.location.pathname.startsWith('/brgy');
-                    const isAdmin = window.location.pathname.startsWith('/admin');
-                    if (isAdmin) {
-                        window.location.href = '/admin/login';
-                    } else if (isStaff) {
-                        window.location.href = '/staff/login';
-                    } else {
-                        window.location.href = '/login';
-                    }
-                }
                 return Promise.reject(refreshErr);
             } finally {
                 isRefreshing = false;
