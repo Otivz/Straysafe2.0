@@ -515,10 +515,25 @@ const BrgyMessages: React.FC = () => {
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                         </svg>
                                     </div>
-                                    <p className="text-xs font-bold text-gray-800">No messages found</p>
-                                    <p className="text-[11px] text-gray-400 mt-0.5">
-                                        {searchTerm ? 'Try another search keyword.' : 'Case chats and match inquiries will appear here.'}
+                                    <p className="text-xs font-bold text-gray-800">
+                                        {activeTab === 'past' ? 'No past messages' : 'No active messages found'}
                                     </p>
+                                    <p className="text-[11px] text-gray-400 mt-0.5 max-w-xs mx-auto">
+                                        {searchTerm
+                                            ? 'Try another search keyword.'
+                                            : pastCases.length > 0 && activeTab !== 'past'
+                                                ? `You have ${pastCases.length} resolved case thread${pastCases.length > 1 ? 's' : ''} in the Past tab.`
+                                                : 'Case chats and match inquiries will appear here.'}
+                                    </p>
+                                    {pastCases.length > 0 && activeTab !== 'past' && !searchTerm && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveTab('past')}
+                                            className="mt-3 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] text-[11px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer border border-orange-200"
+                                        >
+                                            View Past Cases ({pastCases.length})
+                                        </button>
+                                    )}
                                 </div>
                             ) : (
                                 filteredThreads.map(thread => {

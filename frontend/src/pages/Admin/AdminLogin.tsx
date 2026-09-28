@@ -18,26 +18,6 @@ const AdminLogin = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-    
-    // Auto-redirect if already logged in as admin
-    useEffect(() => {
-        const rawUser = 
-            localStorage.getItem('admin_user') || 
-            sessionStorage.getItem('admin_user');
-        
-        if (rawUser) {
-            try {
-                const user = JSON.parse(rawUser);
-                if (user && user.role_id === 4) {
-                    navigate('/admin/dashboard');
-                } else {
-                    clearAuthStorage();
-                }
-            } catch {
-                clearAuthStorage();
-            }
-        }
-    }, [navigate]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

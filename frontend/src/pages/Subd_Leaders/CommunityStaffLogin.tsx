@@ -18,28 +18,6 @@ const CommunityStaffLogin = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-    
-    // Auto-redirect if already logged in as staff
-    useEffect(() => {
-        const rawUser = 
-            localStorage.getItem('staff_user') || 
-            sessionStorage.getItem('staff_user');
-        
-        if (rawUser) {
-            try {
-                const user = JSON.parse(rawUser);
-                if (user && user.role_id === 2) {
-                    navigate('/subd/dashboard');
-                } else if (user && user.role_id === 3) {
-                    navigate('/brgy/dashboard');
-                } else {
-                    clearAuthStorage();
-                }
-            } catch {
-                clearAuthStorage();
-            }
-        }
-    }, [navigate]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

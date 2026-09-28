@@ -187,7 +187,8 @@ def get_or_create_report_thread(report_id: int, current_user: User, db: Session)
             thread_id=thread.thread_id,
             sender_id=reporter_id,
             message_text=f"Official coordination channel established for Report #STR-{report_id:04d}. Direct messaging is bound to this case.",
-            is_system=True
+            is_system=True,
+            is_read=True
         )
         db.add(welcome_msg)
         db.commit()
@@ -305,7 +306,8 @@ def get_or_create_match_thread(match_id: int, current_user: User, db: Session) -
             thread_id=thread.thread_id,
             sender_id=current_user.user_id,
             message_text=f"Direct look-alike verification channel started for Pet '{pet_name}' and Report #{match.source_report_id}.",
-            is_system=True
+            is_system=True,
+            is_read=True
         )
         db.add(welcome_msg)
         db.commit()
@@ -519,7 +521,8 @@ def get_report_chat_stats(
     unread = db.query(ChatMessage).filter(
         ChatMessage.thread_id == thread.thread_id,
         ChatMessage.sender_id != current_user.user_id,
-        ChatMessage.is_read == False
+        ChatMessage.is_read == False,
+        ChatMessage.is_system == False
     ).count()
 
     return {
@@ -706,7 +709,8 @@ def get_match_chat_stats(
     unread = db.query(ChatMessage).filter(
         ChatMessage.thread_id == thread.thread_id,
         ChatMessage.sender_id != current_user.user_id,
-        ChatMessage.is_read == False
+        ChatMessage.is_read == False,
+        ChatMessage.is_system == False
     ).count()
 
     return {
@@ -806,7 +810,8 @@ def list_user_threads(
         unread_count = db.query(ChatMessage).filter(
             ChatMessage.thread_id == t.thread_id,
             ChatMessage.sender_id != current_user.user_id,
-            ChatMessage.is_read == False
+            ChatMessage.is_read == False,
+            ChatMessage.is_system == False
         ).count()
 
         media_url = None
@@ -912,7 +917,8 @@ def list_user_threads(
         unread_count = db.query(ChatMessage).filter(
             ChatMessage.thread_id == t.thread_id,
             ChatMessage.sender_id != current_user.user_id,
-            ChatMessage.is_read == False
+            ChatMessage.is_read == False,
+            ChatMessage.is_system == False
         ).count()
 
         media_url = None
@@ -1060,7 +1066,8 @@ def get_unread_chat_count(
     count = db.query(ChatMessage).filter(
         ChatMessage.thread_id.in_(list(thread_ids)),
         ChatMessage.sender_id != current_user.user_id,
-        ChatMessage.is_read == False
+        ChatMessage.is_read == False,
+        ChatMessage.is_system == False
     ).count()
 
     return {"unread_count": count}

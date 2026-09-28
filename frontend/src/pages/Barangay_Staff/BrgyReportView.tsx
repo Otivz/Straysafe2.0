@@ -1011,31 +1011,6 @@ const BrgyReportView = () => {
                                     </div>
                                 </div>
 
-                                {/* Mission Stage Stepper */}
-                                <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm flex items-center justify-between mb-4 relative overflow-hidden">
-                                    <div className="absolute inset-0 bg-gradient-to-r from-orange-50/50 to-transparent"></div>
-                                    <div className="relative flex w-full items-center justify-between z-10 px-2 sm:px-6">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-[#F97316] text-white flex items-center justify-center font-black text-sm shadow-md">1</div>
-                                            <span className="text-xs font-black text-gray-900 uppercase tracking-wider">Reported</span>
-                                        </div>
-                                        <div className="flex-1 h-0.5 bg-gray-200 mx-4">
-                                            <div className={`h-full ${report.status_id !== 4 ? 'bg-[#F97316]' : 'bg-transparent'} transition-all`}></div>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-8 h-8 rounded-full ${report.status_id !== 4 ? 'bg-[#F97316] text-white shadow-md' : 'bg-gray-100 text-gray-400'} flex items-center justify-center font-black text-sm transition-all`}>2</div>
-                                            <span className={`text-xs font-black uppercase tracking-wider ${report.status_id !== 4 ? 'text-gray-900' : 'text-gray-400'} transition-all`}>Verified</span>
-                                        </div>
-                                        <div className="flex-1 h-0.5 bg-gray-200 mx-4">
-                                            <div className={`h-full ${report.status_id === 5 || report.status_id === 6 || report.status_id === 7 || report.status_id === 11 ? 'bg-[#F97316]' : 'bg-transparent'} transition-all`}></div>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-8 h-8 rounded-full ${report.status_id === 5 || report.status_id === 6 || report.status_id === 7 || report.status_id === 11 ? 'bg-[#F97316] text-white shadow-md' : 'bg-gray-100 text-gray-400'} flex items-center justify-center font-black text-sm transition-all`}>3</div>
-                                            <span className={`text-xs font-black uppercase tracking-wider ${report.status_id === 5 || report.status_id === 6 || report.status_id === 7 || report.status_id === 11 ? 'text-gray-900' : 'text-gray-400'} transition-all`}>Escalate</span>
-                                        </div>
-                                    </div>
-                                </div>
-
                                 {/* Top Summary Bar */}
                                 <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                     <div className="flex flex-wrap items-center gap-3">

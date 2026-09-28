@@ -357,11 +357,11 @@
     color: #FECDD3 !important;
   }
 
-  /* Smooth Switcher Transitions */
-  *, *::before, *::after {
+  /* Smooth Switcher Transitions for core structural containers */
+  body, main, nav, header, aside, .theme-transition {
     transition-property: background-color, border-color, color, fill, stroke;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 250ms;
+    transition-duration: 200ms;
   }
 
   /* -------------------------------------------------------------------------- */
