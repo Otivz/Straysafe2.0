@@ -1764,13 +1764,6 @@ const ResiViewReport = () => {
                                         showHoldingFacilities={isRelocated}
                                         hideViewDetailsButton={true}
                                         markers={resiMarkers}
-                                        polylines={isResolvedCase && hadHoldingHistory && initLat && initLng ? [{
-                                            positions: [[initLat, initLng], [histFacLat, histFacLng]],
-                                            color: '#64748B',
-                                            weight: 3,
-                                            dashArray: '6, 8',
-                                            opacity: 0.85
-                                        }] : undefined}
                                         onMapClick={(routingState || isSettingStartingPoint) ? (clickedLat, clickedLng) => handlePinReposition(clickedLat, clickedLng) : undefined}
                                         routing={(!isResolvedCase && routingState) ? {
                                             start: routingState.start,
@@ -2003,13 +1996,6 @@ const ResiViewReport = () => {
                                             showHoldingFacilities={isRelocated}
                                             hideViewDetailsButton={true}
                                             markers={resiMarkers}
-                                            polylines={isResolvedCase && hadHoldingHistory && initLat && initLng ? [{
-                                                positions: [[initLat, initLng], [histFacLat, histFacLng]],
-                                                color: '#64748B',
-                                                weight: 3,
-                                                dashArray: '6, 8',
-                                                opacity: 0.85
-                                            }] : undefined}
                                             onMapClick={(routingState || isSettingStartingPoint) ? (clickedLat, clickedLng) => handlePinReposition(clickedLat, clickedLng) : undefined}
                                             routing={(!isResolvedCase && routingState) ? {
                                                 start: routingState.start,

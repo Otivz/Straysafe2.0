@@ -8,9 +8,10 @@ from sqlalchemy.orm import Session, joinedload
 from app.utils.auth import get_current_staff_or_admin, get_current_user
 
 from app.database import get_db
-from app.models.report import HoldingAnimal, HoldingTimeline, Report, FacilityStatus, StatusHistory
+from app.models.report import HoldingAnimal, HoldingTimeline, Report, FacilityStatus, StatusHistory, Rescue, EndorsementLetter, ReportMedia
 from app.models.landmark import Landmark
 from app.models.user import Subdivision, User
+from app.models.notification import Notification
 from app.utils.audit import log_activity
 from app.schemas.holding import (
     HoldingAnimalCreate,
@@ -19,6 +20,7 @@ from app.schemas.holding import (
     HoldingTimelineCreate,
     HoldingTimelineResponse,
     HoldingMetricsResponse,
+    HoldingEscalateRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,23 +41,26 @@ CATEGORY_MAP = {
 }
 
 
-def _format_duration(delta_seconds: float) -> str:
-    """Format duration in seconds into human readable format like '2 days, 4 hrs' or '3 days'."""
+def _format_duration(delta_seconds: float, is_finalized: bool = False) -> str:
+    """Format duration in seconds into human readable format like '1 day, 6 hours' or '3 days, 4 hours, 30 minutes'."""
     if delta_seconds < 0:
         delta_seconds = 0
     days = int(delta_seconds // 86400)
     hours = int((delta_seconds % 86400) // 3600)
     mins = int((delta_seconds % 3600) // 60)
+
+    parts = []
     if days > 0:
-        if hours > 0:
-            return f"{days}d {hours}h"
-        return f"{days} day{'s' if days != 1 else ''}"
-    elif hours > 0:
-        if mins > 0:
-            return f"{hours}h {mins}m"
-        return f"{hours} hr{'s' if hours != 1 else ''}"
-    else:
-        return f"{max(mins, 1)} min{'s' if mins != 1 else ''}"
+        parts.append(f"{days} day{'s' if days != 1 else ''}")
+    if hours > 0:
+        parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+    if (is_finalized or days == 0) and mins > 0:
+        parts.append(f"{mins} minute{'s' if mins != 1 else ''}")
+    elif not parts:
+        single_m = max(mins, 1)
+        parts.append(f"{single_m} minute{'s' if single_m != 1 else ''}")
+
+    return ", ".join(parts)
 
 
 def _populate(animal: HoldingAnimal) -> HoldingAnimal:
@@ -141,7 +146,8 @@ def _populate(animal: HoldingAnimal) -> HoldingAnimal:
                 ]
                 if any_imgs:
                     any_imgs.sort(key=lambda m: getattr(m, 'media_id', 0) or 0)
-                    original_photo = any_imgs[0].file_url
+        if original_photo and ("res.cloudinary.com/test" in str(original_photo) or str(original_photo).endswith("original_reporter_dog.jpg")):
+            original_photo = "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop&q=80"
 
         animal.original_photo_url = original_photo  # type: ignore[attr-defined]
 
@@ -152,6 +158,25 @@ def _populate(animal: HoldingAnimal) -> HoldingAnimal:
         else:
             animal.facility_name = animal.report.landmark if animal.report.facility_id else None  # type: ignore[attr-defined]
             animal.facility_type = None  # type: ignore[attr-defined]
+
+        animal.report_status_id = animal.report.current_status_id  # type: ignore[attr-defined]
+        animal.custody_status = animal.report.custody_status  # type: ignore[attr-defined]
+        is_esc = (
+            animal.report.current_status_id in (4, 13, 5, 6) or
+            ("escalat" in str(animal.report.custody_status or "").lower()) or
+            ("awaiting" in str(animal.report.custody_status or "").lower())
+        )
+        animal.is_escalated = is_esc  # type: ignore[attr-defined]
+        if animal.report.current_status_id == 4:
+            animal.escalation_status = "Awaiting Barangay Pickup"  # type: ignore[attr-defined]
+        elif animal.report.current_status_id == 13:
+            animal.escalation_status = "Barangay Approved (Pending Dispatch)"  # type: ignore[attr-defined]
+        elif animal.report.current_status_id == 5:
+            animal.escalation_status = "Barangay Dispatched"  # type: ignore[attr-defined]
+        elif animal.report.current_status_id == 6:
+            animal.escalation_status = "Picked Up (In Transit)"  # type: ignore[attr-defined]
+        else:
+            animal.escalation_status = None  # type: ignore[attr-defined]
     else:
         animal.report_media = []  # type: ignore[attr-defined]
         animal.original_photo_url = None  # type: ignore[attr-defined]
@@ -160,6 +185,10 @@ def _populate(animal: HoldingAnimal) -> HoldingAnimal:
         animal.facility_type = None  # type: ignore[attr-defined]
         animal.subdivision_id = None  # type: ignore[attr-defined]
         animal.barangay_id = None  # type: ignore[attr-defined]
+        animal.report_status_id = None  # type: ignore[attr-defined]
+        animal.custody_status = None  # type: ignore[attr-defined]
+        animal.is_escalated = False  # type: ignore[attr-defined]
+        animal.escalation_status = None  # type: ignore[attr-defined]
 
     # Calculate Subdivision and Barangay Stay Durations
     now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -213,7 +242,7 @@ def _populate(animal: HoldingAnimal) -> HoldingAnimal:
             brgy_intake = transfer_date
             if discharge_time:
                 brgy_discharge = discharge_time
-        elif has_subd_history or (animal.report and animal.report.subdivision_id):
+        elif has_subd_history:
             subd_intake = subd_intake or intake_time
             brgy_intake = brgy_intake or intake_time
             if discharge_time:
@@ -234,12 +263,12 @@ def _populate(animal: HoldingAnimal) -> HoldingAnimal:
         animal.subd_intake_date = subd_intake
         animal.subd_discharge_date = subd_discharge
         animal.subd_duration_days = round(subd_duration_sec / 86400, 2)
-        animal.subd_duration_display = _format_duration(subd_duration_sec)
+        animal.subd_duration_display = _format_duration(subd_duration_sec, is_finalized=bool(subd_discharge))
     else:
         animal.subd_intake_date = None
         animal.subd_discharge_date = None
         animal.subd_duration_days = 0.0
-        animal.subd_duration_display = "0 days"
+        animal.subd_duration_display = "0 minutes"
 
     # Compute Barangay duration
     if brgy_intake:
@@ -248,19 +277,19 @@ def _populate(animal: HoldingAnimal) -> HoldingAnimal:
         animal.brgy_intake_date = brgy_intake
         animal.brgy_discharge_date = brgy_discharge
         animal.brgy_duration_days = round(brgy_duration_sec / 86400, 2)
-        animal.brgy_duration_display = _format_duration(brgy_duration_sec)
+        animal.brgy_duration_display = _format_duration(brgy_duration_sec, is_finalized=bool(brgy_discharge))
     else:
         animal.brgy_intake_date = None
         animal.brgy_discharge_date = None
         animal.brgy_duration_days = 0.0
-        animal.brgy_duration_display = "0 days"
+        animal.brgy_duration_display = "0 minutes"
 
     # Compute total custody duration
     start_total = subd_intake or brgy_intake or intake_time
     end_total = discharge_time or now
     total_sec = max(0.0, (end_total - start_total).total_seconds())
     animal.total_duration_days = round(total_sec / 86400, 2)
-    animal.total_duration_display = _format_duration(total_sec)
+    animal.total_duration_display = _format_duration(total_sec, is_finalized=bool(resolved or discharge_time))
     animal.current_facility_duration_display = (
         animal.subd_duration_display if is_curr_subd else animal.brgy_duration_display
     )
@@ -330,13 +359,6 @@ def get_metrics(
 
     effective_impound_days = impound_days if (impound_days is not None and impound_days >= 0) else IMPOUND_DAYS
 
-    # Run check & notify for overdue animals
-    try:
-        from app.tasks.unassigned_checker import check_and_notify_overdue_holding_animals
-        check_and_notify_overdue_holding_animals(default_stay_days=effective_impound_days)
-    except Exception as notif_err:
-        logger.warning(f"Error checking overdue notifications in get_metrics: {notif_err}")
-
     animals = query.all()
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     deadline = timedelta(days=effective_impound_days)
@@ -363,8 +385,8 @@ def get_metrics(
         elif eff_status == 2:
             healthy += 1
 
-        # Only count active animals for expiry / impoundment
-        if a.facility_status not in RESOLVED_STATUSES and a.intake_date:
+        # Only count active animals for expiry / impoundment (exclude already for adoption or resolved)
+        if a.facility_status not in RESOLVED_STATUSES and a.facility_status != 6 and a.intake_date:
             time_in = now - a.intake_date
             if time_in >= deadline:
                 needs_impoundment += 1
@@ -672,6 +694,210 @@ def update_animal(
     except Exception as e:
         db.rollback()
         logger.error(f"Error updating holding record {holding_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── POST /holding/{holding_id}/escalate ───────────────────────────────────────
+@router.post("/{holding_id}/escalate", response_model=HoldingAnimalResponse)
+def escalate_to_barangay(
+    holding_id: int,
+    body: HoldingEscalateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
+    """
+    Escalate / transfer a holding animal from a Subdivision holding facility
+    to a municipal Barangay holding facility.
+    """
+    try:
+        animal = _load(holding_id, db)
+        if not animal:
+            raise HTTPException(status_code=404, detail="Holding record not found")
+
+        if animal.facility_status in RESOLVED_STATUSES:
+            raise HTTPException(status_code=400, detail="Cannot escalate an animal that has already been resolved or discharged.")
+
+        # Check if animal is already in a barangay facility
+        if animal.report and animal.report.facility and animal.report.facility.subdivision_id is None:
+            raise HTTPException(status_code=400, detail="This animal is already housed in a Barangay facility.")
+
+        if current_user.role_id == 2:
+            if animal.report and animal.report.subdivision_id != current_user.subdivision_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Permission Denied: Subdivision Leaders can only escalate animals within their subdivision."
+                )
+
+        # Determine the destination Barangay holding facility
+        brgy_fac = None
+        if body.barangay_facility_id:
+            brgy_fac = db.query(Landmark).filter(
+                Landmark.landmark_id == body.barangay_facility_id,
+                Landmark.is_holding_facility == True,
+                Landmark.subdivision_id.is_(None)
+            ).first()
+            if not brgy_fac:
+                raise HTTPException(status_code=400, detail="Selected facility is not a valid Barangay holding facility.")
+        else:
+            # Auto-detect target barangay
+            target_brgy_id = None
+            if animal.report and animal.report.subdivision:
+                target_brgy_id = animal.report.subdivision.barangay_id
+            elif current_user.barangay_id:
+                target_brgy_id = current_user.barangay_id
+
+            query = db.query(Landmark).filter(
+                Landmark.is_holding_facility == True,
+                Landmark.subdivision_id.is_(None),
+                Landmark.status == 'Active'
+            )
+            if target_brgy_id:
+                query = query.filter(Landmark.barangay_id == target_brgy_id)
+            brgy_fac = query.first()
+
+            if not brgy_fac:
+                # Fallback to any active barangay facility
+                brgy_fac = db.query(Landmark).filter(
+                    Landmark.is_holding_facility == True,
+                    Landmark.subdivision_id.is_(None),
+                    Landmark.status == 'Active'
+                ).first()
+
+        if not brgy_fac:
+            raise HTTPException(status_code=400, detail="No active Barangay holding facility found. Please designate a Barangay holding facility in landmarks.")
+
+        # Identify the current subdivision holding facility
+        current_fac = animal.report.facility if (animal.report and animal.report.facility) else None
+        if not current_fac and animal.report and animal.report.facility_id:
+            current_fac = db.query(Landmark).filter(Landmark.landmark_id == animal.report.facility_id).first()
+
+        prev_fac_name = current_fac.name if current_fac else (animal.report.landmark if animal.report else "Subdivision Holding Facility")
+        target_brgy_name = brgy_fac.name if brgy_fac else "Barangay Holding Shelter"
+
+        reason_str = f" Reason: {body.reason}." if body.reason else ""
+        notes_str = f" Notes: {body.notes}" if body.notes else ""
+        escalation_desc = f"Escalated from {prev_fac_name} for pickup and transfer to {target_brgy_name}.{reason_str}{notes_str}".strip()
+
+        # Update report status and custody — KEEP animal in subdivision facility until pickup!
+        report = animal.report
+        rescue = None
+        if report:
+            if current_fac:
+                report.facility_id = current_fac.landmark_id
+                report.latitude = current_fac.latitude
+                report.longitude = current_fac.longitude
+                report.landmark = current_fac.name
+            report.current_status_id = 4  # Escalated to Barangay
+            report.custody_status = "In Subdivision Holding (Awaiting Barangay Pickup)"
+
+            # 1. Create or update official Rescue Mission so it appears in Barangay Operations queue
+            existing_rescue = db.query(Rescue).filter(Rescue.report_id == report.report_id).first()
+            if existing_rescue:
+                rescue = existing_rescue
+                rescue.status_id = 1  # Pending Approval
+                rescue.leader_id = current_user.user_id
+                rescue.notes = escalation_desc
+            else:
+                rescue = Rescue(
+                    report_id=report.report_id,
+                    leader_id=current_user.user_id,
+                    status_id=1,  # Pending Approval
+                    notes=escalation_desc
+                )
+                db.add(rescue)
+                db.flush()
+
+            animal.rescue_id = rescue.rescue_id
+
+            # 2. Create or update official EndorsementLetter
+            existing_letter = db.query(EndorsementLetter).filter(EndorsementLetter.report_id == report.report_id).first()
+            endorse_content = f"Official endorsement for animal #{animal.holding_id} currently secured at {prev_fac_name}. Transfer recommended to {target_brgy_name}.{reason_str}{notes_str}".strip()
+
+            media_file = db.query(ReportMedia).filter(
+                ReportMedia.report_id == report.report_id,
+                ReportMedia.is_evidence == True
+            ).order_by(ReportMedia.media_id.desc()).first()
+            file_url = media_file.file_url if media_file else None
+
+            if existing_letter:
+                existing_letter.leader_id = current_user.user_id
+                existing_letter.title = f"Holding Facility Transfer Endorsement: Animal #{animal.holding_id}"
+                existing_letter.letter_content = endorse_content
+                if file_url:
+                    existing_letter.file_url = file_url
+                existing_letter.status_id = 2  # Sent
+            else:
+                db_letter = EndorsementLetter(
+                    report_id=report.report_id,
+                    leader_id=current_user.user_id,
+                    title=f"Holding Facility Transfer Endorsement: Animal #{animal.holding_id}",
+                    letter_content=endorse_content,
+                    file_url=file_url,
+                    status_id=2  # Sent
+                )
+                db.add(db_letter)
+
+        # 3. Timeline entry in Holding Animal record
+        timeline_log = HoldingTimeline(
+            holding_id=holding_id,
+            event_type="transfer",
+            title="Escalated to Barangay — Awaiting Pickup",
+            notes=f"Animal escalated to Barangay by {current_user.name}. Official rescue request logged. Awaiting Barangay team dispatch and pickup from {prev_fac_name}.",
+            logged_by=current_user.user_id,
+        )
+        db.add(timeline_log)
+
+        # 4. Status history entry
+        if report:
+            status_hist = StatusHistory(
+                report_id=report.report_id,
+                rescue_id=rescue.rescue_id if rescue else None,
+                report_status_id=4,  # Escalated to Barangay
+                rescue_status_id=1,  # Pending Approval
+                facility_id=current_fac.landmark_id if current_fac else None,
+                latitude=report.latitude,
+                longitude=report.longitude,
+                landmark=report.landmark,
+                updated_by=current_user.user_id,
+                remarks=f"Escalated to Barangay for pickup at {prev_fac_name}.{reason_str}",
+            )
+            db.add(status_hist)
+
+        # 5. Notify Barangay staff and administrators
+        try:
+            brgy_staff = db.query(User).filter(User.role_id.in_([3, 4])).all()
+            for staff in brgy_staff:
+                notif = Notification(
+                    user_id=staff.user_id,
+                    title=f"🚨 New Escalated Animal Pickup #{report.report_id if report else animal.holding_id}",
+                    message=f"Subdivision Leader {current_user.name} has escalated animal #{animal.holding_id} from {prev_fac_name}. Pickup required at the holding facility.",
+                    type="alert",
+                    related_id=report.report_id if report else animal.holding_id
+                )
+                db.add(notif)
+        except Exception as ne:
+            logger.warning(f"Could not send notification to barangay staff: {ne}")
+
+        # 6. Audit log
+        log_activity(
+            db=db,
+            action="Escalate Holding Animal to Barangay",
+            target_table="holding_animals",
+            target_id=animal.holding_id,
+            description=f"Animal #{animal.holding_id} (Report #{animal.report_id}) at {prev_fac_name} escalated to Barangay for pickup by {current_user.name}. Rescue #{rescue.rescue_id if rescue else 'N/A'} created.",
+            user_id=current_user.user_id,
+            log_type="operation"
+        )
+
+        db.commit()
+        full = _load(holding_id, db)
+        return _populate(full)  # type: ignore[arg-type]
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error escalating holding record {holding_id}: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
 
 

@@ -14,13 +14,18 @@ from app.models.landmark import Landmark
 from app.models.notification import Notification
 from app.schemas.rescue import RescueRequestCreate, RescueRequestResponse, RescueRequestUpdate, RescueAssignTeamRequest
 from app.utils.audit import log_activity
+from app.utils.landmark_cache import get_landmarks_map
 
 router = APIRouter(
     prefix="/rescue-requests",
     tags=["rescue-requests"]
 )
 
-def _populate_rescue_fields(rescue: Optional[Rescue], db: Session) -> Optional[Rescue]:
+def _populate_rescue_fields(
+    rescue: Optional[Rescue],
+    db: Session,
+    landmarks_map: Optional[dict] = None
+) -> Optional[Rescue]:
     if not rescue:
         return None
     
@@ -120,13 +125,18 @@ def _populate_rescue_fields(rescue: Optional[Rescue], db: Session) -> Optional[R
     # Populate updater names and facility names for report history entries
     if rescue.report:
         rescue.report.initial_landmark = rescue.report.initial_landmark or rescue.report.landmark
+        if landmarks_map is None:
+            try:
+                landmarks_map = get_landmarks_map(db)
+            except Exception:
+                landmarks_map = {}
         if rescue.report.facility_id and not rescue.report.facility:
-            rescue.report.facility = db.query(Landmark).filter(Landmark.landmark_id == rescue.report.facility_id).first()
+            rescue.report.facility = landmarks_map.get(rescue.report.facility_id) or db.query(Landmark).filter(Landmark.landmark_id == rescue.report.facility_id).first()
         if rescue.report.history:
             for hist in rescue.report.history:
                 hist.updater_name = hist.updater.name if hist.updater else "System"
                 if hist.facility_id and not getattr(hist, "facility_name", None):
-                    h_fac = db.query(Landmark).filter(Landmark.landmark_id == hist.facility_id).first()
+                    h_fac = landmarks_map.get(hist.facility_id) or db.query(Landmark).filter(Landmark.landmark_id == hist.facility_id).first()
                     hist.facility_name = h_fac.name if h_fac else None
             
     return rescue
@@ -277,8 +287,14 @@ def get_rescue_requests(
         joinedload(Rescue.assignments).joinedload(RescueAssignment.staff)
     ).order_by(Rescue.rescue_id.desc()).all()
 
+    lm_map = None
+    try:
+        lm_map = get_landmarks_map(db)
+    except Exception:
+        pass
+
     for rescue in rescues:
-        _populate_rescue_fields(rescue, db)
+        _populate_rescue_fields(rescue, db, landmarks_map=lm_map)
 
     return rescues
 
@@ -563,20 +579,34 @@ def update_rescue_request(
                         report_obj.facility_id = None
                         relocation_note = None
                     elif report_status_id in (7, 8) and not report_obj.facility_id:
-                        # Auto-resolve Barangay HQ location and custody status only when moved to holding without specific facility
-                        brgy = None
-                        if report_obj.subdivision_id:
-                            subd = db.query(Subdivision).filter(Subdivision.subdivision_id == report_obj.subdivision_id).first()
-                            if subd and subd.barangay_id:
-                                brgy = db.query(Barangay).filter(Barangay.barangay_id == subd.barangay_id).first()
-                        if not brgy:
-                            brgy = db.query(Barangay).first()
+                        # Auto-resolve Barangay Holding Facility location and custody status
+                        brgy_fac = db.query(Landmark).filter(
+                            Landmark.is_holding_facility == True,
+                            Landmark.subdivision_id.is_(None),
+                            Landmark.status == 'Active'
+                        ).first()
+                        if brgy_fac:
+                            report_obj.facility_id = brgy_fac.landmark_id
+                            report_obj.latitude = brgy_fac.latitude
+                            report_obj.longitude = brgy_fac.longitude
+                            report_obj.landmark = brgy_fac.name
+                            report_obj.custody_status = custody_status or "In Barangay Facility"
+                            caretaker_str = f" • Caretaker: {brgy_fac.contact_person} ({brgy_fac.contact_number})" if brgy_fac.contact_person else ""
+                            relocation_note = f"Transferred to {brgy_fac.name}{caretaker_str} (Previously held at: {prev_fac_name or 'Subdivision Holding'})"
+                        else:
+                            brgy = None
+                            if report_obj.subdivision_id:
+                                subd = db.query(Subdivision).filter(Subdivision.subdivision_id == report_obj.subdivision_id).first()
+                                if subd and subd.barangay_id:
+                                    brgy = db.query(Barangay).filter(Barangay.barangay_id == subd.barangay_id).first()
+                            if not brgy:
+                                brgy = db.query(Barangay).first()
 
-                        brgy_hq_name = f"Barangay {brgy.barangay_name} HQ" if brgy else "Barangay HQ"
-                        if not report_obj.custody_status:
-                            report_obj.custody_status = "In Barangay Facility"
-                        if not relocation_note:
-                            relocation_note = f"Secured at {brgy_hq_name}"
+                            brgy_hq_name = f"Barangay {brgy.barangay_name} HQ" if brgy else "Barangay HQ"
+                            if not report_obj.custody_status:
+                                report_obj.custody_status = "In Barangay Facility"
+                            if not relocation_note:
+                                relocation_note = f"Secured at {brgy_hq_name}"
 
                     if relocation_note:
                         if "Secured at" not in history_remarks and "Transferred to" not in history_remarks:
@@ -666,7 +696,46 @@ def update_rescue_request(
 
                     # ── Auto-intake into Holding Facility or Log Relocation when Under Observation (7), Impounded (8), or Moved to Facility ──────
                     # NOTE: Status 6 (Animal Picked Up) is in-transit only; intake happens only when moved to facility (Status 7/8 or explicit facility_id)
-                    if (report_status_id in (7, 8) or facility_id) and report_status_id != 6:
+                    if report_status_id == 6:
+                        already_in = db.query(HoldingAnimal).filter(
+                            HoldingAnimal.report_id == report_obj.report_id
+                        ).first()
+                        if already_in:
+                            loc_str = prev_fac_name or report_obj.landmark or "Subdivision Holding Facility"
+                            db.add(HoldingTimeline(
+                                holding_id=already_in.holding_id,
+                                event_type='transfer',
+                                title='Animal Picked Up by Barangay Responders',
+                                notes=remarks or f'Animal picked up from {loc_str} by Barangay response team. In transit to Barangay shelter.',
+                                logged_by=staff_id_for_history or original_staff_id,
+                            ))
+                            already_in.kennel_slot = None
+                    elif report_status_id == 5:
+                        already_in = db.query(HoldingAnimal).filter(
+                            HoldingAnimal.report_id == report_obj.report_id
+                        ).first()
+                        if already_in:
+                            loc_str = prev_fac_name or report_obj.landmark or "Subdivision Holding Facility"
+                            db.add(HoldingTimeline(
+                                holding_id=already_in.holding_id,
+                                event_type='observation',
+                                title='Barangay Response Team Dispatched',
+                                notes=remarks or f'Barangay response team dispatched to pick up animal from {loc_str}.',
+                                logged_by=staff_id_for_history or original_staff_id,
+                            ))
+                    elif report_status_id == 13:
+                        already_in = db.query(HoldingAnimal).filter(
+                            HoldingAnimal.report_id == report_obj.report_id
+                        ).first()
+                        if already_in:
+                            db.add(HoldingTimeline(
+                                holding_id=already_in.holding_id,
+                                event_type='observation',
+                                title='Rescue Request Approved by Barangay',
+                                notes=remarks or 'Barangay Operations approved the rescue request for pickup.',
+                                logged_by=staff_id_for_history or original_staff_id,
+                            ))
+                    elif (report_status_id in (7, 8) or facility_id) and report_status_id != 6:
                         already_in = db.query(HoldingAnimal).filter(
                             HoldingAnimal.report_id == report_obj.report_id
                         ).first()

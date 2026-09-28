@@ -588,13 +588,6 @@ const SubdViewHistory = () => {
                                                         showHeatmap={false}
                                                         hideViewDetailsButton={true}
                                                         markers={histMarkers}
-                                                        polylines={hadHoldingHistory ? [{
-                                                            positions: [[initLat, initLng], [histFacLat, histFacLng]],
-                                                            color: '#64748B',
-                                                            weight: 3,
-                                                            dashArray: '6, 8',
-                                                            opacity: 0.85
-                                                        }] : undefined}
                                                     />
                                                 );
                                             })()}
@@ -849,13 +842,6 @@ const SubdViewHistory = () => {
                                         zoom={18}
                                         showHeatmap={false}
                                         markers={histMarkers}
-                                        polylines={hadHoldingHistory ? [{
-                                            positions: [[initLat, initLng], [histFacLat, histFacLng]],
-                                            color: '#64748B',
-                                            weight: 3,
-                                            dashArray: '6, 8',
-                                            opacity: 0.85
-                                        }] : undefined}
                                     />
                                 );
                             })()}

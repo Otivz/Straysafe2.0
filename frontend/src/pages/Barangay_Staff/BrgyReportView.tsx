@@ -2115,13 +2115,6 @@ const BrgyReportView = () => {
                                                             showLandmarks={true}
                                                             showConnectingLine={false}
                                                             hideViewDetailsButton={true}
-                                                            polylines={isResolvedCase && hadHoldingHistory && initLat != null && initLng != null ? [{
-                                                                positions: [[initLat, initLng], [histFacLat, histFacLng]],
-                                                                color: '#64748B',
-                                                                weight: 3,
-                                                                dashArray: '6, 8',
-                                                                opacity: 0.85
-                                                            }] : undefined}
                                                             onRouteCalculated={(dist) => setRoadDistance(dist)}
                                                             markers={brgyMarkers}
                                                         />
@@ -2372,7 +2365,19 @@ const BrgyReportView = () => {
                                                                 IconComponent = Ambulance;
                                                                 description = 'Response team deployed to secure and contain the animal.';
                                                             }
-                                                            // 9. Animal Adopted (check BEFORE holding/facility so adoption remarks don't get misclassified)
+                                                            // 9. Adoption Events
+                                                            else if (remarksLower.includes('promoted to adoption') || remarksLower.includes('promote_to_adoption') || remarksLower.includes('promoted to the adoption') || remarksLower.includes('being promoted for adoption')) {
+                                                                actionTitle = 'ANIMAL BEING PROMOTED FOR ADOPTION';
+                                                                type = 'green';
+                                                                IconComponent = Heart;
+                                                                description = rawRemarks || 'Animal is currently being promoted and is available for potential adopters.';
+                                                            }
+                                                            else if (remarksLower.includes('adoption cancelled') || remarksLower.includes('adoption application cancelled') || remarksLower.includes('cancelled by applicant') || remarksLower.includes('cancel_adoption_application')) {
+                                                                actionTitle = 'ADOPTION APPLICATION CANCELLED';
+                                                                type = 'orange';
+                                                                IconComponent = Heart;
+                                                                description = rawRemarks || 'Adoption application was cancelled.';
+                                                            }
                                                             else if (remarksLower.includes('adopted') || remarksLower.includes('adoption') || remarksLower.includes('adopter')) {
                                                                 actionTitle = 'ANIMAL ADOPTED';
                                                                 type = 'green';
@@ -3445,13 +3450,6 @@ const BrgyReportView = () => {
                                         showGeofence={true}
                                         showLandmarks={true}
                                         showConnectingLine={false}
-                                        polylines={isResolvedCase && hadHoldingHistory && initLat != null && initLng != null ? [{
-                                            positions: [[initLat, initLng], [histFacLat, histFacLng]],
-                                            color: '#64748B',
-                                            weight: 3,
-                                            dashArray: '6, 8',
-                                            opacity: 0.85
-                                        }] : undefined}
                                         onRouteCalculated={(dist) => setRoadDistance(dist)}
                                         markers={brgyMarkers}
                                     />

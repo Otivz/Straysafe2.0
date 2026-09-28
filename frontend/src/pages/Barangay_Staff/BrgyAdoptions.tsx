@@ -24,7 +24,9 @@ import {
     User,
     Phone,
     Home,
-    PawPrint
+    PawPrint,
+    Scale,
+    MapPin
 } from 'lucide-react';
 import MaskedIdDisplay from '../../components/MaskedIdDisplay';
 
@@ -101,6 +103,7 @@ const BrgyAdoptions = () => {
 
     // Modal state
     const [selectedApp, setSelectedApp] = useState<AdoptionApp | null>(null);
+    const [viewAppModal, setViewAppModal] = useState<AdoptionApp | null>(null);
     const [reviewModalType, setReviewModalType] = useState<'approve' | 'reject' | null>(null);
     const [reviewNotes, setReviewNotes] = useState('');
     const [handoverModalApp, setHandoverModalApp] = useState<AdoptionApp | null>(null);
@@ -132,6 +135,30 @@ const BrgyAdoptions = () => {
             setCatalogAnimals(Array.isArray(res.data) ? res.data : []);
         } catch (err: any) {
             console.error("Failed to load adoption catalog", err);
+        }
+    };
+
+    const [quickImpoundAnimal, setQuickImpoundAnimal] = useState<CatalogAnimal | null>(null);
+    const [isQuickImpounding, setIsQuickImpounding] = useState(false);
+
+    const handleConfirmImpound = async () => {
+        if (!quickImpoundAnimal) return;
+        setIsQuickImpounding(true);
+        try {
+            await api.patch(`/holding/${quickImpoundAnimal.holding_id}`, {
+                facility_status: 8, // Impounded
+                updated_by: staffUser?.user_id,
+                update_notes: `Animal officially impounded from Adoption Catalog by Barangay Officer.`,
+            });
+            setQuickImpoundAnimal(null);
+            await fetchCatalog();
+            await fetchApplications();
+        } catch (err: any) {
+            console.error('Failed to impound animal:', err);
+            const errMsg = err?.response?.data?.detail || err?.message || 'Failed to impound animal';
+            alert(`Impoundment failed: ${errMsg}`);
+        } finally {
+            setIsQuickImpounding(false);
         }
     };
 
@@ -611,6 +638,16 @@ const BrgyAdoptions = () => {
                                                         </span>
                                                     )}
 
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setViewAppModal(app)}
+                                                        className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                                        title="View full resident application and review history"
+                                                    >
+                                                        <Eye className="w-3.5 h-3.5 text-orange-600" />
+                                                        <span>Full Details</span>
+                                                    </button>
+
                                                     <Link
                                                         to={`/adopt/journey/${app.holding_id}`}
                                                         className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs"
@@ -644,7 +681,7 @@ const BrgyAdoptions = () => {
                                             </div>
 
                                             {/* ─── APPLICANT PROFILE & CONTACT DETAILS (Clean Grid) ─── */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
                                                 <div className="bg-gray-50/90 rounded-2xl p-3 border border-gray-100/90 flex items-center gap-3">
                                                     <div className="w-8 h-8 rounded-xl bg-orange-100/80 text-orange-600 flex items-center justify-center shrink-0">
                                                         <User className="w-4 h-4" />
@@ -665,6 +702,18 @@ const BrgyAdoptions = () => {
                                                         <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Contact Number</div>
                                                         <div className="text-xs font-extrabold text-gray-900 truncate">
                                                             {app.contact_no}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="bg-gray-50/90 rounded-2xl p-3 border border-gray-100/90 flex items-center gap-3 sm:col-span-2 lg:col-span-1">
+                                                    <div className="w-8 h-8 rounded-xl bg-rose-100/80 text-rose-600 flex items-center justify-center shrink-0">
+                                                        <MapPin className="w-4 h-4" />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Residential Address</div>
+                                                        <div className="text-xs font-extrabold text-gray-900 truncate" title={app.address || 'No address specified'}>
+                                                            {app.address || '—'}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -911,17 +960,28 @@ const BrgyAdoptions = () => {
                                                     )}
                                                 </div>
 
-                                                <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                                                <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2 flex-wrap">
                                                     <span className="text-[11px] font-bold text-gray-400">
                                                         Promoted: {animal.promoted_at ? new Date(animal.promoted_at).toLocaleDateString() : 'Active'}
                                                     </span>
-                                                    <Link
-                                                        to={`/adopt/journey/${animal.holding_id}`}
-                                                        target="_blank"
-                                                        className="text-xs text-orange-600 font-black hover:underline flex items-center gap-1"
-                                                    >
-                                                        Journey Map <ExternalLink className="w-3 h-3" />
-                                                    </Link>
+                                                    <div className="flex items-center gap-2">
+                                                        <Link
+                                                            to={`/adopt/journey/${animal.holding_id}`}
+                                                            target="_blank"
+                                                            className="text-xs text-orange-600 font-black hover:underline flex items-center gap-1"
+                                                        >
+                                                            Journey Map <ExternalLink className="w-3 h-3" />
+                                                        </Link>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setQuickImpoundAnimal(animal)}
+                                                            className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-black rounded-xl transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                                                            title="If no citizen has adopted this pet, officially record its impoundment"
+                                                        >
+                                                            <Scale className="w-3 h-3" />
+                                                            <span>Impound</span>
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -1118,6 +1178,306 @@ const BrgyAdoptions = () => {
                                 alt="Applicant Government ID"
                                 className="w-full h-auto max-h-[65vh] sm:max-h-[70vh] object-contain"
                             />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Quick Impound Confirmation Modal */}
+            {quickImpoundAnimal && (
+                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-amber-200 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex items-center gap-3 text-amber-600">
+                            <div className="w-12 h-12 rounded-2xl bg-amber-100 flex items-center justify-center shrink-0">
+                                <Scale className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-black text-gray-900 leading-tight">
+                                    Impound Unadopted Animal
+                                </h3>
+                                <p className="text-xs text-amber-700 font-semibold mt-0.5">
+                                    Official Municipal Animal Custody
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-200 text-xs text-amber-950 space-y-2">
+                            <p className="leading-relaxed">
+                                Are you sure you want to mark <strong>{quickImpoundAnimal.animal_name || `Rescue #${quickImpoundAnimal.holding_id}`}</strong> as <strong>Impounded</strong>?
+                            </p>
+                            <p className="text-[11px] text-amber-800">
+                                This will remove the animal from the public Adoption Catalog, update its status to Impounded, and archive the custody case.
+                            </p>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-3 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => setQuickImpoundAnimal(null)}
+                                disabled={isQuickImpounding}
+                                className="px-4 py-2.5 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmImpound}
+                                disabled={isQuickImpounding}
+                                className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-black rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer uppercase tracking-wider"
+                            >
+                                <Scale className="w-3.5 h-3.5" />
+                                <span>{isQuickImpounding ? 'Impounding...' : 'Confirm Impound'}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Full Application Details Modal */}
+            {viewAppModal && (
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3.5 sm:p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-7 shadow-2xl border border-gray-100 max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between pb-4 border-b border-gray-100 shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 shadow-2xs">
+                                    <FileText className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h2 className="text-base font-black text-gray-900">
+                                            Application #{viewAppModal.adoption_id}
+                                        </h2>
+                                        <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                                            viewAppModal.status === 'Approved'
+                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                : viewAppModal.status === 'Rejected'
+                                                ? 'bg-red-50 text-red-700 border-red-200'
+                                                : viewAppModal.status === 'Cancelled'
+                                                ? 'bg-gray-100 text-gray-700 border-gray-300'
+                                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                                        }`}>
+                                            {viewAppModal.status}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-gray-400 font-semibold mt-0.5">
+                                        Submitted on {new Date(viewAppModal.created_at).toLocaleString('en-PH', {
+                                            year: 'numeric', month: 'short', day: 'numeric',
+                                            hour: '2-digit', minute: '2-digit'
+                                        })}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setViewAppModal(null)}
+                                className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="flex-1 overflow-y-auto space-y-4 py-4 pr-1 custom-scrollbar">
+                            {/* Pet Summary Card */}
+                            <div className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50/50 rounded-2xl p-3.5 border border-orange-200 flex items-center justify-between gap-3 shadow-2xs">
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <img
+                                        src={getPetPicture(viewAppModal.animal_photo)}
+                                        alt={viewAppModal.animal_name || 'Pet'}
+                                        className="w-12 h-12 rounded-xl object-cover border border-orange-200 shadow-2xs shrink-0"
+                                    />
+                                    <div className="min-w-0">
+                                        <span className="text-[10px] font-bold text-orange-700 uppercase tracking-wider">Applied Pet</span>
+                                        <h4 className="text-sm font-black text-gray-900 truncate">
+                                            {viewAppModal.animal_name || `Rescue #${viewAppModal.holding_id}`}
+                                        </h4>
+                                        <p className="text-[11px] text-gray-500 font-semibold">
+                                            {viewAppModal.animal_type || 'Rescue'} {viewAppModal.animal_breed ? `• ${viewAppModal.animal_breed}` : ''}
+                                        </p>
+                                    </div>
+                                </div>
+                                <Link
+                                    to={`/adopt/journey/${viewAppModal.holding_id}`}
+                                    target="_blank"
+                                    className="px-3 py-1.5 bg-white hover:bg-orange-50 text-orange-700 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs shrink-0"
+                                >
+                                    <span>Journey Trail</span>
+                                    <ExternalLink className="w-3.5 h-3.5 text-orange-500" />
+                                </Link>
+                            </div>
+
+                            {/* Applicant Information Section */}
+                            <div>
+                                <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                                    <User className="w-3.5 h-3.5 text-orange-500" /> Applicant Profile & Residence
+                                </h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                    <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100 space-y-0.5">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Full Legal Name</span>
+                                        <p className="text-xs font-black text-gray-900">{viewAppModal.full_name}</p>
+                                    </div>
+                                    <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100 space-y-0.5">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Contact Number</span>
+                                        <p className="text-xs font-black text-gray-900">{viewAppModal.contact_no}</p>
+                                    </div>
+                                    <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100 space-y-0.5 sm:col-span-2">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                            <MapPin className="w-3 h-3 text-rose-500" /> Residential Address
+                                        </span>
+                                        <p className="text-xs font-extrabold text-gray-900 leading-relaxed">
+                                            {viewAppModal.address || 'No residential address provided'}
+                                        </p>
+                                    </div>
+                                    <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100 space-y-0.5">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                            <Home className="w-3 h-3 text-emerald-500" /> Living Space
+                                        </span>
+                                        <p className="text-xs font-black text-gray-900">{viewAppModal.living_space}</p>
+                                    </div>
+                                    <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100 space-y-0.5">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                            <PawPrint className="w-3 h-3 text-purple-500" /> Other Pets in Home
+                                        </span>
+                                        <p className="text-xs font-black text-gray-900">
+                                            {viewAppModal.has_other_pets ? 'Yes (Currently owns other pets)' : 'No other pets'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Identity Verification Section */}
+                            {viewAppModal.id_type && (
+                                <div>
+                                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                                        <CreditCard className="w-3.5 h-3.5 text-blue-500" /> Identity Verification
+                                    </h3>
+                                    <div className="bg-slate-50/90 rounded-2xl p-3.5 border border-slate-200/80 flex items-center justify-between flex-wrap gap-3">
+                                        <div className="space-y-1">
+                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Government ID Document</div>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-xs font-black text-gray-900">{viewAppModal.id_type}</span>
+                                                {viewAppModal.id_number && (
+                                                    <MaskedIdDisplay idNumber={viewAppModal.id_number} idType={viewAppModal.id_type} />
+                                                )}
+                                            </div>
+                                        </div>
+                                        {viewAppModal.id_photo_url && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setPreviewIdPhotoUrl(viewAppModal.id_photo_url || null)}
+                                                className="px-3 py-1.5 bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                            >
+                                                <Eye className="w-3.5 h-3.5" />
+                                                <span>View ID Photo</span>
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Motivation & Reason */}
+                            {viewAppModal.reason && (
+                                <div>
+                                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                        <FileText className="w-3.5 h-3.5 text-amber-500" /> Applicant's Stated Motivation & Reason
+                                    </h3>
+                                    <div className="bg-amber-50/60 rounded-2xl p-3.5 border border-amber-200/70 text-xs text-amber-950 leading-relaxed italic">
+                                        "{viewAppModal.reason}"
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Review & Handover History */}
+                            {(viewAppModal.review_notes || viewAppModal.staff_handed_over || viewAppModal.is_handed_over) && (
+                                <div>
+                                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                                        <Shield className="w-3.5 h-3.5 text-indigo-500" /> Barangay Review & Handover Log
+                                    </h3>
+                                    <div className="space-y-2">
+                                        {viewAppModal.review_notes && (
+                                            <div className="bg-orange-50/60 rounded-2xl p-3 border border-orange-200/80 text-xs space-y-1">
+                                                <span className="font-bold text-orange-900">
+                                                    Review Remarks ({viewAppModal.reviewer_name || 'Barangay Officer'}):
+                                                </span>
+                                                <p className="text-orange-950 font-medium whitespace-pre-wrap">{viewAppModal.review_notes}</p>
+                                            </div>
+                                        )}
+                                        {viewAppModal.status === 'Approved' && (
+                                            <div className="bg-emerald-50/60 rounded-2xl p-3 border border-emerald-200/80 text-xs space-y-1">
+                                                <div className="flex items-center justify-between font-bold text-emerald-900">
+                                                    <span>Handover Status</span>
+                                                    <span>
+                                                        {viewAppModal.staff_handed_over && viewAppModal.is_handed_over
+                                                            ? '✓ Completed & Registered'
+                                                            : 'Awaiting Physical Claiming'}
+                                                    </span>
+                                                </div>
+                                                {viewAppModal.staff_handover_name && (
+                                                    <p className="text-[11px] text-emerald-800">
+                                                        Released by: {viewAppModal.staff_handover_name} on {viewAppModal.staff_handover_date ? new Date(viewAppModal.staff_handover_date).toLocaleDateString() : '—'}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="pt-4 border-t border-gray-100 flex items-center justify-between gap-2.5 flex-wrap shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setViewAppModal(null)}
+                                className="px-4 py-2.5 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
+                            >
+                                Close
+                            </button>
+
+                            <div className="flex items-center gap-2">
+                                {viewAppModal.status === 'Pending' && isHeadOfficer && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const app = viewAppModal;
+                                                setViewAppModal(null);
+                                                handleOpenReviewModal(app, 'reject');
+                                            }}
+                                            className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1"
+                                        >
+                                            <XCircle className="w-3.5 h-3.5" />
+                                            <span>Reject</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const app = viewAppModal;
+                                                setViewAppModal(null);
+                                                handleOpenReviewModal(app, 'approve');
+                                            }}
+                                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all shadow-xs cursor-pointer flex items-center gap-1"
+                                        >
+                                            <CheckCircle2 className="w-3.5 h-3.5" />
+                                            <span>Approve Application</span>
+                                        </button>
+                                    </>
+                                )}
+                                {viewAppModal.status === 'Approved' && !viewAppModal.staff_handed_over && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const app = viewAppModal;
+                                            setViewAppModal(null);
+                                            setHandoverModalApp(app);
+                                        }}
+                                        className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                                    >
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        <span>Confirm Handover</span>
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>

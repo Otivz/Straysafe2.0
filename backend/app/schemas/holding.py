@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from datetime import datetime
 from app.schemas.report import ReportMediaResponse
@@ -91,7 +91,18 @@ class HoldingAnimalResponse(BaseModel):
     current_facility_duration_display: Optional[str] = None
     original_photo_url: Optional[str] = None
     overdue_notified:  Optional[bool] = False
+    report_status_id:  Optional[int] = None
+    custody_status:    Optional[str] = None
+    is_escalated:      Optional[bool] = False
+    escalation_status: Optional[str] = None
     timeline:          List[HoldingTimelineResponse] = []
+
+    @field_validator("original_photo_url", mode="before")
+    @classmethod
+    def sanitize_photo_url(cls, v):
+        if not v or "res.cloudinary.com/test" in str(v) or str(v).endswith("original_reporter_dog.jpg"):
+            return "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop&q=80"
+        return str(v)
 
     class Config:
         from_attributes = True
@@ -104,3 +115,9 @@ class HoldingMetricsResponse(BaseModel):
     nearing_expiry:   int   # intake_date within warn threshold of impound deadline
     resolved_today:   int   # discharged today
     needs_impoundment: int = 0  # intake_date reached or exceeded impound deadline
+
+
+class HoldingEscalateRequest(BaseModel):
+    barangay_facility_id: Optional[int] = None
+    reason: Optional[str] = None
+    notes: Optional[str] = None

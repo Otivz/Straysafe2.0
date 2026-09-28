@@ -958,13 +958,6 @@ const AdminReport = () => {
                                                                 zoom={17}
                                                                 showHeatmap={false}
                                                                 markers={markers}
-                                                                polylines={isResolvedCase && hadHoldingHistory ? [{
-                                                                    positions: [[initLat, initLng], [histFacLat, histFacLng]],
-                                                                    color: '#64748B',
-                                                                    weight: 3,
-                                                                    dashArray: '6, 8',
-                                                                    opacity: 0.85
-                                                                }] : undefined}
                                                             />
                                                         );
                                                     })()}
