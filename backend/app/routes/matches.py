@@ -531,6 +531,14 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
         joinedload(Pet.owner)
     ).filter(Pet.status.in_(["Active", "Lost", "Found", "Rescued"])).all()
 
+    # Pre-load all existing pet matches for this report in one batch query (eliminates N round trips)
+    existing_pet_matches = {
+        m.matched_pet_id: m for m in db.query(ReportMatch).filter(
+            ReportMatch.source_report_id == report.report_id,
+            ReportMatch.matched_pet_id.isnot(None)
+        ).all()
+    }
+
     for pet in all_registered_pets:
         # Pre-filter candidate eligibility before AI comparison
         is_eligible, _ = is_pet_eligible_for_matching(pet)
@@ -542,10 +550,7 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
             continue
 
         # Check if already evaluated or rejected
-        existing = db.query(ReportMatch).filter(
-            ReportMatch.source_report_id == report.report_id,
-            ReportMatch.matched_pet_id == pet.pet_id
-        ).first()
+        existing = existing_pet_matches.get(pet.pet_id)
 
         if existing:
             # If rejected as NOT_A_MATCH or already evaluated, preserve decision
@@ -597,6 +602,19 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
             Report.created_at <= window_end
         ).all()
 
+        # Pre-load all existing duplicate pair matches for this report in one batch query
+        existing_pair_matches = db.query(ReportMatch).filter(
+            ReportMatch.matched_report_id.isnot(None),
+            or_(
+                ReportMatch.source_report_id == report.report_id,
+                ReportMatch.matched_report_id == report.report_id
+            )
+        ).all()
+        existing_dup_pairs = {}
+        for m in existing_pair_matches:
+            existing_dup_pairs[(m.source_report_id, m.matched_report_id)] = m
+            existing_dup_pairs[(m.matched_report_id, m.source_report_id)] = m
+
         for cand in cand_reports:
             # Geographic proximity check
             is_near = False
@@ -613,14 +631,8 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
             if not is_near:
                 continue
 
-            # Check if pair already exists or was evaluated
-            existing_pair = db.query(ReportMatch).filter(
-                ReportMatch.matched_report_id.isnot(None),
-                or_(
-                    and_(ReportMatch.source_report_id == report.report_id, ReportMatch.matched_report_id == cand.report_id),
-                    and_(ReportMatch.source_report_id == cand.report_id, ReportMatch.matched_report_id == report.report_id)
-                )
-            ).first()
+            # Check if pair already exists or was evaluated (O(1) memory lookup)
+            existing_pair = existing_dup_pairs.get((report.report_id, cand.report_id))
 
             if existing_pair and existing_pair.status in ["CONFIRMED_MATCH", "NOT_A_MATCH", "UNABLE_TO_VERIFY"]:
                 continue

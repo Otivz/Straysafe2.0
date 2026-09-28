@@ -219,18 +219,49 @@ def check_and_notify_overdue_holding_animals(default_stay_days: int = 3) -> int:
     return processed_count
 
 
+def prune_old_notifications(retention_days: int = 30) -> int:
+    """
+    Delete read + archived notifications older than `retention_days` days.
+    Safe to run periodically — only removes records that users have already read & archived.
+    """
+    db: Session = SessionLocal()
+    try:
+        cutoff = datetime.now() - timedelta(days=retention_days)
+        deleted = db.query(Notification).filter(
+            Notification.is_archived == True,
+            Notification.is_read == True,
+            Notification.created_at < cutoff
+        ).delete(synchronize_session=False)
+        db.commit()
+        if deleted > 0:
+            logger.info(f"Pruned {deleted} archived and read notifications older than {retention_days} days.")
+        return deleted
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error pruning notifications: {e}")
+        return 0
+    finally:
+        db.close()
+
+
 async def start_unassigned_reports_watcher(interval_seconds: int = 60, threshold_minutes: int = 30):
     """
     Background loop that wakes up every `interval_seconds` to check for stale unassigned reports
-    and overdue holding facility animals.
+    and overdue holding facility animals. Also triggers nightly pruning of old archived notifications.
     """
     logger.info(
         f"Starting Operations Watcher: checking every {interval_seconds}s for unassigned reports and overdue holding animals."
     )
+    iteration = 0
     while True:
         try:
             await asyncio.to_thread(check_and_notify_unassigned_reports, threshold_minutes)
             await asyncio.to_thread(check_and_notify_overdue_holding_animals, 3)
+
+            iteration += 1
+            # Run notification pruning roughly once per 24 hours (1440 iterations at 60s)
+            if iteration % 1440 == 0:
+                await asyncio.to_thread(prune_old_notifications, 30)
         except asyncio.CancelledError:
             logger.info("Operations Watcher stopped.")
             break

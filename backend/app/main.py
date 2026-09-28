@@ -27,7 +27,7 @@ logger = logging.getLogger("uvicorn.error")
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Local imports (now safe to import after path fix)
-from app.database import engine, Base
+from app.database import engine, Base, SessionLocal
 from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches, landmarks, adoptions
 from app.routes import audit_logs as audit_logs_router
 from app.models.pet_qr import PetQRCode, PetQRScan
@@ -1063,18 +1063,123 @@ ensure_revoked_tokens_table()
 ensure_coverage_settings_table()
 ensure_otp_verifications_table()
 
+def ensure_performance_indexes():
+    """
+    Ensure all high-frequency query indexes and standardized collations exist.
+    Additive and non-destructive.
+    """
+    indexes = [
+        ("reports", "idx_reports_subd_status", "CREATE INDEX idx_reports_subd_status ON reports (subdivision_id, current_status_id)"),
+        ("reports", "idx_reports_status_created", "CREATE INDEX idx_reports_status_created ON reports (current_status_id, created_at)"),
+        ("reports", "idx_reports_unassigned_watch", "CREATE INDEX idx_reports_unassigned_watch ON reports (assigned_leader_id, unassigned_notified, current_status_id)"),
+        ("reports", "idx_reports_animal_type_status", "CREATE INDEX idx_reports_animal_type_status ON reports (animal_type, current_status_id, created_at)"),
+        ("status_history", "idx_status_hist_rep_created", "CREATE INDEX idx_status_hist_rep_created ON status_history (report_id, created_at)"),
+        ("report_matches", "idx_rep_matches_src_status", "CREATE INDEX idx_rep_matches_src_status ON report_matches (source_report_id, status)"),
+        ("report_matches", "idx_rep_matches_mat_status", "CREATE INDEX idx_rep_matches_mat_status ON report_matches (matched_report_id, status)"),
+        ("report_matches", "idx_rep_matches_status_score", "CREATE INDEX idx_rep_matches_status_score ON report_matches (status, similarity_score)"),
+        ("holding_animals", "idx_holding_status_intake", "CREATE INDEX idx_holding_status_intake ON holding_animals (facility_status, intake_date)"),
+        ("holding_timeline", "idx_holding_tl_holding_logged", "CREATE INDEX idx_holding_tl_holding_logged ON holding_timeline (holding_id, logged_at)"),
+        ("notifications", "idx_notif_user_arch_created", "CREATE INDEX idx_notif_user_arch_created ON notifications (user_id, is_archived, created_at)"),
+        ("notifications", "idx_notif_type_related", "CREATE INDEX idx_notif_type_related ON notifications (type, related_id)"),
+        ("audit_logs", "idx_audit_tbl_id_time", "CREATE INDEX idx_audit_tbl_id_time ON audit_logs (target_table, target_id, created_at)"),
+        ("report_disputes", "idx_disputes_rep_status", "CREATE INDEX idx_disputes_rep_status ON report_disputes (report_id, status)"),
+        ("chat_messages", "idx_chat_msg_th_sent", "CREATE INDEX idx_chat_msg_th_sent ON chat_messages (thread_id, sent_at)"),
+        ("pets", "idx_pets_status_type", "CREATE INDEX idx_pets_status_type ON pets (status, pet_type)"),
+    ]
+
+    with engine.begin() as conn:
+        for table, idx_name, ddl in indexes:
+            try:
+                chk = conn.execute(text(
+                    "SELECT COUNT(*) FROM information_schema.STATISTICS "
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND INDEX_NAME = :idx"
+                ), {"table": table, "idx": idx_name}).scalar()
+                if chk == 0:
+                    conn.execute(text(ddl))
+                    logger.info(f"Performance index created: {idx_name} on {table}")
+            except Exception as e:
+                logger.warning(f"Could not ensure index {idx_name} on {table}: {e}")
+
+        # Collation harmonization
+        tables_to_collate = [
+            "reports", "status_history", "report_media", "notifications",
+            "audit_logs", "report_disputes", "pets"
+        ]
+        for tbl in tables_to_collate:
+            try:
+                conn.execute(text(f"ALTER TABLE {tbl} CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"))
+            except Exception as coll_err:
+                logger.debug(f"Collation update for {tbl}: {coll_err}")
+
+ensure_performance_indexes()
+
+async def backfill_ai_suggestions_background():
+    """Run in background after startup to backfill missing AI suggestions without blocking HTTP requests."""
+    try:
+        await asyncio.sleep(20)
+        from app.models.report import Report
+        from app.utils.ai_suggestions import generate_ai_suggestions
+        db = SessionLocal()
+        try:
+            stale_reports = db.query(Report).filter(
+                Report.ai_suggested_risk_level.is_(None)
+            ).limit(100).all()
+            if stale_reports:
+                for rep in stale_reports:
+                    try:
+                        category_name = rep.category.category_name if rep.category else ""
+                        media_animal = None
+                        media_color = None
+                        if rep.media:
+                            for m in rep.media:
+                                if m.animal_type and m.animal_type != "Unknown":
+                                    media_animal = m.animal_type
+                                if m.dominant_color and m.dominant_color != "Unknown":
+                                    media_color = m.dominant_color
+                        sug = generate_ai_suggestions(
+                            description=rep.description,
+                            category_name=category_name,
+                            media_animal_type=media_animal,
+                            media_dominant_color=media_color
+                        )
+                        rep.ai_animal_type = sug.get("ai_animal_type")
+                        rep.ai_dominant_color = sug.get("ai_dominant_color")
+                        rep.ai_estimated_size = sug.get("ai_estimated_size")
+                        rep.ai_possible_breed = sug.get("ai_possible_breed")
+                        rep.ai_suggested_risk_level = sug.get("ai_suggested_risk_level")
+                        rep.ai_suggested_priority = sug.get("ai_suggested_priority")
+                        rep.ai_suggested_priority_reason = sug.get("ai_suggested_priority_reason")
+                        rep.ai_behavior_chasing = sug.get("ai_behavior_chasing", False)
+                        rep.ai_behavior_actual_bite = sug.get("ai_behavior_actual_bite", False)
+                        rep.ai_behavior_attempted_bite = sug.get("ai_behavior_attempted_bite", False)
+                        rep.ai_behavior_injury = sug.get("ai_behavior_injury", False)
+                        rep.ai_behavior_aggressive = sug.get("ai_behavior_aggressive", False)
+                        rep.ai_behavior_explanation = sug.get("ai_behavior_explanation")
+                    except Exception:
+                        pass
+                db.commit()
+                logger.info(f"Background AI backfill completed for {len(stale_reports)} legacy reports.")
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"Background AI backfill task encountered: {e}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Start background task that checks for unassigned reports older than 30 minutes
     watcher_task = asyncio.create_task(
         start_unassigned_reports_watcher(interval_seconds=60, threshold_minutes=30)
     )
+    backfill_task = asyncio.create_task(
+        backfill_ai_suggestions_background()
+    )
     yield
-    # Clean up background task on application shutdown
+    # Clean up background tasks on application shutdown
     watcher_task.cancel()
+    backfill_task.cancel()
     try:
-        await watcher_task
-    except asyncio.CancelledError:
+        await asyncio.gather(watcher_task, backfill_task, return_exceptions=True)
+    except Exception:
         pass
 
 app = FastAPI(title="StraySafe API", lifespan=lifespan)

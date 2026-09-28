@@ -15,6 +15,7 @@ from app.schemas.landmark import (
 )
 from app.utils.auth import get_current_user
 from app.utils.audit import log_activity
+from app.utils.landmark_cache import invalidate_landmarks_cache
 
 router = APIRouter(
     prefix="/landmarks",
@@ -34,7 +35,7 @@ def enrich_landmark(landmark: Landmark, db: Session) -> dict:
         "barangay_id": landmark.barangay_id,
         "latitude": float(landmark.latitude),
         "longitude": float(landmark.longitude),
-        "is_holding_facility": bool(landmark.is_holding_facility),
+        "is_holding_facility": landmark.is_holding_facility,
         "facility_type": landmark.facility_type,
         "capacity": landmark.capacity,
         "contact_person": landmark.contact_person,
@@ -142,6 +143,7 @@ def create_landmark(
     db.add(new_landmark)
     db.commit()
     db.refresh(new_landmark)
+    invalidate_landmarks_cache()
 
     log_activity(
         db=db,
@@ -204,6 +206,7 @@ def update_landmark(
 
     db.commit()
     db.refresh(landmark)
+    invalidate_landmarks_cache()
 
     log_activity(
         db=db,
@@ -240,6 +243,7 @@ def delete_landmark(
 
     db.delete(landmark)
     db.commit()
+    invalidate_landmarks_cache()
 
     log_activity(
         db=db,

@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from PIL import Image
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
 from sqlalchemy import and_, desc, or_
 from sqlalchemy.orm import Session, aliased, joinedload, selectinload
 
@@ -21,6 +21,7 @@ from app.database import SessionLocal, get_db
 from app.models.chat import ChatThread
 from app.models.coverage import CoverageSetting
 from app.models.landmark import Landmark
+from app.utils.landmark_cache import get_landmarks_map
 from app.models.notification import Notification
 from app.models.pet import Pet
 from app.models.pet_claim import PetClaim
@@ -367,6 +368,16 @@ def populate_location_and_facility_info(
 ):
     """Populates location history and holding facility details on ReportResponse."""
     try:
+        if landmarks_map is None:
+            try:
+                landmarks_map = get_landmarks_map(db)
+            except Exception:
+                landmarks_map = {}
+        if holding_facs_by_subd is None and landmarks_map:
+            holding_facs_by_subd = {l.subdivision_id: l for l in landmarks_map.values() if l.is_holding_facility and l.subdivision_id}
+        if default_holding_fac is None and landmarks_map:
+            default_holding_fac = next((l for l in landmarks_map.values() if l.is_holding_facility), None)
+
         rep_data.initial_latitude = float(rep.initial_latitude) if rep.initial_latitude is not None else float(rep.latitude)
         rep_data.initial_longitude = float(rep.initial_longitude) if rep.initial_longitude is not None else float(rep.longitude)
         rep_data.initial_landmark = rep.initial_landmark or rep.landmark
@@ -818,9 +829,12 @@ def populate_review_decision_info(
 
 @router.get("/", response_model=List[ReportResponse])
 def get_reports(
+    response: Response,
     subdivision_id: Optional[int] = None,
     barangay_id: Optional[int] = None,
     escalated_only: Optional[bool] = None,
+    limit: Optional[int] = None,
+    offset: int = 0,
     db: Session = Depends(get_db)
 ):
     query = db.query(Report)
@@ -840,7 +854,15 @@ def get_reports(
             )
         )
 
-    reports = query.options(
+    # Set total count header if response object provided
+    if response is not None:
+        try:
+            total_count = query.count()
+            response.headers["X-Total-Count"] = str(total_count)
+        except Exception as cnt_err:
+            print(f"Error computing total reports count: {cnt_err}")
+
+    query_exec = query.options(
         joinedload(Report.reporter),
         joinedload(Report.assigned_leader),
         joinedload(Report.pending_transfer_to),
@@ -853,24 +875,27 @@ def get_reports(
         selectinload(Report.history).joinedload(StatusHistory.updater),
         selectinload(Report.history).selectinload(StatusHistory.media),
         joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
-    ).order_by(Report.report_id.desc()).all()
+    ).order_by(Report.report_id.desc())
+
+    if limit is not None and limit > 0:
+        query_exec = query_exec.offset(offset).limit(limit)
+
+    reports = query_exec.all()
     
     if not reports:
         return []
 
     results = []
-    from app.utils.ai_suggestions import generate_ai_suggestions
 
     report_ids = [rep.report_id for rep in reports]
 
-    # 1. Batch landmarks
+    # 1. Batch landmarks from cache (avoids db query on every report fetch)
     try:
-        all_landmarks = db.query(Landmark).all()
-        landmarks_map = {l.landmark_id: l for l in all_landmarks}
-        holding_facs_by_subd = {l.subdivision_id: l for l in all_landmarks if l.is_holding_facility and l.subdivision_id}
-        default_holding_fac = next((l for l in all_landmarks if l.is_holding_facility), None)
+        landmarks_map = get_landmarks_map(db)
+        holding_facs_by_subd = {l.subdivision_id: l for l in landmarks_map.values() if l.is_holding_facility and l.subdivision_id}
+        default_holding_fac = next((l for l in landmarks_map.values() if l.is_holding_facility), None)
     except Exception as e:
-        print(f"Error batch fetching landmarks: {e}")
+        print(f"Error batch fetching landmarks from cache: {e}")
         landmarks_map = {}
         holding_facs_by_subd = {}
         default_holding_fac = None
@@ -990,46 +1015,8 @@ def get_reports(
     except Exception as e:
         print(f"Error batch fetching report matches: {e}")
 
-    has_backfill_updates = False
-
     for rep in reports:
         try:
-            # Dynamic backfill for legacy reports missing suggestions
-            if rep.ai_suggested_risk_level is None:
-                category_name = rep.category.category_name if rep.category else ""
-                
-                # Check for media metadata if available
-                media_animal = None
-                media_color = None
-                if rep.media:
-                    for m in rep.media:
-                        if m.animal_type and m.animal_type != "Unknown":
-                            media_animal = m.animal_type
-                        if m.dominant_color and m.dominant_color != "Unknown":
-                            media_color = m.dominant_color
-                            
-                suggestions = generate_ai_suggestions(
-                    description=rep.description,  # type: ignore
-                    category_name=category_name,  # type: ignore
-                    media_animal_type=media_animal,  # type: ignore
-                    media_dominant_color=media_color  # type: ignore
-                )
-                
-                rep.ai_animal_type = suggestions["ai_animal_type"]  # type: ignore
-                rep.ai_dominant_color = suggestions["ai_dominant_color"]  # type: ignore
-                rep.ai_estimated_size = suggestions["ai_estimated_size"]  # type: ignore
-                rep.ai_possible_breed = suggestions["ai_possible_breed"]  # type: ignore
-                rep.ai_suggested_risk_level = suggestions["ai_suggested_risk_level"]  # type: ignore
-                rep.ai_suggested_priority = suggestions["ai_suggested_priority"]  # type: ignore
-                rep.ai_suggested_priority_reason = suggestions.get("ai_suggested_priority_reason")  # type: ignore
-                rep.ai_behavior_chasing = suggestions.get("ai_behavior_chasing", False)  # type: ignore
-                rep.ai_behavior_actual_bite = suggestions.get("ai_behavior_actual_bite", False)  # type: ignore
-                rep.ai_behavior_attempted_bite = suggestions.get("ai_behavior_attempted_bite", False)  # type: ignore
-                rep.ai_behavior_injury = suggestions.get("ai_behavior_injury", False)  # type: ignore
-                rep.ai_behavior_aggressive = suggestions.get("ai_behavior_aggressive", False)  # type: ignore
-                rep.ai_behavior_explanation = suggestions.get("ai_behavior_explanation")  # type: ignore
-                has_backfill_updates = True
-
             rep_data = ReportResponse.model_validate(rep)
             # Map current_status_id → status_id for frontend compatibility
             rep_data.status_id = rep.current_status_id  # type: ignore[assignment]
@@ -1095,13 +1082,6 @@ def get_reports(
         except Exception as e:
             print(f"Error validating or backfilling report {rep.report_id}: {e}")
             continue
-
-    if has_backfill_updates:
-        try:
-            db.commit()
-        except Exception as e:
-            print(f"Error committing backfilled suggestions: {e}")
-            db.rollback()
 
     return results
 
@@ -2850,7 +2830,46 @@ def update_report_status(
 
     # Auto-intake into Holding Facility or Log Relocation when Under Observation (7), Impounded (8), or moved to facility
     # NOTE: Status 6 (Animal Picked Up) is in-transit only; intake happens only when moved to facility (Status 7/8 or explicit facility_id)
-    if (status_update.status_id in (7, 8) or status_update.facility_id) and status_update.status_id != 6:
+    if status_update.status_id == 6:
+        already_in = db.query(HoldingAnimal).filter(
+            HoldingAnimal.report_id == report.report_id
+        ).first()
+        if already_in:
+            loc_str = report.landmark or "Subdivision Holding Facility"
+            db.add(HoldingTimeline(
+                holding_id=already_in.holding_id,
+                event_type='transfer',
+                title='Animal Picked Up by Barangay Responders',
+                notes=final_remarks or f'Animal picked up from {loc_str} by Barangay response team. In transit to Barangay shelter.',
+                logged_by=status_update.user_id,
+            ))
+            already_in.kennel_slot = None
+    elif status_update.status_id == 5:
+        already_in = db.query(HoldingAnimal).filter(
+            HoldingAnimal.report_id == report.report_id
+        ).first()
+        if already_in:
+            loc_str = report.landmark or "Subdivision Holding Facility"
+            db.add(HoldingTimeline(
+                holding_id=already_in.holding_id,
+                event_type='observation',
+                title='Barangay Response Team Dispatched',
+                notes=final_remarks or f'Barangay response team dispatched to pick up animal from {loc_str}.',
+                logged_by=status_update.user_id,
+            ))
+    elif status_update.status_id == 13:
+        already_in = db.query(HoldingAnimal).filter(
+            HoldingAnimal.report_id == report.report_id
+        ).first()
+        if already_in:
+            db.add(HoldingTimeline(
+                holding_id=already_in.holding_id,
+                event_type='observation',
+                title='Rescue Request Approved by Barangay',
+                notes=final_remarks or 'Barangay Operations approved the rescue request for pickup.',
+                logged_by=status_update.user_id,
+            ))
+    elif (status_update.status_id in (7, 8) or status_update.facility_id) and status_update.status_id != 6:
         already_in = db.query(HoldingAnimal).filter(
             HoldingAnimal.report_id == report.report_id
         ).first()

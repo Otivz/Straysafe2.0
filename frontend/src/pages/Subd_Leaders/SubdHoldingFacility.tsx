@@ -60,6 +60,10 @@ interface HoldingAnimal {
     total_duration_display?: string | null;
     current_facility_duration_display?: string | null;
     original_photo_url?: string | null;
+    report_status_id?: number | null;
+    custody_status?: string | null;
+    is_escalated?: boolean;
+    escalation_status?: string | null;
     timeline: TimelineEntry[];
     report_media?: {
         media_id: number;
@@ -94,9 +98,12 @@ const FACILITY_STATUSES = [
     { id: 3, name: 'Claimed by Owner', color: 'bg-blue-50 text-blue-600 border-blue-200' },
     { id: 4, name: 'Deceased', color: 'bg-gray-100 text-gray-500 border-gray-200' },
     { id: 5, name: 'Transferred to Shelter', color: 'bg-purple-50 text-purple-600 border-purple-200' },
+    { id: 6, name: 'For Adoption', color: 'bg-teal-50 text-teal-600 border-teal-200' },
+    { id: 7, name: 'Adopted/Released', color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
+    { id: 8, name: 'Impounded', color: 'bg-amber-50 text-amber-600 border-amber-200' },
 ];
 
-const RESOLVED_IDS = new Set([3, 4, 5]);
+const RESOLVED_IDS = new Set([3, 4, 5, 7, 8]);
 
 const EVENT_TYPE_META: Record<string, { icon: ReactNode; color: string }> = {
     intake: { icon: <PawPrint className="w-3.5 h-3.5" />, color: 'bg-emerald-100 text-emerald-700' },
@@ -133,6 +140,68 @@ function formatDateTime(dateStr: string | null): string {
     });
 }
 
+function formatStayDuration(
+    intakeDate?: string | null,
+    dischargeDate?: string | null,
+    isResolved?: boolean,
+    backendDisplay?: string | null
+): string {
+    if (!intakeDate) return backendDisplay || '0 hours';
+    const start = new Date(intakeDate).getTime();
+    if (isNaN(start)) return backendDisplay || '0 hours';
+
+    const end = (isResolved && dischargeDate) ? new Date(dischargeDate).getTime() : Date.now();
+    const diffSec = Math.max(0, Math.floor((end - start) / 1000));
+
+    const days = Math.floor(diffSec / 86400);
+    const hours = Math.floor((diffSec % 86400) / 3600);
+    const mins = Math.floor((diffSec % 3600) / 60);
+
+    const parts: string[] = [];
+    if (days > 0) parts.push(`${days} day${days > 1 ? 's' : ''}`);
+    if (hours > 0) parts.push(`${hours} hour${hours > 1 ? 's' : ''}`);
+
+    if (isResolved) {
+        if (mins > 0 || parts.length === 0) {
+            parts.push(`${mins} minute${mins !== 1 ? 's' : ''}`);
+        }
+    } else {
+        if (parts.length === 0) {
+            const singleM = Math.max(mins, 1);
+            parts.push(`${singleM} minute${singleM !== 1 ? 's' : ''}`);
+        }
+    }
+
+    return parts.join(', ');
+}
+
+function formatDynamicDuration(
+    startDate?: string | null,
+    endDate?: string | null,
+    isResolved?: boolean,
+    fallback?: string | null
+): string {
+    if (!startDate) return fallback || '0 mins';
+    const start = new Date(startDate).getTime();
+    if (isNaN(start)) return fallback || '0 mins';
+
+    const end = (isResolved && endDate) ? new Date(endDate).getTime() : Date.now();
+    const diffSec = Math.max(0, Math.floor((end - start) / 1000));
+
+    const days = Math.floor(diffSec / 86400);
+    const hours = Math.floor((diffSec % 86400) / 3600);
+    const mins = Math.floor((diffSec % 3600) / 60);
+
+    const parts: string[] = [];
+    if (days > 0) parts.push(`${days} day${days > 1 ? 's' : ''}`);
+    if (hours > 0) parts.push(`${hours} hr${hours > 1 ? 's' : ''}`);
+    if (days === 0 || mins > 0 || parts.length === 0) {
+        parts.push(`${mins} min${mins !== 1 ? 's' : ''}`);
+    }
+
+    return parts.join(', ');
+}
+
 function getStatusMeta(statusId: number) {
     return FACILITY_STATUSES.find(s => s.id === statusId) || {
         id: statusId, name: 'Unknown', color: 'bg-gray-50 text-gray-500 border-gray-200'
@@ -145,9 +214,17 @@ function animalIcon(type: string | null, className = 'w-6 h-6'): ReactNode {
     return <PawPrint className={className} />;
 }
 
+function sanitizePhotoUrl(url: string | undefined | null): string | undefined {
+    if (!url) return undefined;
+    if (url.includes('original_reporter_dog.jpg') || url.includes('res.cloudinary.com/test')) {
+        return 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop&q=80';
+    }
+    return url;
+}
+
 function getAnimalPhoto(animal: HoldingAnimal): string | undefined {
     // 0. Primary: Explicit original photo resolved by backend from initial report submission
-    if (animal.original_photo_url) return animal.original_photo_url;
+    if (animal.original_photo_url) return sanitizePhotoUrl(animal.original_photo_url);
 
     // 1. Initial report submission images (no history_id, no holding_log_id, not is_evidence, image file)
     const initialReportImages = animal.report_media
@@ -164,7 +241,7 @@ function getAnimalPhoto(animal: HoldingAnimal): string | undefined {
         .sort((a, b) => (a.media_id || 0) - (b.media_id || 0));
 
     if (initialReportImages && initialReportImages.length > 0 && initialReportImages[0].file_url) {
-        return initialReportImages[0].file_url;
+        return sanitizePhotoUrl(initialReportImages[0].file_url);
     }
 
     // 2. Fallback: Any initial report media without history_id or holding_log_id
@@ -181,7 +258,7 @@ function getAnimalPhoto(animal: HoldingAnimal): string | undefined {
         .sort((a, b) => (a.media_id || 0) - (b.media_id || 0));
 
     if (anyInitialMedia && anyInitialMedia.length > 0 && anyInitialMedia[0].file_url) {
-        return anyInitialMedia[0].file_url;
+        return sanitizePhotoUrl(anyInitialMedia[0].file_url);
     }
 
     // 3. Fallback: Earliest non-evidence image in report_media
@@ -198,7 +275,7 @@ function getAnimalPhoto(animal: HoldingAnimal): string | undefined {
         .sort((a, b) => (a.media_id || 0) - (b.media_id || 0));
 
     if (nonEvidenceMedia && nonEvidenceMedia.length > 0 && nonEvidenceMedia[0].file_url) {
-        return nonEvidenceMedia[0].file_url;
+        return sanitizePhotoUrl(nonEvidenceMedia[0].file_url);
     }
 
     // 4. Fallback: Earliest image in report_media
@@ -214,7 +291,7 @@ function getAnimalPhoto(animal: HoldingAnimal): string | undefined {
         .sort((a, b) => (a.media_id || 0) - (b.media_id || 0));
 
     if (anyImageMedia && anyImageMedia.length > 0 && anyImageMedia[0].file_url) {
-        return anyImageMedia[0].file_url;
+        return sanitizePhotoUrl(anyImageMedia[0].file_url);
     }
 
     // 5. Fallback: Timeline entries
@@ -230,7 +307,7 @@ function getAnimalPhoto(animal: HoldingAnimal): string | undefined {
                     }
                     return false;
                 });
-                if (img?.file_url) return img.file_url;
+                if (img?.file_url) return sanitizePhotoUrl(img.file_url);
             }
         }
     }
@@ -268,6 +345,13 @@ const SubdHoldingFacility = () => {
         localStorage.setItem('subd_holding_stay_duration', String(clamped));
     };
 
+    // Periodic refresh for live stay durations (ticks every 10s for real-time live clock updates)
+    const [, setStayTick] = useState(0);
+    useEffect(() => {
+        const interval = setInterval(() => setStayTick(t => t + 1), 10000);
+        return () => clearInterval(interval);
+    }, []);
+
     // Selected animal detail modal
     const [selected, setSelected] = useState<HoldingAnimal | null>(null);
     const [detailTab, setDetailTab] = useState<'info' | 'timeline'>('info');
@@ -290,6 +374,15 @@ const SubdHoldingFacility = () => {
     // Lightbox modal state
     const [lightboxMedia, setLightboxMedia] = useState<{ mediaList: any[]; index: number } | null>(null);
 
+    // Escalate to Barangay state
+    const [barangayFacilities, setBarangayFacilities] = useState<FacilityOption[]>([]);
+    const [escalateModalOpen, setEscalateModalOpen] = useState(false);
+    const [animalToEscalate, setAnimalToEscalate] = useState<HoldingAnimal | null>(null);
+    const [selectedBrgyFacilityId, setSelectedBrgyFacilityId] = useState<number | ''>('');
+    const [escalateReason, setEscalateReason] = useState('Stay limit reached in subdivision temporary shelter; transferring to municipal Barangay shelter for impoundment and veterinary care.');
+    const [escalateNotes, setEscalateNotes] = useState('');
+    const [isEscalating, setIsEscalating] = useState(false);
+
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
     const subdivisionId = currentUser?.subdivision_id;
@@ -307,6 +400,12 @@ const SubdHoldingFacility = () => {
                 const res = await api.get(url);
                 if (Array.isArray(res.data)) {
                     setFacilities(res.data.filter((f: any) => f.subdivision_id === targetSubdId));
+                }
+
+                // Fetch Barangay holding facilities for escalation
+                const brgyRes = await api.get('/landmarks?is_holding_facility=true&barangay_only=true');
+                if (Array.isArray(brgyRes.data)) {
+                    setBarangayFacilities(brgyRes.data);
                 }
             } catch (e) {
                 console.error('Error fetching subdivision holding facilities:', e);
@@ -337,13 +436,17 @@ const SubdHoldingFacility = () => {
     // ── Separate Active vs History Animals ─────────────────────────────────────
     const isCurrentlyInSubd = useCallback((a: HoldingAnimal) => {
         if (RESOLVED_IDS.has(a.facility_status)) return false;
+        if (a.discharge_date) return false;
+        if (a.report_status_id && [9, 10, 11, 12, 14, 17, 18].includes(a.report_status_id)) return false;
+        if (a.custody_status && ['claimed', 'released', 'deceased', 'impounded', 'adopted'].some(s => a.custody_status?.toLowerCase().includes(s))) return false;
         if (a.facility_type === 'barangay_facility' || (a.facility_name && a.facility_name.toLowerCase().includes('barangay'))) {
             return false;
         }
-        if (facilities.length > 0 && a.facility_id) {
+        if (facilities.length > 0) {
+            if (!a.facility_id) return false;
             return facilities.some(f => f.landmark_id === a.facility_id);
         }
-        return true;
+        return Boolean(a.facility_id);
     }, [facilities]);
 
     const activeAnimals = useMemo(() => animals.filter(isCurrentlyInSubd), [animals, isCurrentlyInSubd]);
@@ -432,6 +535,44 @@ const SubdHoldingFacility = () => {
             setUploadFiles([]);
             setTimelineFiles([]);
             setDetailTab('info');
+        }
+    };
+
+    // ── Escalate to Barangay Handlers ──────────────────────────────────────────
+    const handleOpenEscalate = (animal: HoldingAnimal, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        setAnimalToEscalate(animal);
+        if (barangayFacilities.length > 0) {
+            setSelectedBrgyFacilityId(barangayFacilities[0].landmark_id);
+        } else {
+            setSelectedBrgyFacilityId('');
+        }
+        setEscalateReason('Stay limit reached in subdivision temporary shelter; transferring to municipal Barangay shelter for impoundment and veterinary care.');
+        setEscalateNotes('');
+        setEscalateModalOpen(true);
+    };
+
+    const handleConfirmEscalate = async () => {
+        if (!animalToEscalate) return;
+        setIsEscalating(true);
+        try {
+            await api.post(`/holding/${animalToEscalate.holding_id}/escalate`, {
+                barangay_facility_id: selectedBrgyFacilityId ? Number(selectedBrgyFacilityId) : undefined,
+                reason: escalateReason.trim() || undefined,
+                notes: escalateNotes.trim() || undefined,
+            });
+
+            setEscalateModalOpen(false);
+            setAnimalToEscalate(null);
+            if (selected?.holding_id === animalToEscalate.holding_id) {
+                setSelected(null);
+            }
+            await fetchAll();
+        } catch (err: any) {
+            console.error('Error escalating animal to barangay:', err);
+            alert(err.response?.data?.detail || 'Failed to escalate animal to Barangay.');
+        } finally {
+            setIsEscalating(false);
         }
     };
 
@@ -640,7 +781,7 @@ const SubdHoldingFacility = () => {
                                     onChange={e => setSelectedFacilityId(e.target.value === 'all' ? 'all' : Number(e.target.value))}
                                     className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:ring-2 focus:ring-orange-200 outline-none"
                                 >
-                                    <option value="all">All Subdivision Facilities</option>
+                                    <option value="all">All Holding Facilities</option>
                                     {facilities.map(f => (
                                         <option key={f.landmark_id} value={f.landmark_id}>{f.name}</option>
                                     ))}
@@ -1024,6 +1165,11 @@ const SubdHoldingFacility = () => {
                                                         <span className="px-3 py-1 rounded-full text-[10px] font-black tracking-wider uppercase backdrop-blur-md shadow-sm border bg-indigo-50 text-indigo-700 border-indigo-200">
                                                             In Brgy Holding
                                                         </span>
+                                                    ) : animal.is_escalated ? (
+                                                        <span className="px-3 py-1 rounded-full text-[10px] font-black tracking-wider uppercase backdrop-blur-md shadow-sm border bg-amber-500 text-white border-amber-400 flex items-center gap-1 animate-pulse">
+                                                            <Truck className="w-3 h-3 text-white" />
+                                                            {animal.escalation_status || 'Awaiting Pickup'}
+                                                        </span>
                                                     ) : (
                                                         <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-wider uppercase backdrop-blur-md shadow-sm border ${
                                                             photo
@@ -1067,27 +1213,38 @@ const SubdHoldingFacility = () => {
                                                         <p className="font-bold text-gray-800 text-xs mt-0.5">{formatDate(animal.intake_date)}</p>
                                                     </div>
                                                     <div className="bg-gray-50/70 p-2.5 rounded-xl border border-gray-100">
-                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Total Custody</p>
-                                                        {isResolved ? (
-                                                            <p className="font-bold text-gray-400 text-xs mt-0.5">Discharged ({animal.total_duration_display || '—'})</p>
-                                                        ) : (
-                                                            <p className={`font-black text-xs mt-0.5 ${days >= impoundStayDuration ? 'text-red-600' : 'text-gray-800'}`}>
-                                                                {animal.total_duration_display || `${days} day(s)`}
-                                                            </p>
-                                                        )}
+                                                        <div className="flex items-center justify-between">
+                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Total Stay</p>
+                                                            {isResolved && (
+                                                                <span className="text-[8px] font-black px-1 py-0.2 bg-emerald-50 text-emerald-700 rounded border border-emerald-200">
+                                                                    Finalized
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className={`font-black text-xs mt-0.5 ${isResolved ? 'text-gray-600' : days >= impoundStayDuration ? 'text-red-600' : 'text-gray-800'}`}>
+                                                            {formatStayDuration(animal.intake_date, animal.discharge_date, isResolved, animal.total_duration_display)}
+                                                        </p>
                                                     </div>
                                                 </div>
 
-                                                {/* Facility Stay Breakdown Pills */}
-                                                <div className="flex items-center justify-between gap-1.5 p-2 bg-orange-50/50 rounded-xl border border-orange-100/70 text-[10px]">
-                                                    <span className="font-bold text-orange-900 truncate inline-flex items-center gap-1">
-                                                        <Home className="w-2.5 h-2.5" /> Subd: <strong className="text-orange-700">{animal.subd_duration_display || `${days}d`}</strong>
-                                                    </span>
-                                                    <span className="text-gray-300">|</span>
-                                                    <span className="font-bold text-orange-900 truncate inline-flex items-center gap-1">
-                                                        <Building2 className="w-2.5 h-2.5" /> Brgy: <strong className="text-orange-700">{animal.brgy_duration_display || '0 days'}</strong>
-                                                    </span>
-                                                </div>
+                                                {/* Single Facility Stay Location & Duration Pill */}
+                                                {isTransferredToBrgy ? (
+                                                    <div className="flex items-center justify-between gap-1.5 p-2 bg-indigo-50/50 rounded-xl border border-indigo-100 text-[10px]">
+                                                        <span className="font-bold text-indigo-900 truncate inline-flex items-center gap-1.5">
+                                                            <Building2 className="w-3 h-3 text-indigo-600" /> Barangay Stay: <strong className="text-indigo-700">
+                                                                {formatDynamicDuration(animal.brgy_intake_date, animal.brgy_discharge_date || animal.discharge_date, isResolved || !!animal.brgy_discharge_date, animal.brgy_duration_display)}
+                                                            </strong>
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center justify-between gap-1.5 p-2 bg-orange-50/50 rounded-xl border border-orange-100/70 text-[10px]">
+                                                        <span className="font-bold text-orange-900 truncate inline-flex items-center gap-1.5">
+                                                            <Home className="w-3 h-3 text-orange-600" /> Subdivision Stay: <strong className="text-orange-700">
+                                                                {formatDynamicDuration(animal.subd_intake_date || animal.intake_date, animal.subd_discharge_date, isResolved || !!animal.subd_discharge_date, animal.subd_duration_display || `${days}d`)}
+                                                            </strong>
+                                                        </span>
+                                                    </div>
+                                                )}
 
                                                 {/* Impound / Transfer Deadline */}
                                                 <div className="flex items-center justify-between p-2.5 bg-gray-50/50 rounded-xl border border-gray-100/80">
@@ -1125,18 +1282,48 @@ const SubdHoldingFacility = () => {
                                             {/* Card Action Footer */}
                                             <div className="p-4 pt-3 bg-gray-50/60 border-t border-gray-100 flex items-center justify-between mt-auto gap-2 flex-wrap">
                                                 <span className="text-[11px] text-gray-400 font-semibold group-hover:text-orange-600 transition-colors">
-                                                    {isOverdue ? 'Transfer recommended' : 'Click to view notes & logs'}
+                                                    {animal.is_escalated ? 'Awaiting Barangay response team' : isOverdue ? 'Transfer recommended' : 'Click to view notes & logs'}
                                                 </span>
-                                                <button
-                                                    onClick={e => {
-                                                        e.stopPropagation();
-                                                        openDetail(animal);
-                                                    }}
-                                                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-black text-white bg-orange-600 rounded-xl hover:bg-orange-700 shadow-md hover:shadow-lg transition-all uppercase tracking-wider ml-auto cursor-pointer"
-                                                >
-                                                    <Eye className="w-3.5 h-3.5" />
-                                                    Manage
-                                                </button>
+                                                <div className="flex items-center gap-2 ml-auto">
+                                                    {animal.is_escalated ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={e => {
+                                                                e.stopPropagation();
+                                                                navigate('/subd/escalated');
+                                                            }}
+                                                            className="flex items-center gap-1.5 px-3 py-2 text-xs font-black rounded-xl transition-all uppercase tracking-wider cursor-pointer shadow-sm bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300"
+                                                            title="Track pickup progress in Escalated Missions"
+                                                        >
+                                                            <Truck className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+                                                            <span>Track Mission →</span>
+                                                        </button>
+                                                    ) : !isResolved && !isTransferredToBrgy ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={e => handleOpenEscalate(animal, e)}
+                                                            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-black rounded-xl transition-all uppercase tracking-wider cursor-pointer shadow-sm ${
+                                                                isOverdue
+                                                                    ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-600/20 animate-pulse'
+                                                                    : 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
+                                                            }`}
+                                                            title="Escalate & transfer animal to Barangay Holding Facility"
+                                                        >
+                                                            <Truck className="w-3.5 h-3.5" />
+                                                            Escalate
+                                                        </button>
+                                                    ) : null}
+                                                    <button
+                                                        onClick={e => {
+                                                            e.stopPropagation();
+                                                            openDetail(animal);
+                                                        }}
+                                                        className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-black text-white bg-orange-600 rounded-xl hover:bg-orange-700 shadow-md hover:shadow-lg transition-all uppercase tracking-wider cursor-pointer"
+                                                    >
+                                                        <Eye className="w-3.5 h-3.5" />
+                                                        Manage
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     );
@@ -1153,6 +1340,7 @@ const SubdHoldingFacility = () => {
             {selected && (() => {
                 const isSelectedInHistory = !isCurrentlyInSubd(selected);
                 const isSelectedTransferred = selected.facility_type === 'barangay_facility' || (selected.facility_name && selected.facility_name.toLowerCase().includes('barangay'));
+                const isResolved = RESOLVED_IDS.has(selected.facility_status);
 
                 return (
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
@@ -1244,21 +1432,32 @@ const SubdHoldingFacility = () => {
 
                                         {/* Stay Duration Breakdown Highlight Card */}
                                         <div className="bg-gradient-to-br from-orange-50/80 via-white to-amber-50/80 p-4 rounded-2xl border border-orange-100 shadow-sm">
-                                            <p className="text-[10px] font-black text-orange-900 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
-                                                <Timer className="w-3.5 h-3.5" /> Facility Stay & Custody Duration
-                                            </p>
+                                            <div className="flex items-center justify-between mb-2.5">
+                                                <p className="text-[10px] font-black text-orange-900 uppercase tracking-widest flex items-center gap-1.5">
+                                                    <Timer className="w-3.5 h-3.5" /> Facility Stay Duration
+                                                </p>
+                                                {isResolved && (
+                                                    <span className="text-[9px] font-black px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md border border-emerald-200">
+                                                        Finalized
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div className="grid grid-cols-3 gap-3">
                                                 <div className="bg-white/80 backdrop-blur-xs p-3 rounded-xl border border-orange-100/60 shadow-2xs">
                                                     <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1"><Home className="w-2.5 h-2.5" /> Subdivision Stay</p>
-                                                    <p className="text-sm font-black text-orange-700 mt-1">{selected.subd_duration_display || `${daysSince(selected.intake_date)}d`}</p>
+                                                    <p className="text-sm font-black text-orange-700 mt-1">
+                                                        {formatDynamicDuration(selected.subd_intake_date || selected.intake_date, selected.subd_discharge_date, isResolved || !!selected.subd_discharge_date, selected.subd_duration_display)}
+                                                    </p>
                                                 </div>
                                                 <div className="bg-white/80 backdrop-blur-xs p-3 rounded-xl border border-orange-100/60 shadow-2xs">
                                                     <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1"><Building2 className="w-2.5 h-2.5" /> Barangay Stay</p>
-                                                    <p className="text-sm font-black text-orange-700 mt-1">{selected.brgy_duration_display || '0 days'}</p>
+                                                    <p className="text-sm font-black text-orange-700 mt-1">
+                                                        {formatDynamicDuration(selected.brgy_intake_date, selected.brgy_discharge_date || selected.discharge_date, isResolved || !!selected.brgy_discharge_date, selected.brgy_duration_display)}
+                                                    </p>
                                                 </div>
                                                 <div className="bg-orange-600 text-white p-3 rounded-xl shadow-xs">
-                                                    <p className="text-[9px] font-bold text-orange-200 uppercase tracking-wider">Total Custody</p>
-                                                    <p className="text-sm font-black text-white mt-1">{selected.total_duration_display || `${daysSince(selected.intake_date)}d`}</p>
+                                                    <p className="text-[9px] font-bold text-orange-200 uppercase tracking-wider">Total Stay</p>
+                                                    <p className="text-sm font-black text-white mt-1">{formatStayDuration(selected.intake_date, selected.discharge_date, isResolved, selected.total_duration_display)}</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -1353,6 +1552,74 @@ const SubdHoldingFacility = () => {
                                             </div>
                                         )}
 
+                                        {/* ── Escalate to Barangay Action Banner ── */}
+                                        {!isSelectedInHistory && !RESOLVED_IDS.has(selected.facility_status) && (
+                                            selected.is_escalated ? (
+                                                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
+                                                            <Truck className="w-5 h-5 animate-pulse" />
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <h4 className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                                                                    Escalated to Barangay
+                                                                </h4>
+                                                                <span className="px-2 py-0.5 bg-amber-200 text-amber-900 text-[10px] font-black rounded-md border border-amber-300 uppercase tracking-wider">
+                                                                    {selected.escalation_status || 'Awaiting Pickup'}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-[11px] text-amber-900/90 font-medium mt-0.5 leading-relaxed">
+                                                                Official rescue and pickup mission is active with Barangay Operations. Animal is held here until the team picks it up.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelected(null);
+                                                            navigate('/subd/escalated');
+                                                        }}
+                                                        className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer uppercase tracking-wider shrink-0"
+                                                    >
+                                                        <Truck className="w-4 h-4" />
+                                                        Track in Missions →
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border border-amber-300/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                                                    <div className="flex items-start gap-3">
+                                                        <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
+                                                            <Truck className="w-5 h-5" />
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <h4 className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                                                                    Escalate Custody to Barangay
+                                                                </h4>
+                                                                {daysSince(selected.intake_date) >= impoundStayDuration && (
+                                                                    <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-black rounded-md border border-red-200 uppercase tracking-wider">
+                                                                        Overdue
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-[11px] text-amber-900/90 font-medium mt-0.5 leading-relaxed">
+                                                                Endorse this case to Barangay Operations for official pickup and transfer to the municipal animal shelter.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleOpenEscalate(selected)}
+                                                        className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer uppercase tracking-wider shrink-0"
+                                                    >
+                                                        <Truck className="w-4 h-4" />
+                                                        Escalate to Barangay
+                                                    </button>
+                                                </div>
+                                            )
+                                        )}
+
                                         {/* ── Update Form (Inline) ──────────────── */}
                                         {!isSelectedInHistory && !RESOLVED_IDS.has(selected.facility_status) && (
                                             <div className="border border-gray-100 rounded-2xl p-5 space-y-4 bg-gray-50/50">
@@ -1365,7 +1632,7 @@ const SubdHoldingFacility = () => {
                                                         onChange={e => setUpdateForm(f => ({ ...f, facility_status: Number(e.target.value) }))}
                                                         className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-orange-200 outline-none"
                                                     >
-                                                        {FACILITY_STATUSES.map(s => (
+                                                        {FACILITY_STATUSES.filter(s => ![6, 7, 8].includes(s.id)).map(s => (
                                                             <option key={s.id} value={s.id}>{s.name}</option>
                                                         ))}
                                                     </select>
@@ -1754,6 +2021,191 @@ const SubdHoldingFacility = () => {
                     {/* Image Counter / Caption */}
                     <div className="mt-4 text-xs font-bold text-gray-400 tracking-wider">
                         {lightboxMedia.index + 1} of {lightboxMedia.mediaList.length}
+                    </div>
+                </div>
+            )}
+
+            {/* ─── Escalate to Barangay Modal ────────────────────────────────────── */}
+            {escalateModalOpen && animalToEscalate && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+                        {/* Header */}
+                        <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-transparent">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20">
+                                    <Truck className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-black text-gray-900 leading-tight">
+                                        Escalate to Barangay Facility
+                                    </h3>
+                                    <p className="text-[11px] text-gray-500 font-medium">
+                                        Transfer custody to municipal animal welfare shelter
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setEscalateModalOpen(false);
+                                    setAnimalToEscalate(null);
+                                }}
+                                className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors cursor-pointer"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-6 overflow-y-auto space-y-4 custom-scrollbar">
+                            {/* Animal Preview Card */}
+                            <div className="bg-gray-50 rounded-2xl p-3.5 border border-gray-150 flex items-center gap-3.5">
+                                <div className="w-14 h-14 rounded-xl bg-slate-200 overflow-hidden shrink-0 border border-gray-200 flex items-center justify-center">
+                                    {getAnimalPhoto(animalToEscalate) ? (
+                                        <img
+                                            src={getAnimalPhoto(animalToEscalate)}
+                                            alt=""
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : (
+                                        animalIcon(animalToEscalate.animal_type, 'w-7 h-7 text-gray-400')
+                                    )}
+                                </div>
+                                <div className="min-w-0 flex-1 text-xs">
+                                    <div className="flex items-center gap-1.5 mb-0.5">
+                                        <span className="font-mono font-black text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded text-[10px]">
+                                            #{animalToEscalate.report_id.toString().padStart(4, '0')}
+                                        </span>
+                                        <span className="font-bold text-gray-700 truncate">
+                                            {animalToEscalate.animal_name || `${animalToEscalate.animal_type || 'Animal'} #${animalToEscalate.holding_id}`}
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-gray-500 truncate">
+                                        {animalToEscalate.breed || 'Unknown Breed'} · {animalToEscalate.color || 'Unknown Color'}
+                                    </p>
+                                    <p className="text-[10px] text-gray-400 mt-1 font-medium">
+                                        Time in Subd: <strong className="text-gray-700">{animalToEscalate.subd_duration_display || `${daysSince(animalToEscalate.intake_date)} days`}</strong>
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Target Barangay Facility Selector */}
+                            <div>
+                                <label className="text-[11px] font-black text-gray-700 uppercase tracking-wider block mb-1.5">
+                                    Destination Barangay Holding Facility
+                                </label>
+                                {barangayFacilities.length === 0 ? (
+                                    <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800">
+                                        No specific Barangay holding facility landmark detected. The system will route to the default Barangay Main Holding Shelter.
+                                    </div>
+                                ) : (
+                                    <select
+                                        value={selectedBrgyFacilityId}
+                                        onChange={(e) => setSelectedBrgyFacilityId(Number(e.target.value))}
+                                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:ring-2 focus:ring-amber-200 outline-none cursor-pointer"
+                                    >
+                                        {barangayFacilities.map((f) => (
+                                            <option key={f.landmark_id} value={f.landmark_id}>
+                                                {f.name} {f.capacity ? `(Capacity: ${f.capacity})` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
+                            </div>
+
+                            {/* Quick Reason Chips */}
+                            <div>
+                                <label className="text-[11px] font-black text-gray-700 uppercase tracking-wider block mb-1.5">
+                                    Escalation Reason
+                                </label>
+                                <div className="flex flex-wrap gap-1.5 mb-2">
+                                    {[
+                                        'Stay limit reached (overdue)',
+                                        'Requires municipal veterinary treatment',
+                                        'Aggressive / specialized handling',
+                                        'Subdivision holding unit at full capacity',
+                                        'Long-term custody / municipal impoundment',
+                                    ].map((chip) => (
+                                        <button
+                                            key={chip}
+                                            type="button"
+                                            onClick={() => setEscalateReason(chip)}
+                                            className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                                                escalateReason === chip
+                                                    ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
+                                                    : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                                            }`}
+                                        >
+                                            {chip}
+                                        </button>
+                                    ))}
+                                </div>
+                                <input
+                                    type="text"
+                                    value={escalateReason}
+                                    onChange={(e) => setEscalateReason(e.target.value)}
+                                    placeholder="Enter reason for escalation..."
+                                    className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:ring-2 focus:ring-amber-200 outline-none"
+                                />
+                            </div>
+
+                            {/* Additional Notes */}
+                            <div>
+                                <label className="text-[11px] font-black text-gray-700 uppercase tracking-wider block mb-1.5">
+                                    Additional Handover Notes (Optional)
+                                </label>
+                                <textarea
+                                    rows={2}
+                                    value={escalateNotes}
+                                    onChange={(e) => setEscalateNotes(e.target.value)}
+                                    placeholder="Provide details about the animal's behavior, treatments given, or handover time..."
+                                    className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:ring-2 focus:ring-amber-200 outline-none resize-none"
+                                />
+                            </div>
+
+                            {/* Policy Notice Box */}
+                            <div className="bg-amber-50/80 rounded-2xl p-3.5 border border-amber-200/90 text-xs text-amber-900 space-y-1">
+                                <p className="font-bold flex items-center gap-1.5 text-amber-950">
+                                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                    Same Procedure as Incident Report Escalation
+                                </p>
+                                <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
+                                    Once escalated, an official Rescue & Pickup Mission with Endorsement is forwarded to Barangay Operations. The animal remains safely in your subdivision holding facility until Barangay responders accept the mission and pick up the animal.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-2.5 bg-gray-50/50">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setEscalateModalOpen(false);
+                                    setAnimalToEscalate(null);
+                                }}
+                                disabled={isEscalating}
+                                className="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-800 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmEscalate}
+                                disabled={isEscalating}
+                                className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white text-xs font-black rounded-xl transition-all shadow-md shadow-amber-600/20 flex items-center gap-2 cursor-pointer uppercase tracking-wider"
+                            >
+                                {isEscalating ? (
+                                    <>
+                                        <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        Escalating...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Truck className="w-4 h-4" />
+                                        Confirm Escalation
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
