@@ -34,6 +34,8 @@ interface Report {
     latitude: number;
     longitude: number;
     landmark: string;
+    initial_landmark?: string | null;
+    location_address?: string | null;
     animal_count: number;
     animal_type: string;
     animal_color?: string | null;

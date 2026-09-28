@@ -318,8 +318,6 @@ const SubdDashboard = () => {
 
     const maxTrend = Math.max(...trendData.map(d => d.count), 1);
 
-    const ADMIN_HQ: [number, number] = [14.806906, 121.0039297];
-
     const getStatusName = (statusId: number) => {
         switch (statusId) {
             case 1: return 'Pending Verification';

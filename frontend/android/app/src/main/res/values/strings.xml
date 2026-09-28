@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">StraySafe</string>
+    <string name="title_activity_main">StraySafe</string>
+    <string name="package_name">com.straysafe.app</string>
+    <string name="custom_url_scheme">com.straysafe.app</string>
+</resources>
