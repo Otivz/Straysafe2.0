@@ -189,6 +189,9 @@ interface AiAnalysisSummary {
     size?: string;
     isAiGenerated?: boolean;
     aiGenerationConfidence?: number;
+    aiPhotoLikelihood?: number | null;
+    aiPhotoStatus?: string;
+    aiPhotoRecommendation?: string;
     verificationStatus?: VerificationStatus;
     verificationMessage?: string;
     authenticityDetails?: string;

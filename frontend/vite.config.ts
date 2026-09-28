@@ -9,6 +9,6 @@ export default defineConfig({
   envDir: '../',
   server: {
     port: 5173,
-    host: '127.0.0.1',
+    host: '0.0.0.0',
   },
 })

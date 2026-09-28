@@ -98,7 +98,6 @@ const ResidentsLogin = () => {
     const [compSubdivisionId, setCompSubdivisionId] = useState<number>(1);
     const [compAddress, setCompAddress] = useState('');
     const [compPicture, setCompPicture] = useState('');
-    const [compToken, setCompToken] = useState('');
 
     // Subdivision options
     const [subdivisions, setSubdivisions] = useState<SubdivisionOption[]>([
@@ -186,7 +185,6 @@ const ResidentsLogin = () => {
                 setCompPhone(data.phone || '');
                 setCompSubdivisionId(data.subdivision_id || 1);
                 setCompAddress(data.address || '');
-                setCompToken(data.access_token || '');
                 setGoogleModalStep('complete_details');
                 setLoading(false);
                 return;
@@ -196,7 +194,6 @@ const ResidentsLogin = () => {
                 setCompUserId(data.user_id);
                 setCompEmail(data.email);
                 setCompPhone(data.phone || '');
-                setCompToken(data.access_token || '');
                 setDevOtp(data.dev_otp || null);
                 setOtpDigits(['', '', '', '', '', '']);
                 setOtpTimer(300);
@@ -332,7 +329,6 @@ const ResidentsLogin = () => {
             setCompSubdivisionId(data.subdivision_id || 1);
             setCompAddress(data.address || '');
             setCompPicture(data.profile_picture || avatarUrl);
-            setCompToken(data.access_token || '');
 
             // Check if user is already verified with complete profile
             if (data.is_verified && !data.requires_profile_completion && !data.requires_otp) {
@@ -1117,7 +1113,7 @@ const ResidentsLogin = () => {
                                     {otpDigits.map((digit, idx) => (
                                         <input
                                             key={idx}
-                                            ref={(el) => (otpInputRefs.current[idx] = el)}
+                                            ref={(el) => { otpInputRefs.current[idx] = el; }}
                                             type="text"
                                             inputMode="numeric"
                                             maxLength={1}

@@ -149,8 +149,6 @@ export const AiImageVerificationBadge: React.FC<AiImageVerificationBadgeProps> =
         (likelihoodPct !== null && likelihoodPct > 35 && likelihoodPct < 60)
     );
 
-    const isAuthentic = !isUnableToAnalyze && !isHighLikelihood && !isUncertain;
-
     const message = propMessage || verification?.verificationMessage || verification?.verification_message;
     const recommendation = propRecommendation || verification?.aiPhotoRecommendation || verification?.ai_photo_recommendation;
     const details = propDetails || verification?.authenticityDetails || verification?.authenticity_details;
