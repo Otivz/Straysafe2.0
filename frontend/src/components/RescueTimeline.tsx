@@ -231,7 +231,7 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             description = 'Response team deployed to secure and contain the animal.';
         }
         // 9. Adoption Events
-        else if (remarksLower.includes('promoted to adoption') || remarksLower.includes('promote_to_adoption') || remarksLower.includes('promoted to the adoption') || remarksLower.includes('being promoted for adoption')) {
+        else if (remarksLower.includes('promoted to adoption') || remarksLower.includes('promote_to_adoption') || remarksLower.includes('promoted to the adoption') || remarksLower.includes('being promoted for adoption') || remarksLower.includes('promoted to adoption catalog')) {
             actionTitle = 'ANIMAL BEING PROMOTED FOR ADOPTION';
             type = 'green';
             IconComponent = Heart;
