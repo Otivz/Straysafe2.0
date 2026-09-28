@@ -694,13 +694,16 @@ const ResiViewReport = () => {
                             <button
                                 type="button"
                                 onClick={() => setIsChatOpen(true)}
-                                className="px-5 py-3.5 bg-gradient-to-r from-[#F97316] to-[#EA580C] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-orange-600/20 hover:scale-105 active:scale-95 flex items-center gap-2"
+                                className="px-5 py-3.5 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-orange-600/20 hover:scale-105 active:scale-95 flex items-center gap-2"
                                 title="Open Case Chat with Subdivision Responders"
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                </svg>
-                                <span>Case Chat {chatCount > 0 ? `(${chatCount})` : ''}</span>
+                                <MessageCircle className="w-4 h-4 shrink-0" />
+                                <span>Case Chat</span>
+                                {chatCount > 0 && (
+                                    <span className="px-1.5 py-0.5 bg-white text-[#F97316] rounded-full text-[9px] font-black leading-none flex items-center justify-center shadow-2xs">
+                                        {chatCount}
+                                    </span>
+                                )}
                             </button>
                         )}
 
@@ -785,10 +788,13 @@ const ResiViewReport = () => {
                                 const parts = rawDesc.split('|').map((p: string) => p.trim());
                                 let extractedPattern = '';
                                 let extractedConditions = '';
+                                let extractedCustody = '';
                                 let cleanNotes = '';
 
                                 parts.forEach((part: string) => {
-                                    if (part.toLowerCase().startsWith('pattern:')) {
+                                    if (part.toLowerCase().startsWith('custody:')) {
+                                        extractedCustody = part.replace(/^custody:\s*/i, '');
+                                    } else if (part.toLowerCase().startsWith('pattern:')) {
                                         extractedPattern = part.replace(/^pattern:\s*/i, '');
                                     } else if (part.toLowerCase().startsWith('observed conditions:')) {
                                         extractedConditions = part.replace(/^observed conditions:\s*/i, '');
@@ -796,15 +802,20 @@ const ResiViewReport = () => {
                                         if (!extractedPattern) extractedPattern = part.replace(/^markings:\s*/i, '');
                                     } else if (part.toLowerCase().startsWith('notes:')) {
                                         cleanNotes = part.replace(/^notes:\s*/i, '');
-                                    } else if (!extractedPattern && !extractedConditions && !cleanNotes) {
+                                    } else if (!extractedPattern && !extractedConditions && !extractedCustody && !cleanNotes && !part.toLowerCase().startsWith('custody:')) {
                                         cleanNotes = part;
                                     }
                                 });
+
+                                if (cleanNotes && (cleanNotes.toLowerCase().startsWith('custody:') || cleanNotes.toLowerCase().startsWith('pattern:') || cleanNotes.toLowerCase().startsWith('observed conditions:'))) {
+                                    cleanNotes = '';
+                                }
 
                                 const displayType = report.animal_type || report.ai_animal_type || 'Unknown';
                                 const displayBreed = (report.animal_breed && report.animal_breed.toLowerCase() !== 'unknown') ? report.animal_breed : (report.ai_possible_breed || 'Unknown');
                                 const displayColor = report.animal_color || report.ai_dominant_color || 'Unknown';
                                 const displaySize = report.estimated_size || report.ai_estimated_size || 'Medium';
+                                const effectiveCustody = extractedCustody || report.custody_status || (rawDesc.toLowerCase().includes('secured in safe place') ? 'Secured in safe place by resident' : (rawDesc.toLowerCase().includes('stray sighting') ? 'Stray sighting (not touched)' : null));
 
                                 return (
                                     <div className="space-y-6">
@@ -1118,6 +1129,16 @@ const ResiViewReport = () => {
                                                     <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Ownership Indicator</span>
                                                     <span className={`text-xs font-black uppercase ${report.is_possible_owned ? 'text-amber-600 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400'}`}>
                                                         {report.is_possible_owned ? 'Possible Owned Pet' : 'Uncollared Stray'}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {effectiveCustody && (
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Custody Status</span>
+                                                    <span className={`text-xs font-black uppercase inline-flex items-center gap-1 ${
+                                                        effectiveCustody.toLowerCase().includes('secured') ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'
+                                                    }`}>
+                                                        {effectiveCustody}
                                                     </span>
                                                 </div>
                                             )}
@@ -2158,28 +2179,6 @@ const ResiViewReport = () => {
                 />
             )}
 
-            {/* Floating Chat Trigger - restricted to reporter */}
-            {isReporter && !isChatOpen && (
-                <div className="fixed bottom-6 right-6 z-40">
-                    <button
-                        onClick={() => setIsChatOpen(true)}
-                        className="px-4 py-3.5 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-full shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-2.5 cursor-pointer border-2 border-white dark:border-gray-800"
-                        title="Chat about this report"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                        </svg>
-                        <span className="font-black text-xs uppercase tracking-wider">
-                            Case Chat
-                        </span>
-                        {chatCount > 0 && (
-                            <span className="w-5 h-5 bg-white text-[#F97316] rounded-full text-[10px] font-black flex items-center justify-center shadow-xs">
-                                {chatCount}
-                            </span>
-                        )}
-                    </button>
-                </div>
-            )}
             {/* Dispute Submission Success Alert */}
             {disputeSuccessAlert && (
                 <div className="fixed top-24 right-6 z-[9999] max-w-md bg-emerald-600 text-white p-5 rounded-3xl shadow-2xl animate-in slide-in-from-top-4 flex items-center gap-3">

@@ -108,6 +108,8 @@ const BrgyHistoryReports = () => {
             rep.status_id === 11 || 
             rep.status_id === 9 ||
             rep.status_id === 10 ||
+            rep.status_id === 8 ||
+            rep.status_id === 7 ||
             rep.status_id === 12 || 
             rep.status_id === 14 ||
             rep.status_id === 17 ||
@@ -135,6 +137,8 @@ const BrgyHistoryReports = () => {
             const sf = statusFilter.toLowerCase();
             if (sf === 'resolved') {
                 matchesStatus = [11, 9, 10].includes(rep.status_id);
+            } else if (sf === 'impounded' || sf.includes('impound')) {
+                matchesStatus = [8, 7].includes(rep.status_id);
             } else if (sf === 'dismissed' || sf.includes('dismissed') || sf.includes('false alarm')) {
                 matchesStatus = [14, 17].includes(rep.status_id);
             } else if (sf === 'deceased') {
@@ -151,6 +155,7 @@ const BrgyHistoryReports = () => {
 
     const totalHistory = historyReports.length;
     const resolvedCount = historyReports.filter(r => r.status_id === 11 || r.status_id === 9 || r.status_id === 10).length;
+    const impoundedCount = historyReports.filter(r => r.status_id === 8 || r.status_id === 7).length;
     const deceasedCount = historyReports.filter(r => r.status_id === 12).length;
     const dismissedCount = historyReports.filter(r => r.status_id === 14 || r.status_id === 17).length;
     const rejectedCount = historyReports.filter(r => r.status_id === 3).length;
@@ -171,6 +176,8 @@ const BrgyHistoryReports = () => {
         if (s.includes('resolved')) return 'bg-green-50 text-green-600 border-green-100';
         if (s.includes('claimed')) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
         if (s.includes('released')) return 'bg-teal-50 text-teal-700 border-teal-200';
+        if (s.includes('impounded')) return 'bg-amber-50 text-amber-800 border-amber-300';
+        if (s.includes('observation')) return 'bg-blue-50 text-blue-700 border-blue-200';
         if (s.includes('deceased')) return 'bg-gray-100 text-gray-600 border-gray-200';
         if (s.includes('cannot be found')) return 'bg-amber-50 text-amber-800 border-amber-200';
         if (s.includes('false alarm') || s.includes('dismissed')) return 'bg-amber-50 text-amber-700 border-amber-200';
@@ -183,6 +190,11 @@ const BrgyHistoryReports = () => {
         if (statusId === 11 || statusId === 9 || statusId === 10) return (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+        );
+        if (statusId === 8 || statusId === 7) return (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
             </svg>
         );
         if (statusId === 12) return (
@@ -222,6 +234,17 @@ const BrgyHistoryReports = () => {
             icon: (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+            )
+        },
+        {
+            label: 'Impounded',
+            value: impoundedCount,
+            lightColor: 'bg-amber-50',
+            textColor: 'text-amber-700',
+            icon: (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
                 </svg>
             )
         },
@@ -323,9 +346,9 @@ const BrgyHistoryReports = () => {
                         </div>
 
                         {/* Metrics Row (Desktop: hidden on mobile since hero banner displays it) */}
-                        <div className="hidden md:grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-4">
+                        <div className="hidden md:grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-4">
                             {metrics.map((metric, i) => (
-                                <div key={i} className={`bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-5 flex items-center gap-3 sm:gap-4 hover:shadow-xs transition-all ${i === metrics.length - 1 && metrics.length % 2 !== 0 ? 'col-span-2 sm:col-span-1' : ''}`}>
+                                <div key={i} className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-5 flex items-center gap-3 sm:gap-4 hover:shadow-xs transition-all">
                                     <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl ${metric.lightColor} ${metric.textColor} flex items-center justify-center shrink-0`}>
                                         {metric.icon}
                                     </div>
@@ -343,6 +366,7 @@ const BrgyHistoryReports = () => {
                                 {[
                                     { id: 'all', label: 'All Cases', count: totalHistory, icon: '📋' },
                                     { id: 'Resolved', label: 'Resolved', count: resolvedCount, icon: '✅' },
+                                    { id: 'Impounded', label: 'Impounded', count: impoundedCount, icon: '🏛️' },
                                     { id: 'False Alarm / Dismissed', label: 'Dismissed', count: dismissedCount, icon: '🛡️' },
                                     { id: 'Deceased', label: 'Deceased', count: deceasedCount, icon: '🕊️' },
                                     { id: 'Rejected', label: 'Rejected', count: rejectedCount, icon: '✕' },
@@ -401,6 +425,7 @@ const BrgyHistoryReports = () => {
                                     options={[
                                         { value: 'all', label: 'All Status' },
                                         { value: 'Resolved', label: 'Resolved' },
+                                        { value: 'Impounded', label: 'Impounded' },
                                         { value: 'False Alarm / Dismissed', label: 'Dismissed' },
                                         { value: 'Deceased', label: 'Deceased' },
                                         { value: 'Rejected', label: 'Rejected' },
@@ -523,7 +548,7 @@ const BrgyHistoryReports = () => {
                                                 </div>
                                             )}
 
-                                            {/* Status Badge & Case Chat Row */}
+                                            {/* Status Badge & Outcome Status */}
                                             <div className="flex items-center justify-between gap-2">
                                                 <div className="flex items-center gap-1.5">
                                                     <span className={isResolved ? 'text-emerald-500' : isDeceased ? 'text-slate-500' : 'text-amber-500'}>
@@ -532,18 +557,6 @@ const BrgyHistoryReports = () => {
                                                     <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider ${getStatusColor(statText)}`}>
                                                         {statText}
                                                     </span>
-                                                </div>
-
-                                                <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                                                    <ReportChatBadge
-                                                        reportId={rep.report_id}
-                                                        currentUserId={currentUser?.user_id}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setSelectedChatReport(rep);
-                                                            setIsChatOpen(true);
-                                                        }}
-                                                    />
                                                 </div>
                                             </div>
 
@@ -574,17 +587,28 @@ const BrgyHistoryReports = () => {
                                                     </span>
                                                 </div>
 
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        navigate(`/brgy/history/${rep.report_id}`);
-                                                    }}
-                                                    className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] font-black text-[10.5px] rounded-xl border border-orange-200 uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-2xs group-hover:bg-[#F97316] group-hover:text-white group-hover:border-orange-500 cursor-pointer shrink-0"
-                                                >
-                                                    <span>View</span>
-                                                    <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                                                </button>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <ReportChatBadge
+                                                        reportId={rep.report_id}
+                                                        currentUserId={currentUser?.user_id}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedChatReport(rep);
+                                                            setIsChatOpen(true);
+                                                        }}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            navigate(`/brgy/history/${rep.report_id}`);
+                                                        }}
+                                                        className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] font-black text-[10.5px] rounded-xl border border-orange-200 uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-2xs group-hover:bg-[#F97316] group-hover:text-white group-hover:border-orange-500 cursor-pointer shrink-0"
+                                                    >
+                                                        <span>View</span>
+                                                        <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     );
@@ -598,7 +622,7 @@ const BrgyHistoryReports = () => {
                                 loading={loading}
                                 data={filteredReports}
                                 emptyMessage="No history reports found."
-                                loadingMessage="Loading history reports..."
+                                loadingMessage="Loading history archive..."
                                 onRowClick={(rep) => navigate(`/brgy/history/${rep.report_id}`)}
                                 columns={[
                                     {
@@ -613,7 +637,7 @@ const BrgyHistoryReports = () => {
                                         key: "category",
                                         render: (rep) => (
                                             <div className="flex items-center space-x-2">
-                                                <span className="w-2 h-2 rounded-full bg-orange-400"></span>
+                                                <span className="w-2 h-2 rounded-full bg-orange-500"></span>
                                                 <span className="text-sm font-bold text-gray-900">{categoryMap[rep.category_id] || 'Other'}</span>
                                             </div>
                                         )
@@ -645,16 +669,7 @@ const BrgyHistoryReports = () => {
                                         key: "status",
                                         render: (rep) => (
                                             <div className="flex items-center gap-2">
-                                                <ReportChatBadge
-                                                    reportId={rep.report_id}
-                                                    currentUserId={currentUser?.user_id}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setSelectedChatReport(rep);
-                                                        setIsChatOpen(true);
-                                                    }}
-                                                />
-                                                <span className={`${[11, 9, 10].includes(rep.status_id) ? 'text-green-500' : rep.status_id === 12 ? 'text-gray-500' : 'text-red-500'}`}>
+                                                <span className={`${[11, 9, 10].includes(rep.status_id) ? 'text-green-500' : [8, 7].includes(rep.status_id) ? 'text-amber-500' : rep.status_id === 12 ? 'text-gray-500' : 'text-red-500'}`}>
                                                     {getStatusIcon(rep.status_id)}
                                                 </span>
                                                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || '')}`}>
@@ -689,19 +704,30 @@ const BrgyHistoryReports = () => {
                                         key: "action",
                                         className: "text-right",
                                         render: (rep) => (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    navigate(`/brgy/history/${rep.report_id}`);
-                                                }}
-                                                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-100 rounded-lg hover:bg-orange-100 transition-all uppercase tracking-widest cursor-pointer"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                </svg>
-                                                View
-                                            </button>
+                                            <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                                                <ReportChatBadge
+                                                    reportId={rep.report_id}
+                                                    currentUserId={currentUser?.user_id}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedChatReport(rep);
+                                                        setIsChatOpen(true);
+                                                    }}
+                                                />
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        navigate(`/brgy/history/${rep.report_id}`);
+                                                    }}
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-100 rounded-lg hover:bg-orange-100 transition-all uppercase tracking-widest cursor-pointer"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                    </svg>
+                                                    View
+                                                </button>
+                                            </div>
                                         )
                                     }
                                 ]}

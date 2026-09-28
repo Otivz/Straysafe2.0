@@ -41,6 +41,8 @@ const PetTable: React.FC<PetTableProps> = ({
             pet.name.toLowerCase().includes(term) ||
             (pet.breed || '').toLowerCase().includes(term) ||
             (pet.species || '').toLowerCase().includes(term) ||
+            (pet.ownerName || '').toLowerCase().includes(term) ||
+            (pet.ownerEmail || '').toLowerCase().includes(term) ||
             (pet.age || '').toString().toLowerCase().includes(term)
         );
         if (!matchesTerm) return false;
@@ -217,15 +219,16 @@ const PetTable: React.FC<PetTableProps> = ({
                 </div>
             </div>
 
-            {/* ─── DESKTOP TABLE VIEW (Preserved & Focused: Name, Species, Breed, Age) ─── */}
+            {/* ─── DESKTOP TABLE VIEW (Preserved & Focused: Name, Species, Breed, Age, Pet Owner) ─── */}
             <div className="hidden md:block overflow-x-auto w-full">
-                <table className="w-full text-left border-collapse min-w-[600px]">
+                <table className="w-full text-left border-collapse min-w-[700px]">
                     <thead>
                         <tr className="border-b border-slate-100 bg-[#FAFAF9]/80">
                             <th className="px-6 py-4.5 pl-8 text-[10px] font-black text-slate-400 uppercase tracking-widest">Pet Name</th>
                             <th className="px-6 py-4.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Species</th>
                             <th className="px-6 py-4.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Breed</th>
                             <th className="px-6 py-4.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Age</th>
+                            <th className="px-6 py-4.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Pet Owner</th>
                             <th className="px-6 py-4.5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Action</th>
                         </tr>
                     </thead>
@@ -242,12 +245,13 @@ const PetTable: React.FC<PetTableProps> = ({
                                     <td className="px-6 py-5"><div className="h-6 w-16 bg-slate-100 rounded-full"></div></td>
                                     <td className="px-6 py-5"><div className="h-4 w-28 bg-slate-100 rounded"></div></td>
                                     <td className="px-6 py-5"><div className="h-6 w-16 bg-slate-100 rounded-full"></div></td>
+                                    <td className="px-6 py-5"><div className="h-4 w-24 bg-slate-100 rounded"></div></td>
                                     <td className="px-6 py-5 flex justify-center"><div className="h-8 w-16 bg-slate-100 rounded-xl"></div></td>
                                 </tr>
                             ))
                         ) : filteredPets.length === 0 ? (
                             <tr>
-                                <td colSpan={5} className="px-6 py-24 text-center">
+                                <td colSpan={6} className="px-6 py-24 text-center">
                                     <div className="flex flex-col items-center gap-2.5 max-w-[280px] mx-auto">
                                         <div className="w-16 h-16 bg-orange-50 rounded-[1.5rem] flex items-center justify-center text-[#F97316] border border-orange-100 shadow-inner">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -319,6 +323,20 @@ const PetTable: React.FC<PetTableProps> = ({
                                             <span className="px-3 py-1 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-200/60 uppercase tracking-wider">
                                                 {formatAge(pet.age)}
                                             </span>
+                                        </td>
+
+                                        {/* Pet Owner */}
+                                        <td className="px-6 py-4.5">
+                                            <div>
+                                                <p className="text-xs font-bold text-slate-900 leading-tight">
+                                                    {pet.ownerName || 'No Owner (Community Animal)'}
+                                                </p>
+                                                {pet.ownerEmail && pet.ownerEmail !== 'Unassigned' && pet.ownerEmail !== 'No Email' ? (
+                                                    <p className="text-[10px] font-medium text-slate-400 tracking-tight lowercase mt-0.5">
+                                                        {pet.ownerEmail}
+                                                    </p>
+                                                ) : null}
+                                            </div>
                                         </td>
 
                                         {/* Action */}

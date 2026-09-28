@@ -76,8 +76,17 @@ const ResiNavbar = ({
 
     const messagesRef = useRef<HTMLDivElement>(null);
 
-    const userStr = localStorage.getItem('resident_user');
-    const initialUser = userStr ? JSON.parse(userStr) : null;
+    const getSafeUser = () => {
+        try {
+            const raw = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user') ||
+                        localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user') ||
+                        localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user');
+            return raw ? JSON.parse(raw) : null;
+        } catch {
+            return null;
+        }
+    };
+    const initialUser = getSafeUser();
     const [user, setUser] = useState(initialUser);
 
     const { unreadCount: unreadMessageCount, threads: messageThreads, loading: isMessagesLoading, refreshThreads } = useUnreadMessageCount(user?.user_id);

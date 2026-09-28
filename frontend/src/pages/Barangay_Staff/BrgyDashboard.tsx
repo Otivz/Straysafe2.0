@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../utils/api';
+import { getCachedData, setCachedData } from '../../utils/cache';
 import { DEFAULT_AVATAR, getProfilePicture, DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
@@ -11,11 +12,11 @@ import { MapPin, Activity, Flame, Shield, CheckCircle2, Clock, Truck, FileText, 
 const BrgyDashboard = () => {
     const navigate = useNavigate();
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-    const [requests, setRequests] = useState<any[]>([]);
-    const [personnel, setPersonnel] = useState<any[]>([]);
-    const [reports, setReports] = useState<any[]>([]);
-    const [facilityAnimals, setFacilityAnimals] = useState<any[]>([]);
-    const [facilities, setFacilities] = useState<any[]>([]);
+    const [requests, setRequests] = useState<any[]>(() => getCachedData<any[]>('brgy_dashboard_requests') || []);
+    const [personnel, setPersonnel] = useState<any[]>(() => getCachedData<any[]>('brgy_dashboard_personnel') || []);
+    const [reports, setReports] = useState<any[]>(() => getCachedData<any[]>('brgy_dashboard_reports') || []);
+    const [facilityAnimals, setFacilityAnimals] = useState<any[]>(() => getCachedData<any[]>('brgy_dashboard_holding') || []);
+    const [facilities, setFacilities] = useState<any[]>(() => getCachedData<any[]>('brgy_dashboard_facilities') || []);
     const [mapMode, setMapMode] = useState<'pins' | 'heatmap' | 'both'>('both');
     const [isMapExpanded, setIsMapExpanded] = useState(false);
     const [isModalLegendOpen, setIsModalLegendOpen] = useState(false);
@@ -26,6 +27,7 @@ const BrgyDashboard = () => {
     const [isNavigating, setIsNavigating] = useState(false);
     const [navSource, setNavSource] = useState<'hq' | 'brgy' | 'current'>('hq');
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+    const [geoToast, setGeoToast] = useState<{ message: string; type: 'error' | 'info' } | null>(null);
     const [personnelFilter, setPersonnelFilter] = useState<'all' | 'available' | 'on_mission'>('all');
 
     const [currentUser, setCurrentUser] = useState<any>(() => {
@@ -36,8 +38,8 @@ const BrgyDashboard = () => {
             return null;
         }
     });
-    const [barangayHq, setBarangayHq] = useState<any>(null);
-    const [_isLoading, setIsLoading] = useState(true);
+    const [barangayHq, setBarangayHq] = useState<any>(() => getCachedData<any>('brgy_dashboard_hq') || null);
+    const [_isLoading, setIsLoading] = useState<boolean>(() => !getCachedData('brgy_dashboard_reports'));
     const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
     // Quick Action Modals
@@ -73,6 +75,14 @@ const BrgyDashboard = () => {
     }, [navigate]);
 
     useEffect(() => {
+        if (!geoToast) return;
+        const timer = setTimeout(() => {
+            setGeoToast(null);
+        }, 6000);
+        return () => clearTimeout(timer);
+    }, [geoToast]);
+
+    useEffect(() => {
         if ("geolocation" in navigator) {
             navigator.geolocation.getCurrentPosition(
                 (position) => {
@@ -82,6 +92,56 @@ const BrgyDashboard = () => {
             );
         }
     }, []);
+
+    const handleDirectionsFromMe = (markerOrReport: any) => {
+        const fullReport = reports.find(r => r.report_id?.toString() === markerOrReport?.id?.toString()) || markerOrReport?.rawData || markerOrReport;
+        if (!fullReport) return;
+
+        if (!("geolocation" in navigator)) {
+            setGeoToast({
+                message: "Geolocation is not supported by your browser.",
+                type: 'error'
+            });
+            setIsNavigating(false);
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const coords: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+                setUserLocation(coords);
+                setSelectedReport(fullReport);
+                setNavSource('current');
+                setIsNavigating(true);
+            },
+            (err) => {
+                console.error("Error getting user location:", err);
+                setIsNavigating(false);
+                let errMsg = "Unable to retrieve your current location. Please enable GPS/location permissions in your browser to get directions.";
+                if (err.code === err.PERMISSION_DENIED) {
+                    errMsg = "Location permission denied. Please allow location access in your browser settings to get directions from your current location.";
+                } else if (err.code === err.POSITION_UNAVAILABLE) {
+                    errMsg = "Current GPS position is unavailable. Please check your network or device location settings.";
+                } else if (err.code === err.TIMEOUT) {
+                    errMsg = "Location request timed out. Please try again.";
+                }
+                setGeoToast({
+                    message: errMsg,
+                    type: 'error'
+                });
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    };
+
+    const handleDirectionsFromBrgyHall = (markerOrReport: any) => {
+        const fullReport = reports.find(r => r.report_id?.toString() === markerOrReport?.id?.toString()) || markerOrReport?.rawData || markerOrReport;
+        if (!fullReport) return;
+
+        setSelectedReport(fullReport);
+        setNavSource('brgy');
+        setIsNavigating(true);
+    };
 
     const fetchDashboardData = async () => {
         try {
@@ -100,22 +160,34 @@ const BrgyDashboard = () => {
             ]);
 
             if (requestsRes.status === 'fulfilled') {
-                setRequests(requestsRes.value.data || []);
+                const reqData = requestsRes.value.data || [];
+                setRequests(reqData);
+                setCachedData('brgy_dashboard_requests', reqData);
             }
             if (personnelRes.status === 'fulfilled') {
-                setPersonnel(personnelRes.value.data || []);
+                const persData = personnelRes.value.data || [];
+                setPersonnel(persData);
+                setCachedData('brgy_dashboard_personnel', persData);
             }
             if (reportsRes.status === 'fulfilled') {
-                setReports(reportsRes.value.data || []);
+                const repData = reportsRes.value.data || [];
+                setReports(repData);
+                setCachedData('brgy_dashboard_reports', repData);
             }
             if (holdingRes.status === 'fulfilled') {
-                setFacilityAnimals(holdingRes.value.data || []);
+                const hData = holdingRes.value.data || [];
+                setFacilityAnimals(hData);
+                setCachedData('brgy_dashboard_holding', hData);
             }
             if (landmarksRes.status === 'fulfilled') {
-                setFacilities(landmarksRes.value.data || []);
+                const facData = landmarksRes.value.data || [];
+                setFacilities(facData);
+                setCachedData('brgy_dashboard_facilities', facData);
             }
             if (hqRes.status === 'fulfilled') {
-                setBarangayHq(hqRes.value.data || null);
+                const hqData = hqRes.value.data || null;
+                setBarangayHq(hqData);
+                if (hqData) setCachedData('brgy_dashboard_hq', hqData);
             }
         } catch (err) {
             console.error('Error fetching dashboard statistics:', err);
@@ -126,7 +198,7 @@ const BrgyDashboard = () => {
 
     useEffect(() => {
         fetchDashboardData();
-        const interval = setInterval(fetchDashboardData, 10000);
+        const interval = setInterval(fetchDashboardData, 30000);
         return () => clearInterval(interval);
     }, []);
 
@@ -186,8 +258,9 @@ const BrgyDashboard = () => {
     const adoptionDogsCount = rawAdoptionDogs;
     const adoptionCatsCount = rawAdoptionCats;
 
-    const getStatusName = (statusId: number) => {
-        switch (statusId) {
+    const getStatusName = (statusId: number | string | undefined | null) => {
+        const sId = Number(statusId);
+        switch (sId) {
             case 1: return 'Pending Verification';
             case 2: return 'Verified';
             case 3: return 'Rejected';
@@ -201,6 +274,8 @@ const BrgyDashboard = () => {
             case 11: return 'Incident Resolved';
             case 12: return 'Deceased';
             case 13: return 'Approved by Barangay';
+            case 14: return 'Dismissed';
+            case 17: return 'Animal Cannot Be Found';
             default: return 'Active';
         }
     };
@@ -297,6 +372,34 @@ const BrgyDashboard = () => {
         ? [parseFloat(barangayHq.hq_lat), parseFloat(barangayHq.hq_lng)]
         : [14.806906, 121.0039297];
 
+    const getRoutingConfig = () => {
+        if (!isNavigating || !selectedReport) return undefined;
+
+        const destLat = parseFloat(selectedReport.latitude || selectedReport.lat);
+        const destLng = parseFloat(selectedReport.longitude || selectedReport.lng);
+        if (isNaN(destLat) || isNaN(destLng)) return undefined;
+
+        const destName = selectedReport.landmark || selectedReport.title || `Report #${selectedReport.report_id}`;
+
+        if (navSource === 'brgy') {
+            return {
+                start: hqCoords,
+                end: [destLat, destLng] as [number, number],
+                waypointNames: [`Barangay ${currentBarangayName} Hall`, destName] as [string, string],
+                onClose: () => setIsNavigating(false)
+            };
+        }
+
+        if (!userLocation) return undefined;
+
+        return {
+            start: userLocation,
+            end: [destLat, destLng] as [number, number],
+            waypointNames: ["My Current Location", destName] as [string, string],
+            onClose: () => setIsNavigating(false)
+        };
+    };
+
     const mapMarkers = [
         {
             id: -1,
@@ -342,13 +445,13 @@ const BrgyDashboard = () => {
     const displayPersonnelList = personnel;
 
     const getStatusBadgeStyle = (statusName: string) => {
-        const lower = statusName.toLowerCase();
+        const lower = (statusName || '').toLowerCase();
         if (lower.includes('pending')) return 'bg-red-50 text-red-500 border-red-200';
         if (lower.includes('assigned')) return 'bg-blue-50 text-blue-600 border-blue-200';
-        if (lower.includes('in progress') || lower.includes('started') || lower.includes('dispatched')) return 'bg-emerald-50 text-emerald-600 border-emerald-200';
+        if (lower.includes('in progress') || lower.includes('started') || lower.includes('dispatched') || lower.includes('active')) return 'bg-emerald-50 text-emerald-600 border-emerald-200';
         if (lower.includes('endorsed') || lower.includes('approved') || lower.includes('verified')) return 'bg-orange-50 text-orange-600 border-orange-200';
         if (lower.includes('picked up') || lower.includes('observation') || lower.includes('impounded')) return 'bg-purple-50 text-purple-600 border-purple-200';
-        return 'bg-gray-50 text-gray-600 border-gray-200';
+        return 'bg-slate-50 text-slate-600 border-slate-200';
     };
 
     const formatTimeAgo = (dateStr: string) => {
@@ -366,24 +469,38 @@ const BrgyDashboard = () => {
         }
     };
 
-    // Only show incidents that were officially endorsed/escalated to the Barangay
+    // Incidents officially endorsed/escalated to the Barangay
     const endorsedReports = reports.filter(r => isReportEscalated(r));
 
-    const sortedReports = [...endorsedReports].sort((a: any, b: any) => {
-        const timeA = a.created_at ? new Date(a.created_at).getTime() : a.report_id;
-        const timeB = b.created_at ? new Date(b.created_at).getTime() : b.report_id;
+    // Only show active / unresolved incidents in the recent incidents feed
+    const activeUnresolvedReports = endorsedReports.filter(r => {
+        if (!r) return false;
+        const statusId = Number(r.status_id ?? r.current_status_id ?? 0);
+        const statusName = (r.status?.status_name || r.status_name || getStatusName(statusId) || '').toLowerCase();
+        // Exclude resolved (6, 11), rejected (3), released (10), deceased (12), dismissed (14), or closed cases
+        if ([3, 6, 10, 11, 12, 14, 17, 18].includes(statusId)) return false;
+        if (statusName.includes('resolve') || statusName.includes('reject') || statusName.includes('dismiss') || statusName.includes('deceased') || statusName.includes('closed') || statusName.includes('released')) {
+            return false;
+        }
+        return true;
+    });
+
+    const sortedReports = [...activeUnresolvedReports].sort((a: any, b: any) => {
+        const timeA = a.created_at ? new Date(a.created_at).getTime() : (a.report_id || 0);
+        const timeB = b.created_at ? new Date(b.created_at).getTime() : (b.report_id || 0);
         return timeB - timeA;
     });
 
     const recentIncidents = sortedReports.slice(0, 5).map((r) => {
-        const rawStatus = r.status?.status_name || getStatusName(r.status_id);
-        const friendlyStatus = (r.status_id === 4 || r.status_id === 13) ? 'Endorsed'
-            : (r.status_id === 5) ? 'In Progress'
-            : (r.status_id === 7 || r.status_id === 8 || r.status_id === 9) ? 'Picked Up'
-            : (r.status_id === 6 || r.status_id === 11) ? 'Resolved'
-            : (r.status_id === 3) ? 'Rejected'
-            : (r.status_id === 14) ? 'Dismissed'
-            : rawStatus;
+        const statusId = Number(r.status_id ?? r.current_status_id ?? 0);
+        const rawStatus = r.status?.status_name || r.status_name || getStatusName(statusId);
+        const friendlyStatus = (statusId === 4 || statusId === 13) ? 'Endorsed'
+            : (statusId === 5) ? 'In Progress'
+            : (statusId === 7 || statusId === 8 || statusId === 9) ? 'Picked Up'
+            : (statusId === 6 || statusId === 11) ? 'Resolved'
+            : (statusId === 3) ? 'Rejected'
+            : (statusId === 14) ? 'Dismissed'
+            : (rawStatus || 'Active');
 
         const defaultLocation = barangayHq?.city ? `${currentBarangayName}, ${barangayHq.city}` : `${currentBarangayName}, Bulacan`;
 
@@ -394,7 +511,7 @@ const BrgyDashboard = () => {
             status: friendlyStatus,
             statusColor: getStatusBadgeStyle(friendlyStatus),
             timeAgo: r.created_at ? formatTimeAgo(r.created_at) : 'Recently',
-            image: (r.media && r.media.length > 0 && r.media[0].file_url)
+            image: (r.media && Array.isArray(r.media) && r.media.length > 0 && r.media[0]?.file_url)
                 ? getPetPicture(r.media[0].file_url)
                 : DEFAULT_PET_AVATAR
         };
@@ -528,6 +645,30 @@ const BrgyDashboard = () => {
                         </div>
                     }
                 />
+
+                {/* Geolocation Toast Notification */}
+                {geoToast && (
+                    <div className="fixed top-5 right-5 z-[9999] max-w-md bg-white border border-rose-200 shadow-2xl rounded-2xl p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+                        <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100">
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                        </div>
+                        <div className="flex-1 min-w-0 pt-0.5">
+                            <h4 className="text-xs font-black text-rose-900 tracking-wide">Location Required</h4>
+                            <p className="text-xs text-rose-700 mt-0.5 leading-relaxed font-medium">{geoToast.message}</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setGeoToast(null)}
+                            className="text-rose-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-colors"
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                )}
 
                 {/* SCROLLABLE AREA */}
                 <div className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6 pb-32 lg:pb-6 flex flex-col gap-4 sm:gap-5 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent relative isolate">
@@ -742,6 +883,20 @@ const BrgyDashboard = () => {
                                     markers={mapMarkers}
                                     showHeatmap={false}
                                     onViewDetails={(marker) => setSelectedDetailReport(marker.rawData)}
+                                    routing={getRoutingConfig()}
+                                    onMarkerClick={(m) => {
+                                        if (m.id === -1 || m.id === -999) {
+                                            setSelectedReport(null);
+                                            setIsNavigating(false);
+                                        } else {
+                                            const fullReport = reports.find(r => r.report_id.toString() === m.id.toString()) || m.rawData;
+                                            if (fullReport) {
+                                                setSelectedReport(fullReport);
+                                            }
+                                        }
+                                    }}
+                                    onDirectionsClick={handleDirectionsFromMe}
+                                    onDirectionsFromBrgyClick={handleDirectionsFromBrgyHall}
                                 />
 
                                 {/* Status Legend Collapsible Toggle in Top-Right */}
@@ -1401,30 +1556,20 @@ const BrgyDashboard = () => {
                                         showHeatmap={mapMode !== 'pins'}
                                         heatmapPoints={heatmapPoints}
                                         onViewDetails={(marker) => setSelectedDetailReport(marker.rawData)}
-                                        routing={isNavigating && selectedReport ? {
-                                            start: (navSource === 'hq' || navSource === 'brgy') ? hqCoords : (userLocation || hqCoords),
-                                            end: [parseFloat(selectedReport.latitude || selectedReport.lat), parseFloat(selectedReport.longitude || selectedReport.lng)],
-                                            waypointNames: [(navSource === 'hq' || navSource === 'brgy') ? `Barangay ${currentBarangayName} HQ` : "Your Location", selectedReport.landmark || selectedReport.title],
-                                            onClose: () => setIsNavigating(false)
-                                        } : undefined}
+                                        routing={getRoutingConfig()}
                                         onMarkerClick={(m) => {
                                             if (m.id === -1 || m.id === -999) {
                                                 setSelectedReport(null);
                                                 setIsNavigating(false);
                                             } else {
-                                                const fullReport = reports.find(r => r.report_id.toString() === m.id.toString());
+                                                const fullReport = reports.find(r => r.report_id.toString() === m.id.toString()) || m.rawData;
                                                 if (fullReport) {
                                                     setSelectedReport(fullReport);
-                                                    if (m.source) {
-                                                        setNavSource(m.source);
-                                                        setIsNavigating(true);
-                                                    } else {
-                                                        setIsNavigating(true);
-                                                        setNavSource('hq');
-                                                    }
                                                 }
                                             }
                                         }}
+                                        onDirectionsClick={handleDirectionsFromMe}
+                                        onDirectionsFromBrgyClick={handleDirectionsFromBrgyHall}
                                     />
 
                                     {/* Floating Clicked Coordinates Display Badge */}
@@ -2163,30 +2308,20 @@ const BrgyDashboard = () => {
                                     setIsMapExpanded(false);
                                     setSelectedDetailReport(marker.rawData);
                                 }}
-                                routing={isNavigating && selectedReport ? {
-                                    start: (navSource === 'hq' || navSource === 'brgy') ? hqCoords : (userLocation || hqCoords),
-                                    end: [parseFloat(selectedReport.latitude || selectedReport.lat), parseFloat(selectedReport.longitude || selectedReport.lng)],
-                                    waypointNames: [(navSource === 'hq' || navSource === 'brgy') ? `Barangay ${currentBarangayName} HQ` : "Your Location", selectedReport.landmark || selectedReport.title],
-                                    onClose: () => setIsNavigating(false)
-                                } : undefined}
+                                routing={getRoutingConfig()}
                                 onMarkerClick={(m) => {
                                     if (m.id === -1 || m.id === -999) {
                                         setSelectedReport(null);
                                         setIsNavigating(false);
                                     } else {
-                                        const fullReport = reports.find(r => r.report_id.toString() === m.id.toString());
+                                        const fullReport = reports.find(r => r.report_id.toString() === m.id.toString()) || m.rawData;
                                         if (fullReport) {
                                             setSelectedReport(fullReport);
-                                            if (m.source) {
-                                                setNavSource(m.source);
-                                                setIsNavigating(true);
-                                            } else {
-                                                setIsNavigating(true);
-                                                setNavSource('hq');
-                                            }
                                         }
                                     }
                                 }}
+                                onDirectionsClick={handleDirectionsFromMe}
+                                onDirectionsFromBrgyClick={handleDirectionsFromBrgyHall}
                             />
 
                             {/* Modal Floating Coordinates Display Badge (Top-Left) */}

@@ -1,46 +1,80 @@
 # pyrefly: ignore [missing-import]
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form, BackgroundTasks, status
+import io
+import json
+import math
 import os
+import tempfile
+import urllib.request
 import uuid
 from datetime import datetime, timedelta
+from collections import defaultdict
 from decimal import Decimal
-from sqlalchemy.orm import Session, joinedload, selectinload, aliased
-from typing import List, Optional
-from sqlalchemy import or_, and_, desc
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-# Statuses representing closed, resolved, terminal, or consolidated cases
-RESOLVED_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18]
-from app.database import get_db
-from app.models.report import Report, ReportMedia, Comment, StatusHistory, ReportCategory, EndorsementLetter, ReportStatus, Rescue, HoldingAnimal, HoldingTimeline, RescueAssignment
-from app.models.user import User, Subdivision
+from PIL import Image
+
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile, status
+from sqlalchemy import and_, desc, or_
+from sqlalchemy.orm import Session, aliased, joinedload, selectinload
+
+from app.database import SessionLocal, get_db
+from app.models.chat import ChatThread
+from app.models.coverage import CoverageSetting
 from app.models.landmark import Landmark
 from app.models.notification import Notification
 from app.models.pet import Pet
-from app.models.pet_qr import PetQRCode
 from app.models.pet_claim import PetClaim
+from app.models.pet_qr import PetQRCode
+from app.models.report import (
+    Comment,
+    EndorsementLetter,
+    HoldingAnimal,
+    HoldingTimeline,
+    Report,
+    ReportCategory,
+    ReportMedia,
+    ReportStatus,
+    Rescue,
+    RescueAssignment,
+    StatusHistory,
+)
 from app.models.report_dispute import ReportDispute
 from app.models.report_match import ReportMatch
-import math
-from app.models.coverage import CoverageSetting
-from app.schemas.coverage import CoverageAreaResponse, CoverageAreaUpdate
+from app.models.user import Subdivision, User
 from app.models.warning import OwnerWarning
-from app.models.chat import ChatThread
+from app.schemas.coverage import CoverageAreaResponse, CoverageAreaUpdate
 from app.schemas.report import (
-    ReportCreate, ReportResponse, ReportStatusUpdate, ReportUpdate, 
-    ReportMediaResponse, CommentCreate, CommentResponse, StatusHistoryResponse,
-    ReportClaimRequest, ReportTakeoverRequest,
-    ReportTransferRequest, ReportTransferActionRequest, ReportTransferRejectRequest,
-    ReportDisputeCreate, ReportDisputeResponse, ReportDisputeReviewRequest,
-    ReportFalseAlarmRequest, ReportVerifyRequest,
-    ReportMergeRequest, ReportUnmergeRequest
+    CommentCreate,
+    CommentResponse,
+    ReportClaimRequest,
+    ReportCreate,
+    ReportDisputeCreate,
+    ReportDisputeResponse,
+    ReportDisputeReviewRequest,
+    ReportFalseAlarmRequest,
+    ReportMediaResponse,
+    ReportMergeRequest,
+    ReportResponse,
+    ReportStatusUpdate,
+    ReportTakeoverRequest,
+    ReportTransferActionRequest,
+    ReportTransferRejectRequest,
+    ReportTransferRequest,
+    ReportUnmergeRequest,
+    ReportUpdate,
+    ReportVerifyRequest,
+    StatusHistoryResponse,
 )
+from app.utils.ai_suggestions import call_gemini_with_fallback
+from app.utils.audit import log_activity
+from app.utils.auth import get_current_staff_or_admin, get_current_user, verify_subdivision_scope
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.color_detection import extract_dominant_colors
-from app.utils.audit import log_activity
-from app.utils.ai_suggestions import call_gemini_with_fallback
-from app.utils.uploads import validate_cloudinary_url, read_and_validate_upload
 from app.utils.model_loader import get_yolo_model
-from app.utils.auth import get_current_staff_or_admin, verify_subdivision_scope, get_current_user
+from app.utils.uploads import read_and_validate_upload, validate_cloudinary_url
+
+# Statuses representing closed, resolved, terminal, or consolidated cases
+RESOLVED_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18]
 
 router = APIRouter(
     prefix="/reports",
@@ -196,28 +230,48 @@ def get_hist_updater_name(hist, rep) -> str:
     return "Subdivision Officer / Responders"
 
 
-def populate_pet_and_owner_info(rep_data: ReportResponse, rep: Report, db: Session):
+def populate_pet_and_owner_info(
+    rep_data: ReportResponse,
+    rep: Report,
+    db: Session,
+    pets_map: Optional[Dict[int, Pet]] = None,
+    qrs_map: Optional[Dict[int, PetQRCode]] = None,
+    users_map: Optional[Dict[int, User]] = None
+):
     """Populate linked pet details, QR code, and owner contact information for lost pet reports."""
     try:
         target_pet_id = rep.pet_id or rep_data.pet_id
         if target_pet_id:
-            linked_pet = db.query(Pet).filter(Pet.pet_id == target_pet_id).first()
+            if pets_map is not None:
+                linked_pet = pets_map.get(target_pet_id)
+            else:
+                linked_pet = db.query(Pet).filter(Pet.pet_id == target_pet_id).first()
+
             if linked_pet:
                 rep_data.pet_name = getattr(linked_pet, "pet_name", None) or getattr(linked_pet, "name", None)
-                qr = db.query(PetQRCode).filter(PetQRCode.pet_id == linked_pet.pet_id).first()
-                if not qr:
+                if qrs_map is not None:
+                    qr = qrs_map.get(linked_pet.pet_id)
+                else:
+                    qr = db.query(PetQRCode).filter(PetQRCode.pet_id == linked_pet.pet_id).first()
+
+                if not qr and qrs_map is None:
                     try:
                         from app.routes.pet_qr import generate_qr_for_pet_internal
                         qr = generate_qr_for_pet_internal(linked_pet.pet_id, db)
                     except Exception as qr_err:
                         print(f"Could not auto-generate QR for pet #{linked_pet.pet_id}: {qr_err}")
+
                 if qr:
                     rep_data.pet_qr_code_url = qr.qr_image_url
                     rep_data.pet_qr_token = qr.qr_token
                     rep_data.pet_qr_code_hash = qr.qr_token[:10].upper() if qr.qr_token else None
                 
                 if linked_pet.owner_id:
-                    pet_owner = db.query(User).filter(User.user_id == linked_pet.owner_id).first()
+                    if users_map is not None:
+                        pet_owner = users_map.get(linked_pet.owner_id)
+                    else:
+                        pet_owner = db.query(User).filter(User.user_id == linked_pet.owner_id).first()
+
                     if pet_owner:
                         rep_data.owner_id = pet_owner.user_id
                         rep_data.owner_name = pet_owner.name
@@ -237,7 +291,13 @@ def populate_pet_and_owner_info(rep_data: ReportResponse, rep: Report, db: Sessi
         print(f"Failed to populate pet/owner info for report {rep.report_id}: {err}")
 
 
-def populate_verification_and_disputes(rep_data: ReportResponse, rep: Report, db: Session):
+def populate_verification_and_disputes(
+    rep_data: ReportResponse,
+    rep: Report,
+    db: Session,
+    users_map: Optional[Dict[int, User]] = None,
+    disputes_map: Optional[Dict[int, List[ReportDispute]]] = None
+):
     """Populates on-site verification status, false alarm findings, and pet owner disputes."""
     try:
         rep_data.verification_status = getattr(rep, "verification_status", None) or "unverified"
@@ -255,16 +315,22 @@ def populate_verification_and_disputes(rep_data: ReportResponse, rep: Report, db
         if hasattr(rep, "verified_by_user") and rep.verified_by_user:
             rep_data.verified_by_name = rep.verified_by_user.name
         elif rep.verified_by_user_id:
-            v_user = db.query(User).filter(User.user_id == rep.verified_by_user_id).first()
+            if users_map is not None:
+                v_user = users_map.get(rep.verified_by_user_id)
+            else:
+                v_user = db.query(User).filter(User.user_id == rep.verified_by_user_id).first()
             rep_data.verified_by_name = v_user.name if v_user else f"Officer #{rep.verified_by_user_id}"
 
         # Load disputes
         disputes_list = []
-        disputes_records = db.query(ReportDispute).options(
-            joinedload(ReportDispute.resident),
-            joinedload(ReportDispute.reviewer),
-            joinedload(ReportDispute.pet)
-        ).filter(ReportDispute.report_id == rep.report_id).order_by(ReportDispute.created_at.desc()).all()
+        if disputes_map is not None:
+            disputes_records = disputes_map.get(rep.report_id, [])
+        else:
+            disputes_records = db.query(ReportDispute).options(
+                joinedload(ReportDispute.resident),
+                joinedload(ReportDispute.reviewer),
+                joinedload(ReportDispute.pet)
+            ).filter(ReportDispute.report_id == rep.report_id).order_by(ReportDispute.created_at.desc()).all()
 
         for d in disputes_records:
             d_resp = ReportDisputeResponse(
@@ -290,7 +356,15 @@ def populate_verification_and_disputes(rep_data: ReportResponse, rep: Report, db
         print(f"Failed to populate verification/disputes for report {rep.report_id}: {err}")
 
 
-def populate_location_and_facility_info(rep_data: ReportResponse, rep: Report, db: Session):
+def populate_location_and_facility_info(
+    rep_data: ReportResponse,
+    rep: Report,
+    db: Session,
+    holding_map: Optional[Dict[int, HoldingAnimal]] = None,
+    landmarks_map: Optional[Dict[int, Landmark]] = None,
+    holding_facs_by_subd: Optional[Dict[int, Landmark]] = None,
+    default_holding_fac: Optional[Landmark] = None
+):
     """Populates location history and holding facility details on ReportResponse."""
     try:
         rep_data.initial_latitude = float(rep.initial_latitude) if rep.initial_latitude is not None else float(rep.latitude)
@@ -299,7 +373,11 @@ def populate_location_and_facility_info(rep_data: ReportResponse, rep: Report, d
         rep_data.facility_id = rep.facility_id
         rep_data.custody_status = rep.custody_status or "Sighting"
 
-        holding_rec = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == rep.report_id).first()
+        if holding_map is not None:
+            holding_rec = holding_map.get(rep.report_id)
+        else:
+            holding_rec = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == rep.report_id).first()
+
         RESOLVED_HOLDING_STATUSES = (3, 4, 5, 7, 8)  # 3=Claimed, 4=Deceased, 5=Transferred, 7=Adopted, 8=Impounded
         is_holding_resolved = holding_rec is not None and (
             holding_rec.facility_status in RESOLVED_HOLDING_STATUSES or
@@ -337,16 +415,25 @@ def populate_location_and_facility_info(rep_data: ReportResponse, rep: Report, d
 
         fac = None
         if rep.facility_id and is_in_custody:
-            fac = db.query(Landmark).filter(Landmark.landmark_id == rep.facility_id).first()
+            if landmarks_map is not None:
+                fac = landmarks_map.get(rep.facility_id)
+            else:
+                fac = db.query(Landmark).filter(Landmark.landmark_id == rep.facility_id).first()
         elif is_in_custody:
             # Fallback to subdivision/barangay holding facility landmark
             if rep.subdivision_id:
-                fac = db.query(Landmark).filter(
-                    Landmark.subdivision_id == rep.subdivision_id,
-                    Landmark.is_holding_facility == True
-                ).first()
+                if holding_facs_by_subd is not None:
+                    fac = holding_facs_by_subd.get(rep.subdivision_id)
+                else:
+                    fac = db.query(Landmark).filter(
+                        Landmark.subdivision_id == rep.subdivision_id,
+                        Landmark.is_holding_facility == True
+                    ).first()
             if not fac:
-                fac = db.query(Landmark).filter(Landmark.is_holding_facility == True).first()
+                if default_holding_fac is not None:
+                    fac = default_holding_fac
+                else:
+                    fac = db.query(Landmark).filter(Landmark.is_holding_facility == True).first()
 
         if fac and is_in_custody:
             rep_data.facility_id = fac.landmark_id
@@ -378,13 +465,27 @@ def populate_location_and_facility_info(rep_data: ReportResponse, rep: Report, d
                     rep_data.history[i].landmark = hist.landmark
                     rep_data.history[i].facility_id = hist.facility_id
                     if hist.facility_id:
-                        h_fac = db.query(Landmark).filter(Landmark.landmark_id == hist.facility_id).first()
+                        if landmarks_map is not None:
+                            h_fac = landmarks_map.get(hist.facility_id)
+                        else:
+                            h_fac = db.query(Landmark).filter(Landmark.landmark_id == hist.facility_id).first()
                         rep_data.history[i].facility_name = h_fac.name if h_fac else None
     except Exception as err:
         print(f"Failed to populate location/facility info for report {rep.report_id}: {err}")
 
 
-def populate_duplicate_and_merge_info(rep_data: ReportResponse, rep: Report, db: Session):
+def populate_duplicate_and_merge_info(
+    rep_data: ReportResponse,
+    rep: Report,
+    db: Session,
+    users_map: Optional[Dict[int, User]] = None,
+    parents_map: Optional[Dict[int, Report]] = None,
+    ai_dup_matches_map: Optional[Dict[int, List[ReportMatch]]] = None,
+    dup_matches_pair_map: Optional[Dict[tuple, ReportMatch]] = None,
+    confirmed_pet_matches_map: Optional[Dict[int, ReportMatch]] = None,
+    evaluated_matches_map: Optional[Dict[int, ReportMatch]] = None,
+    pets_map: Optional[Dict[int, Pet]] = None
+):
     """Populates duplicate flags, merge details, and child merged reports."""
     try:
         rep_data.duplicate_of_report_id = rep.duplicate_of_report_id
@@ -393,7 +494,10 @@ def populate_duplicate_and_merge_info(rep_data: ReportResponse, rep: Report, db:
         rep_data.merge_notes = rep.merge_notes
 
         if rep.merged_by:
-            m_user = db.query(User).filter(User.user_id == rep.merged_by).first()
+            if users_map is not None:
+                m_user = users_map.get(rep.merged_by)
+            else:
+                m_user = db.query(User).filter(User.user_id == rep.merged_by).first()
             rep_data.merged_by_name = m_user.name if m_user else f"Officer #{rep.merged_by}"
 
         # If primary report with merged children, populate merged_reports summaries
@@ -420,12 +524,16 @@ def populate_duplicate_and_merge_info(rep_data: ReportResponse, rep: Report, db:
                 })
             rep_data.merged_reports = merged_list
         elif rep.duplicate_of_report_id:
-            parent_rep = db.query(Report).options(
-                joinedload(Report.assigned_leader),
-                joinedload(Report.facility),
-                selectinload(Report.merged_reports).joinedload(Report.reporter),
-                selectinload(Report.merged_reports).selectinload(Report.media)
-            ).filter(Report.report_id == rep.duplicate_of_report_id).first()
+            if parents_map is not None:
+                parent_rep = parents_map.get(rep.duplicate_of_report_id)
+            else:
+                parent_rep = db.query(Report).options(
+                    joinedload(Report.assigned_leader),
+                    joinedload(Report.facility),
+                    selectinload(Report.merged_reports).joinedload(Report.reporter),
+                    selectinload(Report.merged_reports).selectinload(Report.media)
+                ).filter(Report.report_id == rep.duplicate_of_report_id).first()
+
             if parent_rep:
                 if parent_rep.merged_reports:
                     merged_list = []
@@ -458,37 +566,58 @@ def populate_duplicate_and_merge_info(rep_data: ReportResponse, rep: Report, db:
         # Check for active AI duplicate suggestions for this report
         # When a report has been resolved, it will no longer appear or flag under Suspected Duplicate Sightings
         if rep.current_status_id not in RESOLVED_STATUS_IDS and not rep.duplicate_of_report_id:
-            SrcRep = aliased(Report, name="dup_src_rep")
-            CandRep = aliased(Report, name="dup_cand_rep")
-            dup_matches = db.query(ReportMatch).join(
-                SrcRep, ReportMatch.source_report_id == SrcRep.report_id
-            ).join(
-                CandRep, ReportMatch.matched_report_id == CandRep.report_id
-            ).filter(
-                ReportMatch.matched_report_id.isnot(None),
-                ReportMatch.matched_pet_id.is_(None),
-                ReportMatch.status == "AI_SUGGESTED",
-                or_(
-                    ReportMatch.source_report_id == rep.report_id,
-                    ReportMatch.matched_report_id == rep.report_id
-                ),
-                SrcRep.current_status_id.notin_(RESOLVED_STATUS_IDS),
-                SrcRep.duplicate_of_report_id.is_(None),
-                CandRep.current_status_id.notin_(RESOLVED_STATUS_IDS),
-                CandRep.duplicate_of_report_id.is_(None)
-            ).all()
+            if ai_dup_matches_map is not None:
+                dup_matches = ai_dup_matches_map.get(rep.report_id, [])
+            else:
+                SrcRep = aliased(Report, name="dup_src_rep")
+                CandRep = aliased(Report, name="dup_cand_rep")
+                dup_matches = db.query(ReportMatch).join(
+                    SrcRep, ReportMatch.source_report_id == SrcRep.report_id
+                ).join(
+                    CandRep, ReportMatch.matched_report_id == CandRep.report_id
+                ).filter(
+                    ReportMatch.matched_report_id.isnot(None),
+                    ReportMatch.matched_pet_id.is_(None),
+                    ReportMatch.status == "AI_SUGGESTED",
+                    or_(
+                        ReportMatch.source_report_id == rep.report_id,
+                        ReportMatch.matched_report_id == rep.report_id
+                    ),
+                    SrcRep.current_status_id.notin_(RESOLVED_STATUS_IDS),
+                    SrcRep.duplicate_of_report_id.is_(None),
+                    CandRep.current_status_id.notin_(RESOLVED_STATUS_IDS),
+                    CandRep.duplicate_of_report_id.is_(None)
+                ).all()
             rep_data.duplicate_match_count = len(dup_matches)
             rep_data.has_duplicate_flag = len(dup_matches) > 0
         else:
             rep_data.duplicate_match_count = 0
             rep_data.has_duplicate_flag = False
 
-        populate_review_decision_info(rep_data, rep, db)
+        populate_review_decision_info(
+            rep_data, rep, db,
+            users_map=users_map,
+            parents_map=parents_map,
+            dup_matches_pair_map=dup_matches_pair_map,
+            confirmed_pet_matches_map=confirmed_pet_matches_map,
+            evaluated_matches_map=evaluated_matches_map,
+            pets_map=pets_map
+        )
     except Exception as err:
         print(f"Failed to populate duplicate/merge info for report {rep.report_id}: {err}")
 
 
-def populate_review_decision_info(rep_data: ReportResponse, rep: Report, db: Session):
+def populate_review_decision_info(
+    rep_data: ReportResponse,
+    rep: Report,
+    db: Session,
+    users_map: Optional[Dict[int, User]] = None,
+    parents_map: Optional[Dict[int, Report]] = None,
+    dup_matches_pair_map: Optional[Dict[tuple, ReportMatch]] = None,
+    confirmed_pet_matches_map: Optional[Dict[int, ReportMatch]] = None,
+    evaluated_matches_map: Optional[Dict[int, ReportMatch]] = None,
+    pets_map: Optional[Dict[int, Pet]] = None
+):
     """
     Populates persistent review decision metadata for pet matching and duplicate review.
     Guarantees that decisions made by Subdivision Leaders persist when forwarded to Barangay.
@@ -516,29 +645,40 @@ def populate_review_decision_info(rep_data: ReportResponse, rep: Report, db: Ses
             reviewed_at = rep.merged_at
             review_notes = rep.merge_notes
             if rep.merged_by:
-                m_user = db.query(User).filter(User.user_id == rep.merged_by).first()
+                if users_map is not None:
+                    m_user = users_map.get(rep.merged_by)
+                else:
+                    m_user = db.query(User).filter(User.user_id == rep.merged_by).first()
                 if m_user:
                     reviewed_by_name = m_user.name
                     reviewed_by_role = "Subdivision Leader" if m_user.role_id == 2 else ("Barangay Staff" if m_user.role_id == 3 else "Admin")
 
-            parent_rep = db.query(Report).filter(Report.report_id == rep.duplicate_of_report_id).first() if rep.duplicate_of_report_id else None
-            if parent_rep:
-                matched_report_record = {
-                    "report_id": parent_rep.report_id,
-                    "animal_type": parent_rep.animal_type,
-                    "animal_breed": parent_rep.animal_breed,
-                    "landmark": parent_rep.landmark,
-                    "status_id": parent_rep.current_status_id
-                }
+            if rep.duplicate_of_report_id:
+                if parents_map is not None:
+                    parent_rep = parents_map.get(rep.duplicate_of_report_id)
+                else:
+                    parent_rep = db.query(Report).filter(Report.report_id == rep.duplicate_of_report_id).first()
+                if parent_rep:
+                    matched_report_record = {
+                        "report_id": parent_rep.report_id,
+                        "animal_type": parent_rep.animal_type,
+                        "animal_breed": parent_rep.animal_breed,
+                        "landmark": parent_rep.landmark,
+                        "status_id": parent_rep.current_status_id
+                    }
 
             # If reviewer name not found from merged_by, check ReportMatch
-            dup_match = db.query(ReportMatch).options(joinedload(ReportMatch.reviewer)).filter(
-                ReportMatch.matched_report_id.isnot(None),
-                or_(
-                    and_(ReportMatch.source_report_id == rep.report_id, ReportMatch.matched_report_id == rep.duplicate_of_report_id),
-                    and_(ReportMatch.source_report_id == rep.duplicate_of_report_id, ReportMatch.matched_report_id == rep.report_id)
-                )
-            ).first()
+            dup_match = None
+            if dup_matches_pair_map is not None:
+                dup_match = dup_matches_pair_map.get((rep.report_id, rep.duplicate_of_report_id)) or dup_matches_pair_map.get((rep.duplicate_of_report_id, rep.report_id))
+            else:
+                dup_match = db.query(ReportMatch).options(joinedload(ReportMatch.reviewer)).filter(
+                    ReportMatch.matched_report_id.isnot(None),
+                    or_(
+                        and_(ReportMatch.source_report_id == rep.report_id, ReportMatch.matched_report_id == rep.duplicate_of_report_id),
+                        and_(ReportMatch.source_report_id == rep.duplicate_of_report_id, ReportMatch.matched_report_id == rep.report_id)
+                    )
+                ).first()
             if dup_match:
                 if dup_match.reviewer and not reviewed_by_name:
                     reviewed_by_name = dup_match.reviewer.name
@@ -568,7 +708,10 @@ def populate_review_decision_info(rep_data: ReportResponse, rep: Report, db: Ses
                     review_notes = getattr(first_m, "merge_notes", None)
                     m_by = getattr(first_m, "merged_by", None)
                     if m_by:
-                        m_user = db.query(User).filter(User.user_id == m_by).first()
+                        if users_map is not None:
+                            m_user = users_map.get(m_by)
+                        else:
+                            m_user = db.query(User).filter(User.user_id == m_by).first()
                         if m_user:
                             reviewed_by_name = m_user.name
                             reviewed_by_role = "Subdivision Leader" if m_user.role_id == 2 else "Barangay Staff"
@@ -582,14 +725,18 @@ def populate_review_decision_info(rep_data: ReportResponse, rep: Report, db: Ses
 
         # 3. Check for confirmed Pet Match (Report.pet_id is set or ReportMatch is CONFIRMED_MATCH)
         if review_status == "Unreviewed" or rep.pet_id:
-            pet_match = db.query(ReportMatch).options(
-                joinedload(ReportMatch.matched_pet).joinedload(Pet.owner),
-                joinedload(ReportMatch.reviewer)
-            ).filter(
-                ReportMatch.source_report_id == rep.report_id,
-                ReportMatch.matched_pet_id.isnot(None),
-                ReportMatch.status == "CONFIRMED_MATCH"
-            ).order_by(desc(ReportMatch.verified_at)).first()
+            pet_match = None
+            if confirmed_pet_matches_map is not None:
+                pet_match = confirmed_pet_matches_map.get(rep.report_id)
+            else:
+                pet_match = db.query(ReportMatch).options(
+                    joinedload(ReportMatch.matched_pet).joinedload(Pet.owner),
+                    joinedload(ReportMatch.reviewer)
+                ).filter(
+                    ReportMatch.source_report_id == rep.report_id,
+                    ReportMatch.matched_pet_id.isnot(None),
+                    ReportMatch.status == "CONFIRMED_MATCH"
+                ).order_by(desc(ReportMatch.verified_at)).first()
 
             if pet_match:
                 review_status = "Confirmed Match"
@@ -610,7 +757,10 @@ def populate_review_decision_info(rep_data: ReportResponse, rep: Report, db: Ses
                         "photo_url": p.photo_url
                     }
             elif rep.pet_id and review_status == "Unreviewed":
-                linked_p = db.query(Pet).options(joinedload(Pet.owner)).filter(Pet.pet_id == rep.pet_id).first()
+                if pets_map is not None:
+                    linked_p = pets_map.get(rep.pet_id)
+                else:
+                    linked_p = db.query(Pet).options(joinedload(Pet.owner)).filter(Pet.pet_id == rep.pet_id).first()
                 if linked_p:
                     review_status = "Confirmed Match"
                     review_type = "pet_match"
@@ -625,17 +775,21 @@ def populate_review_decision_info(rep_data: ReportResponse, rep: Report, db: Ses
 
         # 4. Check for other reviewed decisions: NOT_A_MATCH or UNABLE_TO_VERIFY if still Unreviewed
         if review_status == "Unreviewed":
-            evaluated_match = db.query(ReportMatch).options(
-                joinedload(ReportMatch.reviewer),
-                joinedload(ReportMatch.matched_pet),
-                joinedload(ReportMatch.matched_report)
-            ).filter(
-                or_(
-                    ReportMatch.source_report_id == rep.report_id,
-                    ReportMatch.matched_report_id == rep.report_id
-                ),
-                ReportMatch.status.in_(["NOT_A_MATCH", "UNABLE_TO_VERIFY"])
-            ).order_by(desc(ReportMatch.verified_at)).first()
+            evaluated_match = None
+            if evaluated_matches_map is not None:
+                evaluated_match = evaluated_matches_map.get(rep.report_id)
+            else:
+                evaluated_match = db.query(ReportMatch).options(
+                    joinedload(ReportMatch.reviewer),
+                    joinedload(ReportMatch.matched_pet),
+                    joinedload(ReportMatch.matched_report)
+                ).filter(
+                    or_(
+                        ReportMatch.source_report_id == rep.report_id,
+                        ReportMatch.matched_report_id == rep.report_id
+                    ),
+                    ReportMatch.status.in_(["NOT_A_MATCH", "UNABLE_TO_VERIFY"])
+                ).order_by(desc(ReportMatch.verified_at)).first()
 
             if evaluated_match:
                 if evaluated_match.status == "NOT_A_MATCH":
@@ -701,10 +855,143 @@ def get_reports(
         joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
     ).order_by(Report.report_id.desc()).all()
     
+    if not reports:
+        return []
+
     results = []
-    
     from app.utils.ai_suggestions import generate_ai_suggestions
-    
+
+    report_ids = [rep.report_id for rep in reports]
+
+    # 1. Batch landmarks
+    try:
+        all_landmarks = db.query(Landmark).all()
+        landmarks_map = {l.landmark_id: l for l in all_landmarks}
+        holding_facs_by_subd = {l.subdivision_id: l for l in all_landmarks if l.is_holding_facility and l.subdivision_id}
+        default_holding_fac = next((l for l in all_landmarks if l.is_holding_facility), None)
+    except Exception as e:
+        print(f"Error batch fetching landmarks: {e}")
+        landmarks_map = {}
+        holding_facs_by_subd = {}
+        default_holding_fac = None
+
+    # 2. Batch holding animals
+    try:
+        all_holding = db.query(HoldingAnimal).filter(HoldingAnimal.report_id.in_(report_ids)).all()
+        holding_map = {h.report_id: h for h in all_holding}
+    except Exception as e:
+        print(f"Error batch fetching holding animals: {e}")
+        holding_map = {}
+
+    # 3. Batch disputes
+    try:
+        all_disputes = db.query(ReportDispute).options(
+            joinedload(ReportDispute.resident),
+            joinedload(ReportDispute.reviewer),
+            joinedload(ReportDispute.pet)
+        ).filter(ReportDispute.report_id.in_(report_ids)).order_by(ReportDispute.created_at.desc()).all()
+        disputes_map = defaultdict(list)
+        for d in all_disputes:
+            disputes_map[d.report_id].append(d)
+    except Exception as e:
+        print(f"Error batch fetching disputes: {e}")
+        disputes_map = defaultdict(list)
+
+    # 4. Batch pets & pet QRs
+    pet_ids = {rep.pet_id for rep in reports if rep.pet_id}
+    pets_map = {}
+    qrs_map = {}
+    if pet_ids:
+        try:
+            all_pets = db.query(Pet).options(joinedload(Pet.owner)).filter(Pet.pet_id.in_(pet_ids)).all()
+            pets_map = {p.pet_id: p for p in all_pets}
+            all_qrs = db.query(PetQRCode).filter(PetQRCode.pet_id.in_(pet_ids)).all()
+            qrs_map = {q.pet_id: q for q in all_qrs}
+        except Exception as e:
+            print(f"Error batch fetching pets/qrs: {e}")
+
+    # 5. Batch users (merged_by, verified_by, pet owners, etc.)
+    user_ids = {rep.user_id for rep in reports if rep.user_id}
+    user_ids.update({rep.merged_by for rep in reports if rep.merged_by})
+    user_ids.update({rep.verified_by_user_id for rep in reports if rep.verified_by_user_id})
+    user_ids.update({rep.assigned_leader_id for rep in reports if rep.assigned_leader_id})
+    for p in pets_map.values():
+        if p.owner_id:
+            user_ids.add(p.owner_id)
+    users_map = {}
+    if user_ids:
+        try:
+            all_users = db.query(User).filter(User.user_id.in_(user_ids)).all()
+            users_map = {u.user_id: u for u in all_users}
+        except Exception as e:
+            print(f"Error batch fetching users: {e}")
+
+    # 6. Batch parent reports (duplicate_of_report_id)
+    parent_report_ids = {rep.duplicate_of_report_id for rep in reports if rep.duplicate_of_report_id}
+    parents_map = {}
+    if parent_report_ids:
+        try:
+            all_parents = db.query(Report).options(
+                joinedload(Report.assigned_leader),
+                joinedload(Report.facility),
+                selectinload(Report.merged_reports).joinedload(Report.reporter),
+                selectinload(Report.merged_reports).selectinload(Report.media)
+            ).filter(Report.report_id.in_(parent_report_ids)).all()
+            parents_map = {p.report_id: p for p in all_parents}
+        except Exception as e:
+            print(f"Error batch fetching parent reports: {e}")
+
+    # 7. Batch report matches
+    ai_dup_matches_map = defaultdict(list)
+    dup_matches_pair_map = {}
+    confirmed_pet_matches_map = {}
+    evaluated_matches_map = {}
+    try:
+        all_matches = db.query(ReportMatch).options(
+            joinedload(ReportMatch.reviewer),
+            joinedload(ReportMatch.matched_pet).joinedload(Pet.owner),
+            joinedload(ReportMatch.matched_report)
+        ).filter(
+            or_(
+                ReportMatch.source_report_id.in_(report_ids),
+                ReportMatch.matched_report_id.in_(report_ids)
+            )
+        ).order_by(desc(ReportMatch.verified_at)).all()
+
+        reports_status_map = {r.report_id: r.current_status_id for r in reports}
+        reports_dup_map = {r.report_id: r.duplicate_of_report_id for r in reports}
+
+        for m in all_matches:
+            # Pair map for duplicate reviews
+            if m.matched_report_id:
+                dup_matches_pair_map[(m.source_report_id, m.matched_report_id)] = m
+                dup_matches_pair_map[(m.matched_report_id, m.source_report_id)] = m
+
+            # Confirmed pet match for source report
+            if m.matched_pet_id and m.status == "CONFIRMED_MATCH" and m.source_report_id not in confirmed_pet_matches_map:
+                confirmed_pet_matches_map[m.source_report_id] = m
+
+            # Evaluated matches (NOT_A_MATCH or UNABLE_TO_VERIFY)
+            if m.status in ("NOT_A_MATCH", "UNABLE_TO_VERIFY"):
+                if m.source_report_id not in evaluated_matches_map:
+                    evaluated_matches_map[m.source_report_id] = m
+                if m.matched_report_id and m.matched_report_id not in evaluated_matches_map:
+                    evaluated_matches_map[m.matched_report_id] = m
+
+            # AI suggested duplicates
+            if m.status == "AI_SUGGESTED" and m.matched_report_id is not None and m.matched_pet_id is None:
+                src_status = reports_status_map.get(m.source_report_id, 1)
+                src_dup = reports_dup_map.get(m.source_report_id, None)
+                cand_status = reports_status_map.get(m.matched_report_id, 1)
+                cand_dup = reports_dup_map.get(m.matched_report_id, None)
+                if src_status not in RESOLVED_STATUS_IDS and not src_dup and cand_status not in RESOLVED_STATUS_IDS and not cand_dup:
+                    ai_dup_matches_map[m.source_report_id].append(m)
+                    ai_dup_matches_map[m.matched_report_id].append(m)
+    except Exception as e:
+        print(f"Error batch fetching report matches: {e}")
+
+    has_backfill_updates = False
+
     for rep in reports:
         try:
             # Dynamic backfill for legacy reports missing suggestions
@@ -741,9 +1028,7 @@ def get_reports(
                 rep.ai_behavior_injury = suggestions.get("ai_behavior_injury", False)  # type: ignore
                 rep.ai_behavior_aggressive = suggestions.get("ai_behavior_aggressive", False)  # type: ignore
                 rep.ai_behavior_explanation = suggestions.get("ai_behavior_explanation")  # type: ignore
-                
-                db.commit()
-                db.refresh(rep)
+                has_backfill_updates = True
 
             rep_data = ReportResponse.model_validate(rep)
             # Map current_status_id → status_id for frontend compatibility
@@ -758,6 +1043,10 @@ def get_reports(
             rep_data.ai_possible_breed = rep.ai_possible_breed  # type: ignore
             rep_data.ai_suggested_risk_level = rep.ai_suggested_risk_level  # type: ignore
             rep_data.ai_suggested_priority = rep.ai_suggested_priority  # type: ignore
+            rep_data.ai_photo_likelihood = float(rep.ai_photo_likelihood) if rep.ai_photo_likelihood is not None else None
+            rep_data.ai_photo_status = rep.ai_photo_status
+            rep_data.ai_photo_recommendation = rep.ai_photo_recommendation
+            rep_data.ai_photo_details = rep.ai_photo_details
             
             # Populate history updater names
             if rep.history:
@@ -773,25 +1062,47 @@ def get_reports(
                         rep_data.comments[i].user_photo = comment.user.profile_picture if comment.user else None
 
             # Populate pet & owner contact info for lost pet reports
-            populate_pet_and_owner_info(rep_data, rep, db)
+            populate_pet_and_owner_info(rep_data, rep, db, pets_map=pets_map, qrs_map=qrs_map, users_map=users_map)
 
             # Populate handler details
             populate_handler_info(rep_data, rep)
 
             # Populate verification & dispute data
-            populate_verification_and_disputes(rep_data, rep, db)
+            populate_verification_and_disputes(rep_data, rep, db, users_map=users_map, disputes_map=disputes_map)
 
             # Populate location history & facility info
-            populate_location_and_facility_info(rep_data, rep, db)
+            populate_location_and_facility_info(
+                rep_data, rep, db,
+                holding_map=holding_map,
+                landmarks_map=landmarks_map,
+                holding_facs_by_subd=holding_facs_by_subd,
+                default_holding_fac=default_holding_fac
+            )
 
             # Populate duplicate & merge info
-            populate_duplicate_and_merge_info(rep_data, rep, db)
+            populate_duplicate_and_merge_info(
+                rep_data, rep, db,
+                users_map=users_map,
+                parents_map=parents_map,
+                ai_dup_matches_map=ai_dup_matches_map,
+                dup_matches_pair_map=dup_matches_pair_map,
+                confirmed_pet_matches_map=confirmed_pet_matches_map,
+                evaluated_matches_map=evaluated_matches_map,
+                pets_map=pets_map
+            )
 
             results.append(rep_data)
         except Exception as e:
             print(f"Error validating or backfilling report {rep.report_id}: {e}")
-            db.rollback()
             continue
+
+    if has_backfill_updates:
+        try:
+            db.commit()
+        except Exception as e:
+            print(f"Error committing backfilled suggestions: {e}")
+            db.rollback()
+
     return results
 
 
@@ -991,11 +1302,6 @@ async def analyze_report_media(
     media_noun = "photo"
     try:
         content = await file.read()
-        from PIL import Image
-        import io
-        import os
-        import json
-        import tempfile
         from app.utils.video_processing import is_video_content, extract_sample_frames, analyze_video_frames
 
         filename = file.filename or ""
@@ -1080,36 +1386,91 @@ async def analyze_report_media(
             if cx2 > cx1 and cy2 > cy1:
                 cropped_img = img.crop((cx1, cy1, cx2, cy2))
 
+        # Run AI vision analysis and forensics using full uncropped image
         api_key = os.getenv("GEMINI_API_KEY")
         if api_key:
             try:
                 prompt = f"""
-                You are an expert AI animal inspector for a stray pet safety system.
-                Inspect the attached {"representative frame from the uploaded video" if is_video else "image"} of the animal subject and determine whether a real, live stray dog or cat is clearly visible.
+                You are a senior digital image forensics expert and animal safety inspector for StraySafe, a community animal welfare and stray rescue platform.
+                Inspect the attached {"representative frame from the uploaded video" if is_video else "image"} of the animal subject and perform two critical analyses:
 
-                CRITICAL RULE FOR COLOR & PATTERN DETECTION:
-                Focus strictly and exclusively on the fur/coat of the animal subject in the foreground.
-                Do NOT include background colors (such as ground, pavement, street, cobblestones, grass, walls, or furniture).
+                ================================================================================
+                PART 1: FORENSIC AI-IMAGE & SYNTHETIC MEDIA DETECTION
+                ================================================================================
+                Perform a forensic examination to classify whether this media is:
+                (A) A GENUINE, REAL-WORLD CAMERA PHOTOGRAPH taken by a physical smartphone or digital camera lens in the physical world.
+                (B) AN AI-GENERATED, SYNTHETIC, OR DIGITALLY RENDERED IMAGE (e.g. Midjourney, DALL-E, Stable Diffusion, Flux, Leonardo, Adobe Firefly, deepfake, or 3D CGI render).
 
-                Provide predictions in a valid JSON object with the following fields:
-                1. "animal_detected": true ONLY if a real dog or cat is clearly visible. Set to false if the media shows inanimate objects, landscapes, food, people without a pet, documents, or non-dog/cat animals.
-                2. "animal_type": "Dog", "Cat", or "Unknown" (if animal_detected is false, must be "Unknown").
-                3. "primary_color": Dominant primary fur color of the animal (e.g. "Black", "White", "Brown", "Orange", "Gray", "Calico", "Cream", "Golden", or "Unknown"). If the animal is solid black, primary_color MUST be "Black".
-                4. "secondary_color": Secondary fur color or "None".
-                5. "tertiary_color": Third fur color or "None" if there is no third color.
-                6. "coat_pattern": "Solid", "Bicolor", "Tricolor", "Spotted", "Striped", "Patched", "Brindle", "Merle", "Tabby", "Calico", "Tortoiseshell", "Mixed", or "Unknown".
-                7. "estimated_size": "Small", "Medium", "Large", or "Unknown". (Default "Small" for cats).
-                8. "possible_breed": Likely breed name (e.g., "Puspin" for domestic cats, "Shih Tzu", "Aspin" for local dogs, "Siamese", "Persian", "Golden Retriever", "Beagle", or "Unknown").
-                9. "collar_detected": true ONLY if a collar or harness is clearly visible around the neck, otherwise false.
-                10. "qr_tag_detected": true ONLY if a QR tag or ID tag is attached, otherwise false.
-                11. "message": If animal_detected is false, provide a short friendly message: "No animal detected in the uploaded {media_label}. Please ensure a cat or dog is clearly visible in your {media_noun}." If detected, provide "Animal detected successfully."
+                Carefully inspect for the following forensic indicators:
+                1. FUR & SKIN MICRO-TEXTURE:
+                   - Real photo: Natural hair follicle disorder, individual flyaway hairs, realistic grit/dirt, organic clumps, natural sensor ISO noise across hair strands.
+                   - AI-generated: Airbrushed/plastic texture, hyper-smooth silky sheen, painterly brushstroke-like fur flow, blurry or melted fur patches lacking individual hair follicle definitions.
+                2. EYES, PUPILS & REFLECTIONS:
+                   - Real photo: Anatomically correct circular/slit pupils, realistic corneal moisture, natural reflection of ambient physical environment.
+                   - AI-generated: Surreal glassy/glossy doll-like eyes, mismatched eye glints, deformed pupil shapes, unnatural circular catchlights disconnected from environment lighting.
+                3. ANATOMICAL PRECISION & EXTREMITIES:
+                   - Real photo: Anatomically correct paws, distinct pads, natural claws rooted properly in toes, authentic ear cartilage and whiskers emerging from visible pores.
+                   - AI-generated: Deformed/merged paws, extra or missing claws/toes, whiskers that float disconnected or blend into cheek fur, ears melting into background.
+                4. OPTICAL PHYSICS, LIGHTING & BACKGROUND:
+                   - Real photo: Natural optical lens depth of field (progressive focal blur), consistent single or ambient light source with authentic shadows, real ground/pavement contact.
+                   - AI-generated: Surreal rim lighting where no light source exists, impossible background geometry/perspective, subject floating or artificially pasted over background with Gaussian/digital blur halos.
 
-                Be extremely accurate.
-                Respond ONLY with a valid JSON block.
+                CLASSIFICATION & CONFIDENCE RULES:
+                - If you observe clear or subtle signatures of AI image generation, prompt diffusion, or synthetic rendering:
+                  * "is_ai_generated": true
+                  * "ai_generation_confidence": float between 0.55 and 1.0 (e.g., 0.90 for obvious AI, 0.70 for subtle AI)
+                  * "verification_status": "ai_generated"
+                  * "verification_message": "Photo verification failed — this image appears to be AI-generated. Please upload an actual photo of the animal."
+                - If the image displays authentic optical camera sensor characteristics, natural grain, and realistic physical traits:
+                  * "is_ai_generated": false
+                  * "ai_generation_confidence": float between 0.0 and 0.35 (e.g., 0.05 for clear photo)
+                  * "verification_status": "authentic"
+                  * "verification_message": "Photo verified — appears to be a real animal photograph."
+                - If the image is heavily degraded, screenshot of low quality, or inconclusive:
+                  * "is_ai_generated": false
+                  * "ai_generation_confidence": float between 0.36 and 0.54
+                  * "verification_status": "uncertain"
+                  * "verification_message": "Photo verification notice — image authenticity is uncertain. Please ensure the photo is clear and taken with a camera."
+
+                ================================================================================
+                PART 2: ANIMAL ATTRIBUTES & IDENTIFICATION
+                ================================================================================
+                Focus strictly on the primary animal subject:
+                - animal_detected: true ONLY if a dog or cat is clearly visible. Set false for non-pets, empty surroundings, documents, objects, or humans.
+                - animal_type: "Dog", "Cat", or "Unknown".
+                - primary_color: Dominant fur color ("Black", "White", "Brown", "Orange", "Gray", "Calico", "Cream", "Golden", "Tan", or "Unknown").
+                - secondary_color: Secondary fur color or "None".
+                - tertiary_color: Third fur color or "None".
+                - coat_pattern: "Solid", "Bicolor", "Tricolor", "Spotted", "Striped", "Patched", "Brindle", "Merle", "Tabby", "Calico", "Tortoiseshell", "Mixed", or "Unknown".
+                - estimated_size: "Small", "Medium", "Large", or "Unknown" (default "Small" for cats).
+                - possible_breed: Likely breed name (e.g. "Aspin" for Philippine local dogs, "Puspin" for Philippine domestic cats, "Shih Tzu", "Golden Retriever", "Siamese", etc.).
+                - collar_detected: true ONLY if collar/harness is visible, otherwise false.
+                - qr_tag_detected: true ONLY if QR/ID tag is attached, otherwise false.
+
+                Respond ONLY with a valid JSON object matching this schema:
+                {{
+                    "is_ai_generated": boolean,
+                    "ai_generation_confidence": number,
+                    "verification_status": "authentic" | "ai_generated" | "uncertain",
+                    "verification_message": string,
+                    "authenticity_details": string,
+                    "animal_detected": boolean,
+                    "animal_type": "Dog" | "Cat" | "Unknown",
+                    "primary_color": string,
+                    "secondary_color": string,
+                    "tertiary_color": string,
+                    "coat_pattern": string,
+                    "estimated_size": string,
+                    "possible_breed": string,
+                    "collar_detected": boolean,
+                    "qr_tag_detected": boolean,
+                    "message": string
+                }}
                 """
 
+                # Pass the full original image for complete forensic fidelity
                 res = call_gemini_with_fallback(
-                    [prompt, cropped_img],
+                    [prompt, img],
                     generation_config={"response_mime_type": "application/json"}
                 )
 
@@ -1128,7 +1489,33 @@ async def analyze_report_media(
                 gemini_detected = bool(data.get("animal_detected", False))
                 animal_type = str(data.get("animal_type", "Unknown"))
 
-                # Combine YOLO & Gemini validation
+                # Extract AI verification fields
+                raw_is_ai = data.get("is_ai_generated")
+                ai_conf = float(data.get("ai_generation_confidence", 0.90 if raw_is_ai else 0.10))
+                ai_conf = max(0.0, min(1.0, ai_conf))
+                ai_likelihood_pct = round(ai_conf * 100, 1)
+                is_ai_gen = bool(raw_is_ai) or (ai_conf >= 0.60)
+                
+                # Compute verification status and recommendations
+                if ai_conf >= 0.60 or is_ai_gen:
+                    v_status = "ai_generated"
+                    v_photo_status = "Potentially AI-generated"
+                    v_rec = "Please verify the authenticity of the uploaded photo."
+                    v_msg = "This image may be AI-generated. Please make sure the uploaded photo is an actual photo of the reported animal."
+                elif ai_conf <= 0.35:
+                    v_status = "authentic"
+                    v_photo_status = "Likely Authentic"
+                    v_rec = "Photo appears authentic."
+                    v_msg = "Photo verified — appears to be a real animal photograph."
+                else:
+                    v_status = "uncertain"
+                    v_photo_status = "Uncertain"
+                    v_rec = "Please verify the authenticity of the uploaded photo."
+                    v_msg = "Image authenticity is uncertain. Please ensure the photo is clear and taken with a camera."
+
+                auth_details = str(data.get("authenticity_details", "Visual authenticity analysis completed."))
+
+                # Combine YOLO & Gemini validation for animal presence
                 is_detected = gemini_detected or (yolo_count > 0)
                 if not is_detected or animal_type.lower() in ["unknown", "none", "null"]:
                     if yolo_count > 0:
@@ -1150,6 +1537,14 @@ async def analyze_report_media(
                         "possible_breed": "Unknown",
                         "collar_detected": False,
                         "qr_tag_detected": False,
+                        "is_ai_generated": is_ai_gen,
+                        "ai_generation_confidence": ai_conf,
+                        "ai_photo_likelihood": ai_likelihood_pct,
+                        "ai_photo_status": v_photo_status,
+                        "ai_photo_recommendation": v_rec,
+                        "verification_status": v_status,
+                        "verification_message": v_msg,
+                        "authenticity_details": auth_details,
                         "message": f"No animal detected in the uploaded {media_label}. Please ensure a cat or dog is clearly visible in your {media_noun}."
                     }
 
@@ -1164,53 +1559,63 @@ async def analyze_report_media(
                     "possible_breed": str(data.get("possible_breed", "Puspin" if animal_type == "Cat" else "Aspin")),
                     "collar_detected": bool(data.get("collar_detected", False)),
                     "qr_tag_detected": bool(data.get("qr_tag_detected", False)),
-                    "message": "Animal detected successfully."
+                    "is_ai_generated": is_ai_gen,
+                    "ai_generation_confidence": ai_conf,
+                    "ai_photo_likelihood": ai_likelihood_pct,
+                    "ai_photo_status": v_photo_status,
+                    "ai_photo_recommendation": v_rec,
+                    "verification_status": v_status,
+                    "verification_message": v_msg,
+                    "authenticity_details": auth_details,
+                    "message": v_msg if v_status == "ai_generated" else "Animal detected and analyzed successfully."
                 }
             except Exception as gem_err:
                 print("Gemini Vision analysis error:", gem_err)
+                # Fall through with unable_to_analyze status
 
-        # Fallback if Gemini is not available: use YOLO detection result and extract color from cropped animal subject
-        if yolo_count == 0:
-            return {
-                "animal_detected": False,
-                "animal_type": "Unknown",
-                "primary_color": "Unknown",
-                "secondary_color": "None",
-                "tertiary_color": "None",
-                "coat_pattern": "Unknown",
-                "estimated_size": "Unknown",
-                "possible_breed": "Unknown",
-                "collar_detected": False,
-                "qr_tag_detected": False,
-                "message": f"No animal detected in the uploaded {media_label}. Please ensure a cat or dog is clearly visible in your {media_noun}."
-            }
+        # Safe fallback if Gemini API is unavailable or encountered an error
+        detected_type = detected_yolo_labels[0] if detected_yolo_labels else "Unknown"
+        is_detected = yolo_count > 0
 
-        # YOLO found an animal; extract dominant colors strictly from the cropped animal region
-        detected_type = detected_yolo_labels[0] if detected_yolo_labels else "Dog"
-        cropped_bytes_io = io.BytesIO()
-        cropped_img.save(cropped_bytes_io, format='JPEG')
-        extracted_color_str = extract_dominant_colors(cropped_bytes_io.getvalue())
-        extracted_colors = [c.strip() for c in extracted_color_str.split(',') if c.strip() and c.strip() != "Unknown"]
-        
-        p_color = extracted_colors[0] if extracted_colors else "Black"
-        s_color = extracted_colors[1] if len(extracted_colors) > 1 else "None"
-        t_color = extracted_colors[2] if len(extracted_colors) > 2 else "None"
+        p_color = "Unknown"
+        s_color = "None"
+        t_color = "None"
+
+        if is_detected:
+            try:
+                cropped_bytes_io = io.BytesIO()
+                cropped_img.save(cropped_bytes_io, format='JPEG')
+                extracted_color_str = extract_dominant_colors(cropped_bytes_io.getvalue())
+                extracted_colors = [c.strip() for c in extracted_color_str.split(',') if c.strip() and c.strip() != "Unknown"]
+                p_color = extracted_colors[0] if extracted_colors else "Black"
+                s_color = extracted_colors[1] if len(extracted_colors) > 1 else "None"
+                t_color = extracted_colors[2] if len(extracted_colors) > 2 else "None"
+            except Exception as col_err:
+                print("Color extraction fallback error:", col_err)
 
         return {
-            "animal_detected": True,
-            "animal_type": detected_type,
+            "animal_detected": is_detected,
+            "animal_type": detected_type if detected_type in ["Dog", "Cat"] else "Unknown",
             "primary_color": p_color,
             "secondary_color": s_color,
             "tertiary_color": t_color,
             "coat_pattern": "Solid",
             "estimated_size": "Small" if detected_type == "Cat" else "Medium",
-            "possible_breed": "Puspin" if detected_type == "Cat" else "Aspin",
+            "possible_breed": "Puspin" if detected_type == "Cat" else ("Aspin" if detected_type == "Dog" else "Unknown"),
             "collar_detected": False,
             "qr_tag_detected": False,
-            "message": "Animal detected successfully."
+            "is_ai_generated": False,
+            "ai_generation_confidence": None,
+            "ai_photo_likelihood": None,
+            "ai_photo_status": "Unable to analyze image",
+            "ai_photo_recommendation": "Unable to analyze image. Please ensure a clear photo of the animal is uploaded.",
+            "verification_status": "unable_to_analyze",
+            "verification_message": "Unable to analyze image. Please ensure the photo is clear and taken with a camera.",
+            "authenticity_details": "AI verification service was unreachable or returned an inconclusive result. Manual verification advised.",
+            "message": "Animal detected with optical sensor fallback. AI authenticity verification is pending." if is_detected else f"No animal detected in the uploaded {media_label}."
         }
     except Exception as e:
-        print("Media analysis error:", e)
+        print("Media analysis critical error:", e)
         return {
             "animal_detected": False,
             "animal_type": "Unknown",
@@ -1222,7 +1627,15 @@ async def analyze_report_media(
             "possible_breed": "Unknown",
             "collar_detected": False,
             "qr_tag_detected": False,
-            "message": f"Unable to verify animal in {media_label}. Please ensure a clear {media_noun} of a dog or cat."
+            "is_ai_generated": False,
+            "ai_generation_confidence": None,
+            "ai_photo_likelihood": None,
+            "ai_photo_status": "Unable to analyze image",
+            "ai_photo_recommendation": "Unable to analyze image. Please ensure a clear photo of the animal is uploaded.",
+            "verification_status": "unable_to_analyze",
+            "verification_message": "Unable to analyze image. Please ensure the photo is clear and taken with a camera.",
+            "authenticity_details": "Analysis pipeline encountered an error.",
+            "message": f"Unable to process {media_label}. Please ensure a valid image file."
         }
 
 
@@ -1231,15 +1644,8 @@ async def validate_report_images(
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db)
 ):
-    try:
-        import tempfile
-        from PIL import Image
-        import io
-        import os
-        import json
-        import google.generativeai as genai
-    except ImportError as e:
-        raise HTTPException(status_code=500, detail=f"Required library missing: {str(e)}")
+    if Image is None:
+        raise HTTPException(status_code=500, detail="PIL / Pillow image library is missing on server.")
 
     valid_images = []
     pil_images = []
@@ -1290,28 +1696,57 @@ async def validate_report_images(
                 if os.path.exists(tmp_path):
                     os.unlink(tmp_path)
 
-            # If YOLO detected 0 animals, double-check with Gemini Vision to prevent false negatives
-            if animal_count == 0:
-                try:
-                    check_prompt = """
-                    Is there a real live dog or cat visible in this photo?
-                    Respond ONLY with a JSON object: {"animal_detected": true/false, "count": number}
-                    """
-                    g_res = call_gemini_with_fallback(
-                        [check_prompt, img],
-                        generation_config={"response_mime_type": "application/json"}
-                    )
-                    if not g_res or not getattr(g_res, "text", None):
-                        raise ValueError("Gemini API returned an empty or invalid response.")
+            # Run authenticity & animal count verification with Gemini Vision
+            try:
+                check_prompt = """
+                You are a senior digital forensics expert and animal safety inspector for StraySafe.
+                Inspect this uploaded image and analyze two essential criteria:
+                1. Animal Detection: Is there a dog or cat visible in this photo? How many?
+                2. Authenticity & AI-Generation Detection: Analyze whether this image is an authentic photograph taken by a physical camera/phone, or if it is an AI-generated, synthetic, deepfake, or digitally rendered illustration (e.g. Midjourney, DALL-E, Stable Diffusion, Flux, Leonardo, 3D CGI).
+                Check for synthetic fur smoothing, plastic sheen, impossible anatomy (distorted paws, mismatched eyes, floating whiskers), and diffusion artifacts.
+
+                Respond ONLY with a valid JSON object:
+                {
+                    "animal_detected": true/false,
+                    "count": number,
+                    "is_ai_generated": true/false,
+                    "ai_generation_confidence": 0.0 to 1.0,
+                    "verification_status": "authentic" | "ai_generated" | "uncertain",
+                    "verification_message": string,
+                    "authenticity_details": string
+                }
+                """
+                g_res = call_gemini_with_fallback(
+                    [check_prompt, img],
+                    generation_config={"response_mime_type": "application/json"}
+                )
+                if g_res and getattr(g_res, "text", None):
                     g_text = g_res.text.strip()
                     if g_text.startswith("```"):
                         lines = g_text.split("\n")
                         g_text = "\n".join(lines[1:-1] if lines[0].startswith("```") else lines)
                     g_data = json.loads(g_text)
+
+                    # Check AI generated status
+                    raw_is_ai = g_data.get("is_ai_generated")
+                    ai_conf = float(g_data.get("ai_generation_confidence", 0.95 if raw_is_ai else 0.05))
+                    is_ai = bool(raw_is_ai) or (ai_conf >= 0.55)
+                    v_status = str(g_data.get("verification_status", "ai_generated" if is_ai else ("uncertain" if ai_conf > 0.35 else "authentic")))
+
+                    if is_ai or v_status == "ai_generated" or ai_conf >= 0.55:
+                        return {
+                            "valid": False,
+                            "error_type": "ai_generated_image",
+                            "message": "Photo verification failed — this image appears to be AI-generated. Please upload an actual photo of the animal.",
+                            "details": g_data.get("authenticity_details", "Detected synthetic artifacts, unnatural fur smoothing, or AI generation signatures.")
+                        }
+
                     if g_data.get("animal_detected"):
-                        animal_count = max(1, int(g_data.get("count", 1)))
-                except Exception as gem_check_err:
-                    print(f"Gemini fallback validation error for {filename}:", gem_check_err)
+                        animal_count = max(animal_count, int(g_data.get("count", 1)))
+            except Exception as gem_check_err:
+                print(f"Gemini validation error for {filename}:", gem_check_err)
+                # If AI check failed, we don't allow unverified images if animal_count is 0
+                pass
 
             if animal_count == 0:
                 return {
@@ -1686,6 +2121,10 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
         rep_data.ai_possible_breed = report.ai_possible_breed  # type: ignore
         rep_data.ai_suggested_risk_level = report.ai_suggested_risk_level  # type: ignore
         rep_data.ai_suggested_priority = report.ai_suggested_priority  # type: ignore
+        rep_data.ai_photo_likelihood = float(report.ai_photo_likelihood) if report.ai_photo_likelihood is not None else None
+        rep_data.ai_photo_status = report.ai_photo_status
+        rep_data.ai_photo_recommendation = report.ai_photo_recommendation
+        rep_data.ai_photo_details = report.ai_photo_details
 
         if report.history:
             for i, hist in enumerate(report.history):  # type: ignore[arg-type]
@@ -1905,15 +2344,6 @@ def process_report_media_ai(report_id: int, media_id: int, file_url: str, file_c
     Background worker that executes YOLOv8 detection, color extraction,
     Gemini suggestions, and triggers looks-matching without blocking the HTTP response.
     """
-    from app.database.session import SessionLocal
-    from app.utils.model_loader import get_yolo_model
-    from app.utils.color_detection import extract_dominant_colors
-    from app.models.report import Report, ReportMedia, ReportCategory
-    import io
-    import os
-    import tempfile
-    from PIL import Image
-
     db = SessionLocal()
     try:
         report = db.query(Report).filter(Report.report_id == report_id).first()
@@ -2097,6 +2527,8 @@ async def upload_report_media(
     history_id: Optional[int] = Form(None),
     status_id: Optional[int] = Form(None),
     is_evidence: Optional[bool] = Form(False),
+    ai_photo_likelihood: Optional[float] = Form(None),
+    ai_photo_status: Optional[str] = Form(None),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db)
 ):
@@ -2125,6 +2557,9 @@ async def upload_report_media(
         if not resolved_url:
             raise HTTPException(status_code=400, detail="Could not resolve media URL.")
 
+        final_likelihood = ai_photo_likelihood if ai_photo_likelihood is not None else report.ai_photo_likelihood
+        final_status = ai_photo_status if ai_photo_status is not None else report.ai_photo_status
+
         db_media = ReportMedia(
             report_id=report_id,
             history_id=history_id,
@@ -2133,7 +2568,9 @@ async def upload_report_media(
             file_url=resolved_url,
             media_type=resolved_media_type,
             animal_type='Unknown',
-            dominant_color='Unknown'
+            dominant_color='Unknown',
+            ai_photo_likelihood=final_likelihood,
+            ai_photo_status=final_status
         )
         db.add(db_media)
         db.commit()
@@ -4066,7 +4503,7 @@ async def create_report_dispute(
     supporting_photo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
-    """Lodge a formal dispute against a report targeting a resident's pet, uploading vaccination card and home confinement photos."""
+    """Lodge a formal dispute against a report targeting a resident pet."""
     report = db.query(Report).filter(Report.report_id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -4218,7 +4655,7 @@ def review_report_dispute(
     req: Request,
     db: Session = Depends(get_db)
 ):
-    """Staff review of a citizen dispute (Accept and dismiss false alarm, or Reject)."""
+    # Staff review of a citizen dispute (Accept and dismiss false alarm, or Reject)
     dispute = db.query(ReportDispute).filter(
         ReportDispute.dispute_id == dispute_id,
         ReportDispute.report_id == report_id

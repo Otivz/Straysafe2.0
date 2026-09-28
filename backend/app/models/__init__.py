@@ -19,6 +19,7 @@ from app.models.announcement import (
 from app.models.audit_log import AuditLog
 from app.models.revoked_token import RevokedToken
 from app.models.coverage import CoverageSetting
+from app.models.otp import OtpVerification
 
 __all__ = [
     "Role", "Position", "Barangay", "Subdivision", "User",
@@ -37,5 +38,6 @@ __all__ = [
     "AnnouncementComment", "AnnouncementReaction",
     "AuditLog",
     "RevokedToken",
-    "CoverageSetting"
+    "CoverageSetting",
+    "OtpVerification"
 ]

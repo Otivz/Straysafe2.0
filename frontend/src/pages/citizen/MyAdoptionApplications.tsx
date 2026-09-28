@@ -18,6 +18,7 @@ import {
     PartyPopper,
     ClipboardList
 } from 'lucide-react';
+import MaskedIdDisplay from '../../components/MaskedIdDisplay';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 
@@ -25,7 +26,7 @@ interface AdoptionApp {
     adoption_id: number;
     holding_id: number;
     applicant_id: number;
-    status: 'Pending' | 'Approved' | 'Rejected';
+    status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
     full_name: string;
     address: string;
     contact_no: string;
@@ -52,21 +53,30 @@ interface AdoptionApp {
     animal_type: string | null;
     animal_breed: string | null;
     animal_photo: string | null;
+    cancellation_reason?: string | null;
+    cancelled_at?: string | null;
 }
 
 const MyAdoptionApplications = () => {
     const navigate = useNavigate();
     const [applications, setApplications] = useState<AdoptionApp[]>([]);
     const [loading, setLoading] = useState(true);
-    const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('All');
+    const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected' | 'Cancelled'>('All');
     const [isNavbarMenuOpen, setIsNavbarMenuOpen] = useState(false);
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
-    // Confirm Modal & ID Lightbox
+    // Confirm Received Modal & ID Lightbox
     const [selectedConfirmApp, setSelectedConfirmApp] = useState<AdoptionApp | null>(null);
     const [confirmNotes, setConfirmNotes] = useState('');
     const [confirmSubmitting, setConfirmSubmitting] = useState(false);
     const [previewIdPhotoUrl, setPreviewIdPhotoUrl] = useState<string | null>(null);
+
+    // Cancel Adoption Modal State
+    const [selectedCancelApp, setSelectedCancelApp] = useState<AdoptionApp | null>(null);
+    const [cancelReason, setCancelReason] = useState('');
+    const [cancelSubmitting, setCancelSubmitting] = useState(false);
+    const [cancelError, setCancelError] = useState<string | null>(null);
+
     const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
     const showToast = (text: string, type: 'success' | 'error' = 'success') => {
@@ -111,6 +121,32 @@ const MyAdoptionApplications = () => {
         }
     };
 
+    const handleConfirmCancel = async () => {
+        if (!selectedCancelApp) return;
+        if (!cancelReason.trim()) {
+            setCancelError("Please provide a reason for cancelling your adoption request.");
+            return;
+        }
+
+        setCancelSubmitting(true);
+        setCancelError(null);
+        try {
+            await api.post(`/adoptions/${selectedCancelApp.adoption_id}/cancel`, {
+                reason: cancelReason.trim(),
+            });
+
+            showToast("Adoption request has been cancelled.");
+            setSelectedCancelApp(null);
+            setCancelReason('');
+            fetchApps();
+        } catch (err: any) {
+            console.error("Cancel adoption error", err);
+            setCancelError(err.response?.data?.detail || "Failed to cancel adoption request. Please try again.");
+        } finally {
+            setCancelSubmitting(false);
+        }
+    };
+
     const filtered = applications.filter((app) => {
         if (statusFilter === 'All') return true;
         return app.status === statusFilter;
@@ -135,6 +171,13 @@ const MyAdoptionApplications = () => {
             return (
                 <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-red-50 text-red-700 text-xs font-black border border-red-200">
                     <XCircle className="w-3.5 h-3.5" /> Not Selected
+                </span>
+            );
+        }
+        if (app.status === 'Cancelled') {
+            return (
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-xs font-black border border-gray-200 dark:border-gray-700">
+                    <XCircle className="w-3.5 h-3.5 text-gray-500" /> Cancelled
                 </span>
             );
         }
@@ -206,12 +249,12 @@ const MyAdoptionApplications = () => {
                 )}
 
                 {/* Filter Tabs */}
-                <div className="flex items-center gap-2 mb-6 border-b border-gray-200/80 dark:border-gray-800 pb-3">
-                    {(['All', 'Pending', 'Approved', 'Rejected'] as const).map((tab) => (
+                <div className="flex items-center gap-2 mb-6 border-b border-gray-200/80 dark:border-gray-800 pb-3 overflow-x-auto scrollbar-none">
+                    {(['All', 'Pending', 'Approved', 'Rejected', 'Cancelled'] as const).map((tab) => (
                         <button
                             key={tab}
                             onClick={() => setStatusFilter(tab)}
-                            className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                            className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer shrink-0 ${
                                 statusFilter === tab
                                     ? 'bg-orange-500 text-white shadow-xs'
                                     : 'bg-white dark:bg-[#151C2C] text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700'
@@ -251,6 +294,7 @@ const MyAdoptionApplications = () => {
                         {filtered.map((app) => {
                             const isFullyAdopted = app.status === 'Approved' && app.staff_handed_over && app.is_handed_over;
                             const isAwaitingAdopterConfirm = app.status === 'Approved' && !app.is_handed_over;
+                            const canCancel = app.status === 'Pending' || (app.status === 'Approved' && !app.is_handed_over);
 
                             return (
                                 <div
@@ -260,6 +304,8 @@ const MyAdoptionApplications = () => {
                                             ? 'border-emerald-200 dark:border-emerald-800/80 bg-linear-to-b from-white to-emerald-50/20 dark:from-[#151C2C] dark:to-emerald-950/20'
                                             : isAwaitingAdopterConfirm
                                             ? 'border-orange-200 dark:border-orange-900/60'
+                                            : app.status === 'Cancelled'
+                                            ? 'border-gray-200 dark:border-gray-800 opacity-90'
                                             : 'border-gray-200/90 dark:border-gray-800 hover:border-orange-200 dark:hover:border-orange-500/40'
                                     }`}
                                 >
@@ -284,7 +330,24 @@ const MyAdoptionApplications = () => {
                                             </div>
                                         </div>
 
-                                        <div>{getStatusBadge(app)}</div>
+                                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                                            {getStatusBadge(app)}
+                                            {canCancel && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedCancelApp(app);
+                                                        setCancelReason('');
+                                                        setCancelError(null);
+                                                    }}
+                                                    className="px-3 py-1 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/60 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
+                                                    title="Cancel this adoption request"
+                                                >
+                                                    <XCircle className="w-3.5 h-3.5" />
+                                                    <span>CANCEL ADOPTION</span>
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {/* Fully Adopted Success Banner */}
@@ -309,6 +372,35 @@ const MyAdoptionApplications = () => {
                                             >
                                                 <Heart className="w-3.5 h-3.5 fill-white" /> View Registered Pets
                                             </Link>
+                                        </div>
+                                    )}
+
+                                    {/* Cancelled Adoption Banner & Reason Details */}
+                                    {app.status === 'Cancelled' && (
+                                        <div className="mt-4 p-4 rounded-2xl bg-gray-50 dark:bg-[#0E131F] border border-gray-200 dark:border-gray-800 space-y-2">
+                                            <div className="flex items-center justify-between flex-wrap gap-2 text-xs font-bold text-gray-700 dark:text-gray-300">
+                                                <span className="flex items-center gap-1.5 text-gray-800 dark:text-gray-200">
+                                                    <XCircle className="w-4 h-4 text-gray-500" />
+                                                    Adoption Request Cancelled
+                                                </span>
+                                                {app.cancelled_at && (
+                                                    <span className="text-[11px] font-normal text-gray-500 dark:text-gray-400">
+                                                        Cancelled on {new Date(app.cancelled_at).toLocaleDateString(undefined, {
+                                                            year: 'numeric',
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit'
+                                                        })}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {app.cancellation_reason && (
+                                                <div className="text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-[#151C2C] p-3 rounded-xl border border-gray-100 dark:border-gray-800">
+                                                    <span className="font-bold text-gray-700 dark:text-gray-300 block mb-0.5">Cancellation Reason:</span>
+                                                    "{app.cancellation_reason}"
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
@@ -395,12 +487,12 @@ const MyAdoptionApplications = () => {
                                         {/* Government ID Info */}
                                         {app.id_type && (
                                             <div className="sm:col-span-2 bg-gray-50/80 dark:bg-[#0E131F] p-3 rounded-xl border border-gray-100 dark:border-gray-800 flex items-center justify-between flex-wrap gap-2">
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-2 flex-wrap">
                                                     <CreditCard className="w-4 h-4 text-orange-500 shrink-0" />
-                                                    <div>
-                                                        <span className="font-bold text-gray-800 dark:text-gray-200 mr-2">{app.id_type}:</span>
-                                                        <span className="text-gray-600 dark:text-gray-400 font-mono text-[11px]">{app.id_number || 'Registered'}</span>
-                                                    </div>
+                                                    <span className="font-bold text-gray-800 dark:text-gray-200">{app.id_type}:</span>
+                                                    {app.id_number && (
+                                                        <MaskedIdDisplay idNumber={app.id_number} idType={app.id_type} />
+                                                    )}
                                                 </div>
                                                 {app.id_photo_url && (
                                                     <button
@@ -445,6 +537,119 @@ const MyAdoptionApplications = () => {
                     </div>
                 )}
             </main>
+
+            {/* Cancel Adoption Request Confirmation Modal */}
+            {selectedCancelApp && (
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-[#151C2C] rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-gray-200 dark:border-gray-800 animate-in fade-in zoom-in-95">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-10 h-10 rounded-2xl bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
+                                    <XCircle className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-black text-gray-900 dark:text-white">
+                                        Cancel Adoption Request
+                                    </h2>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        {selectedCancelApp.animal_name || `Rescue Animal #${selectedCancelApp.holding_id}`} (App #{selectedCancelApp.adoption_id})
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    if (!cancelSubmitting) {
+                                        setSelectedCancelApp(null);
+                                        setCancelReason('');
+                                        setCancelError(null);
+                                    }
+                                }}
+                                disabled={cancelSubmitting}
+                                className="p-1.5 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer disabled:opacity-50"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Warning Box */}
+                        <div className="bg-red-50/70 dark:bg-red-950/30 border border-red-200 dark:border-red-900/60 rounded-2xl p-4 mb-4 text-xs text-red-900 dark:text-red-300 space-y-1.5">
+                            <p className="font-bold flex items-center gap-1.5 text-red-950 dark:text-red-200">
+                                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                                Are you sure you want to cancel this adoption request?
+                            </p>
+                            <p className="leading-relaxed text-red-800 dark:text-red-300/90 pl-5.5">
+                                Cancelling will immediately withdraw your application for this animal and make the rescue available for other applicants or adoption review. This record will remain in your history.
+                            </p>
+                        </div>
+
+                        {/* Error Message */}
+                        {cancelError && (
+                            <div className="mb-4 p-3 rounded-xl bg-red-100 dark:bg-red-950/60 border border-red-300 dark:border-red-800 text-red-800 dark:text-red-200 text-xs font-bold flex items-center gap-2">
+                                <AlertCircle className="w-4 h-4 shrink-0" />
+                                <span>{cancelError}</span>
+                            </div>
+                        )}
+
+                        {/* Reason Input (Required) */}
+                        <div className="mb-6">
+                            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+                                Reason for Cancellation <span className="text-red-500">*</span>
+                            </label>
+                            <textarea
+                                rows={4}
+                                value={cancelReason}
+                                onChange={(e) => {
+                                    setCancelReason(e.target.value);
+                                    if (cancelError) setCancelError(null);
+                                }}
+                                placeholder="Please specify why you are cancelling this adoption request (e.g. change in personal circumstances, housing conflict, adopted elsewhere, etc.)..."
+                                className="w-full p-3.5 text-xs rounded-xl border border-gray-200 dark:border-gray-700 focus:border-red-500 focus:outline-hidden resize-none bg-gray-50 dark:bg-[#0E131F] focus:bg-white dark:focus:bg-[#151C2C] text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
+                            />
+                            <div className="flex items-center justify-between mt-1 text-[11px] text-gray-400">
+                                <span>A clear cancellation reason helps our shelter maintain accurate records.</span>
+                                <span className={cancelReason.trim() ? "text-emerald-500 font-bold" : "text-amber-500"}>
+                                    {cancelReason.trim().length} chars
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center justify-end gap-2.5">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setSelectedCancelApp(null);
+                                    setCancelReason('');
+                                    setCancelError(null);
+                                }}
+                                disabled={cancelSubmitting}
+                                className="px-4 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                                CANCEL
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmCancel}
+                                disabled={cancelSubmitting || !cancelReason.trim()}
+                                className="px-5 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                            >
+                                {cancelSubmitting ? (
+                                    <>
+                                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        <span>Cancelling Request...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <XCircle className="w-4 h-4" />
+                                        <span>CONFIRM CANCELLATION</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Adopter Handover Confirmation Modal */}
             {selectedConfirmApp && (

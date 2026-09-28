@@ -423,7 +423,7 @@ const BrgyPetRecords: React.FC = () => {
                                                 </div>
                                                 <input
                                                     type="text"
-                                                    placeholder="🔍 Search pets..."
+                                                    placeholder="Search pets..."
                                                     value={searchTerm}
                                                     onChange={(e) => setSearchTerm(e.target.value)}
                                                     className="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316] transition-all w-64 shadow-sm"
@@ -540,7 +540,7 @@ const BrgyPetRecords: React.FC = () => {
                                             </div>
                                             <h3 className="text-base font-black text-gray-800 uppercase tracking-wide">No Archived Records</h3>
                                             <p className="text-xs text-gray-400 max-w-sm mt-1">
-                                                 {removedSearchTerm ? 'No records match your search criteria.' : 'There are currently no archived pet profiles in the barangay database.'}
+                                                {removedSearchTerm ? 'No records match your search criteria.' : 'There are currently no archived pet profiles in the barangay database.'}
                                             </p>
                                         </div>
                                     ) : (

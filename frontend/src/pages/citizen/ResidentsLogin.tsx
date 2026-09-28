@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Button from '../../components/Button';
 import { EyeIcon, EyeOffIcon } from '../../components/icon';
@@ -26,6 +26,12 @@ const GoogleIcon = () => (
         />
     </svg>
 );
+
+interface SubdivisionOption {
+    subdivision_id: number;
+    subdivision_name: string;
+    barangay_name?: string;
+}
 
 const ResidentsLogin = () => {
     const navigate = useNavigate();
@@ -63,12 +69,12 @@ const ResidentsLogin = () => {
 
     const [isRegistering, setIsRegistering] = useState(false);
 
-    // Login State
+    // Standard Login State
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
 
-    // Register State
+    // Standard Register State
     const [regName, setRegName] = useState('');
     const [regEmail, setRegEmail] = useState('');
     const [regPhone, setRegPhone] = useState('');
@@ -77,11 +83,34 @@ const ResidentsLogin = () => {
     const [regConfirmPassword, setRegConfirmPassword] = useState('');
     const [showRegPassword, setShowRegPassword] = useState(false);
 
-    // Google Auth Modal State
-    const [showGoogleModal, setShowGoogleModal] = useState(false);
+    // Google Auth Modal & Multi-Step Verification State
+    // Steps: 'google_prompt' | 'complete_details' | 'otp_verification' | null
+    const [googleModalStep, setGoogleModalStep] = useState<'google_prompt' | 'complete_details' | 'otp_verification' | null>(null);
     const [googleAuthMode, setGoogleAuthMode] = useState<'login' | 'register'>('login');
     const [googleEmailInput, setGoogleEmailInput] = useState('');
     const [googleNameInput, setGoogleNameInput] = useState('');
+
+    // Profile Completion State for Google/Unverified Users
+    const [compUserId, setCompUserId] = useState<number | null>(null);
+    const [compEmail, setCompEmail] = useState('');
+    const [compName, setCompName] = useState('');
+    const [compPhone, setCompPhone] = useState('');
+    const [compSubdivisionId, setCompSubdivisionId] = useState<number>(1);
+    const [compAddress, setCompAddress] = useState('');
+    const [compPicture, setCompPicture] = useState('');
+    const [compToken, setCompToken] = useState('');
+
+    // Subdivision options
+    const [subdivisions, setSubdivisions] = useState<SubdivisionOption[]>([
+        { subdivision_id: 1, subdivision_name: 'Selera Homes', barangay_name: 'San Vicente' }
+    ]);
+
+    // OTP State
+    const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
+    const [otpError, setOtpError] = useState('');
+    const [otpTimer, setOtpTimer] = useState(300);
+    const [resendCooldown, setResendCooldown] = useState(0);
+    const [devOtp, setDevOtp] = useState<string | null>(null);
 
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -89,10 +118,43 @@ const ResidentsLogin = () => {
     const [successMessage, setSuccessMessage] = useState('');
     const [registeredUserData, setRegisteredUserData] = useState<any>(null);
 
+    const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+    useEffect(() => {
+        const fetchSubdivisions = async () => {
+            try {
+                const res = await api.get('/auth/subdivisions');
+                if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+                    setSubdivisions(res.data);
+                }
+            } catch (err) {
+                // Fallback default exists
+            }
+        };
+        fetchSubdivisions();
+    }, []);
+
+    // OTP Countdown Timer
+    useEffect(() => {
+        let interval: any = null;
+        if (googleModalStep === 'otp_verification') {
+            interval = setInterval(() => {
+                setOtpTimer((prev) => (prev > 0 ? prev - 1 : 0));
+                setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+            }, 1000);
+        }
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [googleModalStep]);
+
     useEffect(() => {
         if (showSuccess && registeredUserData) {
             const timer = setTimeout(() => {
                 clearAuthStorage();
+                if (registeredUserData.access_token) {
+                    localStorage.setItem('access_token', registeredUserData.access_token);
+                }
                 localStorage.setItem('resident_user', JSON.stringify(registeredUserData));
                 navigate(destinationPath);
             }, 3000); // 3 seconds delay
@@ -112,6 +174,34 @@ const ResidentsLogin = () => {
             // Restrict login to only Role ID 1 (Residents)
             if (data.role_id !== 1) {
                 setError('Access denied. This portal is for residents only.');
+                setLoading(false);
+                return;
+            }
+
+            // Check if resident requires profile completion or OTP
+            if (data.requires_profile_completion) {
+                setCompUserId(data.user_id);
+                setCompEmail(data.email);
+                setCompName(data.name || '');
+                setCompPhone(data.phone || '');
+                setCompSubdivisionId(data.subdivision_id || 1);
+                setCompAddress(data.address || '');
+                setCompToken(data.access_token || '');
+                setGoogleModalStep('complete_details');
+                setLoading(false);
+                return;
+            }
+
+            if (data.requires_otp) {
+                setCompUserId(data.user_id);
+                setCompEmail(data.email);
+                setCompPhone(data.phone || '');
+                setCompToken(data.access_token || '');
+                setDevOtp(data.dev_otp || null);
+                setOtpDigits(['', '', '', '', '', '']);
+                setOtpTimer(300);
+                setResendCooldown(30);
+                setGoogleModalStep('otp_verification');
                 setLoading(false);
                 return;
             }
@@ -183,6 +273,7 @@ const ResidentsLogin = () => {
 
     const openGoogleAuthModal = (mode: 'login' | 'register') => {
         setError('');
+        setOtpError('');
         setGoogleAuthMode(mode);
         if (mode === 'register' && regEmail) {
             setGoogleEmailInput(regEmail);
@@ -194,7 +285,7 @@ const ResidentsLogin = () => {
             setGoogleEmailInput('');
             setGoogleNameInput('');
         }
-        setShowGoogleModal(true);
+        setGoogleModalStep('google_prompt');
     };
 
     const handleGoogleSubmit = async (e: React.FormEvent) => {
@@ -202,6 +293,7 @@ const ResidentsLogin = () => {
         if (!googleEmailInput.trim()) return;
 
         setError('');
+        setOtpError('');
         setLoading(true);
 
         try {
@@ -233,25 +325,228 @@ const ResidentsLogin = () => {
                 return;
             }
 
-            setShowGoogleModal(false);
-            clearAuthStorage();
-            if (data.access_token) {
-                localStorage.setItem('access_token', data.access_token);
-            }
-            localStorage.setItem('resident_user', JSON.stringify(data));
+            setCompUserId(data.user_id);
+            setCompEmail(data.email);
+            setCompName(data.name || cleanName);
+            setCompPhone(data.phone || '');
+            setCompSubdivisionId(data.subdivision_id || 1);
+            setCompAddress(data.address || '');
+            setCompPicture(data.profile_picture || avatarUrl);
+            setCompToken(data.access_token || '');
 
-            if (googleAuthMode === 'register') {
-                setRegisteredUserData(data);
-                setSuccessMessage(`Welcome, ${data.name || 'Resident'}! Your Google account has been connected.`);
-                setShowSuccess(true);
-            } else {
-                navigate(destinationPath);
+            // Check if user is already verified with complete profile
+            if (data.is_verified && !data.requires_profile_completion && !data.requires_otp) {
+                setGoogleModalStep(null);
+                clearAuthStorage();
+                if (data.access_token) {
+                    localStorage.setItem('access_token', data.access_token);
+                }
+                localStorage.setItem('resident_user', JSON.stringify(data));
+
+                if (googleAuthMode === 'register') {
+                    setRegisteredUserData(data);
+                    setSuccessMessage(`Welcome, ${data.name || 'Resident'}! Your Google account has been connected.`);
+                    setShowSuccess(true);
+                } else {
+                    navigate(destinationPath);
+                }
+                return;
+            }
+
+            // If user requires profile completion form -> Step 2
+            if (data.requires_profile_completion) {
+                setGoogleModalStep('complete_details');
+                setLoading(false);
+                return;
+            }
+
+            // If user has complete profile but requires OTP -> Step 3
+            if (data.requires_otp) {
+                setDevOtp(data.dev_otp || null);
+                setOtpDigits(['', '', '', '', '', '']);
+                setOtpTimer(300);
+                setResendCooldown(30);
+                setGoogleModalStep('otp_verification');
+                setLoading(false);
+                return;
             }
         } catch (err) {
             setError('Cannot connect to server. Make sure the backend is running.');
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleCompleteProfileSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setOtpError('');
+
+        if (!compName.trim()) {
+            setError('Please enter your full name.');
+            return;
+        }
+        if (!compPhone.trim()) {
+            setError('Please enter your contact number.');
+            return;
+        }
+        if (!compAddress.trim()) {
+            setError('Please enter your complete address.');
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            const res = await fetch('http://127.0.0.1:8000/auth/complete-profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: compUserId,
+                    email: compEmail,
+                    name: compName.trim(),
+                    phone: compPhone.trim(),
+                    subdivision_id: compSubdivisionId,
+                    address: compAddress.trim()
+                }),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                setError(data.detail || 'Failed to save resident details.');
+                setLoading(false);
+                return;
+            }
+
+            setDevOtp(data.dev_otp || null);
+            setOtpDigits(['', '', '', '', '', '']);
+            setOtpTimer(data.expires_in || 300);
+            setResendCooldown(30);
+            setGoogleModalStep('otp_verification');
+        } catch (err) {
+            setError('Connection error. Please check your network.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleOtpChange = (index: number, val: string) => {
+        const cleanVal = val.replace(/[^0-9]/g, '').slice(-1);
+        const newDigits = [...otpDigits];
+        newDigits[index] = cleanVal;
+        setOtpDigits(newDigits);
+        setOtpError('');
+
+        if (cleanVal && index < 5) {
+            otpInputRefs.current[index + 1]?.focus();
+        }
+    };
+
+    const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
+            otpInputRefs.current[index - 1]?.focus();
+        }
+    };
+
+    const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+        e.preventDefault();
+        const pasted = e.clipboardData.getData('text').replace(/[^0-9]/g, '').slice(0, 6);
+        if (!pasted) return;
+        const newDigits = [...otpDigits];
+        for (let i = 0; i < pasted.length; i++) {
+            newDigits[i] = pasted[i];
+        }
+        setOtpDigits(newDigits);
+        if (pasted.length === 6) {
+            otpInputRefs.current[5]?.focus();
+        } else {
+            otpInputRefs.current[pasted.length]?.focus();
+        }
+    };
+
+    const handleVerifyOtpSubmit = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        setOtpError('');
+        setError('');
+
+        const otpCode = otpDigits.join('');
+        if (otpCode.length < 6) {
+            setOtpError('Please enter all 6 digits of the verification code.');
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            const res = await fetch('http://127.0.0.1:8000/auth/verify-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: compUserId,
+                    email: compEmail,
+                    otp: otpCode
+                }),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                setOtpError(data.detail || 'Verification failed. Please try again.');
+                setLoading(false);
+                return;
+            }
+
+            setGoogleModalStep(null);
+            setRegisteredUserData(data);
+            setSuccessMessage(`Welcome to the Pack, ${data.name || 'Resident'}! Your account is verified.`);
+            setShowSuccess(true);
+        } catch (err) {
+            setOtpError('Connection error during OTP verification.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleResendOtp = async () => {
+        if (resendCooldown > 0) return;
+        setOtpError('');
+        setLoading(true);
+
+        try {
+            const res = await fetch('http://127.0.0.1:8000/auth/resend-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: compUserId,
+                    email: compEmail
+                }),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                setOtpError(data.detail || 'Failed to resend code.');
+                setLoading(false);
+                return;
+            }
+
+            setDevOtp(data.dev_otp || null);
+            setOtpDigits(['', '', '', '', '', '']);
+            setOtpTimer(data.expires_in || 300);
+            setResendCooldown(30);
+            otpInputRefs.current[0]?.focus();
+        } catch (err) {
+            setOtpError('Network error while resending code.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const formatTimer = (seconds: number) => {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}:${s < 10 ? '0' : ''}${s}`;
     };
 
     return (
@@ -581,87 +876,297 @@ const ResidentsLogin = () => {
                 </div>
             </div>
 
-            {/* 4. GOOGLE AUTH DIALOG MODAL */}
-            {showGoogleModal && (
+            {/* 4. GOOGLE AUTH & OTP MULTI-STEP MODAL */}
+            {googleModalStep && (
                 <div className="fixed inset-0 z-[999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
                     <div className="bg-white rounded-3xl shadow-2xl border border-gray-100 w-full max-w-md p-6 sm:p-8 animate-in zoom-in-95 duration-200 relative overflow-hidden">
-                        {/* Top Google Header Banner */}
+                        {/* Top Header Banner */}
                         <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-6">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-center shadow-xs">
-                                    <GoogleIcon />
+                                    {googleModalStep === 'otp_verification' ? (
+                                        <span className="text-xl">🛡️</span>
+                                    ) : (
+                                        <GoogleIcon />
+                                    )}
                                 </div>
                                 <div>
                                     <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">
-                                        {googleAuthMode === 'login' ? 'Sign in with Google' : 'Sign up with Google'}
+                                        {googleModalStep === 'google_prompt' && (googleAuthMode === 'login' ? 'Sign in with Google' : 'Sign up with Google')}
+                                        {googleModalStep === 'complete_details' && 'Complete Resident Profile'}
+                                        {googleModalStep === 'otp_verification' && 'OTP Verification'}
                                     </h3>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                        StraySafe Resident Access
+                                        {googleModalStep === 'google_prompt' && 'StraySafe Resident Access'}
+                                        {googleModalStep === 'complete_details' && 'Step 2: Enter Resident Details'}
+                                        {googleModalStep === 'otp_verification' && 'Step 3: Verify 6-Digit Code'}
                                     </p>
                                 </div>
                             </div>
                             <button
                                 type="button"
-                                onClick={() => setShowGoogleModal(false)}
+                                onClick={() => {
+                                    setGoogleModalStep(null);
+                                    setError('');
+                                    setOtpError('');
+                                }}
                                 className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center text-sm font-bold transition-all cursor-pointer"
                             >
                                 ✕
                             </button>
                         </div>
 
-                        {/* Google Auth Form */}
-                        <form onSubmit={handleGoogleSubmit} className="space-y-4">
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-[#9c8670]">
-                                    Google Account Email
-                                </label>
-                                <input
-                                    type="email"
-                                    value={googleEmailInput}
-                                    onChange={(e) => setGoogleEmailInput(e.target.value)}
-                                    placeholder="yourname@gmail.com"
-                                    className="form-input-premium text-sm py-3.5"
-                                    required
-                                    autoFocus
-                                />
+                        {/* Error Notification inside modal */}
+                        {(error || otpError) && (
+                            <div className="mb-4 bg-red-50 text-red-600 p-3 rounded-2xl border border-red-100 text-xs font-bold animate-in fade-in">
+                                ⚠️ {otpError || error}
                             </div>
+                        )}
 
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-[#9c8670]">
-                                    Display Name <span className="text-gray-400 font-normal">(Optional)</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    value={googleNameInput}
-                                    onChange={(e) => setGoogleNameInput(e.target.value)}
-                                    placeholder="Your Name"
-                                    className="form-input-premium text-sm py-3.5"
-                                />
-                            </div>
+                        {/* STEP 1: Google Account Input Form */}
+                        {googleModalStep === 'google_prompt' && (
+                            <form onSubmit={handleGoogleSubmit} className="space-y-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-[#9c8670]">
+                                        Google Account Email
+                                    </label>
+                                    <input
+                                        type="email"
+                                        value={googleEmailInput}
+                                        onChange={(e) => setGoogleEmailInput(e.target.value)}
+                                        placeholder="yourname@gmail.com"
+                                        className="form-input-premium text-sm py-3.5"
+                                        required
+                                        autoFocus
+                                    />
+                                </div>
 
-                            <div className="p-3 bg-orange-50/70 rounded-2xl border border-orange-200/60 text-[11px] font-semibold text-orange-900 flex items-center gap-2.5">
-                                <span className="text-base shrink-0">🛡️</span>
-                                <span>Fast and secure resident authentication powered by Google OAuth.</span>
-                            </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-[#9c8670]">
+                                        Display Name <span className="text-gray-400 font-normal">(Optional)</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={googleNameInput}
+                                        onChange={(e) => setGoogleNameInput(e.target.value)}
+                                        placeholder="Your Name"
+                                        className="form-input-premium text-sm py-3.5"
+                                    />
+                                </div>
 
-                            <div className="pt-2 flex gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowGoogleModal(false)}
-                                    className="w-1/3 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-black rounded-2xl text-xs uppercase tracking-wider transition-all cursor-pointer"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={loading || !googleEmailInput.trim()}
-                                    className="w-2/3 py-3.5 bg-[#F97316] hover:bg-[#ea580c] text-white font-black rounded-2xl text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-                                >
-                                    <GoogleIcon />
-                                    <span>{loading ? 'Connecting...' : `Continue with Google`}</span>
-                                </button>
-                            </div>
-                        </form>
+                                <div className="p-3 bg-orange-50/70 rounded-2xl border border-orange-200/60 text-[11px] font-semibold text-orange-900 flex items-center gap-2.5">
+                                    <span className="text-base shrink-0">🛡️</span>
+                                    <span>Fast and secure resident authentication powered by Google OAuth.</span>
+                                </div>
+
+                                <div className="pt-2 flex gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setGoogleModalStep(null)}
+                                        className="w-1/3 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-black rounded-2xl text-xs uppercase tracking-wider transition-all cursor-pointer"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={loading || !googleEmailInput.trim()}
+                                        className="w-2/3 py-3.5 bg-[#F97316] hover:bg-[#ea580c] text-white font-black rounded-2xl text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                                    >
+                                        <GoogleIcon />
+                                        <span>{loading ? 'Connecting...' : `Continue with Google`}</span>
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+
+                        {/* STEP 2: Profile Details Completion Form */}
+                        {googleModalStep === 'complete_details' && (
+                            <form onSubmit={handleCompleteProfileSubmit} className="space-y-3 max-h-[75vh] overflow-y-auto pr-1">
+                                <div className="p-3 bg-gray-50 border border-gray-200 rounded-2xl flex items-center justify-between">
+                                    <div className="flex items-center gap-2.5">
+                                        <img
+                                            src={compPicture || `https://ui-avatars.com/api/?name=${encodeURIComponent(compName || 'Resident')}&background=F97316&color=fff&bold=true`}
+                                            alt="Avatar"
+                                            className="w-8 h-8 rounded-full border border-orange-200"
+                                        />
+                                        <div>
+                                            <span className="block text-xs font-black text-gray-900 leading-tight">
+                                                {compEmail}
+                                            </span>
+                                            <span className="text-[10px] font-bold text-emerald-600">
+                                                ✓ Google Authenticated
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 bg-gray-200/60 px-2 py-1 rounded-lg">
+                                        Locked
+                                    </span>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-[#9c8670]">
+                                        Full Name <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={compName}
+                                        onChange={(e) => setCompName(e.target.value)}
+                                        placeholder="Juan Dela Cruz"
+                                        className="form-input-premium text-xs py-3"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-[#9c8670]">
+                                        Contact Number (Phone) <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="tel"
+                                        value={compPhone}
+                                        onChange={(e) => setCompPhone(e.target.value)}
+                                        placeholder="09123456789"
+                                        className="form-input-premium text-xs py-3"
+                                        required
+                                        autoFocus
+                                    />
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-[#9c8670]">
+                                        Subdivision <span className="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        value={compSubdivisionId}
+                                        onChange={(e) => setCompSubdivisionId(Number(e.target.value))}
+                                        className="form-input-premium text-xs py-3 cursor-pointer"
+                                        required
+                                    >
+                                        {subdivisions.map((s) => (
+                                            <option key={s.subdivision_id} value={s.subdivision_id}>
+                                                {s.subdivision_name} ({s.barangay_name || 'San Vicente'})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-[#9c8670]">
+                                        Complete Street Address <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={compAddress}
+                                        onChange={(e) => setCompAddress(e.target.value)}
+                                        placeholder="Block 8 Lot 14, Phase 2"
+                                        className="form-input-premium text-xs py-3"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="pt-2 flex gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setGoogleModalStep(null)}
+                                        className="w-1/3 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-black rounded-2xl text-xs uppercase tracking-wider transition-all cursor-pointer"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={loading || !compName.trim() || !compPhone.trim() || !compAddress.trim()}
+                                        className="w-2/3 py-3.5 bg-[#F97316] hover:bg-[#ea580c] text-white font-black rounded-2xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer disabled:opacity-50"
+                                    >
+                                        {loading ? 'Saving...' : 'Save & Send OTP'}
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+
+                        {/* STEP 3: OTP 6-Digit Verification Screen */}
+                        {googleModalStep === 'otp_verification' && (
+                            <form onSubmit={handleVerifyOtpSubmit} className="space-y-4">
+                                <div className="text-center space-y-1">
+                                    <p className="text-xs font-semibold text-gray-600">
+                                        Enter the 6-digit verification code sent to:
+                                    </p>
+                                    <div className="flex flex-wrap items-center justify-center gap-2">
+                                        <span className="inline-block px-2.5 py-1 bg-orange-50 border border-orange-200 rounded-lg text-xs font-black text-orange-800">
+                                            📱 {compPhone || 'Registered Mobile'}
+                                        </span>
+                                        <span className="inline-block px-2.5 py-1 bg-gray-100 border border-gray-200 rounded-lg text-xs font-bold text-gray-700">
+                                            ✉️ {compEmail}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Dev / Sandbox OTP Display Banner */}
+                                {devOtp && (
+                                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-center">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700 block mb-0.5">
+                                            Demo / Verification Code:
+                                        </span>
+                                        <span className="text-xl font-black tracking-widest text-emerald-900 font-mono">
+                                            {devOtp}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {/* 6-Box OTP Input */}
+                                <div className="flex items-center justify-center gap-2 sm:gap-2.5 py-2" onPaste={handleOtpPaste}>
+                                    {otpDigits.map((digit, idx) => (
+                                        <input
+                                            key={idx}
+                                            ref={(el) => (otpInputRefs.current[idx] = el)}
+                                            type="text"
+                                            inputMode="numeric"
+                                            maxLength={1}
+                                            value={digit}
+                                            onChange={(e) => handleOtpChange(idx, e.target.value)}
+                                            onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                                            className="w-11 h-13 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-black bg-gray-50 border-2 border-gray-200 focus:border-[#F97316] rounded-2xl outline-none transition-all focus:scale-105 focus:shadow-md"
+                                            autoFocus={idx === 0}
+                                        />
+                                    ))}
+                                </div>
+
+                                {/* Timer & Resend Controls */}
+                                <div className="flex items-center justify-between text-xs pt-1 px-1">
+                                    <span className="text-gray-500 font-medium">
+                                        ⏱️ Expires in:{' '}
+                                        <strong className={otpTimer < 60 ? 'text-red-500 font-black' : 'text-gray-900 font-black'}>
+                                            {formatTimer(otpTimer)}
+                                        </strong>
+                                    </span>
+
+                                    <button
+                                        type="button"
+                                        onClick={handleResendOtp}
+                                        disabled={loading || resendCooldown > 0}
+                                        className="text-[#F97316] hover:underline font-black disabled:opacity-40 disabled:no-underline cursor-pointer"
+                                    >
+                                        {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
+                                    </button>
+                                </div>
+
+                                <div className="pt-2 flex gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setGoogleModalStep(null)}
+                                        className="w-1/3 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-black rounded-2xl text-xs uppercase tracking-wider transition-all cursor-pointer"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={loading || otpDigits.join('').length < 6 || otpTimer <= 0}
+                                        className="w-2/3 py-3.5 bg-[#F97316] hover:bg-[#ea580c] text-white font-black rounded-2xl text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                                    >
+                                        <span>{loading ? 'Verifying...' : 'Verify & Sign In'}</span>
+                                    </button>
+                                </div>
+                            </form>
+                        )}
                     </div>
                 </div>
             )}

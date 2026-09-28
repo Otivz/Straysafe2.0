@@ -29,6 +29,7 @@ from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.uploads import read_and_validate_upload
 from app.schemas.adoption import (
     AdoptionApplyRequest,
+    AdoptionCancelRequest,
     AdoptionReviewRequest,
     AdoptionHandoverConfirmRequest,
     PromoteToAdoptionRequest,
@@ -36,6 +37,7 @@ from app.schemas.adoption import (
     CatalogAnimalResponse,
     JourneyPin,
     AnimalJourneyResponse,
+    UserJourneyPetSummary,
     AdoptionResponse,
 )
 
@@ -116,6 +118,8 @@ def _build_adoption_response(app: Adoption) -> AdoptionResponse:
         staff_handover_by=app.staff_handover_by,
         staff_handover_name=staff_name,
         created_pet_id=app.created_pet_id,
+        cancellation_reason=getattr(app, 'cancellation_reason', None),
+        cancelled_at=getattr(app, 'cancelled_at', None),
     )
 
 
@@ -332,40 +336,26 @@ def get_adoption_catalog_detail(holding_id: int, db: Session = Depends(get_db)):
     )
 
 
-# ── GET /adoptions/journey/{holding_id} ──────────────────────────────────────
-@router.get("/journey/{holding_id}", response_model=AnimalJourneyResponse)
-def get_animal_journey(
-    holding_id: int,
-    req: Request,
-    db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_optional_user),
-):
-    """Animal Journey Map endpoint — public views masked adopter info, staff views full."""
-    animal = (
-        db.query(HoldingAnimal)
-        .options(
-            joinedload(HoldingAnimal.report).joinedload(Report.media),
-            joinedload(HoldingAnimal.report).joinedload(Report.facility),
-            joinedload(HoldingAnimal.timeline).joinedload(HoldingTimeline.staff),
-        )
-        .filter(HoldingAnimal.holding_id == holding_id)
-        .first()
-    )
-    if not animal:
-        raise HTTPException(status_code=404, detail="Animal not found")
-
+def _build_animal_journey_response(
+    animal: HoldingAnimal,
+    db: Session,
+    current_user: Optional[User] = None,
+    user_pets: Optional[List[UserJourneyPetSummary]] = None,
+    user_adoption: Optional[Adoption] = None,
+) -> AnimalJourneyResponse:
+    """Helper to build unified journey map pins and response for an animal."""
     rep = animal.report
     photos = [m.file_url for m in rep.media if m.media_type == "Image" and m.file_url] if rep and rep.media else []
 
     pins: List[JourneyPin] = []
 
-    # 1. Red Pin: Original Sighting
+    # 1. Red Pin: Original Sighting / Rescue Origin
     if rep and rep.latitude is not None and rep.longitude is not None:
         date_str = rep.created_at.strftime("%b %d, %Y") if rep.created_at else None
         pins.append(
             JourneyPin(
                 id="sighting",
-                label="Original Sighting",
+                label="Original Sighting & Rescue",
                 description=f"Spotted near {rep.landmark or 'community area'}",
                 latitude=float(rep.latitude),
                 longitude=float(rep.longitude),
@@ -374,11 +364,10 @@ def get_animal_journey(
             )
         )
 
-    # 2. Orange / Blue Pins: Intake & Transfers
+    # 2. Orange / Blue Pins: Intake, Medical & Holding Facility Movements
     if animal.timeline:
         for idx, event in enumerate(animal.timeline):
-            if event.event_type in ["intake", "transfer", "relocation"]:
-                # Lookup facility coords if landmark or notes contain match
+            if event.event_type in ["intake", "transfer", "relocation", "status_change", "medical"]:
                 lat, lng = None, None
                 if rep and rep.facility and rep.facility.latitude and rep.facility.longitude:
                     lat, lng = float(rep.facility.latitude), float(rep.facility.longitude)
@@ -387,8 +376,8 @@ def get_animal_journey(
                 pins.append(
                     JourneyPin(
                         id=f"event_{event.log_id}_{idx}",
-                        label=event.title or "Holding Facility Movement",
-                        description=event.notes or "Animal in protective holding",
+                        label=event.title or "Barangay Facility Protective Custody",
+                        description=event.notes or "Animal in protective holding and care",
                         latitude=lat,
                         longitude=lng,
                         date=event_date,
@@ -396,49 +385,85 @@ def get_animal_journey(
                     )
                 )
 
-    # 3. Check Adoption Record
+    # 3. Check Adoption Record & Application Status
     approved_adoption = (
         db.query(Adoption)
-        .filter(Adoption.holding_id == holding_id, Adoption.status == "Approved")
+        .filter(Adoption.holding_id == animal.holding_id, Adoption.status == "Approved")
         .order_by(Adoption.reviewed_at.desc())
         .first()
     )
 
-    is_adopted = animal.facility_status == 7 or approved_adoption is not None
+    # If current user has their own application for this pet, use it
+    if not user_adoption and current_user:
+        user_adoption = (
+            db.query(Adoption)
+            .filter(Adoption.holding_id == animal.holding_id, Adoption.applicant_id == current_user.user_id)
+            .order_by(Adoption.created_at.desc())
+            .first()
+        )
+
+    is_user_applicant = bool(user_adoption and current_user and user_adoption.applicant_id == current_user.user_id)
+    is_staff_or_admin = bool(current_user and current_user.role_id in [2, 3, 4])
+    is_adopted = animal.facility_status == 7 or (approved_adoption is not None and (approved_adoption.is_handed_over or approved_adoption.staff_handed_over))
+
     adopter_name_public: Optional[str] = None
     adopter_date: Optional[str] = None
     adopter_area: Optional[str] = None
     adopter_name_full: Optional[str] = None
     adopter_contact: Optional[str] = None
     adopter_address: Optional[str] = None
+    application_status: Optional[str] = None
 
-    if approved_adoption:
-        adopter_name_public = _mask_name(approved_adoption.full_name)
-        if approved_adoption.reviewed_at:
-            adopter_date = approved_adoption.reviewed_at.strftime("%b %d, %Y")
-        if approved_adoption.address:
-            addr_parts = approved_adoption.address.split(",")
+    active_target_adoption = user_adoption if is_user_applicant else approved_adoption
+
+    if active_target_adoption:
+        application_status = active_target_adoption.status
+        adopter_name_public = _mask_name(active_target_adoption.full_name)
+        if active_target_adoption.reviewed_at:
+            adopter_date = active_target_adoption.reviewed_at.strftime("%b %d, %Y")
+        elif active_target_adoption.created_at:
+            adopter_date = active_target_adoption.created_at.strftime("%b %d, %Y")
+
+        if active_target_adoption.address:
+            addr_parts = active_target_adoption.address.split(",")
             adopter_area = addr_parts[-1].strip() if addr_parts else "Metro Area"
 
-        # Staff full access
-        is_staff_or_admin = current_user and current_user.role_id in [2, 3, 4]
-        if is_staff_or_admin:
-            adopter_name_full = approved_adoption.full_name
-            adopter_contact = approved_adoption.contact_no
-            adopter_address = approved_adoption.address
+        # If user is the applicant, show their own info without masking
+        if is_user_applicant:
+            adopter_name_public = active_target_adoption.full_name
+            adopter_name_full = active_target_adoption.full_name
+            adopter_contact = active_target_adoption.contact_no
+            adopter_address = active_target_adoption.address
+        elif is_staff_or_admin:
+            adopter_name_full = active_target_adoption.full_name
+            adopter_contact = active_target_adoption.contact_no
+            adopter_address = active_target_adoption.address
 
-        # Final Green Pin (Outcome)
-        pins.append(
-            JourneyPin(
-                id="adoption_outcome",
-                label="Adopted into Loving Home",
-                description=f"Adopted by {adopter_name_public} on {adopter_date or 'Recent'}",
-                latitude=None,  # No exact GPS home coordinates for privacy
-                longitude=None,
-                date=adopter_date,
-                pin_color="green",
+        # Pin for user application or approved adoption outcome
+        if active_target_adoption.status == "Approved" or is_adopted:
+            pins.append(
+                JourneyPin(
+                    id="adoption_outcome",
+                    label="Adopted into Loving Home" if is_adopted else "Adoption Application Approved",
+                    description=f"{'Adopted by ' + adopter_name_public if is_adopted else 'Approved for ' + adopter_name_public} on {adopter_date or 'Recent'}",
+                    latitude=None,
+                    longitude=None,
+                    date=adopter_date,
+                    pin_color="green",
+                )
             )
-        )
+        elif is_user_applicant and active_target_adoption.status == "Pending":
+            pins.append(
+                JourneyPin(
+                    id="adoption_pending",
+                    label="Adoption Application Under Review",
+                    description=f"Your adoption application is currently being evaluated by Barangay Animal Services.",
+                    latitude=None,
+                    longitude=None,
+                    date=adopter_date,
+                    pin_color="orange",
+                )
+            )
 
     return AnimalJourneyResponse(
         holding_id=animal.holding_id,
@@ -454,7 +479,188 @@ def get_animal_journey(
         adopter_name_full=adopter_name_full,
         adopter_contact=adopter_contact,
         adopter_address=adopter_address,
+        application_status=application_status,
         pins=pins,
+        user_pets=user_pets or [],
+    )
+
+
+# ── GET /adoptions/my-journey ────────────────────────────────────────────────
+@router.get("/my-journey", response_model=AnimalJourneyResponse)
+def get_my_animal_journey(
+    holding_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Authenticated user Journey Trail endpoint.
+    Retrieves the journey data scoped strictly to the currently logged-in user.
+    """
+    # 1. Fetch user's adoption applications
+    user_apps = (
+        db.query(Adoption)
+        .options(
+            joinedload(Adoption.animal).joinedload(HoldingAnimal.report).joinedload(Report.media),
+        )
+        .filter(Adoption.applicant_id == current_user.user_id)
+        .order_by(Adoption.created_at.desc())
+        .all()
+    )
+
+    # Build pet summary list for switching between user's pets
+    user_pets: List[UserJourneyPetSummary] = []
+    seen_holdings = set()
+    for app in user_apps:
+        if app.holding_id and app.holding_id not in seen_holdings:
+            seen_holdings.add(app.holding_id)
+            anim = app.animal
+            photo = None
+            if anim and anim.report and anim.report.media:
+                imgs = [m.file_url for m in anim.report.media if m.media_type == "Image" and m.file_url]
+                photo = imgs[0] if imgs else None
+
+            user_pets.append(
+                UserJourneyPetSummary(
+                    holding_id=app.holding_id,
+                    animal_name=anim.animal_name if anim else f"Rescue #{app.holding_id}",
+                    animal_type=anim.animal_type if anim else "Rescue Pet",
+                    breed=anim.breed if anim else None,
+                    photo=photo,
+                    application_status=app.status,
+                    is_adopted=(app.status == "Approved" and (app.is_handed_over or app.staff_handed_over)) or (anim.facility_status == 7 if anim else False),
+                    adoption_id=app.adoption_id,
+                )
+            )
+
+    # If user has no adoption applications:
+    if not user_apps:
+        # Check if staff or admin
+        if current_user.role_id in [2, 3, 4] and holding_id:
+            # Staff can inspect specific animal
+            animal = (
+                db.query(HoldingAnimal)
+                .options(
+                    joinedload(HoldingAnimal.report).joinedload(Report.media),
+                    joinedload(HoldingAnimal.report).joinedload(Report.facility),
+                    joinedload(HoldingAnimal.timeline).joinedload(HoldingTimeline.staff),
+                )
+                .filter(HoldingAnimal.holding_id == holding_id)
+                .first()
+            )
+            if not animal:
+                raise HTTPException(status_code=404, detail="Animal not found")
+            return _build_animal_journey_response(animal, db, current_user, user_pets=[])
+
+        raise HTTPException(
+            status_code=404,
+            detail="No journey records found. You do not have any adoption applications or rescue journey records yet."
+        )
+
+    # Determine which application to display
+    target_app: Optional[Adoption] = None
+    if holding_id:
+        target_app = next((a for a in user_apps if a.holding_id == holding_id), None)
+        if not target_app and current_user.role_id not in [2, 3, 4]:
+            raise HTTPException(
+                status_code=404,
+                detail="No journey records found for this animal in your account."
+            )
+    else:
+        # Pick primary: prefer Approved > Pending > others
+        approved_app = next((a for a in user_apps if a.status == "Approved"), None)
+        pending_app = next((a for a in user_apps if a.status == "Pending"), None)
+        target_app = approved_app or pending_app or user_apps[0]
+
+    target_holding_id = target_app.holding_id if target_app else holding_id
+    if not target_holding_id:
+        raise HTTPException(status_code=404, detail="No journey records found.")
+
+    animal = (
+        db.query(HoldingAnimal)
+        .options(
+            joinedload(HoldingAnimal.report).joinedload(Report.media),
+            joinedload(HoldingAnimal.report).joinedload(Report.facility),
+            joinedload(HoldingAnimal.timeline).joinedload(HoldingTimeline.staff),
+        )
+        .filter(HoldingAnimal.holding_id == target_holding_id)
+        .first()
+    )
+    if not animal:
+        raise HTTPException(status_code=404, detail="Animal record not found.")
+
+    return _build_animal_journey_response(
+        animal=animal,
+        db=db,
+        current_user=current_user,
+        user_pets=user_pets,
+        user_adoption=target_app,
+    )
+
+
+# ── GET /adoptions/journey/{holding_id} ──────────────────────────────────────
+@router.get("/journey/{holding_id}", response_model=AnimalJourneyResponse)
+def get_animal_journey(
+    holding_id: int,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    """Animal Journey Map endpoint — public views masked adopter info, staff and applicant view authenticated data."""
+    animal = (
+        db.query(HoldingAnimal)
+        .options(
+            joinedload(HoldingAnimal.report).joinedload(Report.media),
+            joinedload(HoldingAnimal.report).joinedload(Report.facility),
+            joinedload(HoldingAnimal.timeline).joinedload(HoldingTimeline.staff),
+        )
+        .filter(HoldingAnimal.holding_id == holding_id)
+        .first()
+    )
+    if not animal:
+        raise HTTPException(status_code=404, detail="Animal not found")
+
+    user_pets: List[UserJourneyPetSummary] = []
+    user_adoption: Optional[Adoption] = None
+
+    if current_user:
+        user_apps = (
+            db.query(Adoption)
+            .options(
+                joinedload(Adoption.animal).joinedload(HoldingAnimal.report).joinedload(Report.media),
+            )
+            .filter(Adoption.applicant_id == current_user.user_id)
+            .order_by(Adoption.created_at.desc())
+            .all()
+        )
+        user_adoption = next((a for a in user_apps if a.holding_id == holding_id), None)
+        seen = set()
+        for app in user_apps:
+            if app.holding_id and app.holding_id not in seen:
+                seen.add(app.holding_id)
+                anim = app.animal
+                photo = None
+                if anim and anim.report and anim.report.media:
+                    imgs = [m.file_url for m in anim.report.media if m.media_type == "Image" and m.file_url]
+                    photo = imgs[0] if imgs else None
+                user_pets.append(
+                    UserJourneyPetSummary(
+                        holding_id=app.holding_id,
+                        animal_name=anim.animal_name if anim else f"Rescue #{app.holding_id}",
+                        animal_type=anim.animal_type if anim else "Rescue Pet",
+                        breed=anim.breed if anim else None,
+                        photo=photo,
+                        application_status=app.status,
+                        is_adopted=(app.status == "Approved" and (app.is_handed_over or app.staff_handed_over)) or (anim.facility_status == 7 if anim else False),
+                        adoption_id=app.adoption_id,
+                    )
+                )
+
+    return _build_animal_journey_response(
+        animal=animal,
+        db=db,
+        current_user=current_user,
+        user_pets=user_pets,
+        user_adoption=user_adoption,
     )
 
 
@@ -541,7 +747,7 @@ def promote_to_adoption(
 @router.post("/upload-id")
 async def upload_adoption_id(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_resident),
+    current_user: User = Depends(get_current_user),
 ):
     """Upload Government ID document image for adoption application."""
     file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(
@@ -562,7 +768,7 @@ def apply_for_adoption(
     req: AdoptionApplyRequest,
     http_req: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_resident),
+    current_user: User = Depends(get_current_user),
 ):
     """Citizen submits an adoption application for an animal listed in status 6."""
     animal = db.query(HoldingAnimal).filter(HoldingAnimal.holding_id == req.holding_id).first()
@@ -673,7 +879,7 @@ def apply_for_adoption(
 @router.get("/my-applications", response_model=List[AdoptionResponse])
 def get_my_adoption_applications(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_resident),
+    current_user: User = Depends(get_current_user),
 ):
     """Resident views all adoption applications they have submitted."""
     apps = (
@@ -943,7 +1149,7 @@ def adopter_confirm_received(
     body: AdoptionHandoverConfirmRequest,
     http_req: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_resident),
+    current_user: User = Depends(get_current_user),
 ):
     """Adopter confirms that they have received and claimed the pet."""
     app = (
@@ -1035,3 +1241,93 @@ def get_late_claim_info(
         adopter_name=adoption.full_name,
         adopter_contact_no=adoption.contact_no,
     )
+
+
+# ── POST /adoptions/{adoption_id}/cancel ─────────────────────────────────────
+@router.post("/{adoption_id}/cancel")
+def cancel_adoption_application(
+    adoption_id: int,
+    body: AdoptionCancelRequest,
+    http_req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Applicant cancels their pending or approved adoption application."""
+    app = (
+        db.query(Adoption)
+        .options(
+            joinedload(Adoption.animal).joinedload(HoldingAnimal.report).joinedload(Report.media),
+        )
+        .filter(Adoption.adoption_id == adoption_id)
+        .first()
+    )
+    if not app:
+        raise HTTPException(status_code=404, detail="Adoption application not found")
+
+    # Only applicant or system admin can cancel
+    if app.applicant_id != current_user.user_id and current_user.role_id != 4:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only cancel adoption applications submitted from your own account."
+        )
+
+    if app.status == "Cancelled":
+        raise HTTPException(status_code=400, detail="This application has already been cancelled.")
+
+    if app.status == "Approved" and app.is_handed_over and app.staff_handed_over:
+        raise HTTPException(status_code=400, detail="Cannot cancel an application that has already completed physical handover and adoption.")
+
+    reason = body.reason.strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="A cancellation reason is required.")
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    app.status = "Cancelled"
+    app.cancellation_reason = reason
+    app.cancelled_at = now
+
+    # Log milestone timeline if animal exists
+    if app.holding_id:
+        timeline_entry = HoldingTimeline(
+            holding_id=app.holding_id,
+            event_type="status_change",
+            title=f"Adoption Cancelled — {app.full_name}",
+            notes=f"Adoption application #{app.adoption_id} was cancelled by applicant. Reason: {reason}",
+            logged_by=current_user.user_id,
+        )
+        db.add(timeline_entry)
+
+    # Notify Barangay Head Officer / Staff
+    try:
+        head_officers = db.query(User).filter(User.role_id == 3, User.is_head_officer == True).all()
+        for ho in head_officers:
+            notif = Notification(
+                user_id=ho.user_id,
+                title="Adoption Application Cancelled",
+                message=f"Applicant {app.full_name} cancelled adoption application #{app.adoption_id}. Reason: {reason}",
+                notification_type="adoption_cancelled",
+                related_id=app.adoption_id,
+            )
+            db.add(notif)
+    except Exception:
+        pass
+
+    log_activity(
+        db=db,
+        action="CANCEL_ADOPTION_APPLICATION",
+        target_table="adoptions",
+        target_id=app.adoption_id,
+        description=f"Applicant {current_user.name} cancelled adoption application #{app.adoption_id}. Reason: {reason}",
+        log_type="operation",
+        user_id=current_user.user_id,
+        request=http_req,
+    )
+
+    db.commit()
+    db.refresh(app)
+    return {
+        "message": "Adoption application cancelled successfully.",
+        "adoption_id": app.adoption_id,
+        "status": "Cancelled",
+        "cancellation_reason": reason,
+    }

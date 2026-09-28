@@ -9,7 +9,7 @@ import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMapEvents, Polygon, Circle, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { fetchCoverageArea, isWithinCoverage, type CoverageAreaInfo, COVERAGE_OUTSIDE_ERROR_MESSAGE, SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
+import { fetchCoverageArea, isWithinCoverage, type CoverageAreaInfo, COVERAGE_OUTSIDE_ERROR_MESSAGE, SELERA_DEFAULT_CENTER, SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS } from '../../utils/coverageArea';
 
 // Fix for default marker icon issue in React Leaflet
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -19,6 +19,7 @@ import ReturnToSeleraButton from '../../components/MapControls/ReturnToSeleraBut
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import SuccessModal from '../../components/Modals/SuccessModal';
+import CancelReportModal from '../../components/Modals/CancelReportModal';
 import { getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
 import { createLandmarkPinIcon, getLandmarkCategory } from '../../utils/landmarkIcons';
 import { useToast } from '../../context/ToastContext';
@@ -43,13 +44,6 @@ const DefaultIcon = L.icon({
 });
 
 L.Marker.prototype.options.icon = DefaultIcon;
-
-const SELERA_POLYGON = [
-    { lat: 14.801496, lng: 121.005174 },
-    { lat: 14.799577, lng: 121.003911 },
-    { lat: 14.800634, lng: 121.002228 },
-    { lat: 14.802461, lng: 121.003280 }
-];
 
 const getColorHex = (colorName: string): string => {
     const name = colorName.trim().toLowerCase();
@@ -162,17 +156,20 @@ const categoryMap: Record<number, string> = {
 };
 
 const parseReportDescription = (description: string) => {
-    if (!description) return { cleanNotes: '', pattern: '', conditions: '', markings: '' };
+    if (!description) return { cleanNotes: '', pattern: '', conditions: '', markings: '', custody: '' };
 
-    if (description.includes('|') || description.toLowerCase().includes('pattern:') || description.toLowerCase().includes('observed conditions:') || description.toLowerCase().includes('notes:')) {
+    if (description.includes('|') || description.toLowerCase().includes('pattern:') || description.toLowerCase().includes('observed conditions:') || description.toLowerCase().includes('custody:') || description.toLowerCase().includes('notes:')) {
         const parts = description.split('|').map((p: string) => p.trim());
         let pattern = '';
         let conditions = '';
         let markings = '';
+        let custody = '';
         let cleanNotes = '';
 
         parts.forEach((part: string) => {
-            if (part.toLowerCase().startsWith('pattern:')) {
+            if (part.toLowerCase().startsWith('custody:')) {
+                custody = part.replace(/^custody:\s*/i, '').trim();
+            } else if (part.toLowerCase().startsWith('pattern:')) {
                 pattern = part.replace(/^pattern:\s*/i, '').trim();
             } else if (part.toLowerCase().startsWith('observed conditions:')) {
                 conditions = part.replace(/^observed conditions:\s*/i, '').trim();
@@ -180,15 +177,23 @@ const parseReportDescription = (description: string) => {
                 markings = part.replace(/^markings:\s*/i, '').trim();
             } else if (part.toLowerCase().startsWith('notes:')) {
                 cleanNotes = part.replace(/^notes:\s*/i, '').trim();
-            } else if (!pattern && !conditions && !markings && !cleanNotes) {
+            } else if (!cleanNotes && !part.toLowerCase().startsWith('custody:') && !part.toLowerCase().startsWith('pattern:') && !part.toLowerCase().startsWith('observed conditions:') && !part.toLowerCase().startsWith('markings:')) {
                 cleanNotes = part.trim();
             }
         });
 
-        return { cleanNotes, pattern, conditions, markings };
+        if (cleanNotes && (cleanNotes.toLowerCase().startsWith('custody:') || cleanNotes.toLowerCase().startsWith('pattern:') || cleanNotes.toLowerCase().startsWith('observed conditions:') || cleanNotes.toLowerCase().startsWith('markings:'))) {
+            cleanNotes = '';
+        }
+
+        return { cleanNotes, pattern, conditions, markings, custody };
     }
 
-    return { cleanNotes: description.trim(), pattern: '', conditions: '', markings: '' };
+    if (description.trim().toLowerCase().startsWith('custody:')) {
+        return { cleanNotes: '', pattern: '', conditions: '', markings: '', custody: description.replace(/^custody:\s*/i, '').trim() };
+    }
+
+    return { cleanNotes: description.trim(), pattern: '', conditions: '', markings: '', custody: '' };
 };
 
 const FormattedReportDescription = ({ description }: { description: string }) => {
@@ -206,8 +211,8 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
         return (
             <div className="space-y-3.5 my-3">
                 {/* Header / Banner notice */}
-                <div className="flex items-center gap-2.5 p-3 px-4 bg-gradient-to-r from-red-50 to-orange-50 rounded-2xl border border-red-200/80 text-red-950 shadow-xs">
-                    <Siren className="w-5 h-5 animate-pulse shrink-0" />
+                <div className="flex items-center gap-2.5 p-3 px-4 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-950/40 dark:to-orange-950/30 rounded-2xl border border-red-200/80 dark:border-red-900/50 text-red-950 dark:text-red-200 shadow-xs">
+                    <Siren className="w-5 h-5 animate-pulse shrink-0 text-red-500" />
                     <p className="text-xs sm:text-sm font-black uppercase tracking-tight">
                         {headerLine.replace('[LOST PET REPORT]', '').trim() || 'Missing Registered Pet Alert'}
                     </p>
@@ -215,7 +220,7 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
 
                 {/* Structured Attributes Grid */}
                 {bulletLines.length > 0 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-[#FAF9F6] p-4 rounded-3xl border border-stone-200/70 shadow-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-[#FAF9F6] dark:bg-[#151C2C] p-4 rounded-3xl border border-stone-200/70 dark:border-gray-800 shadow-xs">
                         {bulletLines.map((b, idx) => {
                             const raw = b.replace(/^•\s*/, '');
                             const colonIdx = raw.indexOf(':');
@@ -229,9 +234,9 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
                                 return (
                                     <div
                                         key={idx}
-                                        className={`p-3 rounded-2xl bg-white border border-stone-100 shadow-2xs ${isWide ? 'sm:col-span-2' : ''}`}
+                                        className={`p-3 rounded-2xl bg-white dark:bg-[#1E2738] border border-stone-100 dark:border-gray-700/80 shadow-2xs ${isWide ? 'sm:col-span-2' : ''}`}
                                     >
-                                        <p className="text-[9px] font-black text-amber-800 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                        <p className="text-[9px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest mb-1 flex items-center gap-1">
                                             {key.toLowerCase().includes('last seen') && <MapPin className="w-3 h-3" />}
                                             {key.toLowerCase().includes('breed') && <PawPrint className="w-3 h-3" />}
                                             {key.toLowerCase().includes('color') && <Palette className="w-3 h-3" />}
@@ -241,14 +246,14 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
                                             {key.toLowerCase().includes('circumstances') && <FileText className="w-3 h-3" />}
                                             <span>{key}</span>
                                         </p>
-                                        <p className="text-xs sm:text-[13px] font-bold text-gray-900 leading-snug">
+                                        <p className="text-xs sm:text-[13px] font-bold text-gray-900 dark:text-white leading-snug">
                                             {val}
                                         </p>
                                     </div>
                                 );
                             }
                             return (
-                                <div key={idx} className="sm:col-span-2 p-2.5 rounded-2xl bg-white border border-stone-100 text-xs font-semibold text-gray-800">
+                                <div key={idx} className="sm:col-span-2 p-2.5 rounded-2xl bg-white dark:bg-[#1E2738] border border-stone-100 dark:border-gray-700/80 text-xs font-semibold text-gray-800 dark:text-gray-200">
                                     • {raw}
                                 </div>
                             );
@@ -258,8 +263,8 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
 
                 {/* Closing / Callout */}
                 {closingLines.length > 0 && (
-                    <div className="p-3.5 bg-amber-500/10 rounded-2xl border border-amber-300/60 text-xs font-bold text-amber-950 flex items-start gap-2.5 shadow-2xs">
-                        <Megaphone className="w-4 h-4 text-amber-600 shrink-0" />
+                    <div className="p-3.5 bg-amber-500/10 dark:bg-amber-950/30 rounded-2xl border border-amber-300/60 dark:border-amber-700/50 text-xs font-bold text-amber-950 dark:text-amber-200 flex items-start gap-2.5 shadow-2xs">
+                        <Megaphone className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                         <p className="leading-relaxed">
                             {closingLines.join(' ')}
                         </p>
@@ -275,9 +280,9 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
         return null;
     }
 
-    // Default / Standard Report Description: clean typography with preserved linebreaks
+    // Default / Standard Report Description: clean typography with preserved linebreaks in a subtle card
     return (
-        <div className="text-[13px] sm:text-[14px] font-medium text-[#2d2417] dark:text-slate-100 leading-relaxed whitespace-pre-line">
+        <div className="text-[13px] sm:text-[14px] font-medium text-[#2d2417] dark:text-slate-100 leading-relaxed whitespace-pre-line bg-stone-50/70 dark:bg-[#1E2738] p-3.5 sm:p-4 rounded-2xl border border-stone-200/60 dark:border-gray-700/80 shadow-2xs">
             {cleanNotes}
         </div>
     );
@@ -787,15 +792,27 @@ const ResiHomePage = () => {
         }
     }, [formData.animalBreed, formData.animalType, breedsData]);
 
-    const handleCancelReport = async (reportId: number) => {
-        if (!window.confirm('Are you sure you want to cancel this report? This will withdraw the report from the active feed.')) return;
+    const [cancellingReport, setCancellingReport] = useState<{ reportId: number; reportCode?: string } | null>(null);
+    const [isCancellingReport, setIsCancellingReport] = useState<boolean>(false);
+
+    const openCancelModal = (report: any) => {
+        const reportCode = `#STR-${(report.report_id || 0).toString().padStart(4, '0')}`;
+        setCancellingReport({ reportId: report.report_id, reportCode });
+    };
+
+    const handleConfirmCancelReport = async () => {
+        if (!cancellingReport) return;
+        setIsCancellingReport(true);
         try {
-            await api.patch(`/reports/${reportId}/cancel`);
+            await api.patch(`/reports/${cancellingReport.reportId}/cancel`);
             toast.success('Report cancelled successfully');
+            setCancellingReport(null);
             fetchReports();
         } catch (error) {
             console.error('Error cancelling report:', error);
             toast.error('Failed to cancel report or an error occurred.');
+        } finally {
+            setIsCancellingReport(false);
         }
     };
 
@@ -2365,8 +2382,8 @@ const ResiHomePage = () => {
                                                         onLocationSelect={(lat, lng) => setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }))}
                                                     />
                                                     <Polygon
-                                                        positions={SELERA_POLYGON.map(p => [p.lat, p.lng] as [number, number])}
-                                                        pathOptions={{ color: '#F97316', fillColor: '#F97316', fillOpacity: 0.1, weight: 2, dashArray: '5, 10' }}
+                                                        positions={SELERA_POLYGON_BOUNDS}
+                                                        pathOptions={SELERA_BOUNDARY_PATH_OPTIONS}
                                                     />
                                                     {/* Configurable Reporting Coverage Radius Circle centered on Selera Homes */}
                                                     <Circle
@@ -3239,42 +3256,42 @@ const ResiHomePage = () => {
 
                                 return (
                                     <div key={report.report_id} className="max-w-3xl mx-auto">
-                                        <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden mb-12 hover:shadow-2xl transition-all duration-300">
+                                        <div className="bg-white dark:bg-stone-900 rounded-[2.5rem] border border-gray-100 dark:border-stone-800 shadow-xl overflow-hidden mb-10 hover:shadow-2xl transition-all duration-300">
                                             {/* Top Header Bar: ID (Left) + Actions (Right) */}
-                                            <div className="px-3.5 sm:px-6 py-2.5 border-b border-gray-100 flex items-center justify-between gap-2 bg-gray-50/40">
-                                                <div className="flex items-center gap-1.5 shrink-0">
-                                                    <span className="w-2 h-2 rounded-full bg-orange-400"></span>
-                                                    <p className="text-[10px] sm:text-xs font-black text-gray-500 uppercase tracking-wider">
+                                            <div className="px-4 sm:px-7 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between gap-3 bg-stone-50/60 dark:bg-stone-900/60 flex-wrap sm:flex-nowrap">
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <span className="w-2.5 h-2.5 rounded-full bg-[#F97316] ring-4 ring-orange-100 dark:ring-orange-950/60"></span>
+                                                    <span className="text-xs sm:text-[13px] font-black text-stone-800 dark:text-stone-200 font-mono tracking-wider">
                                                         #STR-{(report.report_id || 0).toString().padStart(4, '0')}
-                                                    </p>
+                                                    </span>
                                                 </div>
-                                                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                                                <div className="flex items-center gap-2 shrink-0 flex-wrap">
                                                     <button
                                                         type="button"
                                                         onClick={(e) => { e.stopPropagation(); openReportDetail(report.report_id, report); }}
-                                                        className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs sm:text-[13px] font-bold text-[#EA580C] bg-white hover:bg-orange-50 active:scale-95 rounded-full transition-all border border-[#FDBA74] hover:border-[#EA580C] shadow-xs cursor-pointer"
+                                                        className="inline-flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 h-9 text-xs font-black uppercase tracking-wider text-[#EA580C] bg-orange-50/70 hover:bg-orange-100 dark:bg-orange-950/40 dark:hover:bg-orange-900/50 active:scale-95 rounded-xl sm:rounded-2xl transition-all border border-orange-200/90 dark:border-orange-800/80 hover:border-orange-400 shadow-2xs cursor-pointer"
                                                         title="View Full Report"
                                                     >
                                                         <span>View Full Report</span>
-                                                        <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-[#EA580C]" />
+                                                        <ExternalLink className="w-3.5 h-3.5 shrink-0 text-[#EA580C]" />
                                                     </button>
                                                     {report.user_id === currentUserId && report.status_id === 1 && (
                                                         <>
                                                             <button
                                                                 type="button"
                                                                 onClick={(e) => { e.stopPropagation(); handleEditClick(report); }}
-                                                                className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-[#F97316] bg-orange-50/90 hover:bg-orange-100 hover:text-orange-700 active:scale-95 rounded-xl transition-all border border-orange-200/60 shadow-xs cursor-pointer"
+                                                                className="inline-flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 h-9 text-xs font-black uppercase tracking-wider text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white bg-white dark:bg-stone-800 hover:bg-stone-50 dark:hover:bg-stone-750 active:scale-95 rounded-xl sm:rounded-2xl transition-all border border-stone-200 dark:border-stone-700 hover:border-stone-300 shadow-2xs cursor-pointer"
                                                                 title="Edit Report"
                                                             >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                                 </svg>
                                                                 <span>Edit</span>
                                                             </button>
                                                             <button
                                                                 type="button"
-                                                                onClick={(e) => { e.stopPropagation(); handleCancelReport(report.report_id); }}
-                                                                className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-rose-600 bg-rose-50/90 hover:bg-rose-100 hover:text-rose-700 active:scale-95 rounded-xl transition-all border border-rose-200/60 shadow-xs cursor-pointer"
+                                                                onClick={(e) => { e.stopPropagation(); openCancelModal(report); }}
+                                                                className="inline-flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 h-9 text-xs font-black uppercase tracking-wider text-rose-600 dark:text-rose-400 hover:text-white dark:hover:text-white bg-rose-50/90 dark:bg-rose-950/40 hover:bg-rose-600 dark:hover:bg-rose-600 active:bg-rose-700 active:scale-95 rounded-xl sm:rounded-2xl transition-all border border-rose-200/90 dark:border-rose-900/60 hover:border-rose-600 shadow-2xs cursor-pointer"
                                                                 title="Cancel Report"
                                                             >
                                                                 <X className="w-3.5 h-3.5 shrink-0" />
@@ -3286,39 +3303,38 @@ const ResiHomePage = () => {
                                             </div>
 
                                             {/* Content Section */}
-                                            <div className="px-4 sm:px-8 pt-6 pb-6">
+                                            <div className="px-4 sm:px-8 pt-6 pb-6 space-y-4">
                                                 {/* Profile & Category Header Row */}
-                                                <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
+                                                <div className="flex items-center justify-between gap-3 flex-wrap">
                                                     <div className="flex items-center gap-3">
                                                         {report.reporter_photo ? (
                                                             <img
                                                                 src={getProfilePicture(report.reporter_photo)}
-                                                                className="w-11 h-11 rounded-full object-cover border-2 border-orange-50 shadow-sm"
+                                                                className="w-11 h-11 rounded-full object-cover ring-2 ring-orange-100 dark:ring-orange-900/40 border-2 border-white dark:border-stone-800 shadow-xs shrink-0"
                                                                 alt={report.reporter_name}
                                                                 onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
                                                             />
                                                         ) : (
-                                                            <div className="w-11 h-11 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-black text-sm border-2 border-white shadow-sm">
+                                                            <div className="w-11 h-11 rounded-full bg-orange-100 dark:bg-orange-950/60 flex items-center justify-center text-[#F97316] dark:text-orange-400 font-black text-sm border-2 border-white dark:border-stone-800 shadow-xs shrink-0">
                                                                 {report.reporter_name?.charAt(0).toUpperCase() || 'U'}
                                                             </div>
                                                         )}
                                                         <div>
-                                                            <p className="text-[13px] font-black text-[#1a1208] uppercase tracking-tight leading-none mb-1.5">{report.reporter_name}</p>
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-[10px] font-semibold text-gray-400 leading-none">{date}</span>
+                                                            <p className="text-sm font-black text-[#1a1208] dark:text-white uppercase tracking-tight leading-snug mb-1">
+                                                                {report.reporter_name}
+                                                            </p>
+                                                            <div className="flex items-center gap-2 text-xs">
+                                                                <span className="text-[11px] font-semibold text-gray-400 leading-none">{date}</span>
                                                                 <span className="text-gray-300 dark:text-gray-600 font-bold text-[9px] leading-none">•</span>
-                                                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[#FAFAF9] dark:bg-[#1A2338] border border-gray-100 dark:border-gray-800 rounded-md w-fit">
+                                                                <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-stone-100 dark:bg-stone-800 border border-stone-200/80 dark:border-stone-700 rounded-md">
                                                                     {report.visibility === 'Private' ? (
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                                                        </svg>
+                                                                        <Shield className="w-3 h-3 text-amber-600" />
                                                                     ) : (
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                                        </svg>
+                                                                        <Eye className="w-3 h-3 text-blue-500" />
                                                                     )}
-                                                                    <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest leading-none">{report.visibility}</span>
+                                                                    <span className="text-[9px] font-black text-stone-600 dark:text-stone-300 uppercase tracking-wider leading-none">
+                                                                        {report.visibility}
+                                                                    </span>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -3326,7 +3342,7 @@ const ResiHomePage = () => {
 
                                                     {/* Category & Status Badges */}
                                                     <div className="flex items-center gap-2 flex-wrap">
-                                                        <span className="px-3 py-1 bg-orange-50 dark:bg-orange-950/60 border border-orange-200 dark:border-orange-800/60 text-[#F97316] dark:text-orange-400 rounded-full text-[10px] font-black uppercase tracking-wider shadow-2xs">
+                                                        <span className="px-3.5 py-1.5 bg-orange-50 dark:bg-orange-950/60 border border-orange-200 dark:border-orange-800/60 text-[#F97316] dark:text-orange-400 rounded-xl sm:rounded-2xl text-[10px] sm:text-[11px] font-black uppercase tracking-wider shadow-2xs">
                                                             {categoryMap[report.category_id] || 'Incident Report'}
                                                         </span>
                                                         {(() => {
@@ -3353,7 +3369,7 @@ const ResiHomePage = () => {
                                                                             />
                                                                         );
                                                                     })()}
-                                                                    <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-2xs ${badgeStyle}`}>
+                                                                    <span className={`px-3 py-1.5 rounded-xl sm:rounded-2xl text-[10px] sm:text-[11px] font-black uppercase tracking-wider border shadow-2xs ${badgeStyle}`}>
                                                                         {statusText}
                                                                     </span>
                                                                 </div>
@@ -3368,69 +3384,100 @@ const ResiHomePage = () => {
                                                     const isLostPet = report.pet_id || (rawDesc && rawDesc.includes('[LOST PET REPORT]'));
                                                     if (isLostPet) return null;
 
-                                                    const { pattern: parsedPattern, conditions: parsedConditions } = parseReportDescription(rawDesc);
+                                                    const { pattern: parsedPattern, conditions: parsedConditions, custody: parsedCustody } = parseReportDescription(rawDesc);
                                                     const displayType = report.animal_type || report.ai_animal_type || 'Animal';
                                                     const displayBreed = (report.animal_breed && report.animal_breed.toLowerCase() !== 'unknown') ? report.animal_breed : (report.ai_possible_breed && report.ai_possible_breed.toLowerCase() !== 'unknown' ? report.ai_possible_breed : null);
                                                     const displayColor = (report.animal_color && report.animal_color.toLowerCase() !== 'unknown') ? report.animal_color : (report.ai_dominant_color || null);
                                                     const displaySize = (report.estimated_size && report.estimated_size.toLowerCase() !== 'unknown') ? report.estimated_size : (report.ai_estimated_size || null);
                                                     const displayPattern = parsedPattern || (report.coat_pattern && report.coat_pattern.toLowerCase() !== 'unknown' ? report.coat_pattern : (report.ai_coat_pattern && report.ai_coat_pattern.toLowerCase() !== 'unknown' ? report.ai_coat_pattern : null));
                                                     const displayConditions = parsedConditions || report.condition || '';
+                                                    const effectiveCustody = parsedCustody || report.custody_status || (rawDesc.toLowerCase().includes('secured in safe place') ? 'Secured in safe place by resident' : (rawDesc.toLowerCase().includes('stray sighting') ? 'Stray sighting (not touched)' : null));
+
+                                                    const isSecuredCustody = effectiveCustody && (effectiveCustody.toLowerCase().includes('secured') || effectiveCustody.toLowerCase().includes('safe place'));
 
                                                     return (
-                                                        <div className="mb-3.5 flex flex-wrap items-center gap-1.5">
-                                                            {/* Animal Type & Breed */}
-                                                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-stone-100/90 border border-stone-200/80 rounded-xl text-stone-800 text-[11px] font-bold shadow-2xs">
-                                                                {displayType.toLowerCase() === 'cat' ? <Cat className="w-3.5 h-3.5" /> : <Dog className="w-3.5 h-3.5" />}
-                                                                <span className="font-extrabold text-[#1a1208]">{displayType}</span>
-                                                                {displayBreed && (
-                                                                    <>
-                                                                        <span className="text-stone-400">•</span>
-                                                                        <span>{displayBreed}</span>
-                                                                    </>
+                                                        <div className="space-y-3 pt-1">
+                                                            {/* Attributes Chips Row */}
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                {/* Animal Type & Breed */}
+                                                                <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-stone-100/90 dark:bg-stone-800 border border-stone-200/90 dark:border-stone-700 rounded-xl sm:rounded-2xl text-stone-800 dark:text-stone-200 text-xs font-bold shadow-2xs">
+                                                                    {displayType.toLowerCase() === 'cat' ? <Cat className="w-3.5 h-3.5 text-[#F97316]" /> : <Dog className="w-3.5 h-3.5 text-[#F97316]" />}
+                                                                    <span className="font-extrabold text-[#1a1208] dark:text-white">{displayType}</span>
+                                                                    {displayBreed && (
+                                                                        <>
+                                                                            <span className="text-stone-300 dark:text-stone-600">•</span>
+                                                                            <span className="text-stone-700 dark:text-stone-300 font-semibold">{displayBreed}</span>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Color */}
+                                                                {displayColor && (
+                                                                    <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-stone-50 dark:bg-stone-800/60 border border-stone-200/80 dark:border-stone-700 rounded-xl sm:rounded-2xl text-stone-700 dark:text-stone-300 text-xs font-bold shadow-2xs">
+                                                                        <Palette className="w-3.5 h-3.5 text-stone-500" />
+                                                                        <span>{displayColor}</span>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Pattern */}
+                                                                {displayPattern && displayPattern.toLowerCase() !== 'unknown' && (
+                                                                    <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-stone-50 dark:bg-stone-800/60 border border-stone-200/80 dark:border-stone-700 rounded-xl sm:rounded-2xl text-stone-700 dark:text-stone-300 text-xs font-bold shadow-2xs">
+                                                                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                                                                        <span>{displayPattern}</span>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Size */}
+                                                                {displaySize && (
+                                                                    <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-stone-50 dark:bg-stone-800/60 border border-stone-200/80 dark:border-stone-700 rounded-xl sm:rounded-2xl text-stone-700 dark:text-stone-300 text-xs font-bold shadow-2xs">
+                                                                        <Ruler className="w-3.5 h-3.5 text-stone-500" />
+                                                                        <span>{displaySize}</span>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Observed Conditions */}
+                                                                {displayConditions && displayConditions.split(',').map((cond: string, i: number) => {
+                                                                    const trimmed = cond.trim();
+                                                                    if (!trimmed || trimmed.toLowerCase() === 'none' || trimmed.toLowerCase() === 'none specified') return null;
+                                                                    return (
+                                                                        <div key={i} className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 rounded-xl sm:rounded-2xl text-xs font-bold shadow-2xs">
+                                                                            <Bandage className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                                                            <span>{trimmed}</span>
+                                                                        </div>
+                                                                    );
+                                                                })}
+
+                                                                {/* Landmark */}
+                                                                {report.landmark && (
+                                                                    <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 rounded-xl sm:rounded-2xl text-xs font-bold shadow-2xs">
+                                                                        <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                                                        <span className="truncate max-w-[220px]">{report.landmark}</span>
+                                                                    </div>
                                                                 )}
                                                             </div>
 
-                                                            {/* Color */}
-                                                            {displayColor && (
-                                                                <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-stone-50 border border-stone-200/60 rounded-xl text-stone-700 text-[11px] font-bold shadow-2xs">
-                                                                    <Palette className="w-3 h-3" />
-                                                                    <span>{displayColor}</span>
-                                                                </div>
-                                                            )}
-
-                                                            {/* Pattern */}
-                                                            {displayPattern && displayPattern.toLowerCase() !== 'unknown' && (
-                                                                <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-stone-50 border border-stone-200/60 rounded-xl text-stone-700 text-[11px] font-bold shadow-2xs">
-                                                                    <Sparkles className="w-3 h-3" />
-                                                                    <span>{displayPattern}</span>
-                                                                </div>
-                                                            )}
-
-                                                            {/* Size */}
-                                                            {displaySize && (
-                                                                <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-stone-50 border border-stone-200/60 rounded-xl text-stone-700 text-[11px] font-bold shadow-2xs">
-                                                                    <Ruler className="w-3 h-3" />
-                                                                    <span>{displaySize}</span>
-                                                                </div>
-                                                            )}
-
-                                                            {/* Observed Conditions */}
-                                                            {displayConditions && displayConditions.split(',').map((cond: string, i: number) => {
-                                                                const trimmed = cond.trim();
-                                                                if (!trimmed || trimmed.toLowerCase() === 'none' || trimmed.toLowerCase() === 'none specified') return null;
-                                                                return (
-                                                                    <div key={i} className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 border border-amber-200/80 text-amber-800 rounded-xl text-[11px] font-bold shadow-2xs">
-                                                                        <Bandage className="w-3 h-3" />
-                                                                        <span>{trimmed}</span>
+                                                            {/* Custody Info Banner */}
+                                                            {effectiveCustody && (
+                                                                <div>
+                                                                    <div className={`inline-flex items-center gap-2.5 px-4 py-2 rounded-xl sm:rounded-2xl border text-xs font-bold shadow-2xs transition-all ${
+                                                                        isSecuredCustody
+                                                                            ? 'bg-emerald-50/90 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/80 text-emerald-950 dark:text-emerald-100'
+                                                                            : 'bg-amber-50/90 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/80 text-amber-950 dark:text-amber-100'
+                                                                    }`}>
+                                                                        <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
+                                                                            isSecuredCustody ? 'bg-emerald-100 dark:bg-emerald-900/60' : 'bg-amber-100 dark:bg-amber-900/60'
+                                                                        }`}>
+                                                                            {isSecuredCustody ? (
+                                                                                <Home className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                                                            ) : (
+                                                                                <Eye className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                                            <span className="text-[10px] font-black uppercase tracking-wider text-stone-500 dark:text-stone-400">Custody:</span>
+                                                                            <span className="font-extrabold text-stone-800 dark:text-stone-100">{effectiveCustody}</span>
+                                                                        </div>
                                                                     </div>
-                                                                );
-                                                            })}
-
-                                                            {/* Landmark */}
-                                                            {report.landmark && (
-                                                                <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 border border-blue-200/70 text-blue-800 rounded-xl text-[11px] font-bold shadow-2xs">
-                                                                    <MapPin className="w-3 h-3" />
-                                                                    <span className="truncate max-w-[200px]">{report.landmark}</span>
                                                                 </div>
                                                             )}
                                                         </div>
@@ -3439,7 +3486,7 @@ const ResiHomePage = () => {
 
                                                 {/* Lost Pet Owner Contact & QR Code Emergency Box */}
                                                 {(report.pet_id || report.owner_phone || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
-                                                    <div className="mb-5 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50/80 border-2 border-amber-200 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                                    <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50/80 border-2 border-amber-200 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                                         <div className="flex items-start sm:items-center gap-3.5">
                                                             <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-600 to-orange-500 text-white flex items-center justify-center shadow-md shrink-0">
                                                                 <PawPrint className="w-5 h-5" />
@@ -3460,9 +3507,9 @@ const ResiHomePage = () => {
                                                                     {report.owner_phone && <span className="text-amber-800 font-bold ml-1.5 inline-flex items-center gap-1">• <Phone className="w-3 h-3" /> {report.owner_phone}</span>}
                                                                 </p>
                                                                 {report.pet_qr_code_hash && (
-                                                                    <p className="text-[10px] font-bold text-amber-800/90 tracking-tight mt-1 flex items-center gap-1">
-                                                                        Pet QR Tag: <span className="font-mono bg-white/90 px-1.5 py-0.5 rounded border border-amber-300 font-bold text-amber-900">{report.pet_qr_code_hash}</span>
-                                                                    </p>
+                                                                  <p className="text-[10px] font-bold text-amber-800/90 tracking-tight mt-1 flex items-center gap-1">
+                                                                      Pet QR Tag: <span className="font-mono bg-white/90 px-1.5 py-0.5 rounded border border-amber-300 font-bold text-amber-900">{report.pet_qr_code_hash}</span>
+                                                                  </p>
                                                                 )}
                                                             </div>
                                                         </div>
@@ -3500,7 +3547,7 @@ const ResiHomePage = () => {
                                                 )}
 
                                                 {/* Description */}
-                                                <div className="mb-4">
+                                                <div>
                                                     <FormattedReportDescription description={report.description} />
                                                 </div>
 
@@ -3518,23 +3565,23 @@ const ResiHomePage = () => {
                                                     if (originalMedia.length === 0) return null;
 
                                                     return (
-                                                        <div className="mb-6">
-                                                            <div className={`grid gap-2 rounded-2xl sm:rounded-[2.5rem] overflow-hidden border-2 border-gray-50 shadow-inner bg-gray-50/30 ${originalMedia.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
+                                                        <div className="pt-2">
+                                                            <div className={`grid gap-2 rounded-2xl sm:rounded-[2.25rem] overflow-hidden border border-stone-200/80 dark:border-stone-800 shadow-sm bg-stone-100/50 dark:bg-stone-900/50 ${originalMedia.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
                                                                 }`}>
                                                                 {originalMedia.slice(0, 4).map((m: any, idx: number) => (
                                                                     <div
                                                                         key={m.media_id}
-                                                                        className={`relative overflow-hidden cursor-pointer group/media ${originalMedia.length === 1 ? 'h-64 sm:h-96' :
+                                                                        className={`relative overflow-hidden cursor-pointer group/media ${originalMedia.length === 1 ? 'max-h-[520px] sm:max-h-[580px] aspect-auto flex items-center justify-center bg-stone-100/60 dark:bg-stone-900/60' :
                                                                             originalMedia.length === 2 ? 'h-48 sm:h-72' :
                                                                                 originalMedia.length === 3 && idx === 0 ? 'row-span-2 h-[24rem] sm:h-[36rem]' : 'h-48 sm:h-72'
                                                                             }`}
                                                                         onClick={() => setActiveGallery({ media: originalMedia, index: idx })}
                                                                     >
                                                                         {m.media_type === 'Video' ? (
-                                                                            <div className="w-full h-full relative">
-                                                                                <video src={m.file_url} className="w-full h-full object-cover" />
+                                                                            <div className="w-full h-full relative flex items-center justify-center">
+                                                                                <video src={m.file_url} className="w-full h-full max-h-[520px] object-cover" />
                                                                                 <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/media:bg-black/30 transition-all">
-                                                                                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white border border-white/30">
+                                                                                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/30 backdrop-blur-md flex items-center justify-center text-white border border-white/30 shadow-lg">
                                                                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 sm:h-6 sm:w-6 ml-1" fill="currentColor" viewBox="0 0 24 24">
                                                                                             <path d="M8 5v14l11-7z" />
                                                                                         </svg>
@@ -3544,8 +3591,8 @@ const ResiHomePage = () => {
                                                                         ) : (
                                                                             <img
                                                                                 src={m.file_url}
-                                                                                alt="Media"
-                                                                                className="w-full h-full object-cover hover:scale-105 transition-all duration-1000 ease-out"
+                                                                                alt="Report media"
+                                                                                className={`w-full ${originalMedia.length === 1 ? 'max-h-[520px] sm:max-h-[580px] object-cover sm:object-contain rounded-2xl sm:rounded-[2.25rem]' : 'h-full object-cover'} group-hover/media:scale-[1.01] transition-transform duration-500 ease-out select-none`}
                                                                                 onError={(e) => {
                                                                                     (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop&q=80';
                                                                                 }}
@@ -3565,11 +3612,12 @@ const ResiHomePage = () => {
                                             </div>
 
                                             {/* Comments Section */}
-                                            <div className="bg-white border-t border-gray-100 p-4 sm:p-8 pt-6">
+                                            <div className="bg-stone-50/50 dark:bg-stone-900/40 border-t border-stone-100 dark:border-stone-800 p-4 sm:p-7 space-y-4">
                                                 {report.comments && report.comments.length > 0 && (
                                                     <button
+                                                        type="button"
                                                         onClick={() => setExpandedComments(prev => ({ ...prev, [report.report_id]: !prev[report.report_id] }))}
-                                                        className="text-[9px] sm:text-[10px] font-black text-gray-400 hover:text-[#F97316] uppercase tracking-widest transition-colors flex items-center gap-2 mb-6"
+                                                        className="text-[10px] sm:text-[11px] font-black text-gray-500 hover:text-[#F97316] uppercase tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer"
                                                     >
                                                         <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform duration-300 ${expandedComments[report.report_id] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
@@ -3579,7 +3627,7 @@ const ResiHomePage = () => {
                                                 )}
 
                                                 {(expandedComments[report.report_id] || !report.comments || report.comments.length === 0) && (
-                                                    <div className="space-y-2 mb-6 max-h-72 overflow-y-auto custom-scrollbar pr-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                                    <div className="space-y-2.5 max-h-72 overflow-y-auto custom-scrollbar pr-2 animate-in fade-in slide-in-from-top-2 duration-300">
                                                         {report.comments && report.comments.length > 0 ? (
                                                             report.comments
                                                                 .filter((c: any) => !c.parent_comment_id)
@@ -3589,33 +3637,34 @@ const ResiHomePage = () => {
                                                                         .filter((reply: any) => reply.parent_comment_id === c.comment_id)
                                                                         .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
                                                                     return (
-                                                                        <div key={c.comment_id} className="mb-4 last:mb-0">
+                                                                        <div key={c.comment_id} className="mb-3.5 last:mb-0">
                                                                             <div className="flex gap-3 relative">
                                                                                 {/* Parent Avatar & Vertical Line */}
                                                                                 <div className="relative flex flex-col items-center shrink-0">
                                                                                     <img
                                                                                         src={getProfilePicture(c.user_photo)}
-                                                                                        className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm"
+                                                                                        className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white dark:ring-stone-900 border border-gray-100 dark:border-stone-800 shadow-sm"
                                                                                         alt={c.user_name || 'User'}
                                                                                         onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
                                                                                     />
                                                                                     {(replies.length > 0 || replyingTo[report.report_id]?.commentId === c.comment_id) && (
-                                                                                        <div className="absolute top-8 bottom-[-16px] left-1/2 -translate-x-1/2 w-[2px] bg-gray-100 z-0"></div>
+                                                                                        <div className="absolute top-8 bottom-[-16px] left-1/2 -translate-x-1/2 w-[2px] bg-gray-100 dark:bg-stone-800 z-0"></div>
                                                                                     )}
                                                                                 </div>
 
                                                                                 <div className="flex-1 pb-1">
                                                                                     {/* Meta Info */}
-                                                                                    <div className="bg-[#FAFAF9] rounded-[1.5rem] p-3.5 px-4 border border-gray-50 shadow-sm inline-block">
-                                                                                        <span className="block text-[11px] font-black text-[#1a1208] mb-0.5">{c.user_name}</span>
-                                                                                        <p className="text-xs font-semibold text-gray-700 leading-relaxed pr-6">{c.comment}</p>
+                                                                                    <div className="bg-white dark:bg-stone-900 rounded-[1.3rem] p-3 px-4 border border-gray-100 dark:border-stone-800 shadow-2xs inline-block">
+                                                                                        <span className="block text-[11px] font-black text-[#1a1208] dark:text-white mb-0.5">{c.user_name}</span>
+                                                                                        <p className="text-xs font-medium text-gray-700 dark:text-gray-300 leading-relaxed pr-6">{c.comment}</p>
                                                                                     </div>
                                                                                     {/* Parent Actions */}
-                                                                                    <div className="flex items-center gap-4 mt-1.5 ml-3">
+                                                                                    <div className="flex items-center gap-4 mt-1 ml-3">
                                                                                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{new Date(c.created_at).toLocaleDateString()}</span>
                                                                                         <button
+                                                                                            type="button"
                                                                                             onClick={() => setReplyingTo(prev => ({ ...prev, [report.report_id]: { commentId: c.comment_id, userName: c.user_name } }))}
-                                                                                            className="text-[10px] font-bold text-gray-500 hover:text-[#F97316] transition-colors"
+                                                                                            className="text-[10px] font-bold text-gray-500 hover:text-[#F97316] transition-colors cursor-pointer"
                                                                                         >
                                                                                             Reply
                                                                                         </button>
@@ -3623,37 +3672,38 @@ const ResiHomePage = () => {
 
                                                                                     {/* Replies Container */}
                                                                                     {replies.length > 0 && (
-                                                                                        <div className="mt-4 space-y-4">
+                                                                                        <div className="mt-3.5 space-y-3.5">
                                                                                             {replies.map((reply: any, index: number) => (
                                                                                                 <div key={reply.comment_id} className="flex gap-3 relative">
                                                                                                     {/* Horizontal connector curve */}
-                                                                                                    <div className="absolute top-[-10px] left-[-28px] w-[28px] h-[26px] border-b-[2px] border-l-[2px] border-gray-100 rounded-bl-[12px] z-0 pointer-events-none"></div>
+                                                                                                    <div className="absolute top-[-10px] left-[-28px] w-[28px] h-[26px] border-b-[2px] border-l-[2px] border-gray-100 dark:border-stone-800 rounded-bl-[12px] z-0 pointer-events-none"></div>
 
                                                                                                     {/* Mask to hide vertical line below the last reply */}
                                                                                                     {index === replies.length - 1 && replyingTo[report.report_id]?.commentId !== c.comment_id && (
-                                                                                                        <div className="absolute top-[16px] bottom-[-100px] left-[-30px] w-[6px] bg-white z-0 pointer-events-none"></div>
+                                                                                                        <div className="absolute top-[16px] bottom-[-100px] left-[-30px] w-[6px] bg-stone-50 dark:bg-stone-900 z-0 pointer-events-none"></div>
                                                                                                     )}
 
                                                                                                     {/* Child Avatar */}
                                                                                                     <img
                                                                                                         src={getProfilePicture(reply.user_photo)}
-                                                                                                        className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0"
+                                                                                                        className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white dark:ring-stone-900 border border-gray-100 dark:border-stone-800 shadow-sm shrink-0"
                                                                                                         alt={reply.user_name || 'User'}
                                                                                                         onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
                                                                                                     />
 
                                                                                                     <div className="flex-1">
                                                                                                         {/* Child Bubble */}
-                                                                                                        <div className="bg-[#FAFAF9] rounded-[1.2rem] p-3 px-4 border border-gray-50 shadow-sm inline-block">
-                                                                                                            <span className="block text-[10px] font-black text-gray-800 mb-0.5">{reply.user_name}</span>
-                                                                                                            <p className="text-[11px] font-semibold text-gray-600 leading-relaxed pr-4">{reply.comment}</p>
+                                                                                                        <div className="bg-white dark:bg-stone-900 rounded-[1.2rem] p-2.5 px-3.5 border border-gray-100 dark:border-stone-800 shadow-2xs inline-block">
+                                                                                                            <span className="block text-[10px] font-black text-gray-800 dark:text-gray-200 mb-0.5">{reply.user_name}</span>
+                                                                                                            <p className="text-[11px] font-medium text-gray-600 dark:text-gray-400 leading-relaxed pr-4">{reply.comment}</p>
                                                                                                         </div>
                                                                                                         {/* Child Actions */}
-                                                                                                        <div className="flex items-center gap-4 mt-1.5 ml-3">
+                                                                                                        <div className="flex items-center gap-4 mt-1 ml-3">
                                                                                                             <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">{new Date(reply.created_at).toLocaleDateString()}</span>
                                                                                                             <button
+                                                                                                                type="button"
                                                                                                                 onClick={() => setReplyingTo(prev => ({ ...prev, [report.report_id]: { commentId: c.comment_id, userName: reply.user_name } }))}
-                                                                                                                className="text-[9px] font-bold text-gray-500 hover:text-[#F97316] transition-colors"
+                                                                                                                className="text-[9px] font-bold text-gray-500 hover:text-[#F97316] transition-colors cursor-pointer"
                                                                                                             >
                                                                                                                 Reply
                                                                                                             </button>
@@ -3666,40 +3716,38 @@ const ResiHomePage = () => {
 
                                                                                     {/* Inline Reply Input */}
                                                                                     {replyingTo[report.report_id]?.commentId === c.comment_id && (
-                                                                                        <div className="mt-4 flex items-center gap-3 relative z-10 animate-in fade-in slide-in-from-top-2 duration-200">
-                                                                                            {/* Thread curve for the reply input itself */}
-                                                                                            <div className="absolute top-[-10px] left-[-28px] w-[28px] h-[24px] border-b-[2px] border-l-[2px] border-gray-100 rounded-bl-[12px] z-0 pointer-events-none"></div>
-                                                                                            {/* Mask to hide vertical line below the inline reply input */}
-                                                                                            <div className="absolute top-[14px] bottom-[-100px] left-[-30px] w-[6px] bg-white z-0 pointer-events-none"></div>
+                                                                                        <div className="mt-3.5 flex items-center gap-2.5 relative z-10 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                                                            <div className="absolute top-[-10px] left-[-28px] w-[28px] h-[24px] border-b-[2px] border-l-[2px] border-gray-100 dark:border-stone-800 rounded-bl-[12px] z-0 pointer-events-none"></div>
+                                                                                            <div className="absolute top-[14px] bottom-[-100px] left-[-30px] w-[6px] bg-stone-50 dark:bg-stone-900 z-0 pointer-events-none"></div>
 
-                                                                                            <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center text-[#F97316] font-black text-[10px] shrink-0 border border-orange-200 z-10 bg-white ring-4 ring-white">
+                                                                                            <div className="w-6 h-6 rounded-full bg-orange-100 dark:bg-orange-950 flex items-center justify-center text-[#F97316] font-black text-[10px] shrink-0 border border-orange-200 dark:border-orange-800 z-10 bg-white ring-4 ring-white dark:ring-stone-900">
                                                                                                 {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
                                                                                             </div>
-                                                                                            <div className="flex-1 relative flex items-center">
+                                                                                            <div className="flex-1 relative flex items-center bg-white dark:bg-stone-900 rounded-xl border border-gray-200 dark:border-stone-700 p-1 focus-within:border-orange-300 shadow-2xs">
                                                                                                 <input
                                                                                                     type="text"
                                                                                                     autoFocus
                                                                                                     placeholder={`Replying to ${replyingTo[report.report_id]?.userName}...`}
-                                                                                                    className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[1.2rem] pl-4 pr-10 py-2 text-[11px] font-semibold text-[#1a1208] focus:outline-none focus:border-orange-200 focus:bg-white transition-all placeholder:text-gray-400 shadow-inner"
+                                                                                                    className="flex-1 bg-transparent px-3 py-1.5 text-[11px] font-medium text-[#1a1208] dark:text-white focus:outline-none placeholder:text-gray-400"
                                                                                                     value={commentInputs[report.report_id] || ''}
                                                                                                     onChange={(e) => setCommentInputs(prev => ({ ...prev, [report.report_id]: e.target.value }))}
                                                                                                     onKeyPress={(e) => e.key === 'Enter' && handleAddComment(report.report_id)}
                                                                                                 />
                                                                                                 <button
+                                                                                                    type="button"
                                                                                                     onClick={() => {
                                                                                                         setReplyingTo(prev => ({ ...prev, [report.report_id]: null }));
                                                                                                         setCommentInputs(prev => ({ ...prev, [report.report_id]: '' }));
                                                                                                     }}
-                                                                                                    className="absolute right-3 text-gray-400 hover:text-red-500 transition-colors"
+                                                                                                    className="p-1 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
                                                                                                 >
-                                                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                                                                                                    </svg>
+                                                                                                    <X className="w-3.5 h-3.5" />
                                                                                                 </button>
                                                                                             </div>
                                                                                             <button
+                                                                                                type="button"
                                                                                                 onClick={() => handleAddComment(report.report_id)}
-                                                                                                className="bg-[#F97316] text-white rounded-full w-8 h-8 flex items-center justify-center shadow-md shadow-orange-100 hover:scale-105 active:scale-95 transition-all shrink-0"
+                                                                                                className="bg-[#F97316] hover:bg-orange-600 text-white rounded-xl w-8 h-8 flex items-center justify-center shadow-xs transition-all shrink-0 cursor-pointer active:scale-95"
                                                                                             >
                                                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 relative left-[1px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -3713,29 +3761,32 @@ const ResiHomePage = () => {
                                                                     );
                                                                 })
                                                         ) : (
-                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic text-center py-4">No comments yet. Be the first to comment!</p>
+                                                            <div className="py-4 flex items-center justify-center gap-2 text-xs font-semibold text-stone-400 dark:text-stone-500">
+                                                                <MessageCircle className="w-4 h-4 text-stone-300 dark:text-stone-600" />
+                                                                <span>No comments yet. Be the first to join the conversation!</span>
+                                                            </div>
                                                         )}
                                                     </div>
                                                 )}
 
-
                                                 {!replyingTo[report.report_id] && (
-                                                    <div className="flex items-center gap-3 animate-in fade-in duration-200">
-                                                        <div className="flex-1 relative">
-                                                            <input
-                                                                type="text"
-                                                                placeholder="Write a comment..."
-                                                                className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[1.5rem] pl-5 pr-12 py-3 text-xs font-semibold text-[#1a1208] focus:outline-none focus:border-orange-200 focus:bg-white transition-all placeholder:text-gray-300 shadow-inner"
-                                                                value={commentInputs[report.report_id] || ''}
-                                                                onChange={(e) => setCommentInputs(prev => ({ ...prev, [report.report_id]: e.target.value }))}
-                                                                onKeyPress={(e) => e.key === 'Enter' && handleAddComment(report.report_id)}
-                                                            />
-                                                        </div>
+                                                    <div className="relative flex items-center bg-white dark:bg-stone-900 rounded-full border border-stone-200 dark:border-stone-700/80 p-1.5 pl-4 pr-1.5 focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-500/10 transition-all shadow-2xs">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Write a public comment..."
+                                                            className="flex-1 bg-transparent py-1.5 text-xs font-medium text-[#1a1208] dark:text-white focus:outline-none placeholder:text-stone-400"
+                                                            value={commentInputs[report.report_id] || ''}
+                                                            onChange={(e) => setCommentInputs(prev => ({ ...prev, [report.report_id]: e.target.value }))}
+                                                            onKeyPress={(e) => e.key === 'Enter' && handleAddComment(report.report_id)}
+                                                        />
                                                         <button
+                                                            type="button"
                                                             onClick={() => handleAddComment(report.report_id)}
-                                                            className="bg-[#F97316] text-white rounded-[1.2rem] p-3 shadow-md shadow-orange-100 hover:scale-105 active:scale-95 transition-all flex-shrink-0"
+                                                            disabled={!commentInputs[report.report_id]?.trim()}
+                                                            className="w-8 h-8 rounded-full bg-[#F97316] hover:bg-[#EA580C] disabled:opacity-40 disabled:hover:bg-[#F97316] disabled:cursor-not-allowed active:scale-95 text-white shadow-xs transition-all flex items-center justify-center shrink-0 cursor-pointer"
+                                                            title="Post comment"
                                                         >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 relative -rotate-45 left-[1px] -top-[1px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                                                             </svg>
                                                         </button>
@@ -4083,14 +4134,8 @@ const ResiHomePage = () => {
                                     }}
                                 />
                                 <Polygon
-                                    positions={SELERA_POLYGON.map(p => [p.lat, p.lng] as [number, number])}
-                                    pathOptions={{
-                                        color: '#F97316',
-                                        fillColor: '#F97316',
-                                        fillOpacity: 0.1,
-                                        weight: 2,
-                                        dashArray: '5, 10'
-                                    }}
+                                    positions={SELERA_POLYGON_BOUNDS}
+                                    pathOptions={SELERA_BOUNDARY_PATH_OPTIONS}
                                 />
                                 {/* Configurable Reporting Coverage Radius Circle centered on Selera Homes */}
                                 <Circle
@@ -4339,6 +4384,18 @@ const ResiHomePage = () => {
                 title={successModalTitle}
                 message={successModalMessage}
                 onClose={() => setShowSuccessModal(false)}
+            />
+
+            {/* Custom Cancel Report Confirmation Modal */}
+            <CancelReportModal
+                isOpen={Boolean(cancellingReport)}
+                onClose={() => {
+                    if (!isCancellingReport) setCancellingReport(null);
+                }}
+                onConfirm={handleConfirmCancelReport}
+                reportId={cancellingReport?.reportId}
+                reportCode={cancellingReport?.reportCode}
+                isCancelling={isCancellingReport}
             />
         </div>
     );

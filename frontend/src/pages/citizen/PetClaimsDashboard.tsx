@@ -6,6 +6,7 @@ import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import { MapContainer, TileLayer, Marker, Popup, Polygon } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS } from '../../utils/coverageArea';
 
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
@@ -25,13 +26,6 @@ const DefaultIcon = L.icon({
 });
 
 L.Marker.prototype.options.icon = DefaultIcon;
-
-const SELERA_POLYGON = [
-    { lat: 14.801496, lng: 121.005174 },
-    { lat: 14.799577, lng: 121.003911 },
-    { lat: 14.800634, lng: 121.002228 },
-    { lat: 14.802461, lng: 121.003280 }
-];
 
 const PetClaimsDashboard = () => {
     const navigate = useNavigate();
@@ -716,14 +710,8 @@ const PetClaimsDashboard = () => {
                                                 >
                                                     <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                                                     <Polygon 
-                                                        positions={SELERA_POLYGON.map(p => [p.lat, p.lng] as [number, number])}
-                                                        pathOptions={{
-                                                            color: '#F97316',
-                                                            fillColor: '#F97316',
-                                                            fillOpacity: 0.08,
-                                                            weight: 2,
-                                                            dashArray: '5, 8'
-                                                        }}
+                                                        positions={SELERA_POLYGON_BOUNDS}
+                                                        pathOptions={SELERA_BOUNDARY_PATH_OPTIONS}
                                                     />
                                                     {/* Sighting position */}
                                                     <Marker position={[selectedClaim.sighting_lat, selectedClaim.sighting_lng]}>

@@ -41,6 +41,11 @@ class ReportBase(BaseModel):
     ai_behavior_injury: Optional[bool] = False
     ai_behavior_aggressive: Optional[bool] = False
     ai_behavior_explanation: Optional[str] = None
+    # AI Photo Analysis & Authenticity Verification
+    ai_photo_likelihood: Optional[float] = None
+    ai_photo_status: Optional[str] = None
+    ai_photo_recommendation: Optional[str] = None
+    ai_photo_details: Optional[str] = None
     # Verified Investigation Behavioral Findings
     verified_actual_bite: Optional[bool] = False
     verified_chasing: Optional[bool] = False
@@ -97,6 +102,8 @@ class ReportMediaResponse(BaseModel):
     ai_possible_breed: Optional[str] = None
     ai_suggested_risk_level: Optional[str] = None
     ai_suggested_priority: Optional[str] = None
+    ai_photo_likelihood: Optional[float] = None
+    ai_photo_status: Optional[str] = None
 
     @field_validator("file_url", mode="before")
     @classmethod

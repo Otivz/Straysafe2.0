@@ -7,6 +7,32 @@ export const SELERA_DEFAULT_POLYGON = [
     { lat: 14.802461, lng: 121.003280 }
 ];
 
+// Official fixed geographic Lat/Lng coordinates for Selera Homes boundary polygon
+export const SELERA_POLYGON_BOUNDS: [number, number][] = [
+    [14.801496, 121.005174],
+    [14.799577, 121.003911],
+    [14.800634, 121.002228],
+    [14.802461, 121.003280]
+];
+
+// Preserved official orange dashed boundary style
+export const SELERA_BOUNDARY_PATH_OPTIONS = {
+    color: '#F97316',
+    fillColor: '#F97316',
+    fillOpacity: 0.12,
+    weight: 2.5,
+    dashArray: '6, 8',
+    className: 'outline-none focus:outline-none cursor-pointer'
+};
+
+// Convert array of {lat, lng} to stable [lat, lng][] array
+export const getPolygonLatLngs = (polygon?: Array<{ lat: number; lng: number }> | null): [number, number][] => {
+    if (!polygon || !Array.isArray(polygon) || polygon.length === 0) {
+        return SELERA_POLYGON_BOUNDS;
+    }
+    return polygon.map(p => [p.lat, p.lng] as [number, number]);
+};
+
 // Calculated centroid from Selera Homes boundary polygon
 export const SELERA_DEFAULT_CENTER: [number, number] = [14.801042, 121.003648];
 

@@ -40,6 +40,7 @@ from app.models.warning import OwnerWarning  # noqa: F401
 from app.models.report_match import ReportMatch  # noqa: F401
 from app.models.landmark import Landmark  # noqa: F401
 from app.models.coverage import CoverageSetting  # noqa: F401
+from app.models.otp import OtpVerification  # noqa: F401
 from app.tasks.unassigned_checker import start_unassigned_reports_watcher
 
 
@@ -116,6 +117,32 @@ def ensure_report_ai_suggestion_columns():
         ))
         if result_reason.scalar() == 0:
             conn.execute(text("ALTER TABLE reports ADD COLUMN ai_suggested_priority_reason TEXT NULL"))
+
+def ensure_ai_photo_columns():
+    with engine.begin() as conn:
+        cols_to_add_reports = [
+            ('ai_photo_likelihood', 'DECIMAL(5, 2) NULL'),
+            ('ai_photo_status', 'VARCHAR(100) NULL'),
+            ('ai_photo_recommendation', 'TEXT NULL'),
+            ('ai_photo_details', 'TEXT NULL'),
+        ]
+        for col, col_type in cols_to_add_reports:
+            res = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'reports' AND COLUMN_NAME = :col"
+            ), {"col": col})
+            if res.scalar() == 0:
+                conn.execute(text(f"ALTER TABLE reports ADD COLUMN {col} {col_type}"))
+
+        cols_to_add_media = [
+            ('ai_photo_likelihood', 'DECIMAL(5, 2) NULL'),
+            ('ai_photo_status', 'VARCHAR(100) NULL'),
+        ]
+        for col, col_type in cols_to_add_media:
+            res = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'report_media' AND COLUMN_NAME = :col"
+            ), {"col": col})
+            if res.scalar() == 0:
+                conn.execute(text(f"ALTER TABLE report_media ADD COLUMN {col} {col_type}"))
 
 def ensure_report_condition_column():
     with engine.begin() as conn:
@@ -516,6 +543,7 @@ ensure_report_media_status_column()
 ensure_report_media_animal_type_column()
 ensure_report_media_dominant_color_column()
 ensure_report_ai_suggestion_columns()
+ensure_ai_photo_columns()
 ensure_report_condition_column()
 ensure_pet_vaccine_card_url_column()
 ensure_report_status_rows()
@@ -928,6 +956,8 @@ def ensure_adoption_tables_and_columns():
             ("staff_handover_date", "DATETIME NULL"),
             ("staff_handover_by", "INT NULL"),
             ("created_pet_id", "INT NULL"),
+            ("cancellation_reason", "TEXT NULL"),
+            ("cancelled_at", "DATETIME NULL"),
         ]
         for cname, ctype in cols:
             try:
@@ -940,6 +970,10 @@ def ensure_adoption_tables_and_columns():
                     conn.execute(text(f"ALTER TABLE adoptions ADD COLUMN {cname} {ctype}"))
             except Exception as e:
                 print(f"Error adding {cname} to adoptions: {e}")
+        try:
+            conn.execute(text("ALTER TABLE adoptions MODIFY COLUMN status ENUM('Pending', 'Approved', 'Rejected', 'Cancelled') NOT NULL DEFAULT 'Pending'"))
+        except Exception as e:
+            print(f"Error updating status column enum in adoptions: {e}")
 
 ensure_announcement_tables_columns()
 ensure_rescue_tables_columns()
@@ -1002,10 +1036,32 @@ def ensure_coverage_settings_table():
                 )
             """), {"boundary": default_boundary})
 
+def ensure_otp_verifications_table():
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS otp_verifications (
+                otp_id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                email VARCHAR(100) NOT NULL,
+                phone VARCHAR(20) NULL,
+                otp_code VARCHAR(10) NOT NULL,
+                purpose VARCHAR(50) DEFAULT 'resident_registration',
+                is_used BOOLEAN DEFAULT FALSE,
+                attempts INT DEFAULT 0,
+                max_attempts INT DEFAULT 5,
+                expires_at DATETIME NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_otp_user (user_id),
+                INDEX idx_otp_email (email),
+                CONSTRAINT fk_otp_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+        """))
+
 ensure_holding_animals_columns()
 ensure_adoption_tables_and_columns()
 ensure_revoked_tokens_table()
 ensure_coverage_settings_table()
+ensure_otp_verifications_table()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

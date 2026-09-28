@@ -77,6 +77,12 @@ class Report(Base):
     ai_behavior_aggressive: Mapped[bool] = mapped_column(Boolean, default=False)
     ai_behavior_explanation: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # AI Photo Analysis & Authenticity Verification
+    ai_photo_likelihood: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
+    ai_photo_status: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    ai_photo_recommendation: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ai_photo_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # DB column is current_status_id (not status_id)
     current_status_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("report_status.status_id"), nullable=True)
 
@@ -185,6 +191,8 @@ class ReportMedia(Base):
     animal_type: Mapped[Optional[str]] = mapped_column(Enum('Dog', 'Cat', 'Unknown'), nullable=True, default='Unknown')
     dominant_color: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # e.g., 'Brown', 'Black and White', 'Golden'
     is_evidence: Mapped[bool] = mapped_column(Boolean, default=False)
+    ai_photo_likelihood: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
+    ai_photo_status: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     uploaded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
     holding_log_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("holding_timeline.log_id", ondelete="SET NULL"), nullable=True)
 
@@ -430,7 +438,7 @@ class Adoption(Base):
     adoption_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     holding_id: Mapped[int] = mapped_column(Integer, ForeignKey("holding_animals.holding_id", ondelete="CASCADE"), nullable=False)
     applicant_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
-    status: Mapped[str] = mapped_column(Enum("Pending", "Approved", "Rejected"), default="Pending", nullable=False)
+    status: Mapped[str] = mapped_column(Enum("Pending", "Approved", "Rejected", "Cancelled"), default="Pending", nullable=False)
     full_name: Mapped[str] = mapped_column(String(150), nullable=False)
     address: Mapped[str] = mapped_column(Text, nullable=False)
     contact_no: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -453,6 +461,8 @@ class Adoption(Base):
     staff_handover_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     staff_handover_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
     created_pet_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("pets.pet_id", ondelete="SET NULL"), nullable=True)
+    cancellation_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Transient fields for API responses
     animal_name: Optional[str] = None

@@ -78,7 +78,7 @@ const AdminDashboard = () => {
         };
 
         fetchDashboardData();
-        const interval = setInterval(fetchDashboardData, 10000);
+        const interval = setInterval(fetchDashboardData, 30000);
         return () => clearInterval(interval);
     }, []);
 

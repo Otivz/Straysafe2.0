@@ -9,6 +9,7 @@ import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import { type PetRecord } from '../../components/PetRecords/types';
 import ResolveLostPetModal from '../../components/Modals/ResolveLostPetModal';
+import AiImageVerificationBadge, { type VerificationStatus } from '../../components/AiImageVerificationBadge';
 
 // Real client-side image color analyzer using HTML5 Canvas
 const analyzeImageColors = (file: File): Promise<string> => {
@@ -186,6 +187,11 @@ interface AiAnalysisSummary {
     tertiaryColor: string;
     pattern?: string;
     size?: string;
+    isAiGenerated?: boolean;
+    aiGenerationConfidence?: number;
+    verificationStatus?: VerificationStatus;
+    verificationMessage?: string;
+    authenticityDetails?: string;
     message?: string;
 }
 
@@ -323,6 +329,7 @@ const ResidentPet = () => {
             setAiAnalysisSummary(null);
             
             const file = files[0];
+            setAiAnalysisSummary(null);
             
             try {
                 const mediaData = new FormData();
@@ -333,6 +340,17 @@ const ResidentPet = () => {
                     const ai = res.data;
                     const isDetected = ai.animal_detected !== false && !['unknown', 'none', ''].includes((ai.animal_type || '').toLowerCase());
                     
+                    const isAiGen = Boolean(ai.is_ai_generated);
+                    const aiConf = typeof ai.ai_generation_confidence === 'number' ? ai.ai_generation_confidence : (isAiGen ? 0.95 : 0.05);
+                    const vStatus: VerificationStatus = (ai.verification_status as VerificationStatus) || (aiConf >= 0.55 ? 'ai_generated' : (aiConf > 0.35 ? 'uncertain' : 'authentic'));
+                    const vMsg = ai.verification_message || (
+                        vStatus === 'ai_generated'
+                            ? "Photo verification failed — this image appears to be AI-generated. Please upload an actual photo of the animal."
+                            : (vStatus === 'uncertain'
+                                ? "Photo verification notice — image authenticity is uncertain. Please ensure the photo is clear and taken with a camera."
+                                : "Photo verified — appears to be a real animal photograph.")
+                    );
+
                     if (isDetected) {
                         const normSpecies = ['Dog', 'Cat'].includes(ai.animal_type)
                             ? ai.animal_type 
@@ -381,7 +399,15 @@ const ResidentPet = () => {
                             tertiaryColor: p3Match.selected === 'Other' ? p3Match.custom : p3Match.selected,
                             pattern: ai.coat_pattern || '',
                             size: detectedSize,
-                            message: ai.message
+                            isAiGenerated: isAiGen,
+                            aiGenerationConfidence: aiConf,
+                            aiPhotoLikelihood: typeof ai.ai_photo_likelihood === 'number' ? ai.ai_photo_likelihood : (aiConf ? Math.round(aiConf * 100) : null),
+                            aiPhotoStatus: ai.ai_photo_status || (isAiGen ? 'Potentially AI-generated' : 'Likely Authentic'),
+                            aiPhotoRecommendation: ai.ai_photo_recommendation || (isAiGen ? 'Please verify the authenticity of the uploaded photo.' : 'Photo appears authentic.'),
+                            verificationStatus: vStatus,
+                            verificationMessage: vMsg,
+                            authenticityDetails: ai.authenticity_details,
+                            message: ai.message || vMsg
                         });
                     } else {
                         // Fallback to client-side color analyzer
@@ -405,6 +431,14 @@ const ResidentPet = () => {
                             tertiaryColor: '',
                             pattern: '',
                             size: formData.sizeCategory || 'Medium',
+                            isAiGenerated: isAiGen,
+                            aiGenerationConfidence: aiConf,
+                            aiPhotoLikelihood: typeof ai.ai_photo_likelihood === 'number' ? ai.ai_photo_likelihood : (aiConf ? Math.round(aiConf * 100) : null),
+                            aiPhotoStatus: ai.ai_photo_status || (isAiGen ? 'Potentially AI-generated' : 'Likely Authentic'),
+                            aiPhotoRecommendation: ai.ai_photo_recommendation || (isAiGen ? 'Please verify the authenticity of the uploaded photo.' : 'Photo appears authentic.'),
+                            verificationStatus: vStatus,
+                            verificationMessage: vMsg,
+                            authenticityDetails: ai.authenticity_details,
                             message: 'Color detected from photo.'
                         });
                     }
@@ -432,6 +466,11 @@ const ResidentPet = () => {
                         tertiaryColor: '',
                         pattern: '',
                         size: formData.sizeCategory || 'Medium',
+                        isAiGenerated: false,
+                        aiGenerationConfidence: 0.50,
+                        verificationStatus: 'uncertain',
+                        verificationMessage: 'Photo verification notice — image authenticity could not be verified by the AI service. Please ensure the photo is clear and taken with a camera.',
+                        authenticityDetails: 'Connection to verification service was interrupted.',
                         message: 'Color detected from photo.'
                     });
                 } catch (fallbackErr) {
@@ -1344,18 +1383,22 @@ const ResidentPet = () => {
                                         />
                                     )}
 
-                                    {isAnalyzingPhoto && (
-                                        <div className="flex items-center gap-3 text-xs font-bold text-[#F97316] bg-orange-50/80 border border-orange-200/70 rounded-2xl p-4 animate-pulse">
-                                            <svg className="animate-spin h-5 w-5 text-[#F97316] shrink-0" fill="none" viewBox="0 0 24 24">
-                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                            </svg>
-                                            <div>
-                                                <p className="text-[10px] font-black uppercase tracking-widest text-[#F97316]">AI Recognition Active</p>
-                                                <p className="text-xs font-bold text-[#1a1208]">Identifying animal breed, coat colors, and details...</p>
-                                            </div>
-                                        </div>
-                                    )}
+                                    {/* AI Photo Authenticity & Verification Badge */}
+                                    <AiImageVerificationBadge
+                                        isAnalyzing={isAnalyzingPhoto}
+                                        verification={aiAnalysisSummary}
+                                        onRetry={() => {
+                                            if (formData.mediaFiles.length > 0) {
+                                                const fakeEvent = { target: { files: formData.mediaFiles } } as any;
+                                                handlePhotoChange(fakeEvent);
+                                            }
+                                        }}
+                                        onRemove={() => {
+                                            setFormData(prev => ({ ...prev, mediaFiles: [] }));
+                                            setAiAnalysisSummary(null);
+                                        }}
+                                        className="mt-3"
+                                    />
 
                                     {!isAnalyzingPhoto && aiAnalysisSummary && (
                                         <div className="bg-gradient-to-br from-orange-50/90 via-amber-50/60 to-white border border-orange-200/80 rounded-2xl p-4 shadow-sm animate-in slide-in-from-top-2 duration-300">

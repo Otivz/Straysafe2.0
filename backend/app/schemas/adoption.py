@@ -74,6 +74,19 @@ class JourneyPin(BaseModel):
     pin_color: str  # 'red', 'orange', 'blue', 'green'
 
 
+class UserJourneyPetSummary(BaseModel):
+    holding_id: int
+    animal_name: Optional[str] = None
+    animal_type: Optional[str] = None
+    breed: Optional[str] = None
+    photo: Optional[str] = None
+    application_status: Optional[str] = None
+    is_adopted: bool = False
+    adoption_id: Optional[int] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class AnimalJourneyResponse(BaseModel):
     holding_id: int
     animal_name: Optional[str] = None
@@ -88,9 +101,15 @@ class AnimalJourneyResponse(BaseModel):
     adopter_name_full: Optional[str] = None  # Staff only
     adopter_contact: Optional[str] = None    # Staff only
     adopter_address: Optional[str] = None    # Staff only
+    application_status: Optional[str] = None
     pins: List[JourneyPin] = []
+    user_pets: List[UserJourneyPetSummary] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AdoptionCancelRequest(BaseModel):
+    reason: str
 
 
 class AdoptionResponse(BaseModel):
@@ -125,5 +144,7 @@ class AdoptionResponse(BaseModel):
     staff_handover_by: Optional[int] = None
     staff_handover_name: Optional[str] = None
     created_pet_id: Optional[int] = None
+    cancellation_reason: Optional[str] = None
+    cancelled_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)

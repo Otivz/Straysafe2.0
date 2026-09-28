@@ -1,8 +1,10 @@
 {
-  "venvPath": ".",
+  "venvPath": "c:/Users/user/Straysafe2.0",
   "venv": ".venv",
-  "pythonVersion": "3.12",
   "pythonPlatform": "Windows",
   "include": ["app"],
-  "extraPaths": ["."]
+  "extraPaths": [
+    ".",
+    "c:/Users/user/Straysafe2.0/.venv/Lib/site-packages"
+  ]
 }
