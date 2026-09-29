@@ -1,118 +1,141 @@
 """
-Color detection utility for extracting dominant animal colors from images.
+Color detection utility for extracting dominant animal coat colors from images.
+Includes background foliage/grass rejection and HSV coat color clustering.
 """
 from PIL import Image
 import io
+import colorsys
 from typing import Optional, Tuple, List
 
 
+def is_background_foliage_or_sky(r: int, g: int, b: int) -> bool:
+    """Detects if pixel is background grass, green foliage, or sky/water to exclude from coat analysis."""
+    h, s, v = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+    h_deg = h * 360.0
+
+    # Green foliage / grass (Hue between 65 and 165 degrees with moderate saturation)
+    if 65 <= h_deg <= 165 and s >= 0.15:
+        return True
+
+    # Sky / blue background (Hue between 185 and 255 degrees with saturation)
+    if 185 <= h_deg <= 255 and s >= 0.20:
+        return True
+
+    return False
+
+
 def rgb_to_color_name(rgb: Tuple[int, int, int]) -> str:
-    """Convert RGB tuple to human-readable color name."""
+    """Convert RGB tuple to standard animal coat color name."""
     r, g, b = rgb
     
-    # 1. White / Light colors (highly neutral and bright)
-    if r > 185 and g > 185 and b > 185:
+    # Exclude background grass / sky pixels
+    if is_background_foliage_or_sky(r, g, b):
+        return "Background"
+
+    h, s, v = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+    h_deg = h * 360.0
+
+    # 1. White / Cream / Light fur
+    if v > 0.72 and s < 0.22:
         return "White"
-    
-    # 2. Black / Very dark colors (neutral and dark)
-    if r < 85 and g < 85 and b < 85:
+    if v > 0.80 and s < 0.35 and 30 <= h_deg <= 55:
+        return "Cream"
+
+    # 2. Black / Very dark fur
+    if v < 0.28:
         return "Black"
-    
-    # 3. Gray (neutral mid-tones where R, G, B are very close)
-    if max(r, g, b) - min(r, g, b) < 25 and (r + g + b) / 3.0 < 170:
+
+    # 3. Gray fur (low saturation mid-tones)
+    if s < 0.18 and 0.28 <= v <= 0.72:
         return "Gray"
-    
-    # 4. Colored Hues (non-neutral)
-    if r > g and r > b:
-        # Red/Brown/Orange dominance
-        if g > 140 and b < 100:
-            return "Yellow"  # Cream/blonde
-        elif g > 90:
-            if r > 160:
-                return "Orange"  # Ginger
-            else:
-                return "Brown"   # Brown fur
-        elif g < 60:
-            return "Red"
-        else:
+
+    # 4. Brown, Tan, Orange, Golden, Red fur
+    if 15 <= h_deg <= 45:
+        if v < 0.50 or s > 0.50:
             return "Brown"
-            
-    elif g > r and g > b:
-        # Green dominance (background grass/foliage)
-        if r > 100 and b < 100:
-            return "Yellow"
+        elif v >= 0.65 and s >= 0.35:
+            return "Orange"
         else:
-            return "Mixed Color"  # Do not classify animal coat as Green
-            
-    elif b > r and b > g:
-        # Blue dominance (sky/background)
-        return "Mixed Color"  # Do not classify animal coat as Blue
-        
-    elif r > 150 and g > 120 and b < 100:
-        return "Golden"
-        
+            return "Tan"
+    elif 45 < h_deg <= 65:
+        if v >= 0.60 and s >= 0.30:
+            return "Golden"
+        else:
+            return "Tan"
+    elif h_deg < 15 or h_deg > 345:
+        if v < 0.45:
+            return "Brown"
+        else:
+            return "Orange"
+
+    # Catch-all for neutral shades
+    if max(r, g, b) - min(r, g, b) < 25:
+        return "Gray" if (r + g + b) / 3.0 < 170 else "White"
+
     return "Mixed Color"
 
 
 def extract_dominant_colors(image_data: bytes, bbox: Optional[List[float]] = None) -> str:
     """
-    Extract dominant colors from an image.
+    Extract dominant animal coat colors from an image, focusing on the animal's coat.
     
     Args:
         image_data: Raw image bytes
         bbox: Bounding box [x1, y1, x2, y2] from YOLOv8 detection
     
     Returns:
-        Human-readable color description (e.g., "Brown", "Black and White")
+        Human-readable comma-separated coat colors (e.g. "White, Gray", "Brown, White")
     """
     try:
-        # Open image
         img = Image.open(io.BytesIO(image_data))
-        
-        # Convert to RGB if needed
         if img.mode != 'RGB':
             img = img.convert('RGB')
         
-        # If bbox provided, crop to that region
+        # Crop to animal bounding box if available
         if bbox:
             x1, y1, x2, y2 = bbox
-            # Ensure coordinates are within image bounds
             width, height = img.size
             x1 = max(0, int(x1))
             y1 = max(0, int(y1))
             x2 = min(width, int(x2))
             y2 = min(height, int(y2))
-            
             if x2 > x1 and y2 > y1:
                 img = img.crop((x1, y1, x2, y2))
         
-        # Resize for faster color extraction
-        img.thumbnail((100, 100))
-        
-        # Get colors
+        # Sample center region of cropped animal to reduce peripheral background
+        cw, ch = img.size
+        if cw > 40 and ch > 40:
+            # 10% inner margin crop to further avoid perimeter background grass
+            margin_x = int(cw * 0.08)
+            margin_y = int(ch * 0.08)
+            img = img.crop((margin_x, margin_y, cw - margin_x, ch - margin_y))
+
+        img.thumbnail((120, 120))
         img = img.convert('RGB')
         colors = img.getcolors(img.width * img.height)
         
         if not colors:
             return "Unknown"
         
-        # Accumulate pixel counts by mapped human-readable color name
         color_counts = {}
         for count, rgb in colors:
-            # Type guard to ensure we have a tuple with at least R, G, B channels
             if isinstance(rgb, tuple) and len(rgb) >= 3:
                 rgb_tuple = (rgb[0], rgb[1], rgb[2])
                 color_name = rgb_to_color_name(rgb_tuple)
-                if color_name not in ["Unknown", "Mixed Color"]:
+                if color_name not in ["Unknown", "Mixed Color", "Background"]:
                     color_counts[color_name] = color_counts.get(color_name, 0) + count
         
-        # Sort color names by accumulated pixel count in descending order
+        if not color_counts:
+            # Fallback if all were flagged as background
+            for count, rgb in colors:
+                if isinstance(rgb, tuple) and len(rgb) >= 3:
+                    r, g, b = rgb[0], rgb[1], rgb[2]
+                    name = "White" if (r > 170 and g > 170 and b > 170) else ("Black" if (r < 75 and g < 75 and b < 75) else "Gray")
+                    color_counts[name] = color_counts.get(name, 0) + count
+
         sorted_colors = sorted(color_counts.items(), key=lambda x: x[1], reverse=True)
-        
-        # Extract top 3 colors
         unique_colors = [color_name for color_name, _ in sorted_colors[:3]]
         
-        # Format output as comma-separated list of top 3 colors (e.g., "Brown, White, Black")
         if len(unique_colors) == 0:
             return "Unknown"
         return ", ".join(unique_colors)
