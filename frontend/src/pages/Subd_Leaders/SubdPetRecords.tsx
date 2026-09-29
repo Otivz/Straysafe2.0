@@ -671,10 +671,10 @@ const SubdPetRecords: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Centered Pet Details Modal Popup */}
+                        {/* Centered Pet Details Modal Popup / Fullscreen on Mobile */}
                         {selectedPet && (
-                            <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 sm:p-12 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-                                <div className="w-full max-w-6xl rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-300 bg-white overflow-hidden flex flex-col max-h-[90vh]">
+                            <div className="fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-6 md:p-12 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
+                                <div className="w-full h-full sm:h-auto sm:max-h-[90vh] max-w-6xl rounded-none sm:rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-300 bg-[#FAFAF9] overflow-hidden flex flex-col border-none sm:border sm:border-gray-100">
                                     {selectedPet.status === 'Archived' && (
                                         <div className="bg-amber-50 border-b border-amber-200/80 px-8 py-3 flex items-center justify-between shrink-0">
                                             <div className="flex items-center gap-2">
@@ -723,7 +723,7 @@ const SubdPetRecords: React.FC = () => {
 
                     </div>
                 </main>
-                <SubdBottomNav />
+                <SubdBottomNav activeTab="records" />
             </div>
         </div>
     );

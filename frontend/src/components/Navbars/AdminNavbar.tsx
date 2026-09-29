@@ -31,7 +31,10 @@ const AdminNavbar = ({ leftContent }: AdminNavbarProps) => {
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (messagesRef.current && !messagesRef.current.contains(event.target as Node)) {
+            const target = event.target as Element | null;
+            const isInsideMessages = (messagesRef.current && messagesRef.current.contains(event.target as Node)) ||
+                                     Boolean(target?.closest?.('[data-messages-dropdown="true"]'));
+            if (!isInsideMessages) {
                 setIsMessagesOpen(false);
             }
         };

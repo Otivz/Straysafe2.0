@@ -1333,7 +1333,7 @@ const SubdHoldingFacility = () => {
 
                     </div>
                 </main>
-                <SubdBottomNav />
+                <SubdBottomNav activeTab="facility" />
             </div>
 
             {/* ─── Detail / Manage Modal (Unified Barangay-Aligned Modal) ────────── */}
@@ -1343,8 +1343,8 @@ const SubdHoldingFacility = () => {
                 const isResolved = RESOLVED_IDS.has(selected.facility_status);
 
                 return (
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
-                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-0 sm:p-4">
+                        <div className="bg-white rounded-none sm:rounded-3xl shadow-2xl w-full h-full sm:h-auto max-w-2xl sm:max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 border-none sm:border border-gray-100">
 
                             {/* Modal Header */}
                             <div className="flex items-center justify-between p-6 border-b border-gray-100">
@@ -2027,8 +2027,8 @@ const SubdHoldingFacility = () => {
 
             {/* ─── Escalate to Barangay Modal ────────────────────────────────────── */}
             {escalateModalOpen && animalToEscalate && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-0 sm:p-4">
+                    <div className="bg-white rounded-none sm:rounded-3xl shadow-2xl w-full h-full sm:h-auto max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col sm:max-h-[90vh] border-none sm:border border-gray-100">
                         {/* Header */}
                         <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-transparent">
                             <div className="flex items-center gap-3">

@@ -762,7 +762,7 @@ const BrgyProfile = () => {
                     </div>
                 </div>
 
-                <BrgyBottomNav activeTab="profile" />
+                <BrgyBottomNav />
             </main>
         </div>
     );

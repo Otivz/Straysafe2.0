@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useLocation } from 'react-router-dom';
-import axios from 'axios';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Button from './Button';
 import QRScannerModal from './Modals/QRScannerModal';
-import { api } from '../utils/api';
+import { api, clearAuthStorage } from '../utils/api';
+import { DEFAULT_AVATAR, getProfilePicture } from '../utils/avatar';
 
 interface BrgySidebarProps {
     isMobileOpen?: boolean;
@@ -22,16 +22,27 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
     const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
     const [overdueHoldingCount, setOverdueHoldingCount] = useState<number>(0);
     const location = useLocation();
+    const navigate = useNavigate();
 
     // Support both prop naming styles for versatility
     const isDrawerOpen = mobileOpen !== undefined ? mobileOpen : (isMobileOpen || false);
     const handleDrawerClose = onMobileClose || onCloseMobile;
 
+    const rawUser = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
+    const currentUser = rawUser ? JSON.parse(rawUser) : null;
+    const isHeadOfficer = currentUser ? currentUser.is_head_officer : false;
+
+    const handleLogout = () => {
+        if (handleDrawerClose) handleDrawerClose();
+        clearAuthStorage();
+        navigate('/staff/login', { replace: true });
+    };
+
     useEffect(() => {
         const fetchCounts = async () => {
             try {
                 const viewed = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_brgy_requests') || '[]'));
-                const res = await axios.get('http://localhost:8000/reports/?escalated_only=true');
+                const res = await api.get('/reports/?escalated_only=true');
                 if (Array.isArray(res.data)) {
                     // Escalated (4), Approved (13), or Rescue In Progress (5) that have not been viewed yet
                     const unviewed = res.data.filter((r: any) => {
@@ -46,7 +57,7 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
 
             try {
                 const viewedClaimIds = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_brgy_claims') || '[]'));
-                const claimsRes = await axios.get('http://localhost:8000/claims/');
+                const claimsRes = await api.get('/claims/');
                 if (Array.isArray(claimsRes.data)) {
                     const unviewedClaims = claimsRes.data.filter((c: any) => {
                         const isPending = c.status === 'Pending Review' || c.status === 'Evidence Requested' || c.status === 'Potential Owner Match';
@@ -80,7 +91,7 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
             try {
                 const savedStay = localStorage.getItem('holding_impound_stay_duration');
                 const stayDays = savedStay ? parseInt(savedStay, 10) : 3;
-                const holdingRes = await axios.get(`http://localhost:8000/holding/metrics?impound_days=${stayDays}`);
+                const holdingRes = await api.get(`/holding/metrics?impound_days=${stayDays}`);
                 if (holdingRes.data && typeof holdingRes.data.needs_impoundment === 'number') {
                     setOverdueHoldingCount(holdingRes.data.needs_impoundment);
                 }
@@ -103,9 +114,6 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
             window.removeEventListener('storage', fetchCounts);
         };
     }, []);
-
-    const rawUser = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
-    const isHeadOfficer = rawUser ? JSON.parse(rawUser).is_head_officer : false;
 
     const menuSections = [
         {
@@ -232,6 +240,15 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                     )
                 },
                 {
+                    path: '/brgy/profile',
+                    label: 'Profile',
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                    )
+                },
+                {
                     path: '/brgy/settings',
                     label: 'Station Settings',
                     icon: (
@@ -292,7 +309,7 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 pb-6">
+            <nav className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 pb-4">
                 {menuSections.map((section, idx) => (
                     <div key={section.title} className={idx > 0 ? 'mt-6' : 'mt-2'}>
                         {showFullText && (
@@ -362,6 +379,57 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                     </div>
                 ))}
             </nav>
+
+            {/* Sidebar Footer / User & Logout */}
+            <div className="p-3 border-t border-gray-100 bg-gray-50/50 shrink-0">
+                {showFullText ? (
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-3 px-3 py-2 bg-white rounded-xl border border-gray-100 shadow-xs">
+                            <img
+                                src={getProfilePicture(currentUser?.profile_picture)}
+                                alt={currentUser?.name || 'Barangay Staff'}
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR; }}
+                                className="w-9 h-9 rounded-full object-cover ring-1 ring-orange-200 shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-slate-800 truncate">{currentUser?.name || 'Barangay Officer'}</p>
+                                <p className="text-[10px] font-medium text-slate-400 truncate">{currentUser?.email || 'Staff'}</p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleLogout}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-rose-600 hover:text-rose-700 bg-rose-50/80 hover:bg-rose-100/80 rounded-xl transition-all active:scale-98 cursor-pointer shadow-xs"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                            </svg>
+                            <span>Logout</span>
+                        </button>
+                    </div>
+                ) : (
+                    <div className="flex flex-col items-center gap-2">
+                        <Link to="/brgy/profile" title="Profile">
+                            <img
+                                src={getProfilePicture(currentUser?.profile_picture)}
+                                alt={currentUser?.name || 'Barangay Staff'}
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR; }}
+                                className="w-8 h-8 rounded-full object-cover ring-1 ring-orange-200"
+                            />
+                        </Link>
+                        <button
+                            type="button"
+                            onClick={handleLogout}
+                            title="Logout"
+                            className="p-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                            </svg>
+                        </button>
+                    </div>
+                )}
+            </div>
         </div>
     );
 

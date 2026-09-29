@@ -135,8 +135,8 @@ const PetRecords = () => {
 
                     {/* Modal Popup */}
                     {selectedPet && (
-                        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 sm:p-12 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-                            <div className="w-full max-w-6xl rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-300 bg-white overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-6 md:p-10 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+                            <div className="w-full h-full sm:h-auto sm:max-h-[90vh] max-w-6xl rounded-none sm:rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-300 bg-[#FAFAF9] overflow-hidden flex flex-col border-none sm:border sm:border-gray-100">
                                 <PetDetailPanel pet={selectedPet} onClose={() => {
                                     setSelectedPet(null);
                                     fetchAllPets(); // Refresh list on close in case of edits

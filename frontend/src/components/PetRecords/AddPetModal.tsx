@@ -552,38 +552,38 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4 md:p-6">
             <div 
                 className="absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300"
                 onClick={handleClose}
             />
 
-            <div className="relative w-full max-w-3xl bg-white rounded-none md:rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-300">
+            <div className="relative w-full h-full sm:h-auto max-w-3xl bg-white rounded-none sm:rounded-[2.5rem] md:rounded-[3rem] shadow-2xl overflow-hidden flex flex-col sm:max-h-[92vh] animate-in zoom-in-95 duration-300 border-none sm:border border-gray-100">
                 
                 {/* Header */}
-                <header className="shrink-0 z-30 bg-white px-8 py-5 flex items-center justify-between border-b border-gray-100">
-                    <div>
+                <header className="shrink-0 z-30 bg-white px-4 sm:px-8 py-3.5 sm:py-5 flex items-center justify-between border-b border-gray-100">
+                    <div className="min-w-0 pr-2">
                         <div className="flex items-center gap-2">
-                            <span className="text-xs font-black uppercase tracking-widest text-[#F97316]">Step {step} of 2</span>
+                            <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-[#F97316]">Step {step} of 2</span>
                             <span className="text-gray-300">•</span>
-                            <span className="text-xs font-bold text-gray-500">{step === 1 ? (editPetData ? 'Edit Pet Details' : 'Pet Registration Form') : 'Owner Assignment'}</span>
+                            <span className="text-[10px] sm:text-xs font-bold text-gray-500 truncate">{step === 1 ? (editPetData ? 'Edit Pet Details' : 'Pet Registration Form') : 'Owner Assignment'}</span>
                         </div>
-                        <h2 className="text-2xl font-black text-[#1a1208] uppercase tracking-tight mt-0.5">
+                        <h2 className="text-lg sm:text-2xl font-black text-[#1a1208] uppercase tracking-tight mt-0.5 truncate">
                             {editPetData ? '✏️ Edit Pet Record' : (initialReportData ? '🐾 Register Pet in System' : 'Register New Pet')}
                         </h2>
                     </div>
                     <button 
                         onClick={handleClose} 
-                        className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-[#1a1208] hover:bg-gray-100 transition-all cursor-pointer"
+                        className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-[#1a1208] hover:bg-gray-100 transition-all cursor-pointer shrink-0"
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
                 </header>
 
                 {/* Form Content Area */}
-                <div className="flex-1 overflow-y-auto p-6 md:p-10 space-y-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-10 space-y-6 sm:space-y-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                     
                     {errorMessage && (
                         <div className="bg-red-50 border-2 border-dashed border-red-200 rounded-[2rem] p-6 flex items-start gap-4 animate-in fade-in duration-300">

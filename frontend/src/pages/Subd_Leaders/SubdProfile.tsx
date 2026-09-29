@@ -637,7 +637,7 @@ const SubdProfile = () => {
                 </div>
 
                 {/* Reusable Mobile Bottom Navigation */}
-                <SubdBottomNav activeTab="profile" />
+                <SubdBottomNav />
             </main>
         </div>
     );

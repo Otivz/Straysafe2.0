@@ -100,7 +100,11 @@ export default function MessagesDropdown({
     };
 
     const content = (
-        <div className={
+        <div 
+            data-messages-dropdown="true"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            className={
             isMobile
                 ? "fixed inset-0 w-full h-[100dvh] bg-white dark:bg-[#151C2C] z-[999999] flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-200"
                 : "absolute right-0 mt-3 w-[25rem] bg-white dark:bg-[#151C2C] rounded-2xl shadow-2xl border border-gray-100/90 dark:border-gray-800 overflow-hidden z-50 flex flex-col animate-in fade-in zoom-in-95 duration-200"
@@ -124,7 +128,8 @@ export default function MessagesDropdown({
                 <div className="flex items-center gap-1.5">
                     {onRefresh && (
                         <button
-                            onClick={onRefresh}
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onRefresh(); }}
                             className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors cursor-pointer"
                             title="Refresh messages"
                         >
@@ -134,7 +139,8 @@ export default function MessagesDropdown({
                         </button>
                     )}
                     <button
-                        onClick={onClose}
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onClose(); }}
                         className="sm:hidden p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors cursor-pointer"
                         title="Close messages"
                     >
@@ -149,7 +155,8 @@ export default function MessagesDropdown({
             <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-800 bg-gray-50/70 dark:bg-[#0E131F] flex items-center justify-between gap-1.5 shrink-0">
                 <div className="flex items-center gap-1">
                     <button
-                        onClick={() => setFilterTab('all')}
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setFilterTab('all'); }}
                         className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                             filterTab === 'all'
                                 ? 'bg-white dark:bg-[#1E2738] text-[#F97316] dark:text-orange-400 shadow-xs border border-orange-100/60 dark:border-orange-500/30 font-black'
@@ -159,7 +166,8 @@ export default function MessagesDropdown({
                         All ({threads.length})
                     </button>
                     <button
-                        onClick={() => setFilterTab('matches')}
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setFilterTab('matches'); }}
                         className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                             filterTab === 'matches'
                                 ? 'bg-white dark:bg-[#1E2738] text-[#F97316] dark:text-orange-400 shadow-xs border border-orange-100/60 dark:border-orange-500/30 font-black'
@@ -169,7 +177,8 @@ export default function MessagesDropdown({
                         Matches ({threads.filter(t => t.thread_mode === 'match').length})
                     </button>
                     <button
-                        onClick={() => setFilterTab('reports')}
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setFilterTab('reports'); }}
                         className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                             filterTab === 'reports'
                                 ? 'bg-white dark:bg-[#1E2738] text-blue-600 dark:text-blue-400 shadow-xs border border-blue-100/60 dark:border-blue-500/30 font-black'
@@ -181,7 +190,7 @@ export default function MessagesDropdown({
                 </div>
 
                 {/* Mini Search Trigger */}
-                <div className="relative">
+                <div className="relative" onClick={(e) => e.stopPropagation()}>
                     <input
                         type="text"
                         value={searchTerm}
@@ -228,7 +237,10 @@ export default function MessagesDropdown({
                         return (
                             <div
                                 key={thread.thread_id}
-                                onClick={() => handleThreadClick(thread)}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleThreadClick(thread);
+                                }}
                                 className={`p-4 flex items-start gap-3.5 cursor-pointer transition-all duration-200 group relative ${
                                     thread.unread_count > 0
                                         ? 'bg-orange-50/30 dark:bg-orange-950/20 hover:bg-orange-50/60 dark:hover:bg-orange-950/35'

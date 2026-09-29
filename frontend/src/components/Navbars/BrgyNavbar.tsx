@@ -2,12 +2,12 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
-import { api, clearAuthStorage } from '../../utils/api';
+import { api } from '../../utils/api';
 import { useUnreadMessageCount } from '../../utils/useUnreadMessageCount';
 import type { ChatThreadSummary } from '../../utils/useUnreadMessageCount';
 import MessagesDropdown from '../Chat/MessagesDropdown';
 import ReportChatDrawer from '../Chat/ReportChatDrawer';
+import QRScannerModal from '../Modals/QRScannerModal';
 
 interface BrgyNavbarProps {
     leftContent?: ReactNode;
@@ -40,6 +40,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
     const navigate = useNavigate();
     const [isMessagesOpen, setIsMessagesOpen] = useState(false);
     const [activeChatThread, setActiveChatThread] = useState<ChatThreadSummary | null>(null);
+    const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
     const messagesRef = useRef<HTMLDivElement>(null);
 
     // Notification states
@@ -50,11 +51,6 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
     const [isLoadingNotifs, setIsLoadingNotifs] = useState(false);
     const [isMarkingAll, setIsMarkingAll] = useState(false);
     const notifRef = useRef<HTMLDivElement>(null);
-
-    const handleLogout = () => {
-        clearAuthStorage();
-        navigate('/staff/login');
-    };
 
     // Get user from storage
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
@@ -102,7 +98,10 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (messagesRef.current && !messagesRef.current.contains(event.target as Node)) {
+            const target = event.target as Element | null;
+            const isInsideMessages = (messagesRef.current && messagesRef.current.contains(event.target as Node)) ||
+                                     Boolean(target?.closest?.('[data-messages-dropdown="true"]'));
+            if (!isInsideMessages) {
                 setIsMessagesOpen(false);
             }
             if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
@@ -225,21 +224,28 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
     return (
         <header className="h-16 sm:h-20 bg-white border-b border-gray-100 flex items-center justify-between px-3 sm:px-8 sticky top-0 z-40 w-full shadow-xs">
             {/* Left Content Area */}
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-1 sm:mr-3">
+            <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-1 mr-1 sm:mr-3">
                 {/* Mobile: StraySafe Logo + Brand + Barangay Location Subtitle */}
-                <Link to="/brgy/dashboard" className="md:hidden flex items-center gap-2.5 group shrink-0 select-none">
+                <Link to="/brgy/dashboard" className="md:hidden flex items-center gap-1.5 group shrink-0 select-none min-w-0 max-w-[54vw] min-[390px]:max-w-[58vw] sm:max-w-[65vw]">
                     <img
                         src="/SSLOGO.png"
                         alt="StraySafe Logo"
-                        className="h-9 w-auto group-hover:scale-105 transition-transform shrink-0"
+                        className="h-7.5 w-auto group-hover:scale-105 transition-transform shrink-0 drop-shadow-xs"
                     />
-                    <div className="flex flex-col min-w-0">
-                        <span className="font-black text-xl tracking-tighter text-[#1a1208] uppercase leading-none">
-                            STRAYSAFE
-                        </span>
-                        <span className="text-[10px] sm:text-[11px] font-black text-slate-700 uppercase tracking-wider mt-0.5 leading-tight truncate max-w-[190px] min-[390px]:max-w-[230px] sm:max-w-[260px]">
-                            {user?.barangay_name ? `${user.barangay_name}, Sta. Maria, Bulacan` : 'San Vicente, Sta. Maria, Bulacan'}
-                        </span>
+                    <div className="flex flex-col min-w-0 justify-center">
+                        <div className="flex items-center gap-1 leading-none">
+                            <span className="font-black text-sm tracking-tight text-slate-900 uppercase leading-none">
+                                STRAYSAFE
+                            </span>
+                            <span className="inline-flex items-center px-1 py-0.5 rounded-full bg-teal-100 text-[#1A4543] text-[7.5px] font-black uppercase tracking-wider leading-none">
+                                Brgy
+                            </span>
+                        </div>
+                        <div className="flex items-center mt-0.5 min-w-0">
+                            <span className="text-[9.5px] font-bold text-slate-500 tracking-tight leading-none truncate max-w-[135px] min-[390px]:max-w-[170px] sm:max-w-[210px]">
+                                {user?.barangay_name ? `${user.barangay_name}, Sta. Maria` : 'San Vicente, Sta. Maria'}
+                            </span>
+                        </div>
                     </div>
                 </Link>
 
@@ -251,6 +257,19 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
 
             {/* Right Side Actions */}
             <div className="flex items-center gap-1 sm:gap-2.5 ml-auto shrink-0">
+                {/* QR Scanner (Mobile & Desktop) */}
+                <button
+                    type="button"
+                    onClick={() => setIsQRScannerOpen(true)}
+                    className="p-2 sm:p-2.5 rounded-xl transition-all flex items-center justify-center active:scale-95 cursor-pointer border border-transparent text-[#4a3b28] sm:text-slate-500 hover:text-[#F97316] hover:bg-orange-50/70 hover:border-orange-100/70"
+                    title="Scan Pet QR Collar Tag"
+                    aria-label="Open QR Scanner"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5.5 h-5.5 sm:w-5 sm:h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                    </svg>
+                </button>
+
                 {/* Messages Dropdown Container (Mobile Only) */}
                 <div className={`relative ${isMessagesOpen ? 'z-50' : ''} md:hidden`} ref={messagesRef}>
                     <button 
@@ -271,8 +290,8 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                         title="Case Messages & Inquiries"
                         aria-label="Messages"
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 sm:h-5.5 sm:w-5.5 transition-transform group-hover:scale-105" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5.5 h-5.5 sm:h-5 sm:w-5 transition-transform group-hover:scale-105" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
                         {unreadMessageCount > 0 && (
                             <span className="absolute top-0.5 right-0.5 sm:-top-1 sm:-right-1 min-w-[18px] sm:min-w-[20px] h-[18px] sm:h-[20px] px-1 bg-[#F97316] text-white text-[9px] sm:text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-white shadow-xs animate-pulse">
@@ -490,77 +509,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                     )}
                 </div>
 
-                {/* Vertical Divider */}
-                <div className="hidden sm:block h-7 w-px bg-slate-200 mx-1"></div>
 
-                {/* Profile Section */}
-                <div className="relative hidden sm:block group">
-                    <button className="flex items-center space-x-3 pl-3 pr-1 py-1 hover:bg-slate-50/80 rounded-2xl transition-all cursor-pointer group">
-                        <div className="flex flex-col text-right hidden lg:block">
-                            <p className="text-sm font-black text-slate-900 leading-tight group-hover:text-[#F97316] transition-colors">{user.name}</p>
-                            <p className="text-[11px] font-bold text-slate-500 mt-0.5 uppercase tracking-wide">Barangay Action Officer</p>
-                        </div>
-                        <div className="w-10 h-10 rounded-full border-2 border-white shadow-sm ring-1 ring-slate-200/90 group-hover:ring-2 group-hover:ring-[#F97316]/40 overflow-hidden bg-slate-100 flex items-center justify-center transition-all">
-                            <img 
-                                src={getProfilePicture(user.profile_picture)} 
-                                alt={user.name} 
-                                className="w-full h-full object-cover"
-                                onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
-                            />
-                        </div>
-                    </button>
-
-                    {/* Dropdown */}
-                    <div className="absolute right-0 mt-0 w-56 pt-2 opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-300 z-50">
-                        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden py-2">
-                            <div className="px-4 py-3 border-b border-gray-100 bg-slate-50/70">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Signed in as</p>
-                                <p className="text-xs font-bold text-slate-800 truncate mt-0.5">{user.email}</p>
-                            </div>
-
-                            <div className="p-1">
-                                <button 
-                                    onClick={() => navigate('/brgy/profile')}
-                                    className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-gray-600 hover:text-[#F97316] hover:bg-orange-50 rounded-xl transition-all group/item"
-                                >
-                                    <div className="p-1.5 bg-gray-100 rounded-lg text-gray-400 group-hover/item:bg-orange-100 group-hover/item:text-[#F97316] transition-colors">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                        </svg>
-                                    </div>
-                                    <span className="font-semibold">My Profile</span>
-                                </button>
-
-                                <button 
-                                    onClick={() => navigate('/brgy/settings')}
-                                    className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-gray-600 hover:text-[#F97316] hover:bg-orange-50 rounded-xl transition-all group/item"
-                                >
-                                    <div className="p-1.5 bg-gray-100 rounded-lg text-gray-400 group-hover/item:bg-orange-100 group-hover/item:text-[#F97316] transition-colors">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        </svg>
-                                    </div>
-                                    <span className="font-semibold">Station Settings</span>
-                                </button>
-                            </div>
-
-                            <div className="p-1 border-t border-gray-50 mt-1">
-                                <button
-                                    onClick={handleLogout}
-                                    className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-xl transition-all group/item"
-                                >
-                                    <div className="p-1.5 bg-red-100/50 rounded-lg text-red-500 group-hover/item:bg-red-100 transition-colors">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                                        </svg>
-                                    </div>
-                                    <span className="font-bold uppercase tracking-wider text-xs">Logout</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
                 {/* Hamburger Menu Button (Mobile Far Right) */}
                 {onMenuToggle && (
@@ -738,6 +687,8 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
 
                 return createPortal(modalContent, document.body);
             })()}
+
+            <QRScannerModal isOpen={isQRScannerOpen} onClose={() => setIsQRScannerOpen(false)} />
         </header>
     );
 };

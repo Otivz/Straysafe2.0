@@ -440,18 +440,18 @@ const ResiProfile = () => {
 
                     {/* Right Column: Reports — hidden on mobile unless ?tab=reports */}
                     <div className={`flex-1 ${showMobileReports ? 'block' : 'hidden lg:block'}`} id="my-reports-section">
-                        <div className="bg-white border border-gray-200 rounded-lg shadow-sm mb-6">
-                            <div className="px-4 sm:px-8 py-5 border-b border-gray-100">
-                                <div className="flex flex-col gap-4">
-                                    <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wider relative inline-block">
+                        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm mb-5">
+                            <div className="px-4 sm:px-6 py-4 border-b border-gray-100">
+                                <div className="flex flex-col gap-3">
+                                    <h2 className="text-xs font-black text-gray-800 uppercase tracking-wider relative inline-block">
                                         My Reports
-                                        <div className="absolute -bottom-[6px] left-0 right-0 h-1 bg-[#F97316]"></div>
+                                        <div className="absolute -bottom-[6px] left-0 right-0 h-0.5 bg-[#F97316]"></div>
                                     </h2>
 
                                     {/* Search Input for Reports */}
                                     <div className="relative w-full">
                                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <svg className="h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                            <svg className="h-3.5 w-3.5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                                                 <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
                                             </svg>
                                         </div>
@@ -460,39 +460,39 @@ const ResiProfile = () => {
                                             value={searchQuery}
                                             onChange={(e) => setSearchQuery(e.target.value)}
                                             placeholder="Filter reports..."
-                                            className="block w-full pl-10 pr-3 py-2.5 border border-gray-100 rounded-xl text-[11px] bg-gray-50/50 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/10 focus:border-[#F97316] transition-all font-bold text-[#1a1208]"
+                                            className="block w-full pl-9 pr-3 py-2 border border-gray-100 rounded-xl text-[10px] bg-gray-50/50 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/10 focus:border-[#F97316] transition-all font-bold text-[#1a1208]"
                                         />
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
                             {/* Create New Report Placeholder */}
                             <button
                                 onClick={() => navigate('/resident-home', { state: { openAddModal: true, from: '/resident/profile' } })}
-                                className="hidden md:flex bg-white border-2 border-dashed border-gray-100 rounded-lg p-10 flex-col items-center justify-center gap-4 group hover:border-[#F97316] hover:bg-orange-50/30 transition-all min-h-[320px]"
+                                className="hidden md:flex bg-white border-2 border-dashed border-gray-100 rounded-2xl p-6 flex-col items-center justify-center gap-3 group hover:border-[#F97316] hover:bg-orange-50/30 transition-all min-h-[260px] cursor-pointer"
                             >
-                                <div className="w-16 h-16 rounded-full bg-[#F97316] flex items-center justify-center text-white shadow-lg shadow-orange-100 group-hover:scale-110 transition-transform">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <div className="w-12 h-12 rounded-full bg-[#F97316] flex items-center justify-center text-white shadow-md shadow-orange-100 group-hover:scale-110 transition-transform">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
                                     </svg>
                                 </div>
-                                <span className="text-sm font-black uppercase tracking-widest text-[#F97316]">Create a new Report</span>
+                                <span className="text-xs font-black uppercase tracking-widest text-[#F97316]">Create a new Report</span>
                             </button>
 
                             {/* Report Cards */}
                             {filteredReports.length === 0 ? (
-                                <div className="col-span-full text-center py-12 bg-white rounded-3xl border border-gray-100 shadow-sm">
-                                    <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">
+                                <div className="col-span-full text-center py-10 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                                         {reports.length === 0 ? "You haven't submitted any reports yet." : "No reports match your search."}
                                     </p>
                                 </div>
                             ) : (
                                 filteredReports.map((report) => (
-                                    <div key={report.report_id} className="bg-white border border-gray-200 rounded-lg overflow-hidden group shadow-sm hover:shadow-md transition-all flex flex-col">
-                                        <div className="h-44 relative overflow-hidden bg-gray-100">
-                                            <div className="absolute top-3 left-3 px-2 py-1 bg-black/50 backdrop-blur-md rounded text-[9px] font-black text-white uppercase tracking-widest z-10 flex items-center gap-1.5 shadow-sm">
+                                    <div key={report.report_id} className="bg-white border border-gray-100 rounded-2xl overflow-hidden group shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+                                        <div className="h-36 sm:h-40 relative overflow-hidden bg-gray-100">
+                                            <div className="absolute top-2.5 left-2.5 px-2 py-0.5 bg-black/50 backdrop-blur-md rounded text-[8px] font-black text-white uppercase tracking-widest z-10 flex items-center gap-1 shadow-sm">
                                                 {report.visibility === 'Private' ? (
                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -507,28 +507,28 @@ const ResiProfile = () => {
                                             </div>
 
                                             {/* 3-Dot Menu */}
-                                            <div className="absolute top-3 right-3 z-20" ref={openMenuId === report.report_id ? menuRef : null}>
+                                            <div className="absolute top-2.5 right-2.5 z-20" ref={openMenuId === report.report_id ? menuRef : null}>
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         setOpenMenuId(openMenuId === report.report_id ? null : report.report_id);
                                                     }}
-                                                    className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-white/40 transition-all border border-white/30"
+                                                    className="w-7 h-7 rounded-full bg-white/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-white/40 transition-all border border-white/30 cursor-pointer"
                                                 >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                                         <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
                                                     </svg>
                                                 </button>
                                                 {openMenuId === report.report_id && (
-                                                    <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-30 animate-in fade-in zoom-in-95 duration-200">
+                                                    <div className="absolute right-0 mt-1 w-36 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-30 animate-in fade-in zoom-in-95 duration-200">
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 navigate(`/resident/reports/${report.report_id}`);
                                                             }}
-                                                            className="w-full flex items-center gap-3 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-[#F97316] hover:bg-orange-50 transition-colors"
+                                                            className="w-full flex items-center gap-2 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-[#F97316] hover:bg-orange-50 transition-colors cursor-pointer"
                                                         >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                                             </svg>
@@ -540,9 +540,9 @@ const ResiProfile = () => {
                                                                     e.stopPropagation();
                                                                     navigate('/resident-home', { state: { editReport: report, isViewMode: false, from: '/resident/profile' } });
                                                                 }}
-                                                                className="w-full flex items-center gap-3 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-orange-600 hover:bg-orange-50 transition-colors border-t border-gray-50 cursor-pointer"
+                                                                className="w-full flex items-center gap-2 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-orange-600 hover:bg-orange-50 transition-colors border-t border-gray-50 cursor-pointer"
                                                             >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                                 </svg>
                                                                 Edit Details
@@ -560,7 +560,7 @@ const ResiProfile = () => {
                                                 />
                                             ) : (
                                                 <div className="w-full h-full flex items-center justify-center text-gray-300">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                                     </svg>
                                                 </div>
@@ -568,16 +568,16 @@ const ResiProfile = () => {
 
                                             {report.status_id === 11 && (
                                                 <div className="absolute inset-0 bg-green-600/20 backdrop-blur-[2px] flex items-center justify-center">
-                                                    <div className="bg-white/90 px-4 py-2 rounded-full shadow-lg border border-green-100 flex items-center gap-2">
-                                                        <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                                        <span className="text-[10px] font-black text-green-700 uppercase tracking-widest">Case Resolved</span>
+                                                    <div className="bg-white/90 px-3 py-1.5 rounded-full shadow-md border border-green-100 flex items-center gap-1.5">
+                                                        <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                                        <span className="text-[9px] font-black text-green-700 uppercase tracking-widest">Case Resolved</span>
                                                     </div>
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="p-5 flex-1 flex flex-col">
-                                            <div className="flex justify-between items-start mb-3">
-                                                <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border ${report.status_id === 1 ? 'bg-orange-50 text-orange-600 border-orange-100' :
+                                        <div className="p-3.5 sm:p-4 flex-1 flex flex-col">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <span className={`px-2 py-0.5 rounded text-[7px] font-black uppercase tracking-widest border ${report.status_id === 1 ? 'bg-orange-50 text-orange-600 border-orange-100' :
                                                     report.status_id === 2 ? 'bg-cyan-50 text-cyan-600 border-cyan-100' :
                                                         report.status_id === 4 ? 'bg-purple-50 text-purple-600 border-purple-100' :
                                                             report.status_id === 13 ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
@@ -586,32 +586,32 @@ const ResiProfile = () => {
                                                     }`}>
                                                     {statusMap[report.status_id]}
                                                 </span>
-                                                <span className="text-[9px] font-bold text-gray-400">#STR-{report.report_id.toString().padStart(4, '0')}</span>
+                                                <span className="text-[8px] font-bold text-gray-400">#STR-{report.report_id.toString().padStart(4, '0')}</span>
                                             </div>
-                                            <h3 className="text-[13px] font-bold text-gray-800 line-clamp-2 mb-4 leading-snug">
+                                            <h3 className="text-xs font-bold text-gray-800 line-clamp-2 mb-3 leading-snug">
                                                 {report.description || `Sighting near ${report.landmark || 'Selera Homes'}`}
                                             </h3>
 
-                                            <div className="mt-auto space-y-4">
-                                                <div className="flex items-center justify-between pt-4 border-t border-gray-50">
+                                            <div className="mt-auto space-y-3">
+                                                <div className="flex items-center justify-between pt-2.5 border-t border-gray-50">
                                                     <div className="flex flex-col">
-                                                        <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Priority</span>
-                                                        <span className={`text-[11px] font-black uppercase ${getEffectivePriority(report).toLowerCase().includes('high') || getEffectivePriority(report).toLowerCase().includes('emergency') ? 'text-red-500' : getEffectivePriority(report).toLowerCase().includes('low') ? 'text-blue-500' : 'text-orange-500'}`}>
+                                                        <span className="text-[7px] font-black text-gray-400 uppercase tracking-widest">Priority</span>
+                                                        <span className={`text-[10px] font-black uppercase ${getEffectivePriority(report).toLowerCase().includes('high') || getEffectivePriority(report).toLowerCase().includes('emergency') ? 'text-red-500' : getEffectivePriority(report).toLowerCase().includes('low') ? 'text-blue-500' : 'text-orange-500'}`}>
                                                             {getEffectivePriority(report)}
                                                         </span>
                                                     </div>
                                                     <div className="flex flex-col text-right">
-                                                        <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Animals</span>
-                                                        <span className="text-[11px] font-black text-gray-800">{report.animal_count} Sighted</span>
+                                                        <span className="text-[7px] font-black text-gray-400 uppercase tracking-widest">Animals</span>
+                                                        <span className="text-[10px] font-black text-gray-800">{report.animal_count} Sighted</span>
                                                     </div>
                                                 </div>
 
                                                 <button
                                                     onClick={() => navigate(`/resident/reports/${report.report_id}`)}
-                                                    className="w-full py-3 bg-[#F97316] text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-[#EA580C] transition-all flex items-center justify-center gap-2 shadow-lg shadow-orange-100"
+                                                    className="w-full py-2 bg-[#F97316] text-white rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-[#EA580C] transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-orange-100 cursor-pointer"
                                                 >
-                                                    View Intelligence
-                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                                                    View Details
+                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                                                 </button>
                                             </div>
                                         </div>

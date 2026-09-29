@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useLocation } from 'react-router-dom';
-import axios from 'axios';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Button from './Button';
 import QRScannerModal from './Modals/QRScannerModal';
-import { api } from '../utils/api';
+import { api, clearAuthStorage } from '../utils/api';
+import { DEFAULT_AVATAR, getProfilePicture } from '../utils/avatar';
 
 interface SubdSidebarProps {
     mobileOpen?: boolean;
@@ -18,17 +18,25 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
     const [pendingClaimsCount, setPendingClaimsCount] = useState<number>(0);
     const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
     const location = useLocation();
+    const navigate = useNavigate();
+
+    const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
+    const currentUser = userStr ? JSON.parse(userStr) : null;
+
+    const handleLogout = () => {
+        if (onMobileClose) onMobileClose();
+        clearAuthStorage();
+        navigate('/staff/login', { replace: true });
+    };
 
     useEffect(() => {
         const fetchCounts = async () => {
             try {
-                const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
-                const currentUser = userStr ? JSON.parse(userStr) : null;
                 const subId = currentUser?.subdivision_id;
                 // Get set of report IDs that have already been viewed by the leader
                 const viewedReportIds = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_subd_reports') || '[]'));
-                const url = subId ? `http://localhost:8000/reports/?subdivision_id=${subId}` : 'http://localhost:8000/reports/';
-                const reportsRes = await axios.get(url);
+                const url = subId ? `/reports/?subdivision_id=${subId}` : '/reports/';
+                const reportsRes = await api.get(url);
                 if (Array.isArray(reportsRes.data)) {
                     // Count unviewed new reports with status_id = 1 (Reported)
                     const unviewedPending = reportsRes.data.filter((r: any) => {
@@ -204,6 +212,15 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
             title: 'SYSTEM',
             items: [
                 {
+                    path: '/subd/profile',
+                    label: 'Profile',
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                    )
+                },
+                {
                     path: '/subd/settings',
                     label: 'Settings',
                     icon: (
@@ -265,7 +282,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                 </div>
 
                 {/* Navigation */}
-                <nav className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 pb-6">
+                <nav className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 pb-4">
                     {menuSections.map((section, idx) => (
                         <div key={section.title} className={idx > 0 ? 'mt-6' : 'mt-2'}>
                             {(isOpen || mobileOpen) && (
@@ -334,6 +351,57 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                         </div>
                     ))}
                 </nav>
+
+                {/* Sidebar Footer / User & Logout */}
+                <div className="p-3 border-t border-gray-100 bg-gray-50/50 shrink-0">
+                    {(isOpen || mobileOpen) ? (
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-3 px-3 py-2 bg-white rounded-xl border border-gray-100 shadow-xs">
+                                <img
+                                    src={getProfilePicture(currentUser?.profile_picture)}
+                                    alt={currentUser?.name || 'Staff User'}
+                                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR; }}
+                                    className="w-9 h-9 rounded-full object-cover ring-1 ring-orange-200 shrink-0"
+                                />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold text-slate-800 truncate">{currentUser?.name || 'Subdivision Staff'}</p>
+                                    <p className="text-[10px] font-medium text-slate-400 truncate">{currentUser?.email || 'Staff'}</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleLogout}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-rose-600 hover:text-rose-700 bg-rose-50/80 hover:bg-rose-100/80 rounded-xl transition-all active:scale-98 cursor-pointer shadow-xs"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                </svg>
+                                <span>Logout</span>
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center gap-2">
+                            <Link to="/subd/profile" title="Profile">
+                                <img
+                                    src={getProfilePicture(currentUser?.profile_picture)}
+                                    alt={currentUser?.name || 'Staff User'}
+                                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR; }}
+                                    className="w-8 h-8 rounded-full object-cover ring-1 ring-orange-200"
+                                />
+                            </Link>
+                            <button
+                                type="button"
+                                onClick={handleLogout}
+                                title="Logout"
+                                className="p-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                </svg>
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
 
             <QRScannerModal isOpen={isQRScannerOpen} onClose={() => setIsQRScannerOpen(false)} />

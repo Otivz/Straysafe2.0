@@ -85,7 +85,9 @@ This creates these accounts (all passwords: `password123`):
 
 ---
 
-## 5. Frontend (React + Vite)
+
+
+## 6. Frontend (React + Vite)
 
 Open a **separate terminal** and run from the **project root**:
 
@@ -100,7 +102,7 @@ npm install
 npm run dev
 ```
 
-> ✅ Frontend runs at: http://localhost:5173
+> ✅ Frontend runs at: http://localhost:5173 (or https://<YOUR_IP>:5173 on network)
 
 **Every time you reopen the project**, just do steps 1 → 3.
 
@@ -110,14 +112,12 @@ npm run dev
 
 | Terminal | Command |
 |----------|---------|
-| Terminal 1 (Backend) | `.venv\Scripts\activate` → `cd backend` → `..\.venv\Scripts\python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload` |
+| Terminal 1 (Backend) | `.venv\Scripts\activate` → `cd backend` → `..\.venv\Scripts\python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload` |
 | Terminal 2 (Frontend) | `cd frontend` → `npm run dev` |
 
 ---
 
----
-
-## 6. Opening / Testing on a Phone
+## 7. Opening / Testing on a Phone
 
 To access StraySafe on your mobile device (via mobile browser or Capacitor Android APK), your phone and PC must be connected to the **same Wi-Fi network**.
 

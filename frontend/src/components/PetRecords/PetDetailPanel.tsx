@@ -574,17 +574,17 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
     return (
         <div className="bg-[#FAFAF9] w-full h-full flex flex-col animate-in fade-in duration-500 overflow-hidden font-sans relative">
             {/* Header */}
-            <header className="shrink-0 z-30 bg-white px-8 py-5 flex items-center justify-between border-b border-gray-100">
-                <div className="flex items-center gap-3">
-                    <div className="w-2.5 h-6 bg-[#F97316] rounded-full"></div>
-                    <h1 className="text-lg font-black text-[#1a1208] uppercase tracking-wider">Pet Profile Detailed Panel</h1>
+            <header className="shrink-0 z-30 bg-white px-4 sm:px-8 py-3.5 sm:py-5 flex items-center justify-between border-b border-gray-100">
+                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                    <div className="w-2 sm:w-2.5 h-5 sm:h-6 bg-[#F97316] rounded-full shrink-0"></div>
+                    <h1 className="text-sm sm:text-lg font-black text-[#1a1208] uppercase tracking-wider truncate">Pet Profile Detailed Panel</h1>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                     <button 
                         onClick={onClose} 
-                        className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#1a1208] hover:bg-gray-50 transition-all cursor-pointer"
+                        className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#1a1208] hover:bg-gray-50 transition-all cursor-pointer shrink-0"
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
@@ -592,12 +592,12 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
             </header>
 
             {/* Content Area */}
-            <div className="flex-1 overflow-y-auto p-8 sm:p-10 space-y-10 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8 md:p-10 space-y-6 sm:space-y-10 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                 
                 {/* Hero Profile Block */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-8">
                     {/* Large Photo Overlay */}
-                    <div className="lg:col-span-2 relative h-[380px] rounded-[2.5rem] overflow-hidden group shadow-lg border border-gray-100 bg-[#1a1208]">
+                    <div className="lg:col-span-2 relative h-[260px] sm:h-[340px] md:h-[380px] rounded-2xl sm:rounded-[2.5rem] overflow-hidden group shadow-lg border border-gray-100 bg-[#1a1208]">
                         <img 
                             src={getPetPicture(currentPhoto || pet.avatar)} 
                             alt={pet.name} 
@@ -619,7 +619,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     type="button"
                                     onClick={() => photoInputRef.current?.click()}
                                     disabled={isUploadingPhoto}
-                                    className="absolute top-6 right-6 z-20 px-3.5 py-2 bg-black/60 hover:bg-[#B35D25] backdrop-blur-md text-white rounded-xl text-[11px] font-black uppercase tracking-wider border border-white/20 transition-all flex items-center gap-1.5 shadow-lg cursor-pointer disabled:opacity-50"
+                                    className="absolute top-3.5 right-3.5 sm:top-6 sm:right-6 z-20 px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-black/60 hover:bg-[#B35D25] backdrop-blur-md text-white rounded-xl text-[10px] sm:text-[11px] font-black uppercase tracking-wider border border-white/20 transition-all flex items-center gap-1.5 shadow-lg cursor-pointer disabled:opacity-50"
                                 >
                                     <span>📷</span>
                                     <span>{isUploadingPhoto ? 'Uploading...' : 'Change Photo'}</span>
@@ -627,26 +627,26 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                             </>
                         )}
 
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-8 sm:p-10">
-                            <div className="flex items-center gap-3 mb-2">
-                                <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border ${getStatusStyle(pet.status)}`}>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent flex flex-col justify-end p-4 sm:p-8 sm:p-10">
+                            <div className="flex flex-wrap items-center gap-2 mb-1.5 sm:mb-2">
+                                <span className={`px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-widest border ${getStatusStyle(pet.status)}`}>
                                     {pet.status}
                                 </span>
                                 {!hasOwner && (
-                                    <span className="px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest bg-amber-500 text-white shadow-sm">
+                                    <span className="px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full text-[9px] sm:text-[11px] font-black uppercase tracking-widest bg-amber-500 text-white shadow-sm">
                                         🐾 Unassigned / No Owner Yet
                                     </span>
                                 )}
                             </div>
-                            <h2 className="text-3xl sm:text-4xl font-black text-white uppercase tracking-tight">{pet.name}</h2>
-                            <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">{pet.breed} • {pet.species} • {pet.sizeCategory || 'Medium'} Size</p>
+                            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-white uppercase tracking-tight leading-tight">{pet.name}</h2>
+                            <p className="text-[10px] sm:text-xs font-bold text-gray-300 uppercase tracking-widest mt-0.5">{pet.breed} • {pet.species} • {pet.sizeCategory || 'Medium'} Size</p>
                         </div>
                     </div>
 
                     {/* Vitals Summary Card / Quick Actions */}
-                    <div className="flex flex-col justify-between gap-6">
+                    <div className="flex flex-col justify-between gap-5 sm:gap-6">
                         {/* Vitals summary */}
-                        <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 space-y-5">
+                        <div className="bg-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm border border-gray-100 space-y-4 sm:space-y-5">
                             <div className="flex items-center justify-between">
                                 <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Registry Details</h3>
                                 {!hasOwner && (
@@ -655,7 +655,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     </span>
                                 )}
                             </div>
-                            <div className="space-y-4">
+                            <div className="space-y-3.5 sm:space-y-4">
                                 <div className="flex justify-between items-center">
                                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Record ID</span>
                                     <span className="text-xs font-black text-[#1a1208]">{pet.idNumber}</span>
@@ -975,8 +975,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                 )}
 
                 {/* Styled Category Tabs */}
-                <div className="space-y-6">
-                    <div className="flex items-center gap-8 border-b border-gray-100 overflow-x-auto pb-1 scrollbar-none">
+                <div className="space-y-4 sm:space-y-6">
+                    <div className="flex items-center gap-4 sm:gap-8 border-b border-gray-100 overflow-x-auto pb-1 scrollbar-none">
                         {[
                             { id: 'info', label: 'Pet Information' },
                             { id: 'health', label: 'Health Information' },
@@ -986,7 +986,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                             <button 
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id as any)}
-                                className={`pb-4 text-xs font-black uppercase tracking-widest transition-all relative shrink-0 cursor-pointer ${
+                                className={`pb-3 sm:pb-4 text-[11px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest transition-all relative shrink-0 cursor-pointer ${
                                     activeTab === tab.id ? 'text-[#F97316]' : 'text-gray-400 hover:text-gray-600'
                                 }`}
                             >
@@ -999,7 +999,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                     </div>
 
                     {/* Tab Panels */}
-                    <div className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div className="bg-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-8 border border-gray-100 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
                         
                         {/* Tab 1: Pet Information */}
                         {activeTab === 'info' && (

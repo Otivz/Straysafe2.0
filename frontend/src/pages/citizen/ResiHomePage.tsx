@@ -282,7 +282,7 @@ const FormattedReportDescription = ({ description }: { description: string }) =>
 
     // Default / Standard Report Description: clean typography with preserved linebreaks in a subtle card
     return (
-        <div className="text-[13px] sm:text-[14px] font-medium text-[#2d2417] dark:text-slate-100 leading-relaxed whitespace-pre-line bg-stone-50/70 dark:bg-[#1E2738] p-3.5 sm:p-4 rounded-2xl border border-stone-200/60 dark:border-gray-700/80 shadow-2xs">
+        <div className="text-[12px] sm:text-[14px] font-medium text-[#2d2417] dark:text-slate-100 leading-relaxed whitespace-pre-line bg-stone-50/70 dark:bg-[#1E2738] p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-stone-200/60 dark:border-gray-700/80 shadow-2xs">
             {cleanNotes}
         </div>
     );
@@ -865,9 +865,9 @@ const ResiHomePage = () => {
 
     const fetchReports = async () => {
         try {
-            const response = await fetch('http://localhost:8000/reports/');
-            if (response.ok) {
-                const data = await response.json();
+            const response = await api.get('/reports/');
+            if (response.status === 200 && response.data) {
+                const data = response.data;
 
                 // Filter out Private reports that do not belong to the current user
                 // Also exclude resolved, claimed, released, and deceased reports from the active home page feed
@@ -1144,13 +1144,13 @@ const ResiHomePage = () => {
             const userId = currentUserId || 1; // Default to 1 if not logged in
             const parentId = replyingTo[reportId]?.commentId || null;
 
-            const response = await fetch(`http://localhost:8000/reports/${reportId}/comments`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ comment: text.trim(), user_id: userId, parent_comment_id: parentId })
+            const response = await api.post(`/reports/${reportId}/comments`, {
+                comment: text.trim(),
+                user_id: userId,
+                parent_comment_id: parentId
             });
 
-            if (response.ok) {
+            if (response.status === 200 || response.status === 201) {
                 setCommentInputs(prev => ({ ...prev, [reportId]: '' }));
                 setReplyingTo(prev => ({ ...prev, [reportId]: null }));
                 fetchReports(); // Refresh comments
@@ -1584,7 +1584,7 @@ const ResiHomePage = () => {
                 onNotificationClick={handleNotificationClick}
             />
 
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-32 pb-24 md:pb-8">
+            <main className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 pt-16 sm:pt-32 pb-20 md:pb-8">
 
                 {/* Citizen Alert Banner Removed as per user request */}
 
@@ -3256,34 +3256,34 @@ const ResiHomePage = () => {
 
                                 return (
                                     <div key={report.report_id} className="max-w-3xl mx-auto">
-                                        <div className="bg-white dark:bg-stone-900 rounded-[2.5rem] border border-gray-100 dark:border-stone-800 shadow-xl overflow-hidden mb-10 hover:shadow-2xl transition-all duration-300">
+                                        <div className="bg-white dark:bg-stone-900 rounded-xl sm:rounded-[2.5rem] shadow-xs sm:shadow-xl overflow-hidden mb-3 sm:mb-10 hover:shadow-md transition-all duration-300">
                                             {/* Top Header Bar: ID (Left) + Actions (Right) */}
-                                            <div className="px-4 sm:px-7 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between gap-3 bg-stone-50/60 dark:bg-stone-900/60 flex-wrap sm:flex-nowrap">
-                                                <div className="flex items-center gap-2 shrink-0">
-                                                    <span className="w-2.5 h-2.5 rounded-full bg-[#F97316] ring-4 ring-orange-100 dark:ring-orange-950/60"></span>
-                                                    <span className="text-xs sm:text-[13px] font-black text-stone-800 dark:text-stone-200 font-mono tracking-wider">
+                                            <div className="px-2.5 sm:px-7 py-1.5 sm:py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between gap-1 bg-stone-50/70 dark:bg-stone-900/60">
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#F97316] ring-1 sm:ring-2 ring-orange-100 dark:ring-orange-950/60"></span>
+                                                    <span className="text-[9px] sm:text-[13px] font-black text-stone-800 dark:text-stone-200 font-mono tracking-wider">
                                                         #STR-{(report.report_id || 0).toString().padStart(4, '0')}
                                                     </span>
                                                 </div>
-                                                <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                                                <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
                                                     <button
                                                         type="button"
                                                         onClick={(e) => { e.stopPropagation(); openReportDetail(report.report_id, report); }}
-                                                        className="inline-flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 h-9 text-xs font-black uppercase tracking-wider text-[#EA580C] bg-orange-50/70 hover:bg-orange-100 dark:bg-orange-950/40 dark:hover:bg-orange-900/50 active:scale-95 rounded-xl sm:rounded-2xl transition-all border border-orange-200/90 dark:border-orange-800/80 hover:border-orange-400 shadow-2xs cursor-pointer"
+                                                        className="inline-flex items-center justify-center gap-0.5 sm:gap-1 px-1.5 sm:px-4 py-0.5 sm:py-2 text-[8px] sm:text-xs font-black uppercase tracking-wider text-[#EA580C] bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 dark:hover:bg-orange-900/50 active:scale-95 rounded sm:rounded-2xl transition-all border border-orange-200/90 dark:border-orange-800/80 shadow-2xs cursor-pointer"
                                                         title="View Full Report"
                                                     >
-                                                        <span>View Full Report</span>
-                                                        <ExternalLink className="w-3.5 h-3.5 shrink-0 text-[#EA580C]" />
+                                                        <span>View</span>
+                                                        <ExternalLink className="w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0 text-[#EA580C]" />
                                                     </button>
                                                     {report.user_id === currentUserId && report.status_id === 1 && (
                                                         <>
                                                             <button
                                                                 type="button"
                                                                 onClick={(e) => { e.stopPropagation(); handleEditClick(report); }}
-                                                                className="inline-flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 h-9 text-xs font-black uppercase tracking-wider text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white bg-white dark:bg-stone-800 hover:bg-stone-50 dark:hover:bg-stone-750 active:scale-95 rounded-xl sm:rounded-2xl transition-all border border-stone-200 dark:border-stone-700 hover:border-stone-300 shadow-2xs cursor-pointer"
+                                                                className="inline-flex items-center justify-center gap-0.5 sm:gap-1 px-1.5 sm:px-4 py-0.5 sm:py-2 text-[8px] sm:text-xs font-black uppercase tracking-wider text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white bg-white dark:bg-stone-800 hover:bg-stone-50 active:scale-95 rounded sm:rounded-2xl transition-all border border-stone-200 dark:border-stone-700 shadow-2xs cursor-pointer"
                                                                 title="Edit Report"
                                                             >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 sm:h-3 sm:w-3 shrink-0 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                                 </svg>
                                                                 <span>Edit</span>
@@ -3291,10 +3291,10 @@ const ResiHomePage = () => {
                                                             <button
                                                                 type="button"
                                                                 onClick={(e) => { e.stopPropagation(); openCancelModal(report); }}
-                                                                className="inline-flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 h-9 text-xs font-black uppercase tracking-wider text-rose-600 dark:text-rose-400 hover:text-white dark:hover:text-white bg-rose-50/90 dark:bg-rose-950/40 hover:bg-rose-600 dark:hover:bg-rose-600 active:bg-rose-700 active:scale-95 rounded-xl sm:rounded-2xl transition-all border border-rose-200/90 dark:border-rose-900/60 hover:border-rose-600 shadow-2xs cursor-pointer"
+                                                                className="inline-flex items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-4 py-0.5 sm:py-2 text-[8px] sm:text-xs font-black uppercase tracking-wider text-rose-600 dark:text-rose-400 hover:text-white dark:hover:text-white bg-rose-50/90 dark:bg-rose-950/40 hover:bg-rose-600 active:scale-95 rounded sm:rounded-2xl transition-all border border-rose-200/90 dark:border-rose-900/60 shadow-2xs cursor-pointer"
                                                                 title="Cancel Report"
                                                             >
-                                                                <X className="w-3.5 h-3.5 shrink-0" />
+                                                                <X className="w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0" />
                                                                 <span>Cancel</span>
                                                             </button>
                                                         </>
@@ -3303,36 +3303,36 @@ const ResiHomePage = () => {
                                             </div>
 
                                             {/* Content Section */}
-                                            <div className="px-4 sm:px-8 pt-6 pb-6 space-y-4">
+                                            <div className="px-2.5 sm:px-8 pt-2 sm:pt-6 pb-2 sm:pb-6 space-y-1.5 sm:space-y-4">
                                                 {/* Profile & Category Header Row */}
-                                                <div className="flex items-center justify-between gap-3 flex-wrap">
-                                                    <div className="flex items-center gap-3">
+                                                <div className="flex items-center justify-between gap-1 flex-wrap">
+                                                    <div className="flex items-center gap-1.5">
                                                         {report.reporter_photo ? (
                                                             <img
                                                                 src={getProfilePicture(report.reporter_photo)}
-                                                                className="w-11 h-11 rounded-full object-cover ring-2 ring-orange-100 dark:ring-orange-900/40 border-2 border-white dark:border-stone-800 shadow-xs shrink-0"
+                                                                className="w-6 h-6 sm:w-11 sm:h-11 rounded-full object-cover ring-1 sm:ring-2 ring-orange-100 dark:ring-orange-900/40 border border-white dark:border-stone-800 shadow-xs shrink-0"
                                                                 alt={report.reporter_name}
                                                                 onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
                                                             />
                                                         ) : (
-                                                            <div className="w-11 h-11 rounded-full bg-orange-100 dark:bg-orange-950/60 flex items-center justify-center text-[#F97316] dark:text-orange-400 font-black text-sm border-2 border-white dark:border-stone-800 shadow-xs shrink-0">
+                                                            <div className="w-6 h-6 sm:w-11 sm:h-11 rounded-full bg-orange-100 dark:bg-orange-950/60 flex items-center justify-center text-[#F97316] dark:text-orange-400 font-black text-[9px] sm:text-sm border border-white dark:border-stone-800 shadow-xs shrink-0">
                                                                 {report.reporter_name?.charAt(0).toUpperCase() || 'U'}
                                                             </div>
                                                         )}
                                                         <div>
-                                                            <p className="text-sm font-black text-[#1a1208] dark:text-white uppercase tracking-tight leading-snug mb-1">
+                                                            <p className="text-[10px] sm:text-sm font-black text-[#1a1208] dark:text-white uppercase tracking-tight leading-none mb-0.5">
                                                                 {report.reporter_name}
                                                             </p>
-                                                            <div className="flex items-center gap-2 text-xs">
-                                                                <span className="text-[11px] font-semibold text-gray-400 leading-none">{date}</span>
-                                                                <span className="text-gray-300 dark:text-gray-600 font-bold text-[9px] leading-none">•</span>
-                                                                <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-stone-100 dark:bg-stone-800 border border-stone-200/80 dark:border-stone-700 rounded-md">
+                                                            <div className="flex items-center gap-1 text-[8px] sm:text-xs">
+                                                                <span className="text-[8px] sm:text-[10px] font-semibold text-gray-400 leading-none">{date}</span>
+                                                                <span className="text-gray-300 dark:text-gray-600 font-bold text-[6px] leading-none">•</span>
+                                                                <div className="inline-flex items-center gap-0.5 px-1 py-0.2 bg-stone-100 dark:bg-stone-800 border border-stone-200/80 dark:border-stone-700 rounded text-[7px] sm:text-[8px]">
                                                                     {report.visibility === 'Private' ? (
-                                                                        <Shield className="w-3 h-3 text-amber-600" />
+                                                                        <Shield className="w-2 h-2 text-amber-600" />
                                                                     ) : (
-                                                                        <Eye className="w-3 h-3 text-blue-500" />
+                                                                        <Eye className="w-2 h-2 text-blue-500" />
                                                                     )}
-                                                                    <span className="text-[9px] font-black text-stone-600 dark:text-stone-300 uppercase tracking-wider leading-none">
+                                                                    <span className="font-black text-stone-600 dark:text-stone-300 uppercase tracking-wider leading-none">
                                                                         {report.visibility}
                                                                     </span>
                                                                 </div>
@@ -3341,8 +3341,8 @@ const ResiHomePage = () => {
                                                     </div>
 
                                                     {/* Category & Status Badges */}
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <span className="px-3.5 py-1.5 bg-orange-50 dark:bg-orange-950/60 border border-orange-200 dark:border-orange-800/60 text-[#F97316] dark:text-orange-400 rounded-xl sm:rounded-2xl text-[10px] sm:text-[11px] font-black uppercase tracking-wider shadow-2xs">
+                                                    <div className="flex items-center gap-1 flex-wrap">
+                                                        <span className="px-1.5 py-0.5 sm:px-3.5 sm:py-1.5 bg-orange-50 dark:bg-orange-950/60 border border-orange-200 dark:border-orange-800/60 text-[#F97316] dark:text-orange-400 rounded sm:rounded-2xl text-[7.5px] sm:text-[11px] font-black uppercase tracking-wider shadow-2xs">
                                                             {categoryMap[report.category_id] || 'Incident Report'}
                                                         </span>
                                                         {(() => {
@@ -3351,7 +3351,7 @@ const ResiHomePage = () => {
                                                             const badgeStyle = getReportStatusBadgeStyle(currentStatusId);
 
                                                             return (
-                                                                <div className="flex items-center gap-1.5">
+                                                                <div className="flex items-center gap-0.5">
                                                                     {(() => {
                                                                         const isAuthorOrStaff = report.user_id === currentUserId || (currentUser && currentUser.role_id && currentUser.role_id !== 1);
                                                                         if (!isAuthorOrStaff) return null;
@@ -3369,7 +3369,7 @@ const ResiHomePage = () => {
                                                                             />
                                                                         );
                                                                     })()}
-                                                                    <span className={`px-3 py-1.5 rounded-xl sm:rounded-2xl text-[10px] sm:text-[11px] font-black uppercase tracking-wider border shadow-2xs ${badgeStyle}`}>
+                                                                    <span className={`px-1.5 py-0.5 sm:px-3 sm:py-1.5 rounded sm:rounded-2xl text-[7.5px] sm:text-[11px] font-black uppercase tracking-wider border shadow-2xs ${badgeStyle}`}>
                                                                         {statusText}
                                                                     </span>
                                                                 </div>
@@ -3396,12 +3396,12 @@ const ResiHomePage = () => {
                                                     const isSecuredCustody = effectiveCustody && (effectiveCustody.toLowerCase().includes('secured') || effectiveCustody.toLowerCase().includes('safe place'));
 
                                                     return (
-                                                        <div className="space-y-3 pt-1">
+                                                        <div className="space-y-1 pt-0.5">
                                                             {/* Attributes Chips Row */}
-                                                            <div className="flex flex-wrap items-center gap-2">
+                                                            <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">
                                                                 {/* Animal Type & Breed */}
-                                                                <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-stone-100/90 dark:bg-stone-800 border border-stone-200/90 dark:border-stone-700 rounded-xl sm:rounded-2xl text-stone-800 dark:text-stone-200 text-xs font-bold shadow-2xs">
-                                                                    {displayType.toLowerCase() === 'cat' ? <Cat className="w-3.5 h-3.5 text-[#F97316]" /> : <Dog className="w-3.5 h-3.5 text-[#F97316]" />}
+                                                                <div className="inline-flex items-center gap-0.5 px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-stone-100/90 dark:bg-stone-800 border border-stone-200/90 dark:border-stone-700 rounded sm:rounded-2xl text-stone-800 dark:text-stone-200 text-[9px] sm:text-xs font-bold shadow-2xs">
+                                                                    {displayType.toLowerCase() === 'cat' ? <Cat className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#F97316]" /> : <Dog className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#F97316]" />}
                                                                     <span className="font-extrabold text-[#1a1208] dark:text-white">{displayType}</span>
                                                                     {displayBreed && (
                                                                         <>
@@ -3413,24 +3413,24 @@ const ResiHomePage = () => {
 
                                                                 {/* Color */}
                                                                 {displayColor && (
-                                                                    <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-stone-50 dark:bg-stone-800/60 border border-stone-200/80 dark:border-stone-700 rounded-xl sm:rounded-2xl text-stone-700 dark:text-stone-300 text-xs font-bold shadow-2xs">
-                                                                        <Palette className="w-3.5 h-3.5 text-stone-500" />
+                                                                    <div className="inline-flex items-center gap-0.5 px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-stone-50 dark:bg-stone-800/60 border border-stone-200/80 dark:border-stone-700 rounded sm:rounded-2xl text-stone-700 dark:text-stone-300 text-[9px] sm:text-xs font-bold shadow-2xs">
+                                                                        <Palette className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-stone-500" />
                                                                         <span>{displayColor}</span>
                                                                     </div>
                                                                 )}
 
                                                                 {/* Pattern */}
                                                                 {displayPattern && displayPattern.toLowerCase() !== 'unknown' && (
-                                                                    <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-stone-50 dark:bg-stone-800/60 border border-stone-200/80 dark:border-stone-700 rounded-xl sm:rounded-2xl text-stone-700 dark:text-stone-300 text-xs font-bold shadow-2xs">
-                                                                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                                                                    <div className="inline-flex items-center gap-0.5 px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-stone-50 dark:bg-stone-800/60 border border-stone-200/80 dark:border-stone-700 rounded sm:rounded-2xl text-stone-700 dark:text-stone-300 text-[9px] sm:text-xs font-bold shadow-2xs">
+                                                                        <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-amber-500" />
                                                                         <span>{displayPattern}</span>
                                                                     </div>
                                                                 )}
 
                                                                 {/* Size */}
                                                                 {displaySize && (
-                                                                    <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-stone-50 dark:bg-stone-800/60 border border-stone-200/80 dark:border-stone-700 rounded-xl sm:rounded-2xl text-stone-700 dark:text-stone-300 text-xs font-bold shadow-2xs">
-                                                                        <Ruler className="w-3.5 h-3.5 text-stone-500" />
+                                                                    <div className="inline-flex items-center gap-0.5 px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-stone-50 dark:bg-stone-800/60 border border-stone-200/80 dark:border-stone-700 rounded sm:rounded-2xl text-stone-700 dark:text-stone-300 text-[9px] sm:text-xs font-bold shadow-2xs">
+                                                                        <Ruler className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-stone-500" />
                                                                         <span>{displaySize}</span>
                                                                     </div>
                                                                 )}
@@ -3440,8 +3440,8 @@ const ResiHomePage = () => {
                                                                     const trimmed = cond.trim();
                                                                     if (!trimmed || trimmed.toLowerCase() === 'none' || trimmed.toLowerCase() === 'none specified') return null;
                                                                     return (
-                                                                        <div key={i} className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 rounded-xl sm:rounded-2xl text-xs font-bold shadow-2xs">
-                                                                            <Bandage className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                                                        <div key={i} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 rounded sm:rounded-2xl text-[9px] sm:text-xs font-bold shadow-2xs">
+                                                                            <Bandage className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-amber-600 shrink-0" />
                                                                             <span>{trimmed}</span>
                                                                         </div>
                                                                     );
@@ -3449,79 +3449,66 @@ const ResiHomePage = () => {
 
                                                                 {/* Landmark */}
                                                                 {report.landmark && (
-                                                                    <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 rounded-xl sm:rounded-2xl text-xs font-bold shadow-2xs">
-                                                                        <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                                                                        <span className="truncate max-w-[220px]">{report.landmark}</span>
+                                                                    <div className="inline-flex items-center gap-0.5 px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 rounded sm:rounded-2xl text-[9px] sm:text-xs font-bold shadow-2xs">
+                                                                        <MapPin className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-blue-600 shrink-0" />
+                                                                        <span className="truncate max-w-[120px] sm:max-w-[220px]">{report.landmark}</span>
                                                                     </div>
                                                                 )}
-                                                            </div>
 
-                                                            {/* Custody Info Banner */}
-                                                            {effectiveCustody && (
-                                                                <div>
-                                                                    <div className={`inline-flex items-center gap-2.5 px-4 py-2 rounded-xl sm:rounded-2xl border text-xs font-bold shadow-2xs transition-all ${
+                                                                {/* Custody Inline Badge */}
+                                                                {effectiveCustody && (
+                                                                    <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded sm:rounded-2xl border text-[9px] sm:text-xs font-bold shadow-2xs ${
                                                                         isSecuredCustody
                                                                             ? 'bg-emerald-50/90 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/80 text-emerald-950 dark:text-emerald-100'
                                                                             : 'bg-amber-50/90 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/80 text-amber-950 dark:text-amber-100'
                                                                     }`}>
-                                                                        <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
-                                                                            isSecuredCustody ? 'bg-emerald-100 dark:bg-emerald-900/60' : 'bg-amber-100 dark:bg-amber-900/60'
-                                                                        }`}>
-                                                                            {isSecuredCustody ? (
-                                                                                <Home className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                                                                            ) : (
-                                                                                <Eye className="w-3 h-3 text-amber-600 dark:text-amber-400" />
-                                                                            )}
-                                                                        </div>
-                                                                        <div className="flex items-center gap-1.5 flex-wrap">
-                                                                            <span className="text-[10px] font-black uppercase tracking-wider text-stone-500 dark:text-stone-400">Custody:</span>
-                                                                            <span className="font-extrabold text-stone-800 dark:text-stone-100">{effectiveCustody}</span>
-                                                                        </div>
+                                                                        {isSecuredCustody ? (
+                                                                            <Home className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
+                                                                        ) : (
+                                                                            <Eye className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
+                                                                        )}
+                                                                        <span className="text-[7.5px] uppercase tracking-wider text-stone-500 dark:text-stone-400">Custody:</span>
+                                                                        <span className="font-extrabold text-stone-800 dark:text-stone-100">{effectiveCustody}</span>
                                                                     </div>
-                                                                </div>
-                                                            )}
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     );
                                                 })()}
 
                                                 {/* Lost Pet Owner Contact & QR Code Emergency Box */}
                                                 {(report.pet_id || report.owner_phone || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
-                                                    <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50/80 border-2 border-amber-200 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                                                        <div className="flex items-start sm:items-center gap-3.5">
-                                                            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-600 to-orange-500 text-white flex items-center justify-center shadow-md shrink-0">
-                                                                <PawPrint className="w-5 h-5" />
+                                                    <div className="p-3 sm:p-5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50/80 border border-amber-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                                                        <div className="flex items-start sm:items-center gap-2.5">
+                                                            <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-amber-600 to-orange-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                                                                <PawPrint className="w-4 h-4 sm:w-5 sm:h-5" />
                                                             </div>
                                                             <div>
-                                                                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                                                    <span className="px-2 py-0.5 bg-amber-200/90 text-amber-900 rounded-md text-[9px] font-black uppercase tracking-wider">
+                                                                <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                                                                    <span className="px-1.5 py-0.5 bg-amber-200/90 text-amber-900 rounded text-[7.5px] sm:text-[9px] font-black uppercase tracking-wider">
                                                                         Lost Registered Pet
                                                                     </span>
                                                                     {report.pet_name && (
-                                                                        <span className="text-xs font-black text-[#1a1208] uppercase">
+                                                                        <span className="text-[11px] sm:text-xs font-black text-[#1a1208] uppercase">
                                                                             {report.pet_name}
                                                                         </span>
                                                                     )}
                                                                 </div>
-                                                                <p className="text-xs font-bold text-amber-950">
-                                                                    Owner: <span className="font-extrabold">{report.owner_name ? report.owner_name : 'No Registered Owner (Community Animal)'}</span>
-                                                                    {report.owner_phone && <span className="text-amber-800 font-bold ml-1.5 inline-flex items-center gap-1">• <Phone className="w-3 h-3" /> {report.owner_phone}</span>}
+                                                                <p className="text-[10px] sm:text-xs font-bold text-amber-950">
+                                                                    Owner: <span className="font-extrabold">{report.owner_name ? report.owner_name : 'No Registered Owner'}</span>
+                                                                    {report.owner_phone && <span className="text-amber-800 font-bold ml-1 inline-flex items-center gap-0.5">• <Phone className="w-2.5 h-2.5" /> {report.owner_phone}</span>}
                                                                 </p>
-                                                                {report.pet_qr_code_hash && (
-                                                                  <p className="text-[10px] font-bold text-amber-800/90 tracking-tight mt-1 flex items-center gap-1">
-                                                                      Pet QR Tag: <span className="font-mono bg-white/90 px-1.5 py-0.5 rounded border border-amber-300 font-bold text-amber-900">{report.pet_qr_code_hash}</span>
-                                                                  </p>
-                                                                )}
                                                             </div>
                                                         </div>
 
-                                                        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                                                        <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto">
                                                             {report.owner_phone && (
                                                                 <a
                                                                     href={`tel:${report.owner_phone}`}
-                                                                    className="flex-1 sm:flex-initial px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center shadow-sm flex items-center justify-center gap-1.5"
+                                                                    className="flex-1 sm:flex-initial px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all text-center shadow-xs flex items-center justify-center gap-1"
                                                                 >
-                                                                    <Phone className="w-3.5 h-3.5" />
-                                                                    <span>Contact Owner</span>
+                                                                    <Phone className="w-3 h-3" />
+                                                                    <span>Contact</span>
                                                                 </a>
                                                             )}
                                                             {report.pet_qr_code_url && (
@@ -3534,12 +3521,9 @@ const ResiHomePage = () => {
                                                                         ownerName: report.owner_name || undefined,
                                                                         ownerPhone: report.owner_phone
                                                                     })}
-                                                                    className="flex-1 sm:flex-initial px-3.5 py-2.5 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                                                                    className="flex-1 sm:flex-initial px-2.5 py-1.5 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all text-center flex items-center justify-center gap-1 shadow-xs cursor-pointer"
                                                                 >
-                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                                                                    </svg>
-                                                                    <span>Pet QR Tag</span>
+                                                                    <span>QR Tag</span>
                                                                 </button>
                                                             )}
                                                         </div>
@@ -3565,24 +3549,24 @@ const ResiHomePage = () => {
                                                     if (originalMedia.length === 0) return null;
 
                                                     return (
-                                                        <div className="pt-2">
-                                                            <div className={`grid gap-2 rounded-2xl sm:rounded-[2.25rem] overflow-hidden border border-stone-200/80 dark:border-stone-800 shadow-sm bg-stone-100/50 dark:bg-stone-900/50 ${originalMedia.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
+                                                        <div className="pt-1">
+                                                            <div className={`grid gap-1.5 rounded-xl sm:rounded-[2.25rem] overflow-hidden border border-stone-200/80 dark:border-stone-800 shadow-xs bg-stone-100/50 dark:bg-stone-900/50 ${originalMedia.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
                                                                 }`}>
                                                                 {originalMedia.slice(0, 4).map((m: any, idx: number) => (
                                                                     <div
                                                                         key={m.media_id}
-                                                                        className={`relative overflow-hidden cursor-pointer group/media ${originalMedia.length === 1 ? 'max-h-[520px] sm:max-h-[580px] aspect-auto flex items-center justify-center bg-stone-100/60 dark:bg-stone-900/60' :
-                                                                            originalMedia.length === 2 ? 'h-48 sm:h-72' :
-                                                                                originalMedia.length === 3 && idx === 0 ? 'row-span-2 h-[24rem] sm:h-[36rem]' : 'h-48 sm:h-72'
+                                                                        className={`relative overflow-hidden cursor-pointer group/media ${originalMedia.length === 1 ? 'max-h-[220px] sm:max-h-[580px] aspect-auto flex items-center justify-center bg-stone-100/60 dark:bg-stone-900/60' :
+                                                                            originalMedia.length === 2 ? 'h-32 sm:h-72' :
+                                                                                originalMedia.length === 3 && idx === 0 ? 'row-span-2 h-[16rem] sm:h-[36rem]' : 'h-32 sm:h-72'
                                                                             }`}
                                                                         onClick={() => setActiveGallery({ media: originalMedia, index: idx })}
                                                                     >
                                                                         {m.media_type === 'Video' ? (
                                                                             <div className="w-full h-full relative flex items-center justify-center">
-                                                                                <video src={m.file_url} className="w-full h-full max-h-[520px] object-cover" />
+                                                                                <video src={m.file_url} className="w-full h-full max-h-[220px] sm:max-h-[520px] object-cover" />
                                                                                 <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/media:bg-black/30 transition-all">
-                                                                                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/30 backdrop-blur-md flex items-center justify-center text-white border border-white/30 shadow-lg">
-                                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 sm:h-6 sm:w-6 ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                                                                    <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full bg-white/30 backdrop-blur-md flex items-center justify-center text-white border border-white/30 shadow-md">
+                                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-6 sm:w-6 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
                                                                                             <path d="M8 5v14l11-7z" />
                                                                                         </svg>
                                                                                     </div>
@@ -3592,7 +3576,7 @@ const ResiHomePage = () => {
                                                                             <img
                                                                                 src={m.file_url}
                                                                                 alt="Report media"
-                                                                                className={`w-full ${originalMedia.length === 1 ? 'max-h-[520px] sm:max-h-[580px] object-cover sm:object-contain rounded-2xl sm:rounded-[2.25rem]' : 'h-full object-cover'} group-hover/media:scale-[1.01] transition-transform duration-500 ease-out select-none`}
+                                                                                className={`w-full ${originalMedia.length === 1 ? 'max-h-[220px] sm:max-h-[580px] object-cover sm:object-contain rounded-xl sm:rounded-[2.25rem]' : 'h-full object-cover'} group-hover/media:scale-[1.01] transition-transform duration-500 ease-out select-none`}
                                                                                 onError={(e) => {
                                                                                     (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop&q=80';
                                                                                 }}
@@ -3600,7 +3584,7 @@ const ResiHomePage = () => {
                                                                         )}
                                                                         {idx === 3 && originalMedia.length > 4 && (
                                                                             <div className="absolute inset-0 bg-black/70 backdrop-blur-[4px] flex items-center justify-center text-white">
-                                                                                <span className="text-xl sm:text-3xl font-black tracking-tighter leading-none">+{originalMedia.length - 4}</span>
+                                                                                <span className="text-base sm:text-3xl font-black tracking-tighter leading-none">+{originalMedia.length - 4}</span>
                                                                             </div>
                                                                         )}
                                                                     </div>
@@ -3612,14 +3596,14 @@ const ResiHomePage = () => {
                                             </div>
 
                                             {/* Comments Section */}
-                                            <div className="bg-stone-50/50 dark:bg-stone-900/40 border-t border-stone-100 dark:border-stone-800 p-4 sm:p-7 space-y-4">
+                                            <div className="bg-stone-50/50 dark:bg-stone-900/40 border-t border-stone-100 dark:border-stone-800 p-2.5 sm:p-7 space-y-2 sm:space-y-4">
                                                 {report.comments && report.comments.length > 0 && (
                                                     <button
                                                         type="button"
                                                         onClick={() => setExpandedComments(prev => ({ ...prev, [report.report_id]: !prev[report.report_id] }))}
-                                                        className="text-[10px] sm:text-[11px] font-black text-gray-500 hover:text-[#F97316] uppercase tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer"
+                                                        className="text-[9px] sm:text-[11px] font-black text-gray-500 hover:text-[#F97316] uppercase tracking-wider transition-colors flex items-center gap-1 cursor-pointer"
                                                     >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform duration-300 ${expandedComments[report.report_id] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 sm:h-4 sm:w-4 transition-transform duration-300 ${expandedComments[report.report_id] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
                                                         </svg>
                                                         {expandedComments[report.report_id] ? 'Hide Comments' : `View all ${report.comments.length} comments`}
@@ -3627,7 +3611,7 @@ const ResiHomePage = () => {
                                                 )}
 
                                                 {(expandedComments[report.report_id] || !report.comments || report.comments.length === 0) && (
-                                                    <div className="space-y-2.5 max-h-72 overflow-y-auto custom-scrollbar pr-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                                    <div className="space-y-2 max-h-48 sm:max-h-72 overflow-y-auto custom-scrollbar pr-1 animate-in fade-in slide-in-from-top-2 duration-300">
                                                         {report.comments && report.comments.length > 0 ? (
                                                             report.comments
                                                                 .filter((c: any) => !c.parent_comment_id)
@@ -3637,34 +3621,34 @@ const ResiHomePage = () => {
                                                                         .filter((reply: any) => reply.parent_comment_id === c.comment_id)
                                                                         .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
                                                                     return (
-                                                                        <div key={c.comment_id} className="mb-3.5 last:mb-0">
-                                                                            <div className="flex gap-3 relative">
-                                                                                {/* Parent Avatar & Vertical Line */}
+                                                                        <div key={c.comment_id} className="mb-2 sm:mb-3.5 last:mb-0">
+                                                                            <div className="flex gap-2 relative">
+                                                                                {/* Parent Avatar */}
                                                                                 <div className="relative flex flex-col items-center shrink-0">
                                                                                     <img
                                                                                         src={getProfilePicture(c.user_photo)}
-                                                                                        className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white dark:ring-stone-900 border border-gray-100 dark:border-stone-800 shadow-sm"
+                                                                                        className="w-6 h-6 sm:w-8 sm:h-8 rounded-full object-cover z-10 ring-2 sm:ring-4 ring-white dark:ring-stone-900 border border-gray-100 dark:border-stone-800 shadow-xs"
                                                                                         alt={c.user_name || 'User'}
                                                                                         onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
                                                                                     />
                                                                                     {(replies.length > 0 || replyingTo[report.report_id]?.commentId === c.comment_id) && (
-                                                                                        <div className="absolute top-8 bottom-[-16px] left-1/2 -translate-x-1/2 w-[2px] bg-gray-100 dark:bg-stone-800 z-0"></div>
+                                                                                        <div className="absolute top-6 bottom-[-12px] left-1/2 -translate-x-1/2 w-[2px] bg-gray-100 dark:bg-stone-800 z-0"></div>
                                                                                     )}
                                                                                 </div>
 
-                                                                                <div className="flex-1 pb-1">
+                                                                                <div className="flex-1 pb-0.5">
                                                                                     {/* Meta Info */}
-                                                                                    <div className="bg-white dark:bg-stone-900 rounded-[1.3rem] p-3 px-4 border border-gray-100 dark:border-stone-800 shadow-2xs inline-block">
-                                                                                        <span className="block text-[11px] font-black text-[#1a1208] dark:text-white mb-0.5">{c.user_name}</span>
-                                                                                        <p className="text-xs font-medium text-gray-700 dark:text-gray-300 leading-relaxed pr-6">{c.comment}</p>
+                                                                                    <div className="bg-white dark:bg-stone-900 rounded-xl sm:rounded-[1.3rem] p-2 sm:p-3 px-3 sm:px-4 border border-gray-100 dark:border-stone-800 shadow-2xs inline-block">
+                                                                                        <span className="block text-[10px] sm:text-[11px] font-black text-[#1a1208] dark:text-white mb-0.5">{c.user_name}</span>
+                                                                                        <p className="text-[11px] sm:text-xs font-medium text-gray-700 dark:text-gray-300 leading-relaxed pr-2">{c.comment}</p>
                                                                                     </div>
                                                                                     {/* Parent Actions */}
-                                                                                    <div className="flex items-center gap-4 mt-1 ml-3">
-                                                                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{new Date(c.created_at).toLocaleDateString()}</span>
+                                                                                    <div className="flex items-center gap-3 mt-0.5 ml-2">
+                                                                                        <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase tracking-widest">{new Date(c.created_at).toLocaleDateString()}</span>
                                                                                         <button
                                                                                             type="button"
                                                                                             onClick={() => setReplyingTo(prev => ({ ...prev, [report.report_id]: { commentId: c.comment_id, userName: c.user_name } }))}
-                                                                                            className="text-[10px] font-bold text-gray-500 hover:text-[#F97316] transition-colors cursor-pointer"
+                                                                                            className="text-[9px] sm:text-[10px] font-bold text-gray-500 hover:text-[#F97316] transition-colors cursor-pointer"
                                                                                         >
                                                                                             Reply
                                                                                         </button>
@@ -3672,38 +3656,33 @@ const ResiHomePage = () => {
 
                                                                                     {/* Replies Container */}
                                                                                     {replies.length > 0 && (
-                                                                                        <div className="mt-3.5 space-y-3.5">
+                                                                                        <div className="mt-2 space-y-2">
                                                                                             {replies.map((reply: any, index: number) => (
-                                                                                                <div key={reply.comment_id} className="flex gap-3 relative">
-                                                                                                    {/* Horizontal connector curve */}
-                                                                                                    <div className="absolute top-[-10px] left-[-28px] w-[28px] h-[26px] border-b-[2px] border-l-[2px] border-gray-100 dark:border-stone-800 rounded-bl-[12px] z-0 pointer-events-none"></div>
+                                                                                                <div key={reply.comment_id} className="flex gap-2 relative">
+                                                                                                    <div className="absolute top-[-8px] left-[-22px] w-[22px] h-[20px] border-b-[2px] border-l-[2px] border-gray-100 dark:border-stone-800 rounded-bl-[10px] z-0 pointer-events-none"></div>
 
-                                                                                                    {/* Mask to hide vertical line below the last reply */}
                                                                                                     {index === replies.length - 1 && replyingTo[report.report_id]?.commentId !== c.comment_id && (
-                                                                                                        <div className="absolute top-[16px] bottom-[-100px] left-[-30px] w-[6px] bg-stone-50 dark:bg-stone-900 z-0 pointer-events-none"></div>
+                                                                                                        <div className="absolute top-[12px] bottom-[-100px] left-[-24px] w-[6px] bg-stone-50 dark:bg-stone-900 z-0 pointer-events-none"></div>
                                                                                                     )}
 
-                                                                                                    {/* Child Avatar */}
                                                                                                     <img
                                                                                                         src={getProfilePicture(reply.user_photo)}
-                                                                                                        className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white dark:ring-stone-900 border border-gray-100 dark:border-stone-800 shadow-sm shrink-0"
+                                                                                                        className="w-5 h-5 sm:w-6 sm:h-6 rounded-full object-cover z-10 mt-0.5 ring-2 ring-white dark:ring-stone-900 border border-gray-100 dark:border-stone-800 shadow-xs shrink-0"
                                                                                                         alt={reply.user_name || 'User'}
                                                                                                         onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
                                                                                                     />
 
                                                                                                     <div className="flex-1">
-                                                                                                        {/* Child Bubble */}
-                                                                                                        <div className="bg-white dark:bg-stone-900 rounded-[1.2rem] p-2.5 px-3.5 border border-gray-100 dark:border-stone-800 shadow-2xs inline-block">
-                                                                                                            <span className="block text-[10px] font-black text-gray-800 dark:text-gray-200 mb-0.5">{reply.user_name}</span>
-                                                                                                            <p className="text-[11px] font-medium text-gray-600 dark:text-gray-400 leading-relaxed pr-4">{reply.comment}</p>
+                                                                                                        <div className="bg-white dark:bg-stone-900 rounded-lg sm:rounded-[1.2rem] p-1.5 sm:p-2.5 px-2.5 sm:px-3.5 border border-gray-100 dark:border-stone-800 shadow-2xs inline-block">
+                                                                                                            <span className="block text-[9px] sm:text-[10px] font-black text-gray-800 dark:text-gray-200 mb-0.5">{reply.user_name}</span>
+                                                                                                            <p className="text-[10px] sm:text-[11px] font-medium text-gray-600 dark:text-gray-400 leading-relaxed pr-2">{reply.comment}</p>
                                                                                                         </div>
-                                                                                                        {/* Child Actions */}
-                                                                                                        <div className="flex items-center gap-4 mt-1 ml-3">
-                                                                                                            <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">{new Date(reply.created_at).toLocaleDateString()}</span>
+                                                                                                        <div className="flex items-center gap-3 mt-0.5 ml-2">
+                                                                                                            <span className="text-[7px] sm:text-[8px] font-bold text-gray-400 uppercase tracking-widest">{new Date(reply.created_at).toLocaleDateString()}</span>
                                                                                                             <button
                                                                                                                 type="button"
                                                                                                                 onClick={() => setReplyingTo(prev => ({ ...prev, [report.report_id]: { commentId: c.comment_id, userName: reply.user_name } }))}
-                                                                                                                className="text-[9px] font-bold text-gray-500 hover:text-[#F97316] transition-colors cursor-pointer"
+                                                                                                                className="text-[8px] sm:text-[9px] font-bold text-gray-500 hover:text-[#F97316] transition-colors cursor-pointer"
                                                                                                             >
                                                                                                                 Reply
                                                                                                             </button>
@@ -3716,19 +3695,19 @@ const ResiHomePage = () => {
 
                                                                                     {/* Inline Reply Input */}
                                                                                     {replyingTo[report.report_id]?.commentId === c.comment_id && (
-                                                                                        <div className="mt-3.5 flex items-center gap-2.5 relative z-10 animate-in fade-in slide-in-from-top-2 duration-200">
-                                                                                            <div className="absolute top-[-10px] left-[-28px] w-[28px] h-[24px] border-b-[2px] border-l-[2px] border-gray-100 dark:border-stone-800 rounded-bl-[12px] z-0 pointer-events-none"></div>
-                                                                                            <div className="absolute top-[14px] bottom-[-100px] left-[-30px] w-[6px] bg-stone-50 dark:bg-stone-900 z-0 pointer-events-none"></div>
+                                                                                        <div className="mt-2 flex items-center gap-1.5 relative z-10 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                                                            <div className="absolute top-[-8px] left-[-22px] w-[22px] h-[20px] border-b-[2px] border-l-[2px] border-gray-100 dark:border-stone-800 rounded-bl-[10px] z-0 pointer-events-none"></div>
+                                                                                            <div className="absolute top-[12px] bottom-[-100px] left-[-24px] w-[6px] bg-stone-50 dark:bg-stone-900 z-0 pointer-events-none"></div>
 
-                                                                                            <div className="w-6 h-6 rounded-full bg-orange-100 dark:bg-orange-950 flex items-center justify-center text-[#F97316] font-black text-[10px] shrink-0 border border-orange-200 dark:border-orange-800 z-10 bg-white ring-4 ring-white dark:ring-stone-900">
+                                                                                            <div className="w-5 h-5 rounded-full bg-orange-100 dark:bg-orange-950 flex items-center justify-center text-[#F97316] font-black text-[9px] shrink-0 border border-orange-200 dark:border-orange-800 z-10 bg-white ring-2 ring-white dark:ring-stone-900">
                                                                                                 {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
                                                                                             </div>
-                                                                                            <div className="flex-1 relative flex items-center bg-white dark:bg-stone-900 rounded-xl border border-gray-200 dark:border-stone-700 p-1 focus-within:border-orange-300 shadow-2xs">
+                                                                                            <div className="flex-1 relative flex items-center bg-white dark:bg-stone-900 rounded-lg border border-gray-200 dark:border-stone-700 p-0.5 focus-within:border-orange-300 shadow-2xs">
                                                                                                 <input
                                                                                                     type="text"
                                                                                                     autoFocus
                                                                                                     placeholder={`Replying to ${replyingTo[report.report_id]?.userName}...`}
-                                                                                                    className="flex-1 bg-transparent px-3 py-1.5 text-[11px] font-medium text-[#1a1208] dark:text-white focus:outline-none placeholder:text-gray-400"
+                                                                                                    className="flex-1 bg-transparent px-2 py-1 text-[10px] font-medium text-[#1a1208] dark:text-white focus:outline-none placeholder:text-gray-400"
                                                                                                     value={commentInputs[report.report_id] || ''}
                                                                                                     onChange={(e) => setCommentInputs(prev => ({ ...prev, [report.report_id]: e.target.value }))}
                                                                                                     onKeyPress={(e) => e.key === 'Enter' && handleAddComment(report.report_id)}
@@ -3739,17 +3718,17 @@ const ResiHomePage = () => {
                                                                                                         setReplyingTo(prev => ({ ...prev, [report.report_id]: null }));
                                                                                                         setCommentInputs(prev => ({ ...prev, [report.report_id]: '' }));
                                                                                                     }}
-                                                                                                    className="p-1 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+                                                                                                    className="p-0.5 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
                                                                                                 >
-                                                                                                    <X className="w-3.5 h-3.5" />
+                                                                                                    <X className="w-3 h-3" />
                                                                                                 </button>
                                                                                             </div>
                                                                                             <button
                                                                                                 type="button"
                                                                                                 onClick={() => handleAddComment(report.report_id)}
-                                                                                                className="bg-[#F97316] hover:bg-orange-600 text-white rounded-xl w-8 h-8 flex items-center justify-center shadow-xs transition-all shrink-0 cursor-pointer active:scale-95"
+                                                                                                className="bg-[#F97316] hover:bg-orange-600 text-white rounded-lg w-6 h-6 flex items-center justify-center shadow-xs transition-all shrink-0 cursor-pointer active:scale-95"
                                                                                             >
-                                                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 relative left-[1px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 relative left-[0.5px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                                                                                                 </svg>
                                                                                             </button>
@@ -3760,21 +3739,16 @@ const ResiHomePage = () => {
                                                                         </div>
                                                                     );
                                                                 })
-                                                        ) : (
-                                                            <div className="py-4 flex items-center justify-center gap-2 text-xs font-semibold text-stone-400 dark:text-stone-500">
-                                                                <MessageCircle className="w-4 h-4 text-stone-300 dark:text-stone-600" />
-                                                                <span>No comments yet. Be the first to join the conversation!</span>
-                                                            </div>
-                                                        )}
+                                                        ) : null}
                                                     </div>
                                                 )}
 
                                                 {!replyingTo[report.report_id] && (
-                                                    <div className="relative flex items-center bg-white dark:bg-stone-900 rounded-full border border-stone-200 dark:border-stone-700/80 p-1.5 pl-4 pr-1.5 focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-500/10 transition-all shadow-2xs">
+                                                    <div className="relative flex items-center bg-white dark:bg-stone-900 rounded-full border border-stone-200 dark:border-stone-700/80 p-1 pl-3 pr-1 focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-500/10 transition-all shadow-2xs">
                                                         <input
                                                             type="text"
-                                                            placeholder="Write a public comment..."
-                                                            className="flex-1 bg-transparent py-1.5 text-xs font-medium text-[#1a1208] dark:text-white focus:outline-none placeholder:text-stone-400"
+                                                            placeholder="Write a comment..."
+                                                            className="flex-1 bg-transparent py-0.5 text-[11px] sm:text-xs font-medium text-[#1a1208] dark:text-white focus:outline-none placeholder:text-stone-400"
                                                             value={commentInputs[report.report_id] || ''}
                                                             onChange={(e) => setCommentInputs(prev => ({ ...prev, [report.report_id]: e.target.value }))}
                                                             onKeyPress={(e) => e.key === 'Enter' && handleAddComment(report.report_id)}
@@ -4360,10 +4334,7 @@ const ResiHomePage = () => {
                 feedTab={feedTab}
                 onFeedTabChange={setFeedTab}
                 onAddReportClick={() => {
-                    setFeedTab('reports');
-                    setEditingReportId(null);
-                    setFormData(INITIAL_FORM_DATA);
-                    setIsAddReportModalOpen(true);
+                    navigate('/resident/report/new');
                 }}
             />
 

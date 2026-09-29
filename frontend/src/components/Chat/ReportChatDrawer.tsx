@@ -114,6 +114,25 @@ export default function ReportChatDrawer({
     highlightMatch
 }: ReportChatDrawerProps) {
     const navigate = useNavigate();
+
+    const activeUser = currentUser || (() => {
+        try {
+            const raw = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user') ||
+                        localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user') ||
+                        localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                return {
+                    user_id: parsed.user_id,
+                    name: parsed.name || 'User',
+                    role_id: parsed.role_id || (parsed.subdivision_id ? 2 : 1),
+                    profile_picture: parsed.profile_picture
+                };
+            }
+        } catch {}
+        return null;
+    })();
+
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputText, setInputText] = useState(initialMessageSnippet || '');
     const [isUploadingMedia, setIsUploadingMedia] = useState(false);
@@ -149,15 +168,24 @@ export default function ReportChatDrawer({
     };
 
     const reportId = report?.report_id || 0;
-    const rawStatusId = (report as any)?.current_status_id || report?.status_id;
+    const [liveReport, setLiveReport] = useState<any>(report);
+    const [isThreadClosed, setIsThreadClosed] = useState<boolean>(Boolean((report as any)?.is_closed));
+
+    useEffect(() => {
+        setLiveReport(report);
+        setIsThreadClosed(Boolean((report as any)?.is_closed));
+    }, [report]);
+
+    const rawStatusId = liveReport?.current_status_id || liveReport?.status_id || (report as any)?.current_status_id || report?.status_id;
     const effectiveMatchId = autoMatchId || matchId || 0;
-    const isReporter = currentUser && report && currentUser.user_id === report.user_id;
+    const isReporter = activeUser && (liveReport || report) && activeUser.user_id === (liveReport?.user_id || report?.user_id);
     const isMatchMode = (threadMode === 'match') || (threadMode !== 'report' && effectiveMatchId > 0 && !isReporter);
 
-    // If match mode: match chat remains open for coordination during Claimed by Owner (ID 9). Only closes on 3, 11, 12, 14.
-    const isResolved = isMatchMode 
+    // Terminal statuses: 3 (Rejected), 9 (Claimed by Owner), 10 (Released), 11 (Resolved), 12 (Deceased), 14 (False Alarm / Dismissed)
+    const isTerminalStatus = Boolean(rawStatusId && [3, 9, 10, 11, 12, 14].includes(Number(rawStatusId)));
+    const isResolved = isThreadClosed || (isMatchMode 
         ? Boolean(rawStatusId && [3, 11, 12, 14].includes(Number(rawStatusId)))
-        : Boolean(rawStatusId && [3, 9, 10, 11, 12, 14].includes(Number(rawStatusId)));
+        : isTerminalStatus);
     const isClaimApprovedPendingPickup = isMatchMode && Number(rawStatusId) === 9;
 
     const shouldHighlightMatch = highlightMatch || threadMode === 'match' || (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('highlightMatch') === 'true');
@@ -184,33 +212,40 @@ export default function ReportChatDrawer({
         }
     }, [matchId]);
 
-    // Ensure report details & animal photo are loaded if report object was partially provided
+    // Always fetch latest report details, status & thread stats on open
     useEffect(() => {
         if (!isOpen || !reportId) return;
 
-        const needsReportFetch = !(report as any)?.media_url && !(report as any)?.media?.length;
-        if (needsReportFetch) {
-            api.get(`/reports/${reportId}`)
-                .then(res => {
-                    if (res.data) {
-                        const repData = res.data;
-                        const sightingPhoto = repData.media?.[0]?.file_url || repData.media?.[0]?.media_url || repData.media_url || repData.photo_url || null;
-                        setLocalMatchedPet(prev => {
-                            if (!prev) return null;
-                            return {
-                                ...prev,
-                                sighting_photo_url: prev.sighting_photo_url || sightingPhoto || undefined,
-                                sighting_species: prev.sighting_species || repData.animal_type,
-                                sighting_breed: prev.sighting_breed || repData.animal_breed,
-                                sighting_color: prev.sighting_color || repData.animal_color,
-                                sighting_size: prev.sighting_size || repData.animal_size,
-                                sighting_landmark: prev.sighting_landmark || repData.landmark
-                            };
-                        });
-                    }
-                })
-                .catch(err => console.warn('Could not auto-fetch report details for drawer:', err));
-        }
+        api.get(`/reports/${reportId}`)
+            .then(res => {
+                if (res.data) {
+                    const repData = res.data;
+                    setLiveReport(repData);
+                    const sightingPhoto = repData.media?.[0]?.file_url || repData.media?.[0]?.media_url || repData.media_url || repData.photo_url || null;
+                    setLocalMatchedPet(prev => {
+                        if (!prev) return null;
+                        return {
+                            ...prev,
+                            sighting_photo_url: prev.sighting_photo_url || sightingPhoto || undefined,
+                            sighting_species: prev.sighting_species || repData.animal_type,
+                            sighting_breed: prev.sighting_breed || repData.animal_breed,
+                            sighting_color: prev.sighting_color || repData.animal_color,
+                            sighting_size: prev.sighting_size || repData.animal_size,
+                            sighting_landmark: prev.sighting_landmark || repData.landmark
+                        };
+                    });
+                }
+            })
+            .catch(err => console.warn('Could not auto-fetch report details for drawer:', err));
+
+        // Also fetch thread stats to check is_closed state
+        api.get(`/chat/reports/${reportId}/stats`)
+            .then(res => {
+                if (res.data && typeof res.data.is_closed === 'boolean') {
+                    setIsThreadClosed(res.data.is_closed);
+                }
+            })
+            .catch(() => {});
     }, [isOpen, reportId]);
 
     useEffect(() => {
@@ -238,7 +273,7 @@ export default function ReportChatDrawer({
             api.get(`/matches/report/${reportId}`)
                 .then(res => {
                     if (Array.isArray(res.data) && res.data.length > 0) {
-                        const myMatch = res.data.find((m: any) => m.matched_pet?.owner_id === currentUser?.user_id) || res.data[0];
+                        const myMatch = res.data.find((m: any) => m.matched_pet?.owner_id === activeUser?.user_id) || res.data[0];
                         if (myMatch && myMatch.match_id) {
                             setAutoMatchId(myMatch.match_id);
                         }
@@ -438,10 +473,10 @@ export default function ReportChatDrawer({
         // Optimistic UI update
         const tempMessage: ChatMessage = {
             id: `msg-${Date.now()}`,
-            senderId: currentUser?.user_id || 999,
-            senderName: currentUser?.name || 'Authorized Responder',
-            senderRole: roleNameMap[currentUser?.role_id || 2] || 'Subdivision Leader',
-            senderAvatar: currentUser?.profile_picture,
+            senderId: activeUser?.user_id || 999,
+            senderName: activeUser?.name || 'Authorized Responder',
+            senderRole: roleNameMap[activeUser?.role_id || 2] || 'Subdivision Leader',
+            senderAvatar: activeUser?.profile_picture,
             text: messageText,
             mediaUrl,
             timestamp: timeFormatted,
@@ -489,7 +524,7 @@ export default function ReportChatDrawer({
 
     const selectedFileKind = selectedImageFile ? getMediaKind(selectedImageFile.name) : 'image';
 
-    if (!isOpen || !report || !currentUser) return null;
+    if (!isOpen || !report || !activeUser) return null;
 
     const drawerContent = (
         <div className="fixed inset-0 z-[999999] overflow-hidden">
@@ -536,13 +571,34 @@ export default function ReportChatDrawer({
                                     <span className="px-1.5 py-0.5 bg-white/20 text-white rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-wider shrink-0">
                                         {isMatchMode ? `MATCH #${effectiveMatchId}` : `#STR-${(report?.report_id || 0).toString().padStart(4, '0')}`}
                                     </span>
+                                    {isResolved && (
+                                        <span className="px-2 py-0.5 bg-rose-600 text-white rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-wider shrink-0 shadow-xs flex items-center gap-1">
+                                            <span>🔒</span>
+                                            <span>CASE RESOLVED / CLOSED</span>
+                                        </span>
+                                    )}
                                 </div>
                                 <p className="text-[10px] sm:text-[11px] text-orange-100 font-medium truncate mt-0.5">
-                                    {counterpartRole} • <span className="text-white font-bold">{isMatchMode ? 'Direct Look-Alike Inquiry' : (statusNameMap[report?.status_id || 1] || 'Active')}</span>
+                                    {counterpartRole} • <span className="text-white font-bold">{isMatchMode ? 'Direct Look-Alike Inquiry' : (statusNameMap[Number(rawStatusId) || 1] || 'Active')}</span>
                                 </p>
                             </div>
                         </div>
                     </div>
+
+                    {/* Prominent Case Closed Banner */}
+                    {isResolved && (
+                        <div className="bg-rose-50 dark:bg-rose-950/50 border-b border-rose-200 dark:border-rose-900/60 px-4 py-2.5 flex items-start gap-2.5 text-rose-950 dark:text-rose-200 shrink-0">
+                            <span className="text-sm shrink-0 mt-0.5">🔒</span>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs font-black text-rose-900 dark:text-rose-200">
+                                    Case Closed — Direct Messaging Disabled
+                                </p>
+                                <p className="text-[10.5px] text-rose-700 dark:text-rose-300 font-medium leading-relaxed mt-0.5">
+                                    This incident is marked as <strong>{statusNameMap[Number(rawStatusId) || 1] || 'Resolved'}</strong>. The conversation is archived in read-only mode.
+                                </p>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Report Summary Quick Strip */}
                     <div className="px-4 py-2 bg-orange-50/80 dark:bg-orange-950/40 border-b border-orange-100 dark:border-orange-900/60 flex items-center justify-between text-xs text-orange-950 dark:text-orange-200 shrink-0">
@@ -1022,10 +1078,13 @@ export default function ReportChatDrawer({
                     {/* Input Footer */}
                     <div className="p-3 sm:p-3.5 bg-white dark:bg-[#151C2C] border-t border-gray-200 dark:border-gray-800 shrink-0 pb-6 sm:pb-3.5">
                         {isResolved ? (
-                            <div className="p-3 bg-gray-50 dark:bg-[#0E131F] rounded-2xl border border-gray-200 dark:border-gray-800 text-center space-y-1">
-                                <p className="text-xs font-bold text-gray-700 dark:text-gray-200">🔒 Case Resolved & Archived</p>
-                                <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed">
-                                    This report has been resolved and direct messaging is in read-only mode. If you need any further assistance, please contact the office directly.
+                            <div className="p-3.5 bg-rose-50/80 dark:bg-[#0E131F] rounded-2xl border border-rose-200 dark:border-rose-900/60 text-center space-y-1">
+                                <div className="flex items-center justify-center gap-1.5 text-rose-900 dark:text-rose-200 font-black text-xs">
+                                    <span>🔒</span>
+                                    <span>Case Closed — Messaging Disabled</span>
+                                </div>
+                                <p className="text-[10.5px] text-rose-700 dark:text-rose-300 leading-relaxed font-medium">
+                                    This report is marked as <strong>{statusNameMap[Number(rawStatusId) || 1] || 'Resolved'}</strong>. Direct messaging is disabled and archived in read-only mode.
                                 </p>
                             </div>
                         ) : !canInteract ? (
@@ -1084,10 +1143,10 @@ export default function ReportChatDrawer({
                 </div>
             </div>
 
-            {/* Nested Pet Details Modal */}
+            {/* Nested Pet Details Modal / Fullscreen on Mobile */}
             {selectedPetDetail && (
-                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 sm:p-10 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="w-full max-w-6xl rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-200 bg-white dark:bg-[#151C2C] overflow-hidden flex flex-col max-h-[90vh] border border-gray-100 dark:border-gray-800">
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-0 sm:p-6 md:p-10 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="w-full h-full sm:h-auto sm:max-h-[90vh] max-w-6xl rounded-none sm:rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-200 bg-[#FAFAF9] overflow-hidden flex flex-col border-none sm:border sm:border-gray-100">
                         <PetDetailPanel
                             pet={selectedPetDetail}
                             onClose={() => setSelectedPetDetail(null)}

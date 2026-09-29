@@ -934,63 +934,63 @@ const SubdViewReport = () => {
                     }
                 />
 
-                <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-36 md:pb-8 custom-scrollbar">
+                <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 pb-28 md:pb-6 custom-scrollbar">
                     <div className="max-w-7xl mx-auto">
                         {loading ? (
-                            <div className="py-32 flex flex-col items-center justify-center gap-4">
-                                <div className="w-12 h-12 border-4 border-[#F97316] border-t-transparent rounded-full animate-spin"></div>
+                            <div className="py-20 flex flex-col items-center justify-center gap-3">
+                                <div className="w-9 h-9 border-3 border-[#F97316] border-t-transparent rounded-full animate-spin"></div>
                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Loading Report details...</p>
                             </div>
                         ) : !report ? (
-                            <div className="bg-white rounded-[2.5rem] border border-gray-100 p-20 text-center shadow-sm">
-                                <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                                <h3 className="text-gray-900 font-black uppercase text-sm tracking-wider">Report Not Found</h3>
-                                <p className="text-gray-400 text-xs mt-1.5 leading-relaxed">The report ID you are trying to view does not exist or has been deleted.</p>
-                                <Link to="/subd/reports" className="inline-block mt-6 px-6 py-3 bg-[#F97316] hover:bg-[#EA580C] text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-md">
+                            <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center shadow-sm">
+                                <AlertTriangle className="w-9 h-9 mx-auto mb-3 text-gray-400" />
+                                <h3 className="text-gray-900 font-black uppercase text-xs tracking-wider">Report Not Found</h3>
+                                <p className="text-gray-400 text-[11px] mt-1 leading-relaxed">The report ID you are trying to view does not exist or has been deleted.</p>
+                                <Link to="/subd/reports" className="inline-block mt-4 px-5 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-sm">
                                     Go Back to Reports
                                 </Link>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
                                 {/* LEFT COLUMN: Main Report Card */}
-                                <div className="lg:col-span-2 space-y-8 bg-white p-8 sm:p-10 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                                <div className="lg:col-span-2 space-y-5 bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm">
                                 {/* INCOMING TRANSFER REQUEST: CURRENT USER IS RECIPIENT */}
                                 {report.pending_transfer_to_id === currentUserId && ![11, 12, 14, 3].includes(report.status_id) && (
-                                    <div className="p-6 rounded-3xl bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-orange-500/15 border-2 border-orange-400 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 shadow-lg shadow-orange-500/10 animate-in slide-in-from-top duration-300">
-                                        <div className="flex items-start gap-4">
-                                            <div className="w-12 h-12 rounded-2xl bg-[#F97316] text-white flex items-center justify-center shadow-md shadow-orange-500/30 shrink-0">
-                                                <Mail className="w-6 h-6" />
+                                    <div className="p-4 rounded-2xl bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-orange-500/15 border border-orange-400 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 shadow-sm animate-in slide-in-from-top duration-300">
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-9 h-9 rounded-xl bg-[#F97316] text-white flex items-center justify-center shadow-sm shrink-0">
+                                                <Mail className="w-4 h-4" />
                                             </div>
-                                            <div className="space-y-1">
-                                                <h4 className="text-sm font-black text-gray-900 uppercase tracking-wide flex items-center gap-2">
+                                            <div className="space-y-0.5">
+                                                <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide flex items-center gap-1.5">
                                                     Case Handover Request For You
-                                                    <span className="px-2.5 py-0.5 rounded-full bg-[#F97316] text-white text-[9px] font-black uppercase tracking-wider animate-pulse">Action Required</span>
+                                                    <span className="px-2 py-0.5 rounded-full bg-[#F97316] text-white text-[8px] font-black uppercase tracking-wider animate-pulse">Action Required</span>
                                                 </h4>
-                                                <p className="text-xs text-gray-700 font-semibold">
+                                                <p className="text-[11px] text-gray-700 font-semibold">
                                                     <strong className="text-orange-950 font-black">{report.pending_transfer_from_name || 'An officer'}</strong> has requested to transfer Report #{report.report_id} to you.
                                                 </p>
                                                 {report.pending_transfer_notes && (
-                                                    <div className="mt-2 p-2.5 rounded-xl bg-white/90 border border-orange-200 text-xs text-gray-800 font-medium flex items-start gap-1.5">
-                                                        <MessageCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" /> <span><span className="text-gray-500 font-bold">Handover Note:</span> "{report.pending_transfer_notes}"</span>
+                                                    <div className="mt-1.5 p-2 rounded-lg bg-white/90 border border-orange-200 text-[11px] text-gray-800 font-medium flex items-start gap-1.5">
+                                                        <MessageCircle className="w-3 h-3 mt-0.5 shrink-0" /> <span><span className="text-gray-500 font-bold">Handover Note:</span> "{report.pending_transfer_notes}"</span>
                                                     </div>
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
+                                        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
                                             <button
                                                 type="button"
                                                 onClick={handleAcceptTransfer}
                                                 disabled={isAcceptingTransfer}
-                                                className="flex-1 sm:flex-none px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                                                className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] uppercase tracking-wider shadow-sm transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
                                             >
-                                                {isAcceptingTransfer ? 'Accepting...' : <><Check className="w-3.5 h-3.5" /> Accept Case</>}
+                                                {isAcceptingTransfer ? 'Accepting...' : <><Check className="w-3 h-3" /> Accept Case</>}
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => setIsRejectTransferModalOpen(true)}
-                                                className="flex-1 sm:flex-none px-5 py-3 rounded-2xl bg-white hover:bg-red-50 text-red-600 border border-red-200 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                                className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl bg-white hover:bg-red-50 text-red-600 border border-red-200 font-black text-[11px] uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer"
                                             >
-                                                <X className="w-3.5 h-3.5" /> Decline
+                                                <X className="w-3 h-3" /> Decline
                                             </button>
                                         </div>
                                     </div>
@@ -998,21 +998,21 @@ const SubdViewReport = () => {
 
                                 {/* PENDING TRANSFER REQUEST: CURRENT USER WAITING FOR RECIPIENT */}
                                 {report.pending_transfer_from_id === currentUserId && report.pending_transfer_to_id && ![11, 12, 14, 3].includes(report.status_id) && (
-                                    <div className="p-5 rounded-3xl bg-amber-500/10 border border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300">
-                                        <div className="flex items-center gap-3.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0">
-                                                <Hourglass className="w-5 h-5" />
+                                    <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-300">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-sm shrink-0">
+                                                <Hourglass className="w-4 h-4" />
                                             </div>
                                             <div>
-                                                <h4 className="text-xs font-black text-amber-950 uppercase tracking-widest flex items-center gap-2">
+                                                <h4 className="text-xs font-black text-amber-950 uppercase tracking-widest flex items-center gap-1.5">
                                                     Case Transfer Pending Acceptance
-                                                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
                                                 </h4>
-                                                <p className="text-xs text-amber-800 font-semibold mt-0.5">
+                                                <p className="text-[11px] text-amber-800 font-semibold mt-0.5">
                                                     Transfer requested to <strong className="font-bold text-amber-950">{report.pending_transfer_to_name || 'Officer'}</strong>. You remain responsible for this report until they accept.
                                                 </p>
                                                 {report.pending_transfer_notes && (
-                                                    <p className="text-[11px] text-amber-700 italic mt-1 font-medium flex items-start gap-1"><MessageCircle className="w-3 h-3 mt-0.5 shrink-0" /> Note: "{report.pending_transfer_notes}"</p>
+                                                    <p className="text-[10px] text-amber-700 italic mt-0.5 font-medium flex items-start gap-1"><MessageCircle className="w-2.5 h-2.5 mt-0.5 shrink-0" /> Note: "{report.pending_transfer_notes}"</p>
                                                 )}
                                             </div>
                                         </div>
@@ -1020,7 +1020,7 @@ const SubdViewReport = () => {
                                             type="button"
                                             onClick={handleCancelTransfer}
                                             disabled={isCancellingTransfer}
-                                            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 font-black text-[11px] uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shrink-0"
+                                            className="w-full sm:w-auto px-3 py-1.5 rounded-lg bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 font-black text-[10px] uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shrink-0"
                                         >
                                             {isCancellingTransfer ? 'Cancelling...' : 'Cancel Request'}
                                         </button>
@@ -1028,53 +1028,19 @@ const SubdViewReport = () => {
                                 )}
 
                                 {/* Case Handler Ownership Banner - Active Cases Only */}
-                                {report.status_id !== 18 && !report.duplicate_of_report_id && ![3, 9, 10, 11, 12, 14, 18].includes(report.status_id) && (
-                                    !report.assigned_leader_id ? (
-                                    <div className="p-5 rounded-3xl bg-amber-500/10 border border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                                        <div className="flex items-center gap-3.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0">
-                                                <AlertTriangle className="w-5 h-5" />
+                                {report.status_id !== 18 && !report.duplicate_of_report_id && ![3, 9, 10, 11, 12, 14, 18].includes(report.status_id) && report.assigned_leader_id && (
+                                    report.assigned_leader_id === currentUserId ? (
+                                    <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm shrink-0">
+                                                <Shield className="w-4 h-4" />
                                             </div>
                                             <div>
-                                                <h4 className="text-xs font-black text-amber-950 uppercase tracking-widest flex items-center gap-2">
-                                                    Report is Unassigned
-                                                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
-                                                </h4>
-                                                <p className="text-xs text-amber-800 font-semibold mt-0.5">
-                                                    No officer has claimed this case yet. Claiming will assign you as the primary handler.
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={handleClaimReport}
-                                            disabled={isClaiming}
-                                            className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-[#F97316] hover:bg-[#EA580C] text-white font-black text-xs uppercase tracking-wider shadow-md shadow-orange-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer shrink-0"
-                                        >
-                                            {isClaiming ? (
-                                                <>
-                                                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                                                    <span>Claiming...</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Shield className="w-3.5 h-3.5" /> <span>Claim This Report</span>
-                                                </>
-                                            )}
-                                        </button>
-                                    </div>
-                                ) : report.assigned_leader_id === currentUserId ? (
-                                    <div className="p-5 rounded-3xl bg-emerald-500/10 border border-emerald-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                                        <div className="flex items-center gap-3.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-600/20 shrink-0">
-                                                <Shield className="w-5 h-5" />
-                                            </div>
-                                            <div>
-                                                <h4 className="text-xs font-black text-emerald-950 uppercase tracking-widest flex items-center gap-2">
+                                                <h4 className="text-xs font-black text-emerald-950 uppercase tracking-widest flex items-center gap-1.5">
                                                     You are handling this case
-                                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                                                 </h4>
-                                                <p className="text-xs text-emerald-800 font-semibold mt-0.5">
+                                                <p className="text-[11px] text-emerald-800 font-semibold mt-0.5">
                                                     {report.claimed_at ? (
                                                         <>Claimed <RelativeTimestamp date={report.claimed_at} /> — All investigation & status controls are active.</>
                                                     ) : (
@@ -1087,55 +1053,55 @@ const SubdViewReport = () => {
                                             type="button"
                                             onClick={handleUnclaimReport}
                                             disabled={isUnclaiming}
-                                            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-black text-[11px] uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shrink-0"
+                                            className="w-full sm:w-auto px-3.5 py-1.5 rounded-xl bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-black text-[10px] uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shrink-0"
                                         >
                                             {isUnclaiming ? 'Releasing...' : 'Release / Unclaim'}
                                         </button>
                                     </div>
                                 ) : (
-                                    <div className={`p-5 rounded-3xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
+                                    <div className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
                                         report.is_takeover_eligible
                                             ? 'bg-amber-500/10 border-amber-300'
                                             : 'bg-blue-500/10 border-blue-300'
                                     }`}>
-                                        <div className="flex items-center gap-3.5">
-                                            <div className={`w-11 h-11 rounded-2xl text-white flex items-center justify-center text-xl font-black shadow-md shrink-0 ${
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-9 h-9 rounded-xl text-white flex items-center justify-center shadow-sm shrink-0 ${
                                                 report.is_takeover_eligible
                                                     ? 'bg-amber-600 shadow-amber-600/20'
                                                     : 'bg-blue-600 shadow-blue-600/20'
                                             }`}>
-                                                {report.is_takeover_eligible ? <AlertTriangle className="w-5 h-5" /> : <User className="w-5 h-5" />}
+                                                {report.is_takeover_eligible ? <AlertTriangle className="w-4 h-4" /> : <User className="w-4 h-4" />}
                                             </div>
                                             <div>
-                                                <div className="flex items-center gap-2 flex-wrap">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
                                                     <h4 className={`text-xs font-black uppercase tracking-widest ${
                                                         report.is_takeover_eligible ? 'text-amber-950' : 'text-blue-950'
                                                     }`}>
                                                         Handled by {report.assigned_leader_name || `Officer #${report.assigned_leader_id}`}
                                                     </h4>
                                                     {report.is_takeover_eligible ? (
-                                                        <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white font-black text-[9px] uppercase tracking-wider shadow-xs animate-pulse inline-flex items-center gap-1">
-                                                            <AlertTriangle className="w-2.5 h-2.5" /> Inactive / Stalled ({report.takeover_inactivity_hours_threshold || 24}h No Progress)
+                                                        <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white font-black text-[8px] uppercase tracking-wider shadow-xs animate-pulse inline-flex items-center gap-1">
+                                                            <AlertTriangle className="w-2 h-2" /> Inactive ({report.takeover_inactivity_hours_threshold || 24}h No Progress)
                                                         </span>
                                                     ) : (
-                                                        <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold text-[9px] uppercase tracking-wider border border-blue-200">
+                                                        <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold text-[8px] uppercase tracking-wider border border-blue-200">
                                                             Active Response Window
                                                         </span>
                                                     )}
                                                 </div>
-                                                <p className={`text-xs font-semibold mt-0.5 ${
+                                                <p className={`text-[11px] font-semibold mt-0.5 ${
                                                     report.is_takeover_eligible ? 'text-amber-800' : 'text-blue-800'
                                                 }`}>
                                                     {report.claimed_at ? (
-                                                        <>Primary handler since <RelativeTimestamp date={report.claimed_at} />. Actions are reserved for the current handler.</>
+                                                        <>Primary handler since <RelativeTimestamp date={report.claimed_at} />. Actions are reserved for current handler.</>
                                                     ) : (
                                                         <>Assigned to another subdivision officer.</>
                                                     )}
                                                 </p>
                                                 {!report.is_takeover_eligible && (report.takeover_cooldown_remaining_seconds || 0) > 0 && (
-                                                    <p className="text-[11px] font-bold text-blue-600/90 mt-1 flex items-center gap-1">
-                                                        <Lock className="w-3 h-3" />
-                                                        <span>Takeover unlocks in <strong>{formatCooldownTimer(report.takeover_cooldown_remaining_seconds)}</strong> if no progress is made.</span>
+                                                    <p className="text-[10px] font-bold text-blue-600/90 mt-0.5 flex items-center gap-1">
+                                                        <Lock className="w-2.5 h-2.5" />
+                                                        <span>Takeover unlocks in <strong>{formatCooldownTimer(report.takeover_cooldown_remaining_seconds)}</strong> if stalled.</span>
                                                     </p>
                                                 )}
                                             </div>
@@ -1146,16 +1112,16 @@ const SubdViewReport = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => setIsTakeoverModalOpen(true)}
-                                                className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 animate-in zoom-in-95 hover:scale-105 active:scale-95"
+                                                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-[11px] uppercase tracking-wider shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 animate-in zoom-in-95 hover:scale-105 active:scale-95"
                                             >
-                                                <RefreshCw className="w-3.5 h-3.5" /> <span>Take Over Report</span>
+                                                <RefreshCw className="w-3 h-3" /> <span>Take Over</span>
                                                 {currentUser?.role_id === 4 && !report.is_takeover_eligible && (
-                                                    <span className="text-[9px] bg-amber-700/50 px-1.5 py-0.5 rounded text-white font-normal">Admin Override</span>
+                                                    <span className="text-[8px] bg-amber-700/50 px-1 py-0.2 rounded text-white font-normal">Admin</span>
                                                 )}
                                             </button>
                                         ) : (
-                                            <div className="w-full sm:w-auto px-4 py-2.5 rounded-2xl bg-gray-100 border border-gray-200 text-gray-400 font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-not-allowed opacity-80 shrink-0" title="Takeover is locked while the assigned officer is within the active response period.">
-                                                <Lock className="w-3 h-3" /> <span>Takeover Locked ({formatCooldownTimer(report.takeover_cooldown_remaining_seconds)})</span>
+                                            <div className="w-full sm:w-auto px-3 py-1.5 rounded-xl bg-gray-100 border border-gray-200 text-gray-400 font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1 cursor-not-allowed opacity-80 shrink-0" title="Takeover is locked while the assigned officer is within the active response period.">
+                                                <Lock className="w-2.5 h-2.5" /> <span>Locked ({formatCooldownTimer(report.takeover_cooldown_remaining_seconds)})</span>
                                             </div>
                                         )}
                                     </div>
@@ -1163,31 +1129,30 @@ const SubdViewReport = () => {
 
                                 {/* AI Suspected Duplicate Stray Sighting Alert Banner */}
                                 {!RESOLVED_STATUS_IDS.includes(report.status_id) && !report.duplicate_of_report_id && (duplicateMatches.length > 0 || report.has_duplicate_flag) && (
-                                    <div className="p-5 rounded-3xl bg-amber-500/10 border-2 border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300 mb-4">
-                                        <div className="flex items-start sm:items-center gap-3.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0">
-                                                <AlertTriangle className="w-5 h-5" />
+                                    <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-300 mb-3">
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-sm shrink-0">
+                                                <AlertTriangle className="w-4 h-4" />
                                             </div>
                                             <div>
-                                                <div className="flex items-center gap-2 flex-wrap">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
                                                     <h4 className="text-xs font-black text-amber-900 uppercase tracking-widest">
                                                         Possible Duplicate Sighting Detected
                                                     </h4>
-                                                    <span className="px-2.5 py-0.5 bg-amber-200/80 border border-amber-400 text-amber-900 rounded-full text-[10px] font-black uppercase tracking-wider">
-                                                        {duplicateMatches.length > 0 ? `${duplicateMatches.length} Similar Stray Report${duplicateMatches.length > 1 ? 's' : ''}` : 'Suspected Duplicate'}
+                                                    <span className="px-2 py-0.5 bg-amber-200/80 border border-amber-400 text-amber-900 rounded-full text-[9px] font-black uppercase tracking-wider">
+                                                        {duplicateMatches.length > 0 ? `${duplicateMatches.length} Similar Report${duplicateMatches.length > 1 ? 's' : ''}` : 'Suspected Duplicate'}
                                                     </span>
                                                     {duplicateMatches[0] && (
-                                                        <span className="px-2 py-0.5 bg-amber-100 border border-amber-300 text-amber-800 rounded-md text-[10px] font-black">
+                                                        <span className="px-1.5 py-0.2 bg-amber-100 border border-amber-300 text-amber-800 rounded text-[9px] font-black">
                                                             {Math.round(duplicateMatches[0].similarity_score > 1 ? duplicateMatches[0].similarity_score : duplicateMatches[0].similarity_score * 100)}% Match
                                                         </span>
                                                     )}
                                                 </div>
-                                                <p className="text-xs text-amber-800 font-medium mt-1 leading-relaxed">
-                                                    Straysafe AI identified another active report in this area with matching visual features and timeframe. 
-                                                    Compare the sightings side-by-side to consolidate duplicate dispatches.
+                                                <p className="text-[11px] text-amber-800 font-medium mt-0.5 leading-relaxed">
+                                                    Straysafe AI identified another active report in this area with matching visual features and timeframe.
                                                 </p>
                                                 {duplicateMatches[0]?.matched_report && (
-                                                    <p className="text-[11px] text-amber-700 font-bold mt-1">
+                                                    <p className="text-[10px] text-amber-700 font-bold mt-0.5">
                                                         Potential duplicate: Case #{duplicateMatches[0].matched_report.report_id} 
                                                         {duplicateMatches[0].matched_report.animal_name ? ` ("${duplicateMatches[0].matched_report.animal_name}")` : ''} 
                                                         {duplicateMatches[0].matched_report.created_at ? ` • Reported ${new Date(duplicateMatches[0].matched_report.created_at).toLocaleDateString()}` : ''}
@@ -1200,23 +1165,23 @@ const SubdViewReport = () => {
                                                 <button
                                                     type="button"
                                                     onClick={() => setActiveReviewMatch(duplicateMatches[0])}
-                                                    className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md shadow-amber-600/20 flex items-center gap-1.5 cursor-pointer"
+                                                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center gap-1 cursor-pointer"
                                                 >
-                                                    <Search className="w-3.5 h-3.5" /> <span>Compare Side-by-Side</span>
+                                                    <Search className="w-3 h-3" /> <span>Compare</span>
                                                 </button>
                                             )}
                                             <button
                                                 type="button"
                                                 onClick={() => setIsMergeModalOpen(true)}
-                                                className="px-3.5 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer"
+                                                className="px-3 py-1.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer"
                                             >
-                                                <Link2 className="w-3.5 h-3.5" /> <span>Merge Case</span>
+                                                <Link2 className="w-3 h-3" /> <span>Merge</span>
                                             </button>
                                             {duplicateMatches[0] && (
                                                 <button
                                                     type="button"
                                                     onClick={() => handleDismissDuplicate(duplicateMatches[0].match_id)}
-                                                    className="px-3 py-2.5 bg-white hover:bg-amber-50 text-amber-900 border border-amber-300 text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                                                    className="px-2.5 py-1.5 bg-white hover:bg-amber-50 text-amber-900 border border-amber-300 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
                                                     title="Dismiss duplicate alert (separate animals)"
                                                 >
                                                     <span>Dismiss</span>
@@ -1228,26 +1193,26 @@ const SubdViewReport = () => {
 
                                 {/* Status Alert Banners: Merged / False Alarm / Disputed / Verified */}
                                 {report.status_id === 18 || report.duplicate_of_report_id ? (
-                                    <div className="p-5 rounded-3xl bg-stone-100 border-2 border-stone-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300">
-                                        <div className="flex items-start sm:items-center gap-3.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-stone-800 text-white flex items-center justify-center shadow-md shadow-stone-800/20 shrink-0">
-                                                <Link2 className="w-5 h-5" />
+                                    <div className="p-3.5 rounded-2xl bg-stone-100 border border-stone-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-300">
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-9 h-9 rounded-xl bg-stone-800 text-white flex items-center justify-center shadow-sm shrink-0">
+                                                <Link2 className="w-4 h-4" />
                                             </div>
                                             <div>
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-1.5">
                                                     <h4 className="text-xs font-black text-stone-900 uppercase tracking-widest">
                                                         Merged Duplicate Report
                                                     </h4>
-                                                    <span className="px-2 py-0.5 bg-stone-300 text-stone-900 rounded-md text-[9px] font-black uppercase">
+                                                    <span className="px-2 py-0.5 bg-stone-300 text-stone-900 rounded-md text-[8px] font-black uppercase">
                                                         Case #{report.duplicate_of_report_id || 'Active'}
                                                     </span>
                                                 </div>
-                                                <p className="text-xs text-stone-700 font-medium mt-1 leading-relaxed">
-                                                    This sighting has been confirmed as the same animal and consolidated into active Case #{report.duplicate_of_report_id}. 
+                                                <p className="text-[11px] text-stone-700 font-medium mt-0.5 leading-relaxed">
+                                                    Consolidated into active Case #{report.duplicate_of_report_id}. 
                                                     {report.merge_notes && ` Note: "${report.merge_notes}"`}
                                                 </p>
                                                 {report.merged_by_name && (
-                                                    <p className="text-[10px] text-stone-500 font-bold mt-1">
+                                                    <p className="text-[9px] text-stone-500 font-bold mt-0.5">
                                                         Merged by: {report.merged_by_name} {report.merged_at ? `• ${new Date(report.merged_at).toLocaleDateString()}` : ''}
                                                     </p>
                                                 )}
@@ -1257,43 +1222,43 @@ const SubdViewReport = () => {
                                             {report.duplicate_of_report_id && (
                                                 <Link
                                                     to={`/subd/reports/${report.duplicate_of_report_id}`}
-                                                    className="px-4 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                                                    className="px-3 py-1.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center gap-1"
                                                 >
-                                                    <span>View Primary Case #{report.duplicate_of_report_id}</span>
+                                                    <span>View Case #{report.duplicate_of_report_id}</span>
                                                     <span>→</span>
                                                 </Link>
                                             )}
                                             <button
                                                 type="button"
                                                 onClick={() => setIsUnmergeModalOpen(true)}
-                                                className="px-3.5 py-2 bg-white hover:bg-stone-50 text-stone-700 border border-stone-300 text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                                                className="px-3 py-1.5 bg-white hover:bg-stone-50 text-stone-700 border border-stone-300 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
                                             >
-                                                <span>Separate / Unmerge</span>
+                                                <span>Unmerge</span>
                                             </button>
                                         </div>
                                     </div>
                                 ) : report.status_id === 14 || report.verification_status === 'false_alarm' ? (
-                                    <div className="p-5 rounded-3xl bg-rose-500/10 border border-rose-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300">
-                                        <div className="flex items-start sm:items-center gap-3.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-rose-600 text-white flex items-center justify-center shadow-md shadow-rose-600/20 shrink-0">
-                                                <Ban className="w-5 h-5" />
+                                    <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-300">
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-sm shrink-0">
+                                                <Ban className="w-4 h-4" />
                                             </div>
                                             <div>
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-1.5">
                                                     <h4 className="text-xs font-black text-rose-950 uppercase tracking-widest">
                                                         Dismissed as False Alarm
                                                     </h4>
                                                     {report.false_alarm_reason && (
-                                                        <span className="px-2 py-0.5 bg-rose-200/80 text-rose-900 rounded-md text-[9px] font-black uppercase">
+                                                        <span className="px-2 py-0.5 bg-rose-200/80 text-rose-900 rounded-md text-[8px] font-black uppercase">
                                                             {report.false_alarm_reason}
                                                         </span>
                                                     )}
                                                 </div>
-                                                <p className="text-xs text-rose-900/90 font-medium mt-1 leading-relaxed">
-                                                    {report.verification_notes || 'Investigation concluded that this report was inaccurate, exaggerated, or invalid.'}
+                                                <p className="text-[11px] text-rose-900/90 font-medium mt-0.5 leading-relaxed">
+                                                    {report.verification_notes || 'Investigation concluded that this report was inaccurate or invalid.'}
                                                 </p>
                                                 {report.verified_by_name && (
-                                                    <p className="text-[10px] text-rose-700 font-bold mt-1">
+                                                    <p className="text-[9px] text-rose-700 font-bold mt-0.5">
                                                         Verified by: {report.verified_by_name} {report.verified_at ? `• ${new Date(report.verified_at).toLocaleDateString()}` : ''}
                                                     </p>
                                                 )}
@@ -1301,36 +1266,36 @@ const SubdViewReport = () => {
                                         </div>
                                     </div>
                                 ) : report.status_id === 15 || report.verification_status === 'disputed' ? (
-                                    <div className="p-5 rounded-3xl bg-amber-500/15 border-2 border-amber-400 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-pulse">
-                                        <div className="flex items-start sm:items-center gap-3.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-amber-600 text-white flex items-center justify-center shadow-md shadow-amber-600/20 shrink-0">
-                                                <Scale className="w-5 h-5" />
+                                    <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-400 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-pulse">
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-9 h-9 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-sm shrink-0">
+                                                <Scale className="w-4 h-4" />
                                             </div>
                                             <div>
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-1.5">
                                                     <h4 className="text-xs font-black text-amber-950 uppercase tracking-widest">
                                                         Report Formally Disputed by Pet Owner
                                                     </h4>
-                                                    <span className="px-2 py-0.5 bg-amber-300 text-amber-950 rounded-md text-[9px] font-black uppercase">
+                                                    <span className="px-2 py-0.5 bg-amber-300 text-amber-950 rounded-md text-[8px] font-black uppercase">
                                                         Action Paused
                                                     </span>
                                                 </div>
-                                                <p className="text-xs text-amber-900 font-medium mt-1 leading-relaxed">
-                                                    A registered resident pet owner has submitted a counter-claim with proof of anti-rabies vaccination and home confinement. Review the dispute below before proceeding.
+                                                <p className="text-[11px] text-amber-900 font-medium mt-0.5 leading-relaxed">
+                                                    A registered resident pet owner has submitted a counter-claim with proof of vaccination and confinement.
                                                 </p>
                                             </div>
                                         </div>
                                     </div>
                                 ) : report.verification_status === 'verified_true' ? (
-                                    <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                                            <Check className="w-4 h-4" />
+                                    <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center gap-2.5">
+                                        <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                                            <Check className="w-3.5 h-3.5" />
                                         </div>
                                         <div className="flex-1">
-                                            <p className="text-xs font-black text-emerald-900 uppercase">
+                                            <p className="text-[11px] font-black text-emerald-900 uppercase">
                                                 Officially Verified Incident
                                             </p>
-                                            <p className="text-[11px] text-emerald-700 font-medium">
+                                            <p className="text-[10px] text-emerald-700 font-medium">
                                                 {report.verification_notes || 'Confirmed via field inspection and witness check.'} {report.verified_by_name ? `(by ${report.verified_by_name})` : ''}
                                             </p>
                                         </div>
@@ -1338,9 +1303,9 @@ const SubdViewReport = () => {
                                 ) : null}
 
                                 {/* Header Info */}
-                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-200 shadow-xs shrink-0 bg-gray-100 flex items-center justify-center">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-200 shadow-2xs shrink-0 bg-gray-100 flex items-center justify-center">
                                             {report.reporter_photo ? (
                                                 <img
                                                     src={getProfilePicture(report.reporter_photo)}
@@ -1351,66 +1316,66 @@ const SubdViewReport = () => {
                                                     }}
                                                 />
                                             ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-lg text-gray-500 font-bold bg-orange-50 text-[#F97316]">
+                                                <div className="w-full h-full flex items-center justify-center text-sm text-gray-500 font-bold bg-orange-50 text-[#F97316]">
                                                     {(report.reporter_name || 'U').charAt(0).toUpperCase()}
                                                 </div>
                                             )}
                                         </div>
                                         <div>
-                                            <h4 className="text-sm font-bold text-gray-900">{report.reporter_name || `User ${report.user_id}`}</h4>
-                                            <p className="text-xs text-gray-500"><RelativeTimestamp date={report.created_at} /></p>
+                                            <h4 className="text-xs font-bold text-gray-900">{report.reporter_name || `User ${report.user_id}`}</h4>
+                                            <p className="text-[10px] text-gray-500"><RelativeTimestamp date={report.created_at} /></p>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
                                         <button
                                             type="button"
                                             onClick={() => setIsChatOpen(true)}
-                                            className="px-4 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] border border-orange-200 rounded-full text-xs font-bold transition-all shadow-2xs hover:scale-105 active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                                            className="px-3 py-1 bg-orange-50 hover:bg-orange-100 text-[#F97316] border border-orange-200 rounded-full text-[11px] font-bold transition-all shadow-2xs hover:scale-105 active:scale-95 flex items-center gap-1 cursor-pointer"
                                             title="Open Case Chat with Reporter"
                                         >
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                             </svg>
                                             <span>Message {chatCount > 0 ? `(${chatCount})` : ''}</span>
                                         </button>
-                                        <span className={`px-4 py-1.5 rounded-full text-xs font-bold border ${getReportStatusBadgeStyle(report.status_id)}`}>
+                                        <span className={`px-3 py-1 rounded-full text-[11px] font-bold border ${getReportStatusBadgeStyle(report.status_id)}`}>
                                             {getReportStatusLabel(report.status_id)}
                                         </span>
                                     </div>
                                 </div>
 
                                 {/* Details Grid */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-gray-50/80 p-3.5 rounded-xl border border-gray-100">
                                     <div>
-                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Category</span>
-                                        <span className="text-sm font-semibold text-gray-900">{categoryMap[report.category_id] || 'Other'}</span>
+                                        <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Category</span>
+                                        <span className="text-xs font-semibold text-gray-900">{categoryMap[report.category_id] || 'Other'}</span>
                                     </div>
                                     <div>
-                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Priority</span>
-                                        <span className={`text-sm font-bold ${getPriorityColor(getEffectivePriority(report)).replace('bg-', 'text-').replace('-50', '-600')}`}>
+                                        <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Priority</span>
+                                        <span className={`text-xs font-bold ${getPriorityColor(getEffectivePriority(report)).replace('bg-', 'text-').replace('-50', '-600')}`}>
                                             {getEffectivePriority(report)}
                                         </span>
                                     </div>
                                     <div>
-                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Rescue Status</span>
-                                        <span className={`text-sm font-bold ${report.status_id >= 5 ? 'text-blue-600' : 'text-gray-400'}`}>
+                                        <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Rescue Status</span>
+                                        <span className={`text-xs font-bold ${report.status_id >= 5 ? 'text-blue-600' : 'text-gray-400'}`}>
                                             {report.status_id >= 5 ? statusMap[report.status_id] : 'Not Yet Initiated'}
                                         </span>
                                     </div>
                                     <div>
-                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Animals</span>
-                                        <span className="text-sm font-semibold text-gray-900">{report.animal_count} observed</span>
+                                        <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Animals</span>
+                                        <span className="text-xs font-semibold text-gray-900">{report.animal_count} observed</span>
                                     </div>
                                     <div>
-                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Landmark</span>
-                                        <span className="text-sm font-semibold text-gray-900">{report.landmark || 'N/A'}</span>
+                                        <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Landmark</span>
+                                        <span className="text-xs font-semibold text-gray-900">{report.landmark || 'N/A'}</span>
                                     </div>
-                                    <div className="col-span-2 md:col-span-4">
-                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Street / Location</span>
-                                        <span className="text-sm font-semibold text-[#F97316]">
+                                    <div className="col-span-2 md:col-span-3">
+                                        <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Street / Location</span>
+                                        <span className="text-xs font-semibold text-[#F97316]">
                                             {isViewReportAddressLoading ? (
                                                 <span className="flex items-center gap-1.5">
-                                                    <svg className="animate-spin h-3.5 w-3.5 text-[#F97316]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <svg className="animate-spin h-3 w-3 text-[#F97316]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                                     </svg>
@@ -1536,28 +1501,28 @@ const SubdViewReport = () => {
 
                                 {/* Lost Pet Owner Contact & Digital QR Tag Panel */}
                                 {(report.pet_id || report.owner_name || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
-                                    <div className="p-6 rounded-3xl bg-gradient-to-br from-amber-50/90 to-orange-50/70 border-2 border-amber-200 shadow-sm space-y-4">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2.5">
-                                                <span className={`px-3 py-1 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm ${
+                                    <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-br from-amber-50/90 to-orange-50/70 border-2 border-amber-200 shadow-sm space-y-4">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className={`px-2.5 sm:px-3 py-1 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm ${
                                                     report.owner_name ? 'bg-amber-600' : 'bg-emerald-600'
                                                 }`}>
                                                     <PawPrint className="w-3 h-3" />
                                                     <span>{report.owner_name ? 'Registered Pet Case' : 'Registered Community Animal Record'}</span>
                                                 </span>
                                                 {report.pet_name && (
-                                                    <span className="text-sm font-black text-amber-950 uppercase">
+                                                    <span className="text-sm sm:text-base font-black text-amber-950 uppercase">
                                                         {report.pet_name}
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
                                                 {report.pet_id && (
                                                     <button
                                                         type="button"
                                                         onClick={() => handleOpenPetDetail(report.pet_id)}
                                                         disabled={isLoadingPetDetail}
-                                                        className="px-3 py-1 bg-gradient-to-r from-amber-600 to-[#B35D25] hover:from-amber-700 hover:to-[#964E1F] text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm hover:shadow transition-all cursor-pointer"
+                                                        className="px-3.5 py-1.5 bg-gradient-to-r from-amber-600 to-[#B35D25] hover:from-amber-700 hover:to-[#964E1F] text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm hover:shadow transition-all cursor-pointer"
                                                     >
                                                         {isLoadingPetDetail ? (
                                                             <Hourglass className="w-3 h-3 animate-spin" />
@@ -1570,17 +1535,17 @@ const SubdViewReport = () => {
                                                     </button>
                                                 )}
                                                 {report.pet_qr_code_hash && (
-                                                    <span className="text-[10px] font-mono font-bold text-amber-900 bg-white/90 px-2.5 py-1 rounded-lg border border-amber-200 shadow-xs">
+                                                    <span className="text-[10px] font-mono font-bold text-amber-900 bg-white/90 px-2.5 py-1 rounded-lg border border-amber-200 shadow-xs max-w-full break-all">
                                                         Tag: {report.pet_qr_code_hash}
                                                     </span>
                                                 )}
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-1">
                                             <div className="bg-white/90 p-4 rounded-2xl border border-amber-100 shadow-xs">
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Registered Owner</p>
-                                                <p className="text-sm font-black text-gray-900">
+                                                <p className="text-xs sm:text-sm font-black text-gray-900 leading-snug">
                                                     {report.owner_name ? report.owner_name : <span className="text-gray-500 font-bold italic">No Registered Owner (Community / Unassigned)</span>}
                                                 </p>
                                                 {report.owner_address && (
@@ -1594,7 +1559,7 @@ const SubdViewReport = () => {
                                             <div className="bg-white/90 p-4 rounded-2xl border border-amber-100 shadow-xs flex flex-col justify-between">
                                                 <div>
                                                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Owner Contact Hotline</p>
-                                                    <p className="text-sm font-black text-amber-900">
+                                                    <p className="text-xs sm:text-sm font-black text-amber-900">
                                                         {report.owner_phone ? report.owner_phone : <span className="text-gray-400 font-semibold text-xs italic">No Owner Hotline (Unassigned Animal)</span>}
                                                     </p>
                                                 </div>
@@ -1610,32 +1575,32 @@ const SubdViewReport = () => {
                                         </div>
 
                                         {(report.pet_qr_code_url || report.pet_id) && (
-                                            <div className="pt-2 flex items-center justify-between bg-white p-4 rounded-2xl border border-amber-200 gap-4 shadow-xs">
-                                                <div className="flex items-center gap-3.5">
+                                            <div className="pt-1 flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-4 rounded-2xl border border-amber-200 gap-3 sm:gap-4 shadow-xs">
+                                                <div className="flex items-center gap-3.5 min-w-0">
                                                     {report.pet_qr_code_url ? (
                                                         <img 
                                                             src={report.pet_qr_code_url} 
                                                             alt="Pet QR Tag" 
-                                                            className="w-14 h-14 rounded-xl object-contain bg-white border border-gray-200 p-1 cursor-pointer hover:scale-105 transition-transform"
+                                                            className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl object-contain bg-white border border-gray-200 p-1 cursor-pointer hover:scale-105 transition-transform shrink-0"
                                                             onClick={handleOpenQrTag}
                                                         />
                                                     ) : (
                                                         <div
                                                             onClick={handleOpenQrTag}
-                                                            className="w-14 h-14 rounded-xl bg-amber-100 flex items-center justify-center cursor-pointer hover:scale-105 transition-transform border border-amber-200"
+                                                            className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-amber-100 flex items-center justify-center cursor-pointer hover:scale-105 transition-transform border border-amber-200 shrink-0"
                                                         >
                                                             <PawPrint className="w-6 h-6 text-amber-700" />
                                                         </div>
                                                     )}
-                                                    <div>
-                                                        <p className="text-xs font-black text-gray-900 uppercase">Pet StraySafe QR Tag</p>
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-black text-gray-900 uppercase truncate">Pet StraySafe QR Tag</p>
                                                         <p className="text-[11px] text-gray-500 font-medium">Click or scan tag to verify animal registration</p>
                                                     </div>
                                                 </div>
                                                 <button
                                                     type="button"
                                                     onClick={handleOpenQrTag}
-                                                    className="px-4 py-2 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer"
+                                                    className="w-full sm:w-auto px-4 py-2 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer text-center"
                                                 >
                                                     View Tag ↗
                                                 </button>
@@ -1646,7 +1611,7 @@ const SubdViewReport = () => {
 
                                 {/* Persistent Staff / Subdivision Review Decision Dossier */}
                                 {((report.review_status && report.review_status !== 'Unreviewed') || report.pet_id) && (
-                                    <div className={`p-6 rounded-3xl border-2 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 animate-in fade-in duration-300 shadow-sm mb-6 ${
+                                    <div className={`p-3.5 sm:p-4 rounded-2xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-3 animate-in fade-in duration-300 shadow-2xs mb-4 ${
                                         (report.review_status === 'Confirmed Match' || report.pet_id)
                                             ? 'bg-emerald-500/10 border-emerald-300 text-emerald-950'
                                             : (report.review_status === 'Confirmed Duplicate' || report.status_id === 18 || report.duplicate_of_report_id)
@@ -1655,8 +1620,8 @@ const SubdViewReport = () => {
                                             ? 'bg-rose-500/10 border-rose-300 text-rose-950'
                                             : 'bg-amber-500/10 border-amber-300 text-amber-950'
                                     }`}>
-                                        <div className="flex items-start gap-4">
-                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-md ${
+                                        <div className="flex items-start gap-3">
+                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${
                                                 (report.review_status === 'Confirmed Match' || report.pet_id)
                                                     ? 'bg-emerald-600 text-white shadow-emerald-600/20'
                                                     : (report.review_status === 'Confirmed Duplicate' || report.status_id === 18 || report.duplicate_of_report_id)
@@ -1666,29 +1631,29 @@ const SubdViewReport = () => {
                                                     : 'bg-amber-600 text-white shadow-amber-600/20'
                                             }`}>
                                                 {(report.review_status === 'Confirmed Match' || report.pet_id) ? (
-                                                    <PawPrint className="w-6 h-6" />
+                                                    <PawPrint className="w-4 h-4" />
                                                 ) : (report.review_status === 'Confirmed Duplicate' || report.status_id === 18 || report.duplicate_of_report_id) ? (
-                                                    <Link2 className="w-6 h-6" />
+                                                    <Link2 className="w-4 h-4" />
                                                 ) : report.review_status === 'Not a Match' ? (
-                                                    <X className="w-6 h-6" />
+                                                    <X className="w-4 h-4" />
                                                 ) : (
-                                                    <AlertTriangle className="w-6 h-6" />
+                                                    <AlertTriangle className="w-4 h-4" />
                                                 )}
                                             </div>
 
-                                            <div className="space-y-1.5">
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-white/80 border border-current shadow-2xs">
-                                                        Review Decision (Subdivision Verified)
+                                            <div className="space-y-1">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.2 rounded-full bg-white/80 border border-current shadow-2xs">
+                                                        Review Decision (Subdivision)
                                                     </span>
-                                                    <span className="font-extrabold text-sm uppercase tracking-wide">
+                                                    <span className="font-extrabold text-xs uppercase tracking-wide">
                                                         {report.review_status || (report.pet_id ? 'Confirmed Match' : 'Confirmed Duplicate')}
                                                     </span>
                                                 </div>
 
                                                 {/* Pet Match Details */}
                                                 {(report.review_status === 'Confirmed Match' || report.pet_id) && (
-                                                    <p className="text-xs font-bold text-emerald-900 flex items-center gap-2 flex-wrap mt-1">
+                                                    <p className="text-[11px] font-bold text-emerald-900 flex items-center gap-1.5 flex-wrap mt-0.5">
                                                         <span>Matched Pet: <strong className="underline">{report.matched_pet_record?.pet_name || report.pet_name || 'Registered Pet'}</strong></span>
                                                         {(report.matched_pet_record?.breed || report.animal_breed) && (
                                                             <span className="text-emerald-700">({report.matched_pet_record?.breed || report.animal_breed})</span>
@@ -1701,30 +1666,30 @@ const SubdViewReport = () => {
 
                                                 {/* Duplicate Details */}
                                                 {(report.review_status === 'Confirmed Duplicate' || report.duplicate_of_report_id) && (
-                                                    <p className="text-xs font-bold text-stone-800 flex items-center gap-2 flex-wrap mt-1">
+                                                    <p className="text-[11px] font-bold text-stone-800 flex items-center gap-1.5 flex-wrap mt-0.5">
                                                         <span>Confirmed Duplicate of Primary Case #{report.duplicate_of_report_id || report.matched_report_record?.report_id || 'Active'}</span>
                                                     </p>
                                                 )}
 
                                                 {/* Review Notes / Rationale */}
                                                 {(report.review_notes || report.merge_notes) && (
-                                                    <p className="text-xs italic opacity-90 mt-0.5">
+                                                    <p className="text-[11px] italic opacity-90 mt-0.5">
                                                         "{report.review_notes || report.merge_notes}"
                                                     </p>
                                                 )}
 
                                                 {/* Reviewer and Timestamp Metadata */}
-                                                <div className="flex items-center gap-3 text-[11px] opacity-75 font-semibold pt-1">
+                                                <div className="flex items-center gap-2 text-[10px] opacity-75 font-semibold pt-0.5">
                                                     <span>Reviewed by: <strong>{report.reviewed_by_name || report.merged_by_name || 'Subdivision Leader'}</strong> {report.reviewed_by_role ? `(${report.reviewed_by_role})` : ''}</span>
                                                     <span>•</span>
-                                                    <span>Reviewed at: {report.reviewed_at || report.merged_at ? new Date(String(report.reviewed_at || report.merged_at)).toLocaleString() : 'Recorded in system'}</span>
+                                                    <span>{report.reviewed_at || report.merged_at ? new Date(String(report.reviewed_at || report.merged_at)).toLocaleString() : 'Recorded in system'}</span>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div className="shrink-0 flex items-center gap-2">
-                                            <span className="px-3.5 py-1.5 rounded-xl bg-white/90 text-xs font-black uppercase tracking-wider border border-current shadow-xs flex items-center gap-1.5">
-                                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                        <div className="shrink-0 flex items-center gap-1.5">
+                                            <span className="px-2.5 py-1 rounded-lg bg-white/90 text-[10px] font-black uppercase tracking-wider border border-current shadow-2xs flex items-center gap-1">
+                                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                                                 <span>Decision Preserved</span>
                                             </span>
                                         </div>
@@ -1772,731 +1737,729 @@ const SubdViewReport = () => {
                                         isStaff={true}
                                         onMatchesUpdated={fetchReportDetails}
                                     />
-                                </div>
+                                                     {/* Pet Owner Formal Dispute Review Panel */}
+                                 {report.disputes && report.disputes.length > 0 && (
+                                     <div className="bg-amber-50/50 border border-amber-200 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xs">
+                                         <div className="flex items-center justify-between border-b border-amber-200/80 pb-3">
+                                             <div className="flex items-center gap-2.5">
+                                                 <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs">
+                                                     <Scale className="w-4 h-4" />
+                                                 </div>
+                                                 <div>
+                                                     <h4 className="text-xs font-black text-amber-950 uppercase tracking-tight">
+                                                         Citizen Pet Disputes & Counter-Claims ({report.disputes.length})
+                                                     </h4>
+                                                     <p className="text-[11px] text-amber-800 font-medium">
+                                                         Review resident vaccination proofs and home confinement evidence to prevent false impoundment.
+                                                     </p>
+                                                 </div>
+                                             </div>
+                                         </div>
 
-                                {/* Pet Owner Formal Dispute Review Panel */}
-                                {report.disputes && report.disputes.length > 0 && (
-                                    <div className="bg-amber-50/50 border-2 border-amber-200 rounded-3xl p-6 sm:p-7 space-y-5 shadow-xs">
-                                        <div className="flex items-center justify-between border-b border-amber-200/80 pb-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-sm">
-                                                    <Scale className="w-5 h-5" />
-                                                </div>
-                                                <div>
-                                                    <h4 className="text-sm font-black text-amber-950 uppercase tracking-tight">
-                                                        Citizen Pet Disputes & Counter-Claims ({report.disputes.length})
-                                                    </h4>
-                                                    <p className="text-xs text-amber-800 font-medium">
-                                                        Review resident vaccination proofs and home confinement evidence to prevent false impoundment.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
+                                         <div className="space-y-3">
+                                             {report.disputes.map((dispute, idx) => (
+                                                 <div key={dispute.dispute_id || (dispute as any).id || `dispute-${idx}`} className="bg-white p-3.5 sm:p-4 rounded-xl border border-amber-100 shadow-xs space-y-3">
+                                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
+                                                         <div>
+                                                             <span className="text-xs font-black text-gray-900 uppercase">
+                                                                 Dispute by {dispute.resident_name || `Resident #${dispute.resident_user_id}`}
+                                                             </span>
+                                                             {dispute.pet_name && (
+                                                                 <span className="ml-2 text-xs font-bold text-amber-700">
+                                                                     (Pet: {dispute.pet_name})
+                                                                 </span>
+                                                             )}
+                                                             <p className="text-[10px] text-gray-400 font-medium mt-0.5">
+                                                                 Submitted <RelativeTimestamp date={dispute.created_at} />
+                                                             </p>
+                                                         </div>
+                                                         <div>
+                                                             <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                                                 dispute.status === 'Accepted'
+                                                                     ? 'bg-emerald-100 text-emerald-800'
+                                                                     : dispute.status === 'Rejected'
+                                                                     ? 'bg-rose-100 text-rose-800'
+                                                                     : 'bg-amber-100 text-amber-800 animate-pulse'
+                                                             }`}>
+                                                                 {dispute.status}
+                                                             </span>
+                                                         </div>
+                                                     </div>
 
-                                        <div className="space-y-4">
-                                            {report.disputes.map((dispute, idx) => (
-                                                <div key={dispute.dispute_id || (dispute as any).id || `dispute-${idx}`} className="bg-white p-5 rounded-2xl border border-amber-100 shadow-xs space-y-4">
-                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
-                                                        <div>
-                                                            <span className="text-xs font-black text-gray-900 uppercase">
-                                                                Dispute by {dispute.resident_name || `Resident #${dispute.resident_user_id}`}
-                                                            </span>
-                                                            {dispute.pet_name && (
-                                                                <span className="ml-2 text-xs font-bold text-amber-700">
-                                                                    (Pet: {dispute.pet_name})
-                                                                </span>
-                                                            )}
-                                                            <p className="text-[10px] text-gray-400 font-medium mt-0.5">
-                                                                Submitted <RelativeTimestamp date={dispute.created_at} />
-                                                            </p>
-                                                        </div>
-                                                        <div>
-                                                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                                                dispute.status === 'Accepted'
-                                                                    ? 'bg-emerald-100 text-emerald-800'
-                                                                    : dispute.status === 'Rejected'
-                                                                    ? 'bg-rose-100 text-rose-800'
-                                                                    : 'bg-amber-100 text-amber-800 animate-pulse'
-                                                            }`}>
-                                                                {dispute.status}
-                                                            </span>
-                                                        </div>
-                                                    </div>
+                                                     <div>
+                                                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                                                             Owner Explanation & Statement:
+                                                         </p>
+                                                         <p className="text-xs font-semibold text-gray-800 leading-relaxed bg-gray-50 p-2.5 sm:p-3 rounded-lg border border-gray-100">
+                                                             "{dispute.dispute_reason}"
+                                                         </p>
+                                                     </div>
 
-                                                    <div>
-                                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
-                                                            Owner Explanation & Statement:
-                                                        </p>
-                                                        <p className="text-xs font-semibold text-gray-800 leading-relaxed bg-gray-50 p-3.5 rounded-xl border border-gray-100">
-                                                            "{dispute.dispute_reason}"
-                                                        </p>
-                                                    </div>
+                                                     {/* Evidence Attachments */}
+                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-0.5">
+                                                         {dispute.vaccination_card_url && (
+                                                             <a
+                                                                 href={dispute.vaccination_card_url}
+                                                                 target="_blank"
+                                                                 rel="noopener noreferrer"
+                                                                 className="flex items-center gap-2.5 p-2.5 bg-blue-50/50 hover:bg-blue-50 border border-blue-100 rounded-xl transition-all group"
+                                                             >
+                                                                 <Syringe className="w-4 h-4 text-blue-600 shrink-0" />
+                                                                 <div className="overflow-hidden">
+                                                                     <p className="text-[10px] font-black text-blue-900 uppercase tracking-wider group-hover:text-blue-700">
+                                                                         Anti-Rabies Card
+                                                                     </p>
+                                                                     <p className="text-[9px] text-blue-600 truncate">Click to inspect certificate ↗</p>
+                                                                 </div>
+                                                             </a>
+                                                         )}
 
-                                                    {/* Evidence Attachments */}
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                                                        {dispute.vaccination_card_url && (
-                                                            <a
-                                                                href={dispute.vaccination_card_url}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="flex items-center gap-3 p-3 bg-blue-50/50 hover:bg-blue-50 border border-blue-100 rounded-xl transition-all group"
-                                                            >
-                                                                <Syringe className="w-6 h-6 text-blue-600" />
-                                                                <div className="overflow-hidden">
-                                                                    <p className="text-[11px] font-black text-blue-900 uppercase tracking-wider group-hover:text-blue-700">
-                                                                        Anti-Rabies Card
-                                                                    </p>
-                                                                    <p className="text-[10px] text-blue-600 truncate">Click to inspect certificate ↗</p>
-                                                                </div>
-                                                            </a>
-                                                        )}
+                                                         {dispute.supporting_photo_url && (
+                                                             <a
+                                                                 href={dispute.supporting_photo_url}
+                                                                 target="_blank"
+                                                                 rel="noopener noreferrer"
+                                                                 className="flex items-center gap-2.5 p-2.5 bg-emerald-50/50 hover:bg-emerald-50 border border-emerald-100 rounded-xl transition-all group"
+                                                             >
+                                                                 <Camera className="w-4 h-4 text-emerald-600 shrink-0" />
+                                                                 <div className="overflow-hidden">
+                                                                     <p className="text-[10px] font-black text-emerald-900 uppercase tracking-wider group-hover:text-emerald-700">
+                                                                         Home Confinement Photo
+                                                                     </p>
+                                                                     <p className="text-[9px] text-emerald-600 truncate">Click to inspect photo ↗</p>
+                                                                 </div>
+                                                             </a>
+                                                         )}
+                                                     </div>
 
-                                                        {dispute.supporting_photo_url && (
-                                                            <a
-                                                                href={dispute.supporting_photo_url}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="flex items-center gap-3 p-3 bg-emerald-50/50 hover:bg-emerald-50 border border-emerald-100 rounded-xl transition-all group"
-                                                            >
-                                                                <Camera className="w-6 h-6 text-emerald-600" />
-                                                                <div className="overflow-hidden">
-                                                                    <p className="text-[11px] font-black text-emerald-900 uppercase tracking-wider group-hover:text-emerald-700">
-                                                                        Home Confinement Photo
-                                                                    </p>
-                                                                    <p className="text-[10px] text-emerald-600 truncate">Click to inspect photo ↗</p>
-                                                                </div>
-                                                            </a>
-                                                        )}
-                                                    </div>
+                                                     {/* Review Form if Pending */}
+                                                     {dispute.status === 'Pending' && (
+                                                         <div className="pt-2.5 border-t border-gray-100 space-y-2.5">
+                                                             {reviewingDisputeId === dispute.dispute_id ? (
+                                                                 <div className="space-y-2.5 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                                                                     <label className="text-[9px] font-black text-gray-700 uppercase tracking-widest block">
+                                                                         Investigation Review Notes:
+                                                                     </label>
+                                                                     <textarea
+                                                                         rows={2}
+                                                                         value={disputeReviewNotes}
+                                                                         onChange={(e) => setDisputeReviewNotes(e.target.value)}
+                                                                         placeholder="State your findings regarding this vaccination/ownership proof..."
+                                                                         className="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:border-amber-500"
+                                                                     />
+                                                                     <div className="flex gap-2">
+                                                                         <button
+                                                                             type="button"
+                                                                             disabled={isReviewingDispute}
+                                                                             onClick={() => handleReviewDispute(dispute.dispute_id, 'Accepted')}
+                                                                             className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+                                                                         >
+                                                                             {isReviewingDispute ? 'Processing...' : <><Check className="w-3 h-3 inline mr-1" /> Accept Dispute</>}
+                                                                         </button>
+                                                                         <button
+                                                                             type="button"
+                                                                             disabled={isReviewingDispute}
+                                                                             onClick={() => handleReviewDispute(dispute.dispute_id, 'Rejected')}
+                                                                             className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+                                                                         >
+                                                                             {isReviewingDispute ? 'Processing...' : <><X className="w-3 h-3 inline mr-1" /> Reject Dispute</>}
+                                                                         </button>
+                                                                         <button
+                                                                             type="button"
+                                                                             onClick={() => { setReviewingDisputeId(null); setDisputeReviewNotes(''); }}
+                                                                             className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-xs font-bold cursor-pointer"
+                                                                         >
+                                                                             Cancel
+                                                                         </button>
+                                                                     </div>
+                                                                 </div>
+                                                             ) : (
+                                                                 <button
+                                                                     type="button"
+                                                                     onClick={() => setReviewingDisputeId(dispute.dispute_id)}
+                                                                     className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-black uppercase tracking-wider transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+                                                                 >
+                                                                     <Search className="w-3.5 h-3.5" /> Review & Resolve This Dispute
+                                                                 </button>
+                                                             )}
+                                                         </div>
+                                                     )}
 
-                                                    {/* Review Form if Pending */}
-                                                    {dispute.status === 'Pending' && (
-                                                        <div className="pt-3 border-t border-gray-100 space-y-3">
-                                                            {reviewingDisputeId === dispute.dispute_id ? (
-                                                                <div className="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200">
-                                                                    <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest block">
-                                                                        Investigation Review Notes:
-                                                                    </label>
-                                                                    <textarea
-                                                                        rows={2}
-                                                                        value={disputeReviewNotes}
-                                                                        onChange={(e) => setDisputeReviewNotes(e.target.value)}
-                                                                        placeholder="State your findings regarding this vaccination/ownership proof..."
-                                                                        className="w-full p-3 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:border-amber-500"
-                                                                    />
-                                                                    <div className="flex gap-2">
-                                                                        <button
-                                                                            type="button"
-                                                                            disabled={isReviewingDispute}
-                                                                            onClick={() => handleReviewDispute(dispute.dispute_id, 'Accepted')}
-                                                                            className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
-                                                                        >
-                                                                            {isReviewingDispute ? 'Processing...' : <><Check className="w-3.5 h-3.5 inline mr-1" /> Accept Dispute & Clear Pet</>}
-                                                                        </button>
-                                                                        <button
-                                                                            type="button"
-                                                                            disabled={isReviewingDispute}
-                                                                            onClick={() => handleReviewDispute(dispute.dispute_id, 'Rejected')}
-                                                                            className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
-                                                                        >
-                                                                            {isReviewingDispute ? 'Processing...' : <><X className="w-3.5 h-3.5 inline mr-1" /> Reject Dispute</>}
-                                                                        </button>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => { setReviewingDisputeId(null); setDisputeReviewNotes(''); }}
-                                                                            className="px-4 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl text-xs font-bold cursor-pointer"
-                                                                        >
-                                                                            Cancel
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            ) : (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setReviewingDisputeId(dispute.dispute_id)}
-                                                                    className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
-                                                                >
-                                                                    <Search className="w-3.5 h-3.5" /> Review & Resolve This Dispute
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                     {dispute.reviewer_notes && (
+                                                         <div className="text-[11px] text-gray-600 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                                             <strong className="text-gray-900 font-bold">Reviewer Decision Notes: </strong>
+                                                             {dispute.reviewer_notes} {dispute.reviewer_name ? `(by ${dispute.reviewer_name})` : ''}
+                                                         </div>
+                                                     )}
+                                                 </div>
+                                             ))}
+                                         </div>
+                                     </div>
+                                 )}
 
-                                                    {dispute.reviewer_notes && (
-                                                        <div className="text-[11px] text-gray-600 bg-gray-50 p-3 rounded-xl border border-gray-100">
-                                                            <strong className="text-gray-900 font-bold">Reviewer Decision Notes: </strong>
-                                                            {dispute.reviewer_notes} {dispute.reviewer_name ? `(by ${dispute.reviewer_name})` : ''}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
+                                 {/* Map Location */}
+                                 <div>
+                                     <div className="flex justify-between items-center mb-2.5">
+                                         <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Incident Location Map</h5>
+                                         <button
+                                             onClick={() => setIsMapExpanded(true)}
+                                             className="px-3 py-1 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-lg text-[10px] font-bold border border-gray-200 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                         >
+                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h3a1 1 0 010 2H5v2a1 1 0 01-2 0V4zm14 0a1 1 0 00-1-1h-3a1 1 0 110 2h2v2a1 1 0 112 0V4zM3 16a1 1 0 001 1h3a1 1 0 100-2H5v-2a1 1 0 10-2 0v3zm14 0a1 1 0 01-1 1h-3a1 1 0 100-2h2v-2a1 1 0 102 0v3z" />
+                                             </svg>
+                                             Expand Map
+                                         </button>
+                                     </div>
+                                     <div className="w-full h-[280px] sm:h-[340px] md:h-[380px] rounded-xl overflow-hidden border border-gray-100 shadow-xs bg-gray-50">
+                                         {(() => {
+                                             const isResolvedCase = [9, 10, 11, 12, 14, 17, 18].includes(report.status_id) || 
+                                                 ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(report.custody_status || '');
+                                             const isRelocated = !isResolvedCase && report.status_id !== 6 && ([7, 8].includes(report.status_id) || ['Secured in Facility', 'In Barangay Facility', 'In Subdivision Facility'].includes(report.custody_status || ''));
+                                             const initLat = report.initial_latitude != null ? parseFloat(report.initial_latitude.toString()) : (report.latitude != null ? parseFloat(report.latitude.toString()) : null);
+                                             const initLng = report.initial_longitude != null ? parseFloat(report.initial_longitude.toString()) : (report.longitude != null ? parseFloat(report.longitude.toString()) : null);
+                                             const currentLat = initLat;
+                                             const currentLng = initLng;
+                                             const facLat = report.facility?.latitude != null 
+                                                 ? parseFloat(report.facility.latitude.toString()) 
+                                                 : (report.facility_id === 2 ? 14.8018 : (report.facility_id === 5 ? 14.8069 : currentLat));
+                                             const facLng = report.facility?.longitude != null 
+                                                 ? parseFloat(report.facility.longitude.toString()) 
+                                                 : (report.facility_id === 2 ? 121.0028 : (report.facility_id === 5 ? 121.0039 : currentLng));
 
-                                {/* Map Location */}
-                                <div>
-                                    <div className="flex justify-between items-center mb-3">
-                                        <h5 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Incident Location Map</h5>
-                                        <button
-                                            onClick={() => setIsMapExpanded(true)}
-                                            className="px-3.5 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl text-[10px] font-bold border border-gray-200 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h3a1 1 0 010 2H5v2a1 1 0 01-2 0V4zm14 0a1 1 0 00-1-1h-3a1 1 0 110 2h2v2a1 1 0 112 0V4zM3 16a1 1 0 001 1h3a1 1 0 100-2H5v-2a1 1 0 10-2 0v3zm14 0a1 1 0 01-1 1h-3a1 1 0 100-2h2v-2a1 1 0 102 0v3z" />
-                                            </svg>
-                                            Expand Map
-                                        </button>
-                                    </div>
-                                    <div className="w-full h-[400px] sm:h-[460px] md:h-[500px] rounded-2xl overflow-hidden border border-gray-100 shadow-sm bg-gray-50">
-                                        {(() => {
-                                            const isResolvedCase = [9, 10, 11, 12, 14, 17, 18].includes(report.status_id) || 
-                                                ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(report.custody_status || '');
-                                            const isRelocated = !isResolvedCase && report.status_id !== 6 && ([7, 8].includes(report.status_id) || ['Secured in Facility', 'In Barangay Facility', 'In Subdivision Facility'].includes(report.custody_status || ''));
-                                            const initLat = report.initial_latitude != null ? parseFloat(report.initial_latitude.toString()) : (report.latitude != null ? parseFloat(report.latitude.toString()) : null);
-                                            const initLng = report.initial_longitude != null ? parseFloat(report.initial_longitude.toString()) : (report.longitude != null ? parseFloat(report.longitude.toString()) : null);
-                                            const currentLat = initLat;
-                                            const currentLng = initLng;
-                                            const facLat = report.facility?.latitude != null 
-                                                ? parseFloat(report.facility.latitude.toString()) 
-                                                : (report.facility_id === 2 ? 14.8018 : (report.facility_id === 5 ? 14.8069 : currentLat));
-                                            const facLng = report.facility?.longitude != null 
-                                                ? parseFloat(report.facility.longitude.toString()) 
-                                                : (report.facility_id === 2 ? 121.0028 : (report.facility_id === 5 ? 121.0039 : currentLng));
+                                             const holdingLat = isRelocated && facLat != null ? facLat : (currentLat ?? 14.8018);
+                                             const holdingLng = isRelocated && facLng != null ? facLng : (currentLng ?? 121.0028);
 
-                                            const holdingLat = isRelocated && facLat != null ? facLat : (currentLat ?? 14.8018);
-                                            const holdingLng = isRelocated && facLng != null ? facLng : (currentLng ?? 121.0028);
+                                             const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
+                                             const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && holdingLat != null && holdingLng != null && (Math.abs(initLat - holdingLat) > 0.0001 || Math.abs(initLng - holdingLng) > 0.0001);
 
-                                            const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
-                                            const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && holdingLat != null && holdingLng != null && (Math.abs(initLat - holdingLat) > 0.0001 || Math.abs(initLng - holdingLng) > 0.0001);
+                                             const hadHoldingHistory = report.history?.some((h: any) => 
+                                                 [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
+                                                 (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
+                                                 (h.action && h.action.toLowerCase().includes('holding'))
+                                             ) || Boolean(report.facility_id) || Boolean(report.facility);
+                                             const histFacLat = 14.8069;
+                                             const histFacLng = 121.0039;
+                                             const histFacName = 'Barangay Holding Pen';
 
-                                            const hadHoldingHistory = report.history?.some((h: any) => 
-                                                [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
-                                                (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
-                                                (h.action && h.action.toLowerCase().includes('holding'))
-                                            ) || Boolean(report.facility_id) || Boolean(report.facility);
-                                            const histFacLat = 14.8069;
-                                            const histFacLng = 121.0039;
-                                            const histFacName = 'Barangay Holding Pen';
+                                             const markersList = isResolvedCase ? [
+                                                 {
+                                                     id: report.report_id,
+                                                     lat: initLat ?? 14.8018,
+                                                     lng: initLng ?? 121.0028,
+                                                     title: `1. Reported Incident Location: ${report.initial_landmark || report.landmark || 'Incident Location'}`,
+                                                     category: 'Historical Sighting',
+                                                     priority: report.priority_level || 'Medium',
+                                                     color: 'slate',
+                                                     rawData: { ...report, landmark: report.initial_landmark || report.landmark, is_resolved: true }
+                                                 },
+                                                 ...(hadHoldingHistory ? [{
+                                                     id: -999,
+                                                     lat: histFacLat,
+                                                     lng: histFacLng,
+                                                     title: `2. Holding Pen: ${histFacName}`,
+                                                     category: 'Historical Holding',
+                                                     priority: 'Low',
+                                                     color: 'slate',
+                                                     rawData: { ...report, landmark: histFacName, is_resolved: true }
+                                                 }] : []),
+                                                 {
+                                                     id: -1,
+                                                     lat: BRGY_OFFICE[0],
+                                                     lng: BRGY_OFFICE[1],
+                                                     title: "Barangay Hall HQ",
+                                                     category: "Barangay Office"
+                                                 }
+                                             ] : [
+                                                 {
+                                                     id: report.report_id,
+                                                     lat: isRelocated ? holdingLat : (currentLat ?? 14.8018),
+                                                     lng: isRelocated ? holdingLng : (currentLng ?? 121.0028),
+                                                     title: isRelocated 
+                                                         ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}` 
+                                                         : (report.status_id === 6 
+                                                             ? `Animal Picked Up: ${report.landmark || 'Incident Location'}` 
+                                                             : (report.landmark || 'Incident Location')),
+                                                     category: isRelocated ? 'Holding Facility' : categoryMap[report.category_id],
+                                                     priority: report.priority_level,
+                                                     rawData: {
+                                                         ...report,
+                                                         facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Facility', latitude: holdingLat, longitude: holdingLng }) : undefined,
+                                                         facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Facility') : undefined
+                                                     }
+                                                 },
+                                                 ...(hasDifferentInitialSpot ? [{
+                                                     id: -999,
+                                                     lat: initLat!,
+                                                     lng: initLng!,
+                                                     title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
+                                                     category: 'Initial Sighting',
+                                                     priority: 'Medium',
+                                                     rawData: { ...report, landmark: report.initial_landmark || 'Initial Sighting Spot' }
+                                                 }] : []),
+                                                 {
+                                                     id: -1,
+                                                     lat: BRGY_OFFICE[0],
+                                                     lng: BRGY_OFFICE[1],
+                                                     title: "Barangay Hall HQ",
+                                                     category: "Barangay Office"
+                                                 },
+                                                 ...(userLocation ? [{
+                                                     id: -2,
+                                                     lat: userLocation[0],
+                                                     lng: userLocation[1],
+                                                     title: "Your Location",
+                                                     category: "User Location"
+                                                 }] : [])
+                                             ];
 
-                                            const markersList = isResolvedCase ? [
-                                                {
-                                                    id: report.report_id,
-                                                    lat: initLat ?? 14.8018,
-                                                    lng: initLng ?? 121.0028,
-                                                    title: `1. Reported Incident Location: ${report.initial_landmark || report.landmark || 'Incident Location'}`,
-                                                    category: 'Historical Sighting',
-                                                    priority: report.priority_level || 'Medium',
-                                                    color: 'slate',
-                                                    rawData: { ...report, landmark: report.initial_landmark || report.landmark, is_resolved: true }
-                                                },
-                                                ...(hadHoldingHistory ? [{
-                                                    id: -999,
-                                                    lat: histFacLat,
-                                                    lng: histFacLng,
-                                                    title: `2. Holding Pen: ${histFacName}`,
-                                                    category: 'Historical Holding',
-                                                    priority: 'Low',
-                                                    color: 'slate',
-                                                    rawData: { ...report, landmark: histFacName, is_resolved: true }
-                                                }] : []),
-                                                {
-                                                    id: -1,
-                                                    lat: BRGY_OFFICE[0],
-                                                    lng: BRGY_OFFICE[1],
-                                                    title: "Barangay Hall HQ",
-                                                    category: "Barangay Office"
-                                                }
-                                            ] : [
-                                                {
-                                                    id: report.report_id,
-                                                    lat: isRelocated ? holdingLat : (currentLat ?? 14.8018),
-                                                    lng: isRelocated ? holdingLng : (currentLng ?? 121.0028),
-                                                    title: isRelocated 
-                                                        ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}` 
-                                                        : (report.status_id === 6 
-                                                            ? `Animal Picked Up: ${report.landmark || 'Incident Location'}` 
-                                                            : (report.landmark || 'Incident Location')),
-                                                    category: isRelocated ? 'Holding Facility' : categoryMap[report.category_id],
-                                                    priority: report.priority_level,
-                                                    rawData: {
-                                                        ...report,
-                                                        facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Facility', latitude: holdingLat, longitude: holdingLng }) : undefined,
-                                                        facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Facility') : undefined
-                                                    }
-                                                },
-                                                ...(hasDifferentInitialSpot ? [{
-                                                    id: -999,
-                                                    lat: initLat!,
-                                                    lng: initLng!,
-                                                    title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
-                                                    category: 'Initial Sighting',
-                                                    priority: 'Medium',
-                                                    rawData: { ...report, landmark: report.initial_landmark || 'Initial Sighting Spot' }
-                                                }] : []),
-                                                {
-                                                    id: -1,
-                                                    lat: BRGY_OFFICE[0],
-                                                    lng: BRGY_OFFICE[1],
-                                                    title: "Barangay Hall HQ",
-                                                    category: "Barangay Office"
-                                                },
-                                                ...(userLocation ? [{
-                                                    id: -2,
-                                                    lat: userLocation[0],
-                                                    lng: userLocation[1],
-                                                    title: "Your Location",
-                                                    category: "User Location"
-                                                }] : [])
-                                            ];
+                                             return (
+                                                 <MapComponent
+                                                     center={[isRelocated ? holdingLat : (currentLat ?? 14.8018), isRelocated ? holdingLng : (currentLng ?? 121.0028)]}
+                                                     zoom={17}
+                                                     showHeatmap={false}
+                                                     showPopups={false}
+                                                     showReturnToSelera={false}
+                                                     markers={markersList}
+                                                     routing={(!isResolvedCase && isNavigating) ? (() => {
+                                                         const repLoc: [number, number] = [report.latitude, report.longitude];
+                                                         const destName = report.landmark || 'Incident Location';
+                                                         if (navSource === 'current' && userLocation) {
+                                                             return {
+                                                                 start: userLocation,
+                                                                 end: repLoc,
+                                                                 waypointNames: ["Your Location", destName] as [string, string],
+                                                                 onClose: () => setIsNavigating(false)
+                                                             };
+                                                         } else {
+                                                             return {
+                                                                 start: BRGY_OFFICE,
+                                                                 end: repLoc,
+                                                                 waypointNames: ["Barangay Office", destName] as [string, string],
+                                                                 onClose: () => setIsNavigating(false)
+                                                             };
+                                                         }
+                                                     })() : undefined}
+                                                     onMarkerClick={(m) => {
+                                                         if (!isResolvedCase) {
+                                                             setNavSource(m.source || 'brgy');
+                                                             setIsNavigating(true);
+                                                         }
+                                                     }}
+                                                 />
+                                             );
+                                         })()}
+                                     </div>
+                                 </div>
 
-                                            return (
-                                                <MapComponent
-                                                    center={[isRelocated ? holdingLat : (currentLat ?? 14.8018), isRelocated ? holdingLng : (currentLng ?? 121.0028)]}
-                                                    zoom={17}
-                                                    showHeatmap={false}
-                                                    showPopups={false}
-                                                    showReturnToSelera={false}
-                                                    markers={markersList}
-                                                    routing={(!isResolvedCase && isNavigating) ? (() => {
-                                                        const repLoc: [number, number] = [report.latitude, report.longitude];
-                                                        const destName = report.landmark || 'Incident Location';
-                                                        if (navSource === 'current' && userLocation) {
-                                                            return {
-                                                                start: userLocation,
-                                                                end: repLoc,
-                                                                waypointNames: ["Your Location", destName] as [string, string],
-                                                                onClose: () => setIsNavigating(false)
-                                                            };
-                                                        } else {
-                                                            return {
-                                                                start: BRGY_OFFICE,
-                                                                end: repLoc,
-                                                                waypointNames: ["Barangay Office", destName] as [string, string],
-                                                                onClose: () => setIsNavigating(false)
-                                                            };
-                                                        }
-                                                    })() : undefined}
-                                                    onMarkerClick={(m) => {
-                                                        if (!isResolvedCase) {
-                                                            setNavSource(m.source || 'brgy');
-                                                            setIsNavigating(true);
-                                                        }
-                                                    }}
-                                                />
-                                            );
-                                        })()}
-                                    </div>
-                                </div>
+                                 {/* Description */}
+                                 <div>
+                                     <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Description</h5>
+                                     <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-2xs">
+                                         <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{report.description || 'No description provided.'}</p>
+                                     </div>
+                                 </div>
 
-                                {/* Description */}
-                                <div>
-                                    <h5 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Description</h5>
-                                    <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                                        <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{report.description || 'No description provided.'}</p>
-                                    </div>
-                                </div>
+                                 {/* Official Letter Section */}
+                                 {report.status_id >= 4 && report.media?.some(m => m.media_type === 'Document' || m.file_url.toLowerCase().endsWith('.pdf') || m.file_url.toLowerCase().endsWith('.docx')) && (
+                                     <div>
+                                         <h5 className="text-[10px] font-black text-[#1a1208] uppercase tracking-[0.2em] mb-2.5">Official Subdivision Letter</h5>
+                                         <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-4 flex items-center justify-between">
+                                             <div className="flex items-center gap-3">
+                                                 <div className="w-9 h-9 rounded-xl bg-orange-600 flex items-center justify-center text-white shadow-sm">
+                                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                     </svg>
+                                                 </div>
+                                                 <div>
+                                                     <p className="text-xs font-black text-gray-900 uppercase tracking-wider">Endorsement Letter</p>
+                                                     <p className="text-[10px] font-bold text-gray-400 mt-0.5">Sent to Barangay for Rescue Request</p>
+                                                 </div>
+                                             </div>
+                                             <button
+                                                 onClick={() => {
+                                                     const letter = report.media?.find(m => m.media_type === 'Document' || m.file_url.toLowerCase().endsWith('.pdf') || m.file_url.toLowerCase().endsWith('.docx'));
+                                                     if (letter) setActiveGallery({ media: [letter], index: 0 });
+                                                 }}
+                                                 className="px-4 py-2 bg-white border border-orange-200 text-orange-600 text-[10px] font-black uppercase tracking-wider rounded-lg hover:bg-orange-600 hover:text-white transition-all shadow-2xs cursor-pointer"
+                                             >
+                                                 View Letter
+                                             </button>
+                                         </div>
+                                     </div>
+                                 )}
 
-                                {/* Official Letter Section */}
-                                {report.status_id >= 4 && report.media?.some(m => m.media_type === 'Document' || m.file_url.toLowerCase().endsWith('.pdf') || m.file_url.toLowerCase().endsWith('.docx')) && (
-                                    <div>
-                                        <h5 className="text-[11px] font-black text-[#1a1208] uppercase tracking-[0.2em] mb-4">Official Subdivision Letter</h5>
-                                        <div className="bg-orange-50/50 border border-orange-100 rounded-3xl p-6 flex items-center justify-between">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-2xl bg-orange-600 flex items-center justify-center text-white shadow-lg">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                                    </svg>
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs font-black text-gray-900 uppercase tracking-widest">Endorsement Letter</p>
-                                                    <p className="text-[10px] font-bold text-gray-400 mt-0.5">Sent to Barangay for Rescue Request</p>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => {
-                                                    const letter = report.media?.find(m => m.media_type === 'Document' || m.file_url.toLowerCase().endsWith('.pdf') || m.file_url.toLowerCase().endsWith('.docx'));
-                                                    if (letter) setActiveGallery({ media: [letter], index: 0 });
-                                                }}
-                                                className="px-6 py-2.5 bg-white border border-orange-200 text-orange-600 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-orange-600 hover:text-white transition-all shadow-sm"
-                                            >
-                                                View Letter
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
+                                 {/* Media Gallery */}
+                                 {report.media && report.media.filter(m => {
+                                     const url = m.file_url.toLowerCase();
+                                     return m.media_type !== 'Document' &&
+                                         !url.endsWith('.pdf') &&
+                                         !url.endsWith('.doc') &&
+                                         !url.endsWith('.docx') &&
+                                         !url.endsWith('.txt');
+                                 }).length > 0 && (
+                                         <div>
+                                             <div className="flex items-center justify-between mb-2.5">
+                                                 <h5 className="text-[10px] font-black text-[#1a1208] uppercase tracking-[0.2em]">Evidence Gallery</h5>
+                                                 <span className="text-[9px] font-bold text-gray-400 bg-gray-50 px-2.5 py-0.5 rounded-full border border-gray-100">
+                                                     {report.media.filter(m => {
+                                                         const url = m.file_url.toLowerCase();
+                                                         return m.media_type !== 'Document' &&
+                                                             !url.endsWith('.pdf') &&
+                                                             !url.endsWith('.doc') &&
+                                                             !url.endsWith('.docx') &&
+                                                             !url.endsWith('.txt');
+                                                     }).length} {report.media.filter(m => {
+                                                         const url = m.file_url.toLowerCase();
+                                                         return m.media_type !== 'Document' &&
+                                                             !url.endsWith('.pdf') &&
+                                                             !url.endsWith('.doc') &&
+                                                             !url.endsWith('.docx') &&
+                                                             !url.endsWith('.txt');
+                                                     }).length === 1 ? 'File' : 'Files'} Attached
+                                                 </span>
+                                             </div>
 
-                                {/* Media Gallery */}
-                                {report.media && report.media.filter(m => {
-                                    const url = m.file_url.toLowerCase();
-                                    return m.media_type !== 'Document' &&
-                                        !url.endsWith('.pdf') &&
-                                        !url.endsWith('.doc') &&
-                                        !url.endsWith('.docx') &&
-                                        !url.endsWith('.txt');
-                                }).length > 0 && (
-                                        <div>
-                                            <div className="flex items-center justify-between mb-4">
-                                                <h5 className="text-[11px] font-black text-[#1a1208] uppercase tracking-[0.2em]">Evidence Gallery</h5>
-                                                <span className="text-[10px] font-bold text-gray-400 bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
-                                                    {report.media.filter(m => {
-                                                        const url = m.file_url.toLowerCase();
-                                                        return m.media_type !== 'Document' &&
-                                                            !url.endsWith('.pdf') &&
-                                                            !url.endsWith('.doc') &&
-                                                            !url.endsWith('.docx') &&
-                                                            !url.endsWith('.txt');
-                                                    }).length} {report.media.filter(m => {
-                                                        const url = m.file_url.toLowerCase();
-                                                        return m.media_type !== 'Document' &&
-                                                            !url.endsWith('.pdf') &&
-                                                            !url.endsWith('.doc') &&
-                                                            !url.endsWith('.docx') &&
-                                                            !url.endsWith('.txt');
-                                                    }).length === 1 ? 'File' : 'Files'} Attached
-                                                </span>
-                                            </div>
+                                             <div className={`grid gap-2.5 ${report.media.filter(m => {
+                                                 const url = m.file_url.toLowerCase();
+                                                 return m.media_type !== 'Document' &&
+                                                     !url.endsWith('.pdf') &&
+                                                     !url.endsWith('.doc') &&
+                                                     !url.endsWith('.docx') &&
+                                                     !url.endsWith('.txt');
+                                             }).length === 1 ? 'grid-cols-1' :
+                                                 report.media.filter(m => {
+                                                     const url = m.file_url.toLowerCase();
+                                                     return m.media_type !== 'Document' &&
+                                                         !url.endsWith('.pdf') &&
+                                                         !url.endsWith('.doc') &&
+                                                         !url.endsWith('.docx') &&
+                                                         !url.endsWith('.txt');
+                                                 }).length === 2 ? 'grid-cols-2' :
+                                                     'grid-cols-2 sm:grid-cols-3'
+                                                 }`}>
+                                                 {report.media.filter(m => {
+                                                     const url = m.file_url.toLowerCase();
+                                                     return m.media_type !== 'Document' &&
+                                                         !url.endsWith('.pdf') &&
+                                                         !url.endsWith('.doc') &&
+                                                         !url.endsWith('.docx') &&
+                                                         !url.endsWith('.txt');
+                                                 }).map((m: any, idx: number) => (
+                                                     <div
+                                                         key={m.media_id || m.id || m.file_url || `report-media-${idx}`}
+                                                         onClick={() => {
+                                                             const filtered = report.media!.filter(m => {
+                                                                 const url = m.file_url.toLowerCase();
+                                                                 return m.media_type !== 'Document' &&
+                                                                     !url.endsWith('.pdf') &&
+                                                                     !url.endsWith('.doc') &&
+                                                                     !url.endsWith('.docx') &&
+                                                                     !url.endsWith('.txt');
+                                                             });
+                                                             setActiveGallery({ media: filtered, index: idx });
+                                                         }}
+                                                         className={`group relative rounded-xl overflow-hidden bg-gray-100 border border-gray-100 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-md active:scale-95 ${report.media!.filter(m => {
+                                                             const url = m.file_url.toLowerCase();
+                                                             return m.media_type !== 'Document' &&
+                                                                 !url.endsWith('.pdf') &&
+                                                                 !url.endsWith('.doc') &&
+                                                                 !url.endsWith('.docx') &&
+                                                                 !url.endsWith('.txt');
+                                                         }).length === 3 && idx === 0 ? 'sm:row-span-2 sm:h-full' : 'aspect-square'
+                                                             }`}
+                                                     >
+                                                         {m.media_type === 'Video' ? (
+                                                             <div className="relative w-full h-full">
+                                                                 <video src={m.file_url} className="w-full h-full object-cover" />
+                                                                 <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                                                                     <div className="w-9 h-9 rounded-full bg-white/30 backdrop-blur-md flex items-center justify-center text-white ring-2 ring-white/20">
+                                                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 fill-current" viewBox="0 0 20 20">
+                                                                             <path d="M4.516 7.548c0-.446.362-.809.808-.809.446 0 .808.363.808.809v4.904c0 .446-.362.809-.808.809-.446 0-.808-.363-.808-.809V7.548zm5.281 0c0-.446.362-.809.808-.809.446 0 .808.363.808.809v4.904c0 .446-.362.809-.808.809-.446 0-.808-.363-.808-.809V7.548z" />
+                                                                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                                                                         </svg>
+                                                                     </div>
+                                                                 </div>
+                                                             </div>
+                                                         ) : (
+                                                             <img src={m.file_url} alt="Report evidence" className="w-full h-full object-cover" />
+                                                         )}
 
-                                            <div className={`grid gap-3 ${report.media.filter(m => {
-                                                const url = m.file_url.toLowerCase();
-                                                return m.media_type !== 'Document' &&
-                                                    !url.endsWith('.pdf') &&
-                                                    !url.endsWith('.doc') &&
-                                                    !url.endsWith('.docx') &&
-                                                    !url.endsWith('.txt');
-                                            }).length === 1 ? 'grid-cols-1' :
-                                                report.media.filter(m => {
-                                                    const url = m.file_url.toLowerCase();
-                                                    return m.media_type !== 'Document' &&
-                                                        !url.endsWith('.pdf') &&
-                                                        !url.endsWith('.doc') &&
-                                                        !url.endsWith('.docx') &&
-                                                        !url.endsWith('.txt');
-                                                }).length === 2 ? 'grid-cols-2' :
-                                                    'grid-cols-2 sm:grid-cols-3'
-                                                }`}>
-                                                {report.media.filter(m => {
-                                                    const url = m.file_url.toLowerCase();
-                                                    return m.media_type !== 'Document' &&
-                                                        !url.endsWith('.pdf') &&
-                                                        !url.endsWith('.doc') &&
-                                                        !url.endsWith('.docx') &&
-                                                        !url.endsWith('.txt');
-                                                }).map((m: any, idx: number) => (
-                                                    <div
-                                                        key={m.media_id || m.id || m.file_url || `report-media-${idx}`}
-                                                        onClick={() => {
-                                                            const filtered = report.media!.filter(m => {
-                                                                const url = m.file_url.toLowerCase();
-                                                                return m.media_type !== 'Document' &&
-                                                                    !url.endsWith('.pdf') &&
-                                                                    !url.endsWith('.doc') &&
-                                                                    !url.endsWith('.docx') &&
-                                                                    !url.endsWith('.txt');
-                                                            });
-                                                            setActiveGallery({ media: filtered, index: idx });
-                                                        }}
-                                                        className={`group relative rounded-2xl overflow-hidden bg-gray-100 border border-gray-100 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-xl active:scale-95 ${report.media!.filter(m => {
-                                                            const url = m.file_url.toLowerCase();
-                                                            return m.media_type !== 'Document' &&
-                                                                !url.endsWith('.pdf') &&
-                                                                !url.endsWith('.doc') &&
-                                                                !url.endsWith('.docx') &&
-                                                                !url.endsWith('.txt');
-                                                        }).length === 3 && idx === 0 ? 'sm:row-span-2 sm:h-full' : 'aspect-square'
-                                                            }`}
-                                                    >
-                                                        {m.media_type === 'Video' ? (
-                                                            <div className="relative w-full h-full">
-                                                                <video src={m.file_url} className="w-full h-full object-cover" />
-                                                                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-                                                                    <div className="w-12 h-12 rounded-full bg-white/30 backdrop-blur-md flex items-center justify-center text-white ring-4 ring-white/20">
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 fill-current" viewBox="0 0 20 20">
-                                                                            <path d="M4.516 7.548c0-.446.362-.809.808-.809.446 0 .808.363.808.809v4.904c0 .446-.362.809-.808.809-.446 0-.808-.363-.808-.809V7.548zm5.281 0c0-.446.362-.809.808-.809.446 0 .808.363.808.809v4.904c0 .446-.362.809-.808.809-.446 0-.808-.363-.808-.809V7.548z" />
-                                                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-                                                                        </svg>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        ) : (
-                                                            <img src={m.file_url} alt="Report evidence" className="w-full h-full object-cover" />
-                                                        )}
+                                                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2.5">
+                                                             <span className="text-[9px] font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                 </svg>
+                                                                 Expand
+                                                             </span>
+                                                         </div>
+                                                     </div>
+                                                 ))}
+                                             </div>
+                                         </div>
+                                     )}
 
-                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
-                                                            <span className="text-[10px] font-bold text-white uppercase tracking-widest flex items-center gap-2">
-                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                                </svg>
-                                                                Click to Expand
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
+                                     {/* Consolidated Sighting Evidence from Merged Duplicate Reports */}
+                                     {report.merged_reports && report.merged_reports.length > 0 && (
+                                         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-orange-200/80 shadow-xs space-y-3">
+                                             <div className="flex items-center justify-between">
+                                                 <div className="flex items-center gap-2.5">
+                                                     <div className="w-8 h-8 rounded-xl bg-orange-50 text-[#F97316] border border-orange-200 flex items-center justify-center shrink-0">
+                                                         <Link2 className="w-4 h-4" />
+                                                     </div>
+                                                     <div>
+                                                         <h3 className="text-xs font-black text-gray-900 uppercase tracking-wide">
+                                                             Consolidated Sighting Evidence ({report.merged_reports.length} Merged {report.merged_reports.length === 1 ? 'Report' : 'Reports'})
+                                                         </h3>
+                                                         <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                                                             Photos and sightings from other residents confirmed for this same animal
+                                                         </p>
+                                                     </div>
+                                                 </div>
+                                             </div>
 
-                                    {/* Consolidated Sighting Evidence from Merged Duplicate Reports */}
-                                    {report.merged_reports && report.merged_reports.length > 0 && (
-                                        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-orange-200/80 shadow-xs space-y-4">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] border border-orange-200 flex items-center justify-center shrink-0">
-                                                        <Link2 className="w-5 h-5" />
-                                                    </div>
-                                                    <div>
-                                                        <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">
-                                                            Consolidated Sighting Evidence ({report.merged_reports.length} Merged {report.merged_reports.length === 1 ? 'Report' : 'Reports'})
-                                                        </h3>
-                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                                                            Photos and sightings from other residents confirmed for this same animal
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                                                 {report.merged_reports.map((mr: any, mrIdx: number) => (
+                                                     <div key={mr.report_id || mr.id || `merged-report-${mrIdx}`} className="p-3 rounded-xl bg-stone-50/70 border border-stone-200 space-y-2">
+                                                         <div className="flex items-center justify-between">
+                                                             <div className="flex items-center gap-1.5">
+                                                                 <span className="text-xs font-black text-gray-900">
+                                                                     Report #{mr.report_id}
+                                                                 </span>
+                                                                 <span className="px-1.5 py-0.5 rounded bg-stone-200 text-stone-700 text-[8px] font-black uppercase">
+                                                                     Merged Duplicate
+                                                                 </span>
+                                                             </div>
+                                                             <Link
+                                                                 to={`/subd/reports/${mr.report_id}`}
+                                                                 className="text-[9px] font-black text-[#F97316] hover:underline"
+                                                             >
+                                                                 View Details →
+                                                             </Link>
+                                                         </div>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                                                {report.merged_reports.map((mr: any, mrIdx: number) => (
-                                                    <div key={mr.report_id || mr.id || `merged-report-${mrIdx}`} className="p-4 rounded-2xl bg-stone-50/70 border border-stone-200 space-y-3">
-                                                        <div className="flex items-center justify-between">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-xs font-black text-gray-900">
-                                                                    Report #{mr.report_id}
-                                                                </span>
-                                                                <span className="px-2 py-0.5 rounded-md bg-stone-200 text-stone-700 text-[9px] font-black uppercase">
-                                                                    Merged Duplicate
-                                                                </span>
-                                                            </div>
-                                                            <Link
-                                                                to={`/subd/reports/${mr.report_id}`}
-                                                                className="text-[10px] font-black text-[#F97316] hover:underline"
-                                                            >
-                                                                View Report Details →
-                                                            </Link>
-                                                        </div>
+                                                         <div className="flex items-center gap-2 text-[11px] text-gray-600">
+                                                             <User className="w-3 h-3 shrink-0" />
+                                                             <span className="font-bold text-gray-800">{mr.reporter_name}</span>
+                                                             {mr.landmark && (
+                                                                 <>
+                                                                     <span>•</span>
+                                                                     <span className="truncate inline-flex items-center gap-1"><MapPin className="w-2.5 h-2.5 shrink-0" /> {mr.landmark}</span>
+                                                                 </>
+                                                             )}
+                                                         </div>
 
-                                                        <div className="flex items-center gap-2.5 text-xs text-gray-600">
-                                                            <User className="w-3 h-3" />
-                                                            <span className="font-bold text-gray-800">{mr.reporter_name}</span>
-                                                            {mr.landmark && (
-                                                                <>
-                                                                    <span>•</span>
-                                                                    <span className="truncate inline-flex items-center gap-1"><MapPin className="w-3 h-3" /> {mr.landmark}</span>
-                                                                </>
-                                                            )}
-                                                        </div>
+                                                         {mr.description && (
+                                                             <p className="text-[11px] text-gray-600 italic bg-white p-2 rounded-lg border border-stone-100">
+                                                                 "{mr.description}"
+                                                             </p>
+                                                         )}
 
-                                                        {mr.description && (
-                                                            <p className="text-xs text-gray-600 italic bg-white p-2.5 rounded-xl border border-stone-100">
-                                                                "{mr.description}"
-                                                            </p>
-                                                        )}
-
-                                                        {mr.media && mr.media.length > 0 && (
-                                                            <div className="flex gap-2 overflow-x-auto py-1">
-                                                                {mr.media.map((m: any, mIdx: number) => (
-                                                                    <div
-                                                                        key={m.media_id || m.id || m.file_url || `merged-media-${mIdx}`}
-                                                                        onClick={() => window.open(m.file_url, '_blank')}
-                                                                        className="w-20 h-20 rounded-xl overflow-hidden bg-gray-200 shrink-0 border border-stone-200 cursor-pointer hover:scale-105 transition-transform"
-                                                                    >
-                                                                        <img src={m.file_url} alt="" className="w-full h-full object-cover" />
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
+                                                         {mr.media && mr.media.length > 0 && (
+                                                             <div className="flex gap-1.5 overflow-x-auto py-0.5">
+                                                                 {mr.media.map((m: any, mIdx: number) => (
+                                                                     <div
+                                                                         key={m.media_id || m.id || m.file_url || `merged-media-${mIdx}`}
+                                                                         onClick={() => window.open(m.file_url, '_blank')}
+                                                                         className="w-14 h-14 rounded-lg overflow-hidden bg-gray-200 shrink-0 border border-stone-200 cursor-pointer hover:scale-105 transition-transform"
+                                                                     >
+                                                                         <img src={m.file_url} alt="" className="w-full h-full object-cover" />
+                                                                     </div>
+                                                                 ))}
+                                                             </div>
+                                                         )}
+                                                     </div>
+                                                 ))}
+                                             </div>
+                                         </div>
+                                     )}
 
 
-                                {/* Comments Section */}
-                                <div className="bg-white border border-gray-100 rounded-2xl p-6 pt-5 shadow-sm">
-                                    {report.comments && report.comments.length > 0 && (
-                                        <button
-                                            onClick={() => setExpandedComments(prev => !prev)}
-                                            className="text-[10px] font-black text-gray-400 hover:text-[#F97316] uppercase tracking-widest transition-colors flex items-center gap-2 mb-6"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform duration-300 ${expandedComments ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                                            </svg>
-                                            {expandedComments ? 'Hide Comments' : `View all ${report.comments.length} comments`}
-                                        </button>
-                                    )}
+                                 {/* Comments Section */}
+                                 <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 pt-4 shadow-2xs">
+                                     {report.comments && report.comments.length > 0 && (
+                                         <button
+                                             onClick={() => setExpandedComments(prev => !prev)}
+                                             className="text-[10px] font-black text-gray-400 hover:text-[#F97316] uppercase tracking-widest transition-colors flex items-center gap-1.5 mb-4 cursor-pointer"
+                                         >
+                                             <svg xmlns="http://www.w3.org/2000/svg" className={`h-3.5 w-3.5 transition-transform duration-300 ${expandedComments ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                             </svg>
+                                             {expandedComments ? 'Hide Comments' : `View all ${report.comments.length} comments`}
+                                         </button>
+                                     )}
 
-                                    {(expandedComments || !report.comments || report.comments.length === 0) && (
-                                        <div className="space-y-2 mb-6 max-h-72 overflow-y-auto custom-scrollbar pr-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                                            {report.comments && report.comments.length > 0 ? (
-                                                report.comments
-                                                    .filter((c: any) => !c.parent_comment_id)
-                                                    .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                                                    .map((c: any, cIdx: number) => {
-                                                        const replies = report.comments
-                                                            ?.filter((reply: any) => reply.parent_comment_id === c.comment_id)
-                                                            .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) || [];
-                                                        return (
-                                                            <div key={c.comment_id || c.id || `comment-${cIdx}`} className="mb-4 last:mb-0">
-                                                                <div className="flex gap-3 relative">
-                                                                    <div className="relative flex flex-col items-center shrink-0">
-                                                                        <img 
-                                                                            src={getProfilePicture(c.user_photo)} 
-                                                                            className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm" 
-                                                                            alt={c.user_name || 'User'} 
-                                                                            onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
-                                                                        />
-                                                                        {(replies.length > 0 || replyingTo?.commentId === c.comment_id) && (
-                                                                            <div className="absolute top-8 bottom-[-16px] left-1/2 -translate-x-1/2 w-[2px] bg-gray-100 z-0"></div>
-                                                                        )}
-                                                                    </div>
+                                     {(expandedComments || !report.comments || report.comments.length === 0) && (
+                                         <div className="space-y-2 mb-4 max-h-64 overflow-y-auto custom-scrollbar pr-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
+                                             {report.comments && report.comments.length > 0 ? (
+                                                 report.comments
+                                                     .filter((c: any) => !c.parent_comment_id)
+                                                     .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                                                     .map((c: any, cIdx: number) => {
+                                                         const replies = report.comments
+                                                             ?.filter((reply: any) => reply.parent_comment_id === c.comment_id)
+                                                             .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) || [];
+                                                         return (
+                                                             <div key={c.comment_id || c.id || `comment-${cIdx}`} className="mb-3 last:mb-0">
+                                                                 <div className="flex gap-2.5 relative">
+                                                                     <div className="relative flex flex-col items-center shrink-0">
+                                                                         <img 
+                                                                             src={getProfilePicture(c.user_photo)} 
+                                                                             className="w-7 h-7 rounded-full object-cover z-10 ring-2 ring-white border border-gray-100 shadow-2xs" 
+                                                                             alt={c.user_name || 'User'} 
+                                                                             onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                                                         />
+                                                                         {(replies.length > 0 || replyingTo?.commentId === c.comment_id) && (
+                                                                             <div className="absolute top-7 bottom-[-14px] left-1/2 -translate-x-1/2 w-[2px] bg-gray-100 z-0"></div>
+                                                                         )}
+                                                                     </div>
 
-                                                                    <div className="flex-1 pb-1">
-                                                                        <div className="bg-[#FAFAF9] rounded-[1.5rem] p-3.5 px-4 border border-gray-50 shadow-sm inline-block">
-                                                                            <span className="block text-[11px] font-black text-[#1a1208] mb-0.5">{c.user_name || 'User'}</span>
-                                                                            <p className="text-xs font-semibold text-gray-700 leading-relaxed pr-6">{c.comment}</p>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-4 mt-1.5 ml-3">
-                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest"><RelativeTimestamp date={c.created_at} /></span>
-                                                                            <button
-                                                                                onClick={() => setReplyingTo({ commentId: c.comment_id, userName: c.user_name || 'User' })}
-                                                                                className="text-[10px] font-bold text-gray-500 hover:text-[#F97316] transition-colors"
-                                                                            >
-                                                                                Reply
-                                                                            </button>
-                                                                        </div>
+                                                                     <div className="flex-1 pb-1">
+                                                                         <div className="bg-[#FAFAF9] rounded-xl p-2.5 px-3 border border-gray-100 shadow-2xs inline-block">
+                                                                             <span className="block text-[10px] font-black text-[#1a1208] mb-0.5">{c.user_name || 'User'}</span>
+                                                                             <p className="text-xs font-semibold text-gray-700 leading-relaxed pr-3">{c.comment}</p>
+                                                                         </div>
+                                                                         <div className="flex items-center gap-3 mt-1 ml-2">
+                                                                             <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest"><RelativeTimestamp date={c.created_at} /></span>
+                                                                             <button
+                                                                                 onClick={() => setReplyingTo({ commentId: c.comment_id, userName: c.user_name || 'User' })}
+                                                                                 className="text-[9px] font-bold text-gray-500 hover:text-[#F97316] transition-colors cursor-pointer"
+                                                                             >
+                                                                                 Reply
+                                                                             </button>
+                                                                         </div>
 
-                                                                        {replies.length > 0 && (
-                                                                            <div className="mt-4 space-y-4">
-                                                                                {replies.map((reply: any, index: number) => (
-                                                                                    <div key={reply.comment_id || reply.id || `reply-${reply.parent_comment_id || c.comment_id}-${index}`} className="flex gap-3 relative">
-                                                                                        <div className="absolute top-[-10px] left-[-28px] w-[28px] h-[26px] border-b-[2px] border-l-[2px] border-gray-100 rounded-bl-[12px] z-0 pointer-events-none"></div>
-                                                                                        {index === replies.length - 1 && replyingTo?.commentId !== c.comment_id && (
-                                                                                            <div className="absolute top-[16px] bottom-[-100px] left-[-30px] w-[6px] bg-white z-0 pointer-events-none"></div>
-                                                                                        )}
+                                                                         {replies.length > 0 && (
+                                                                             <div className="mt-3 space-y-3">
+                                                                                 {replies.map((reply: any, index: number) => (
+                                                                                     <div key={reply.comment_id || reply.id || `reply-${reply.parent_comment_id || c.comment_id}-${index}`} className="flex gap-2 relative">
+                                                                                         <div className="absolute top-[-8px] left-[-22px] w-[22px] h-[20px] border-b-[2px] border-l-[2px] border-gray-100 rounded-bl-[10px] z-0 pointer-events-none"></div>
+                                                                                         {index === replies.length - 1 && replyingTo?.commentId !== c.comment_id && (
+                                                                                             <div className="absolute top-[14px] bottom-[-100px] left-[-24px] w-[5px] bg-white z-0 pointer-events-none"></div>
+                                                                                         )}
 
-                                                                                        <img 
-                                                                                            src={getProfilePicture(reply.user_photo)} 
-                                                                                            className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0" 
-                                                                                            alt={reply.user_name || 'User'} 
-                                                                                            onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
-                                                                                        />
+                                                                                         <img 
+                                                                                             src={getProfilePicture(reply.user_photo)} 
+                                                                                             className="w-5 h-5 rounded-full object-cover z-10 mt-0.5 ring-2 ring-white border border-gray-100 shadow-2xs shrink-0" 
+                                                                                             alt={reply.user_name || 'User'} 
+                                                                                             onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                                                                         />
 
-                                                                                        <div className="flex-1">
-                                                                                            <div className="bg-[#FAFAF9] rounded-[1.2rem] p-3 px-4 border border-gray-50 shadow-sm inline-block">
-                                                                                                <span className="block text-[10px] font-black text-gray-800 mb-0.5">{reply.user_name || 'User'}</span>
-                                                                                                <p className="text-[11px] font-semibold text-gray-600 leading-relaxed pr-4">{reply.comment}</p>
-                                                                                            </div>
-                                                                                            <div className="flex items-center gap-4 mt-1.5 ml-3">
-                                                                                                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest"><RelativeTimestamp date={reply.created_at} /></span>
-                                                                                                <button
-                                                                                                    onClick={() => setReplyingTo({ commentId: c.comment_id, userName: reply.user_name || 'User' })}
-                                                                                                    className="text-[9px] font-bold text-gray-500 hover:text-[#F97316] transition-colors"
-                                                                                                >
-                                                                                                    Reply
-                                                                                                </button>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
-                                                                        )}
+                                                                                         <div className="flex-1">
+                                                                                             <div className="bg-[#FAFAF9] rounded-lg p-2 px-2.5 border border-gray-100 shadow-2xs inline-block">
+                                                                                                 <span className="block text-[9px] font-black text-gray-800 mb-0.5">{reply.user_name || 'User'}</span>
+                                                                                                 <p className="text-[11px] font-semibold text-gray-600 leading-relaxed pr-2">{reply.comment}</p>
+                                                                                             </div>
+                                                                                             <div className="flex items-center gap-3 mt-1 ml-2">
+                                                                                                 <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest"><RelativeTimestamp date={reply.created_at} /></span>
+                                                                                                 <button
+                                                                                                     onClick={() => setReplyingTo({ commentId: c.comment_id, userName: reply.user_name || 'User' })}
+                                                                                                     className="text-[8px] font-bold text-gray-500 hover:text-[#F97316] transition-colors cursor-pointer"
+                                                                                                 >
+                                                                                                     Reply
+                                                                                                 </button>
+                                                                                             </div>
+                                                                                         </div>
+                                                                                     </div>
+                                                                                 ))}
+                                                                             </div>
+                                                                         )}
 
-                                                                        {replyingTo?.commentId === c.comment_id && (
-                                                                            <div className="mt-4 flex items-center gap-3 relative z-10 animate-in fade-in slide-in-from-top-2 duration-200">
-                                                                                <div className="absolute top-[-10px] left-[-28px] w-[28px] h-[24px] border-b-[2px] border-l-[2px] border-gray-100 rounded-bl-[12px] z-0 pointer-events-none"></div>
-                                                                                <div className="absolute top-[14px] bottom-[-100px] left-[-30px] w-[6px] bg-white z-0 pointer-events-none"></div>
-                                                                                <img 
-                                                                                    src={getProfilePicture(currentUser?.profile_picture)} 
-                                                                                    className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0" 
-                                                                                    alt={currentUser?.name || 'User'} 
-                                                                                    onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
-                                                                                />
-                                                                                <div className="flex-1 relative flex items-center">
-                                                                                    <input
-                                                                                        type="text"
-                                                                                        autoFocus
-                                                                                        placeholder={`Replying to ${replyingTo?.userName}...`}
-                                                                                        className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[1.2rem] pl-4 pr-10 py-2 text-[11px] font-semibold text-[#1a1208] focus:outline-none focus:border-orange-200 focus:bg-white transition-all placeholder:text-gray-400 shadow-inner"
-                                                                                        value={commentInput}
-                                                                                        onChange={(e) => setCommentInput(e.target.value)}
-                                                                                        onKeyPress={(e) => e.key === 'Enter' && handleAddComment()}
-                                                                                    />
-                                                                                    <button
-                                                                                        onClick={() => {
-                                                                                            setReplyingTo(null);
-                                                                                            setCommentInput('');
-                                                                                        }}
-                                                                                        className="absolute right-3 text-gray-400 hover:text-red-500 transition-colors"
-                                                                                    >
-                                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                                                                                        </svg>
-                                                                                    </button>
-                                                                                </div>
-                                                                                <button
-                                                                                    onClick={handleAddComment}
-                                                                                    className="bg-[#F97316] text-white rounded-full w-8 h-8 flex items-center justify-center shadow-md shadow-orange-100 hover:scale-105 active:scale-95 transition-all shrink-0"
-                                                                                >
-                                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 relative left-[1px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                                                                                    </svg>
-                                                                                </button>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })
-                                            ) : (
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic text-center py-4">No comments yet. Be the first to comment!</p>
-                                            )}
-                                        </div>
-                                    )}
+                                                                         {replyingTo?.commentId === c.comment_id && (
+                                                                             <div className="mt-3 flex items-center gap-2 relative z-10 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                                                 <div className="absolute top-[-8px] left-[-22px] w-[22px] h-[20px] border-b-[2px] border-l-[2px] border-gray-100 rounded-bl-[10px] z-0 pointer-events-none"></div>
+                                                                                 <div className="absolute top-[12px] bottom-[-100px] left-[-24px] w-[5px] bg-white z-0 pointer-events-none"></div>
+                                                                                 <img 
+                                                                                     src={getProfilePicture(currentUser?.profile_picture)} 
+                                                                                     className="w-5 h-5 rounded-full object-cover z-10 mt-0.5 ring-2 ring-white border border-gray-100 shadow-2xs shrink-0" 
+                                                                                     alt={currentUser?.name || 'User'} 
+                                                                                     onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                                                                 />
+                                                                                 <div className="flex-1 relative flex items-center">
+                                                                                     <input
+                                                                                         type="text"
+                                                                                         autoFocus
+                                                                                         placeholder={`Replying to ${replyingTo?.userName}...`}
+                                                                                         className="w-full bg-[#FAFAF9] border border-gray-200 rounded-xl pl-3 pr-8 py-1.5 text-[11px] font-semibold text-[#1a1208] focus:outline-none focus:border-orange-200 focus:bg-white transition-all placeholder:text-gray-400 shadow-inner"
+                                                                                         value={commentInput}
+                                                                                         onChange={(e) => setCommentInput(e.target.value)}
+                                                                                         onKeyPress={(e) => e.key === 'Enter' && handleAddComment()}
+                                                                                     />
+                                                                                     <button
+                                                                                         onClick={() => {
+                                                                                             setReplyingTo(null);
+                                                                                             setCommentInput('');
+                                                                                         }}
+                                                                                         className="absolute right-2 text-gray-400 hover:text-red-500 transition-colors"
+                                                                                     >
+                                                                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                                                                         </svg>
+                                                                                     </button>
+                                                                                 </div>
+                                                                                 <button
+                                                                                     onClick={handleAddComment}
+                                                                                     className="bg-[#F97316] text-white rounded-full w-7 h-7 flex items-center justify-center shadow-xs hover:scale-105 active:scale-95 transition-all shrink-0 cursor-pointer"
+                                                                                 >
+                                                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 relative left-[0.5px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                                                                     </svg>
+                                                                                 </button>
+                                                                             </div>
+                                                                         )}
+                                                                     </div>
+                                                                 </div>
+                                                             </div>
+                                                         );
+                                                     })
+                                             ) : (
+                                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic text-center py-3">No comments yet. Be the first to comment!</p>
+                                             )}
+                                         </div>
+                                     )}
 
-                                    {!replyingTo && (
-                                        <div className="flex items-center gap-3 animate-in fade-in duration-200 border-t border-gray-50 pt-4 mt-2">
-                                            <div className="flex-1 relative">
-                                                <input
-                                                    type="text"
-                                                    placeholder="Write a comment as Subdivision Leader..."
-                                                    className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[1.5rem] pl-5 pr-12 py-3 text-xs font-semibold text-[#1a1208] focus:outline-none focus:border-orange-200 focus:bg-white transition-all placeholder:text-gray-300 shadow-inner"
-                                                    value={commentInput}
-                                                    onChange={(e) => setCommentInput(e.target.value)}
-                                                    onKeyPress={(e) => e.key === 'Enter' && handleAddComment()}
-                                                />
-                                            </div>
-                                            <button
-                                                onClick={handleAddComment}
-                                                className="bg-[#F97316] text-white rounded-[1.2rem] p-3 shadow-md shadow-orange-100 hover:scale-105 active:scale-95 transition-all flex-shrink-0"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                                                </svg>
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
+                                     {!replyingTo && (
+                                         <div className="flex items-center gap-2.5 animate-in fade-in duration-200 border-t border-gray-100 pt-3 mt-1.5">
+                                             <div className="flex-1 relative">
+                                                 <input
+                                                     type="text"
+                                                     placeholder="Write a comment as Subdivision Leader..."
+                                                     className="w-full bg-[#FAFAF9] border border-gray-200 rounded-xl pl-3.5 pr-10 py-2 text-xs font-semibold text-[#1a1208] focus:outline-none focus:border-orange-200 focus:bg-white transition-all placeholder:text-gray-300 shadow-inner"
+                                                     value={commentInput}
+                                                     onChange={(e) => setCommentInput(e.target.value)}
+                                                     onKeyPress={(e) => e.key === 'Enter' && handleAddComment()}
+                                                 />
+                                             </div>
+                                             <button
+                                                 onClick={handleAddComment}
+                                                 className="bg-[#F97316] text-white rounded-xl p-2 shadow-xs hover:scale-105 active:scale-95 transition-all flex-shrink-0 cursor-pointer"
+                                             >
+                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                                 </svg>
+                                             </button>
+                                         </div>
+                                     )}
+                                 </div>                        </div>
 
                                 {/* ACTION PANEL */}
-                                <div className="mt-8 pt-8 border-t border-gray-100">
-                                    <div className="flex flex-col gap-3">
+                                <div className="mt-5 pt-5 border-t border-gray-100">
+                                    <div className="flex flex-col gap-2.5">
                                         {/* CASE NOT HANDLED BY CURRENT USER */}
                                         {report.assigned_leader_id && report.assigned_leader_id !== currentUserId && ![11, 12, 14, 3].includes(report.status_id) && (
-                                            <div className={`p-5 rounded-2xl border text-center space-y-2.5 ${
+                                            <div className={`p-3.5 rounded-xl border text-center space-y-1.5 ${
                                                 report.is_takeover_eligible ? 'bg-amber-50/80 border-amber-300' : 'bg-blue-50/70 border-blue-200'
                                             }`}>
-                                                <p className={`text-xs font-bold flex items-start justify-center gap-1.5 ${report.is_takeover_eligible ? 'text-amber-950' : 'text-blue-900'}`}>
-                                                    <Lock className="w-3.5 h-3.5 mt-0.5 shrink-0" /> <span>Operational controls are reserved for the assigned case officer (<span className={`font-black ${report.is_takeover_eligible ? 'text-amber-800' : 'text-blue-700'}`}>{report.assigned_leader_name || `Officer #${report.assigned_leader_id}`}</span>).</span>
+                                                <p className={`text-[11px] font-bold flex items-start justify-center gap-1.5 ${report.is_takeover_eligible ? 'text-amber-950' : 'text-blue-900'}`}>
+                                                    <Lock className="w-3 h-3 mt-0.5 shrink-0" /> <span>Operational controls are reserved for the assigned case officer (<span className={`font-black ${report.is_takeover_eligible ? 'text-amber-800' : 'text-blue-700'}`}>{report.assigned_leader_name || `Officer #${report.assigned_leader_id}`}</span>).</span>
                                                 </p>
                                                 {report.is_takeover_eligible ? (
-                                                    <p className="text-[11px] text-amber-800 font-semibold flex items-start justify-center gap-1">
-                                                        <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /> <span>This report has had no updates for over {report.takeover_inactivity_hours_threshold || 24} hours. You can take over handling now.</span>
+                                                    <p className="text-[10px] text-amber-800 font-semibold flex items-start justify-center gap-1">
+                                                        <AlertTriangle className="w-2.5 h-2.5 mt-0.5 shrink-0" /> <span>This report has had no updates for over {report.takeover_inactivity_hours_threshold || 24} hours. You can take over handling now.</span>
                                                     </p>
                                                 ) : (
-                                                    <p className="text-[11px] text-blue-700/80 font-medium">
+                                                    <p className="text-[10px] text-blue-700/80 font-medium">
                                                         Officer is within the active response window. Takeover unlocks in <strong>{formatCooldownTimer(report.takeover_cooldown_remaining_seconds)}</strong> if no progress is made.
                                                     </p>
                                                 )}
@@ -2505,17 +2468,17 @@ const SubdViewReport = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => setIsTakeoverModalOpen(true)}
-                                                        className="mt-2 px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black uppercase tracking-wider shadow-sm transition-all cursor-pointer hover:scale-105 active:scale-95 inline-flex items-center gap-1.5"
+                                                        className="mt-1 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-black uppercase tracking-wider shadow-2xs transition-all cursor-pointer hover:scale-105 active:scale-95 inline-flex items-center gap-1"
                                                     >
-                                                        <RefreshCw className="w-3.5 h-3.5" /> Take Over Report (Stalled)
+                                                        <RefreshCw className="w-3 h-3" /> Take Over Report (Stalled)
                                                     </button>
                                                 ) : (
                                                     <button
                                                         type="button"
                                                         disabled
-                                                        className="mt-2 px-6 py-2.5 rounded-xl bg-gray-100 border border-gray-200 text-gray-400 text-xs font-black uppercase tracking-wider shadow-xs cursor-not-allowed opacity-80 inline-flex items-center gap-1.5"
+                                                        className="mt-1 px-4 py-2 rounded-xl bg-gray-100 border border-gray-200 text-gray-400 text-[10px] font-black uppercase tracking-wider shadow-2xs cursor-not-allowed opacity-80 inline-flex items-center gap-1"
                                                     >
-                                                        <Lock className="w-3.5 h-3.5" /> Takeover Locked ({formatCooldownTimer(report.takeover_cooldown_remaining_seconds)})
+                                                        <Lock className="w-2.5 h-2.5" /> Takeover Locked ({formatCooldownTimer(report.takeover_cooldown_remaining_seconds)})
                                                     </button>
                                                 )}
                                             </div>
@@ -2523,17 +2486,17 @@ const SubdViewReport = () => {
 
                                         {/* CASE IS UNASSIGNED */}
                                         {!report.assigned_leader_id && report.status_id !== 18 && !report.duplicate_of_report_id && ![3, 9, 10, 11, 12, 14, 18].includes(report.status_id) && (
-                                            <div className="p-5 rounded-2xl bg-amber-50/80 border border-amber-200 text-center space-y-2">
-                                                <p className="text-xs font-bold text-amber-900 flex items-start justify-center gap-1.5">
-                                                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" /> <span>Please claim this incident report to unlock verification, warning citations, and resolution actions.</span>
+                                            <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-center space-y-1.5">
+                                                <p className="text-[11px] font-bold text-amber-900 flex items-start justify-center gap-1.5">
+                                                    <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /> <span>Please claim this incident report to unlock verification, warning citations, and resolution actions.</span>
                                                 </p>
                                                 <button
                                                     type="button"
                                                     onClick={handleClaimReport}
                                                     disabled={isClaiming}
-                                                    className="mt-2 px-6 py-2.5 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider shadow-sm transition-all disabled:opacity-50 cursor-pointer inline-flex items-center gap-1.5"
+                                                    className="mt-1 px-4 py-2 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-[11px] font-black uppercase tracking-wider shadow-sm transition-all disabled:opacity-50 cursor-pointer inline-flex items-center gap-1"
                                                 >
-                                                    {isClaiming ? 'Claiming...' : <><Shield className="w-3.5 h-3.5" /> Claim This Report</>}
+                                                    {isClaiming ? 'Claiming...' : <><Shield className="w-3 h-3" /> Claim This Report</>}
                                                 </button>
                                             </div>
                                         )}
@@ -2544,33 +2507,33 @@ const SubdViewReport = () => {
                                                 {/* OPTION: ADD PET RECORD IF UNREGISTERED */}
                                                 {/* STEP 0: ESCALATED TO BARANGAY (Strictly Read-Only / Tracking Mode) */}
                                                 {isEscalatedToBarangay ? (
-                                                    <div className="w-full p-6 bg-gradient-to-br from-indigo-50/90 via-purple-50/50 to-white border-2 border-indigo-200/80 rounded-3xl shadow-sm flex flex-col gap-4 animate-in fade-in duration-300">
-                                                        <div className="flex items-start gap-3.5">
-                                                            <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-600/20">
-                                                                <Building2 className="w-5 h-5" />
+                                                    <div className="w-full p-4 bg-gradient-to-br from-indigo-50/90 via-purple-50/50 to-white border border-indigo-200/80 rounded-2xl shadow-2xs flex flex-col gap-3 animate-in fade-in duration-300">
+                                                        <div className="flex items-start gap-3">
+                                                            <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                                                                <Building2 className="w-4 h-4" />
                                                             </div>
                                                             <div className="flex-1">
-                                                                <div className="flex items-center gap-2">
+                                                                <div className="flex items-center gap-1.5">
                                                                     <span className="text-xs font-black uppercase tracking-wider text-indigo-900">Escalated to Barangay</span>
-                                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                                                    <span className="px-2 py-0.2 rounded-full text-[8px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-700 border border-indigo-200">
                                                                         {report.status_id === 4 ? 'Pending Barangay Action' : 'In Barangay Care'}
                                                                     </span>
                                                                 </div>
-                                                                <p className="text-xs text-indigo-950 font-bold mt-1 leading-relaxed">
+                                                                <p className="text-xs text-indigo-950 font-bold mt-0.5 leading-relaxed">
                                                                     This animal case has been endorsed and escalated to the Barangay.
                                                                 </p>
-                                                                <p className="text-[11px] text-indigo-700 mt-1 leading-normal font-medium">
-                                                                    Subdivision leaders can no longer modify this animal record. You can track all live progress, rescue missions, and veterinary updates below or in the Escalated Missions tracker.
+                                                                <p className="text-[10px] text-indigo-700 mt-0.5 leading-normal font-medium">
+                                                                    Subdivision leaders can track all live progress in Escalated Missions.
                                                                 </p>
                                                             </div>
                                                         </div>
 
-                                                        <div className="pt-2 border-t border-indigo-100/80 flex flex-col sm:flex-row gap-2">
+                                                        <div className="pt-1.5 border-t border-indigo-100/80 flex flex-col sm:flex-row gap-2">
                                                             <Link
                                                                 to="/subd/escalated"
-                                                                className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-indigo-600/25 cursor-pointer"
+                                                                className="flex-1 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
                                                             >
-                                                                <Rocket className="w-3.5 h-3.5" />
+                                                                <Rocket className="w-3 h-3" />
                                                                 <span>Track in Escalated Missions →</span>
                                                             </Link>
                                                         </div>
@@ -2581,18 +2544,18 @@ const SubdViewReport = () => {
                                                             <button
                                                                 type="button"
                                                                 disabled
-                                                                className="w-full py-3.5 border-2 border-gray-700 bg-gray-800 text-gray-200 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-xs cursor-not-allowed opacity-90"
+                                                                className="w-full py-2.5 border border-gray-700 bg-gray-800 text-gray-200 rounded-xl text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-2xs cursor-not-allowed opacity-90"
                                                             >
-                                                                <Check className="w-4 h-4 text-emerald-400" />
+                                                                <Check className="w-3.5 h-3.5 text-emerald-400" />
                                                                 <span>Record Already Added</span>
                                                             </button>
                                                         ) : (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => setIsAddPetModalOpen(true)}
-                                                                className="w-full py-3.5 border-2 border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 text-[#F97316] rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer hover:scale-[1.01] active:scale-95"
+                                                                className="w-full py-2.5 border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 text-[#F97316] rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer hover:scale-[1.01] active:scale-95"
                                                             >
-                                                                <PawPrint className="w-4 h-4" />
+                                                                <PawPrint className="w-3.5 h-3.5" />
                                                                 <span>Add Record for this Animal in System</span>
                                                             </button>
                                                         )}
@@ -2632,9 +2595,9 @@ const SubdViewReport = () => {
 
                                                                     setIsVerifyModalOpen(true);
                                                                 }}
-                                                                className="w-full py-4 bg-blue-600 text-white rounded-2xl text-xs font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                                                                className="w-full py-3 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-100 hover:bg-blue-700 transition-all transform hover:-translate-y-0.5 active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
                                                             >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                                 </svg>
                                                                 VERIFY ANIMAL ACTION
@@ -2649,9 +2612,9 @@ const SubdViewReport = () => {
                                                                     setFalseAlarmNotes('');
                                                                     setIsFalseAlarmModalOpen(true);
                                                                 }}
-                                                                className="w-full py-3.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                                                                className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                                                             >
-                                                                <Ban className="w-3.5 h-3.5" />
+                                                                <Ban className="w-3 h-3" />
                                                                 <span>Mark as False Alarm / Dismiss</span>
                                                             </button>
                                                         )}
@@ -2664,9 +2627,9 @@ const SubdViewReport = () => {
                                                                     setEscalationDescription('');
                                                                     setIsEscalateModalOpen(true);
                                                                 }}
-                                                                className="w-full py-4 bg-orange-600 text-white rounded-2xl text-xs font-bold shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
+                                                                className="w-full py-3 bg-orange-600 text-white rounded-xl text-xs font-bold shadow-md shadow-orange-100 hover:bg-orange-700 transition-all transform hover:-translate-y-0.5 active:scale-95 flex items-center justify-center gap-1.5"
                                                             >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                                                                 </svg>
                                                                 ESCALATE TO BARANGAY
@@ -2677,9 +2640,9 @@ const SubdViewReport = () => {
                                                         {Boolean(report.owner_id || (report.is_owner_report && report.user_id) || report.owner_name || report.pet_id) && (
                                                             <button
                                                                 onClick={openIssueWarningModal}
-                                                                className="w-full py-4 bg-yellow-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-yellow-100 hover:bg-yellow-600 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
+                                                                className="w-full py-3 bg-yellow-500 text-white rounded-xl text-xs font-bold shadow-md shadow-yellow-100 hover:bg-yellow-600 transition-all transform hover:-translate-y-0.5 active:scale-95 flex items-center justify-center gap-1.5"
                                                             >
-                                                                <AlertTriangle className="w-4 h-4" />
+                                                                <AlertTriangle className="w-3.5 h-3.5" />
                                                                 ISSUE OWNER WARNING
                                                             </button>
                                                         )}
@@ -2690,9 +2653,9 @@ const SubdViewReport = () => {
                                                                 onClick={() => {
                                                                     setIsResolveLostModalOpen(true);
                                                                 }}
-                                                                className="w-full py-3.5 border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100 text-emerald-700 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                                                                className="w-full py-2.5 border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
                                                             >
-                                                                {(report.category_id === 6 || !!report.pet_id || (!!report.description && report.description.includes('[LOST PET REPORT]'))) ? <Home className="w-3.5 h-3.5" /> : <PawPrint className="w-3.5 h-3.5" />}
+                                                                {(report.category_id === 6 || !!report.pet_id || (!!report.description && report.description.includes('[LOST PET REPORT]'))) ? <Home className="w-3 h-3" /> : <PawPrint className="w-3 h-3" />}
                                                                 Update Animal Status
                                                             </button>
                                                         )}
@@ -2702,9 +2665,9 @@ const SubdViewReport = () => {
                                                              <button
                                                                  type="button"
                                                                  onClick={() => setIsTransferModalOpen(true)}
-                                                                 className="w-full py-3.5 border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 text-purple-800 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs hover:scale-[1.01] active:scale-95"
+                                                                 className="w-full py-2.5 border border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 text-purple-800 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs hover:scale-[1.01] active:scale-95"
                                                              >
-                                                                 <RefreshCw className="w-4 h-4" />
+                                                                 <RefreshCw className="w-3 h-3" />
                                                                  <span>Transfer Report to Another Leader</span>
                                                              </button>
                                                          )}
@@ -2714,9 +2677,9 @@ const SubdViewReport = () => {
                                                              <button
                                                                  type="button"
                                                                  onClick={() => setIsMergeModalOpen(true)}
-                                                                 className="w-full py-3.5 border border-stone-300 bg-stone-50 hover:bg-stone-100 text-stone-800 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                                                                 className="w-full py-2.5 border border-stone-300 bg-stone-50 hover:bg-stone-100 text-stone-800 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                                                              >
-                                                                 <Link2 className="w-4 h-4" />
+                                                                 <Link2 className="w-3 h-3" />
                                                                  <span>Mark as Duplicate / Merge Report</span>
                                                              </button>
                                                          )}
@@ -2724,7 +2687,7 @@ const SubdViewReport = () => {
                                                          {(report.status_id === 1 || report.status_id === 2) && (
                                                              <button
                                                                  onClick={handleReject}
-                                                                 className="w-full py-3 border border-gray-100 rounded-2xl text-[10px] font-bold text-gray-400 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all uppercase tracking-widest cursor-pointer"
+                                                                 className="w-full py-2 border border-gray-100 rounded-xl text-[10px] font-bold text-gray-400 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all uppercase tracking-widest cursor-pointer"
                                                              >
                                                                  Reject Report
                                                              </button>
@@ -2736,19 +2699,19 @@ const SubdViewReport = () => {
 
                                         {/* RESOLVED / HISTORY STATE (Visible to everyone) */}
                                         {report.status_id === 11 && (
-                                            <div className="w-full p-5 bg-green-50 border border-green-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in duration-300">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-full bg-green-100 text-green-700 flex items-center justify-center shrink-0">
-                                                        <Check className="w-5 h-5" />
+                                            <div className="w-full p-3.5 bg-green-50 border border-green-200 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in duration-300">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className="w-8 h-8 rounded-full bg-green-100 text-green-700 flex items-center justify-center shrink-0">
+                                                        <Check className="w-4 h-4" />
                                                     </div>
                                                     <div>
                                                         <h5 className="text-xs font-black text-green-800 uppercase tracking-wide">Incident Resolved</h5>
-                                                        <p className="text-[10px] font-bold text-green-600 uppercase tracking-wider">This report is archived and visible in History Reports</p>
+                                                        <p className="text-[9px] font-bold text-green-600 uppercase tracking-wider">This report is archived and visible in History Reports</p>
                                                     </div>
                                                 </div>
                                                 <Link 
                                                     to="/subd/history" 
-                                                    className="px-5 py-2.5 bg-green-700 hover:bg-green-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer shadow-sm hover:scale-105"
+                                                    className="px-4 py-2 bg-green-700 hover:bg-green-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer shadow-2xs hover:scale-105"
                                                 >
                                                     View History Reports →
                                                 </Link>
@@ -2756,19 +2719,19 @@ const SubdViewReport = () => {
                                         )}
 
                                         {report.status_id === 14 && (
-                                            <div className="w-full p-5 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in duration-300">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                                                        <Ban className="w-5 h-5" />
+                                            <div className="w-full p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in duration-300">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                                                        <Ban className="w-4 h-4" />
                                                     </div>
                                                     <div>
                                                         <h5 className="text-xs font-black text-amber-800 uppercase tracking-wide">False Alarm / Dismissed</h5>
-                                                        <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">This report was dismissed and is archived in History Reports</p>
+                                                        <p className="text-[9px] font-bold text-amber-600 uppercase tracking-wider">This report was dismissed and is archived in History Reports</p>
                                                     </div>
                                                 </div>
                                                 <Link 
                                                     to="/subd/history" 
-                                                    className="px-5 py-2.5 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer shadow-sm hover:scale-105"
+                                                    className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer shadow-2xs hover:scale-105"
                                                 >
                                                     View History Reports →
                                                 </Link>
@@ -2776,19 +2739,19 @@ const SubdViewReport = () => {
                                         )}
 
                                         {report.status_id === 3 && (
-                                            <div className="w-full p-5 bg-red-50 border border-red-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in duration-300">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center shrink-0">
-                                                        <X className="w-5 h-5" />
+                                            <div className="w-full p-3.5 bg-red-50 border border-red-200 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in duration-300">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className="w-8 h-8 rounded-full bg-red-100 text-red-700 flex items-center justify-center shrink-0">
+                                                        <X className="w-4 h-4" />
                                                     </div>
                                                     <div>
                                                         <h5 className="text-xs font-black text-red-800 uppercase tracking-wide">Report Rejected</h5>
-                                                        <p className="text-[10px] font-bold text-red-600 uppercase tracking-wider">This report was rejected and is archived in History Reports</p>
+                                                        <p className="text-[9px] font-bold text-red-600 uppercase tracking-wider">This report was rejected and is archived in History Reports</p>
                                                     </div>
                                                 </div>
                                                 <Link 
                                                     to="/subd/history" 
-                                                    className="px-5 py-2.5 bg-red-700 hover:bg-red-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer shadow-sm hover:scale-105"
+                                                    className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer shadow-2xs hover:scale-105"
                                                 >
                                                     View History Reports →
                                                 </Link>
@@ -2796,7 +2759,7 @@ const SubdViewReport = () => {
                                         )}
 
                                         {report.status_id === 12 && (
-                                            <div className="w-full py-4 bg-gray-100 text-gray-600 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border border-gray-200">
+                                            <div className="w-full py-3 bg-gray-100 text-gray-600 rounded-xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 border border-gray-200">
                                                 Status: Deceased — Archived in History Reports
                                             </div>
                                         )}
@@ -2805,20 +2768,20 @@ const SubdViewReport = () => {
                             </div>
 
                                 {/* RIGHT COLUMN: Report Activity & Handover Timeline */}
-                                <div className="lg:col-span-1 space-y-8 sticky top-0">
-                                    <div className="bg-white border border-gray-100 rounded-[2.5rem] p-6 sm:p-7 shadow-sm space-y-5">
+                                <div className="lg:col-span-1 space-y-5 sticky top-0">
+                                    <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
                                         {/* Header */}
-                                        <div className="flex items-center justify-between pb-4 border-b border-gray-100">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#F97316] flex items-center justify-center shadow-xs shrink-0">
-                                                    <ScrollText className="w-5 h-5" />
+                                        <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-8 h-8 rounded-xl bg-orange-50 text-[#F97316] flex items-center justify-center shadow-2xs shrink-0">
+                                                    <ScrollText className="w-4 h-4" />
                                                 </div>
                                                 <div>
-                                                    <h4 className="text-sm font-black text-gray-900 uppercase tracking-wide">
-                                                        Report Activity & Handover Timeline
+                                                    <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide">
+                                                        Report Activity & Handover
                                                     </h4>
-                                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
-                                                        Official Audit Trail & Officer Activity Log
+                                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
+                                                        Official Audit Trail & Activity Log
                                                     </p>
                                                 </div>
                                             </div>
@@ -2826,7 +2789,7 @@ const SubdViewReport = () => {
                                                 const validHistory = (report.history || []).filter((h: any) => (h.remarks || '').trim() !== 'Initial report submitted by resident.');
                                                 const totalEvents = validHistory.length + 1;
                                                 return (
-                                                    <span className="text-[10px] font-black text-gray-600 bg-gray-100/90 px-2.5 py-1 rounded-full border border-gray-200/60 shadow-2xs whitespace-nowrap">
+                                                    <span className="text-[9px] font-black text-gray-600 bg-gray-100/90 px-2 py-0.5 rounded-full border border-gray-200/60 shadow-2xs whitespace-nowrap">
                                                         {totalEvents} {totalEvents === 1 ? 'Event' : 'Events'}
                                                     </span>
                                                 );
@@ -3205,43 +3168,43 @@ const SubdViewReport = () => {
 
             {/* Escalation Modal */}
             {isEscalateModalOpen && report && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-300">
-                        <div className="px-8 py-6 border-b border-gray-150 flex justify-between items-center bg-gray-50/50">
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-none sm:rounded-2xl shadow-2xl w-full h-full sm:h-auto max-w-lg overflow-y-auto border-none sm:border border-gray-100 animate-in zoom-in-95 duration-300">
+                        <div className="px-5 py-4 border-b border-gray-150 flex justify-between items-center bg-gray-50/50">
                             <div>
-                                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Escalation Letter</h3>
-                                <p className="text-xs text-gray-400 mt-1 font-medium">Attach endorsement document to forward request to Barangay.</p>
+                                <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Escalation Letter</h3>
+                                <p className="text-[11px] text-gray-400 mt-0.5 font-medium">Attach endorsement document to forward request to Barangay.</p>
                             </div>
-                            <button onClick={() => setIsEscalateModalOpen(false)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-900 rounded-full hover:bg-gray-100 transition-all">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <button onClick={() => setIsEscalateModalOpen(false)} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-900 rounded-full hover:bg-gray-100 transition-all cursor-pointer">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
                         </div>
-                        <div className="p-8 space-y-6">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Request Title</label>
+                        <div className="p-5 space-y-4">
+                            <div className="space-y-1.5">
+                                <label className="text-[9px] font-black text-gray-900 uppercase tracking-widest ml-1">Request Title</label>
                                 <input
                                     type="text" required
-                                    className="w-full px-5 py-4 bg-white border border-gray-900 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300"
+                                    className="w-full px-3.5 py-2.5 bg-white border border-gray-900 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300"
                                     value={escalationTitle}
                                     onChange={(e) => setEscalationTitle(e.target.value)}
                                     placeholder="e.g. Endorsement for Report #18"
                                 />
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Additional Notes</label>
-                                <textarea required rows={4}
-                                    className="w-full px-5 py-4 bg-white border border-orange-400 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300 resize-none"
+                            <div className="space-y-1.5">
+                                <label className="text-[9px] font-black text-gray-900 uppercase tracking-widest ml-1">Additional Notes</label>
+                                <textarea required rows={3}
+                                    className="w-full px-3.5 py-2.5 bg-white border border-orange-400 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300 resize-none"
                                     value={escalationDescription}
                                     onChange={(e) => setEscalationDescription(e.target.value)}
                                     placeholder="Provide detailed description of why emergency rescue is needed..."
                                 />
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Endorsement Letter File (PDF/DOCX/IMAGE)</label>
-                                <div className="flex items-center gap-3 mt-1">
-                                    <label htmlFor="endorsement-file-input-view" className="px-5 py-2 bg-[#FFF3E6] text-[#F97316] hover:bg-orange-100 rounded-full text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all border border-transparent">
+                            <div className="space-y-1.5">
+                                <label className="text-[9px] font-black text-gray-900 uppercase tracking-widest ml-1">Endorsement Letter File (PDF/DOCX/IMAGE)</label>
+                                <div className="flex items-center gap-2.5 mt-1">
+                                    <label htmlFor="endorsement-file-input-view" className="px-3.5 py-1.5 bg-[#FFF3E6] text-[#F97316] hover:bg-orange-100 rounded-full text-[9px] font-black uppercase tracking-wider cursor-pointer transition-all border border-transparent">
                                         Choose File
                                     </label>
                                     <input
@@ -3252,23 +3215,23 @@ const SubdViewReport = () => {
                                         onChange={(e) => setEndorsementFile(e.target.files?.[0] || null)}
                                         className="hidden"
                                     />
-                                    <span className="text-xs font-semibold text-gray-500">
+                                    <span className="text-[11px] font-semibold text-gray-500 truncate">
                                         {endorsementFile ? endorsementFile.name : 'No file chosen'}
                                     </span>
                                 </div>
                             </div>
-                            <div className="w-full h-[1px] bg-gray-150 my-6" />
-                            <div className="flex gap-4 pt-1">
+                            <div className="w-full h-[1px] bg-gray-150 my-4" />
+                            <div className="flex gap-3 pt-0.5">
                                 <button
                                     onClick={() => setIsEscalateModalOpen(false)}
-                                    className="flex-1 py-3.5 bg-[#F1F3F6] hover:bg-gray-200 text-gray-700 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all"
+                                    className="flex-1 py-2.5 bg-[#F1F3F6] hover:bg-gray-200 text-gray-700 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={handleEscalate}
                                     disabled={isEscalating || !endorsementFile}
-                                    className="flex-1 py-3.5 bg-[#FBB065] hover:bg-[#F99D43] disabled:bg-orange-200 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                                    className="flex-1 py-2.5 bg-[#FBB065] hover:bg-[#F99D43] disabled:bg-orange-200 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                                 >
                                     {isEscalating ? 'Escalating...' : 'SEND ESCALATION'}
                                 </button>
@@ -3280,46 +3243,46 @@ const SubdViewReport = () => {
 
             {/* Warning Modal */}
             {isWarningModalOpen && report && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-300">
-                        <div className="px-8 py-6 border-b border-gray-150 flex justify-between items-center bg-yellow-50/50">
-                            <div className="flex items-center gap-3">
-                                <AlertTriangle className="w-8 h-8 text-yellow-600" />
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-none sm:rounded-2xl shadow-2xl w-full h-full sm:h-auto max-w-lg overflow-y-auto border-none sm:border border-gray-100 animate-in zoom-in-95 duration-300">
+                        <div className="px-5 py-4 border-b border-gray-150 flex justify-between items-center bg-yellow-50/50">
+                            <div className="flex items-center gap-2.5">
+                                <AlertTriangle className="w-6 h-6 text-yellow-600" />
                                 <div>
-                                    <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Issue Owner Warning</h3>
-                                    <p className="text-xs text-gray-500 mt-1 font-medium">Issue a formal notice to the registered pet owner.</p>
+                                    <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Issue Owner Warning</h3>
+                                    <p className="text-[11px] text-gray-500 mt-0.5 font-medium">Issue a formal notice to the registered pet owner.</p>
                                 </div>
                             </div>
-                            <button onClick={() => setIsWarningModalOpen(false)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-900 rounded-full hover:bg-gray-100 transition-all">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                            <button onClick={() => setIsWarningModalOpen(false)} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-900 rounded-full hover:bg-gray-100 transition-all cursor-pointer">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                         </div>
-                        <form onSubmit={handleIssueWarning} className="p-8 space-y-6">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Pet Owner (Recipient)</label>
+                        <form onSubmit={handleIssueWarning} className="p-5 space-y-4">
+                            <div className="space-y-1.5">
+                                <label className="text-[9px] font-black text-gray-900 uppercase tracking-widest ml-1">Pet Owner (Recipient)</label>
                                 <input
                                     type="text"
                                     readOnly
-                                    className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-semibold text-gray-500 outline-none"
+                                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-500 outline-none"
                                     value={warningOwnerId}
                                 />
                             </div>
 
                             {/* Prior Offenses & Escalation Status */}
                             {isLoadingPriorWarnings ? (
-                                <div className="p-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs text-gray-400 font-bold flex items-center gap-2 animate-pulse">
-                                    <span className="w-3.5 h-3.5 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
+                                <div className="p-2.5 bg-gray-50 border border-gray-100 rounded-xl text-xs text-gray-400 font-bold flex items-center gap-2 animate-pulse">
+                                    <span className="w-3 h-3 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
                                     Checking resident's previous warning history...
                                 </div>
                             ) : priorWarnings.length > 0 ? (
-                                <div className="p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-2xl text-[11px] text-amber-900 flex flex-col gap-1.5 animate-in fade-in duration-200">
-                                    <div className="font-black flex items-center justify-between text-amber-900 uppercase tracking-wider text-[10px]">
+                                <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-[10px] text-amber-900 flex flex-col gap-1.5 animate-in fade-in duration-200">
+                                    <div className="font-black flex items-center justify-between text-amber-900 uppercase tracking-wider text-[9px]">
                                         <span className="flex items-center gap-1.5"><ClipboardList className="w-3 h-3" /> Prior Citations ({priorWarnings.length})</span>
                                         <span className="text-amber-700 font-medium">auto-escalated to: <strong className="uppercase">{warningTier}</strong></span>
                                     </div>
-                                    <div className="max-h-24 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar text-[10px]">
+                                    <div className="max-h-20 overflow-y-auto space-y-1 pr-1 custom-scrollbar text-[10px]">
                                         {priorWarnings.map((w: any, idx: number) => (
-                                            <div key={w.warning_id || idx} className="flex justify-between items-center bg-white/90 px-3 py-1.5 rounded-xl border border-amber-100 shadow-sm">
+                                            <div key={w.warning_id || idx} className="flex justify-between items-center bg-white/90 px-2.5 py-1 rounded-lg border border-amber-100 shadow-2xs">
                                                 <span className="font-bold text-gray-800">{w.warning_level} <span className="font-normal text-gray-500">• {w.violation_type}</span></span>
                                                 <span className="text-gray-400 font-mono text-[9px]">{new Date(w.created_at).toLocaleDateString()}</span>
                                             </div>
@@ -3327,21 +3290,21 @@ const SubdViewReport = () => {
                                     </div>
                                 </div>
                             ) : (
-                                <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-2xl text-[10px] font-bold text-blue-800 flex items-center gap-2">
+                                <div className="p-2.5 bg-blue-50/70 border border-blue-100 rounded-xl text-[10px] font-bold text-blue-800 flex items-center gap-2">
                                     <Sparkles className="w-3 h-3" /> First recorded violation for this resident. Defaulted to Notice (Friendly Reminder).
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
                                     <div className="flex items-center justify-between">
-                                        <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Warning Tier</label>
-                                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 tracking-wider">
+                                        <label className="text-[9px] font-black text-gray-900 uppercase tracking-widest ml-1">Warning Tier</label>
+                                        <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 tracking-wider">
                                             {priorWarnings.length === 0 ? <><Sparkles className="w-2.5 h-2.5 inline mr-0.5" /> Notice</> : <><Zap className="w-2.5 h-2.5 inline mr-0.5" /> Step {Math.min(priorWarnings.length + 1, 4)}/4</>}
                                         </span>
                                     </div>
                                     <select
-                                        className="w-full px-5 py-4 bg-white border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-yellow-100 focus:border-yellow-500 outline-none transition-all"
+                                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-yellow-100 focus:border-yellow-500 outline-none transition-all"
                                         value={warningTier}
                                         onChange={(e) => setWarningTier(e.target.value)}
                                     >
@@ -3351,10 +3314,10 @@ const SubdViewReport = () => {
                                         <option value="Final Notice / Escalation">Final Notice / Escalation (Barangay Action)</option>
                                     </select>
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Violation Category</label>
+                                <div className="space-y-1.5">
+                                    <label className="text-[9px] font-black text-gray-900 uppercase tracking-widest ml-1">Violation Category</label>
                                     <select
-                                        className="w-full px-5 py-4 bg-white border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-yellow-100 focus:border-yellow-500 outline-none transition-all"
+                                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-yellow-100 focus:border-yellow-500 outline-none transition-all"
                                         value={warningViolation}
                                         onChange={(e) => setWarningViolation(e.target.value)}
                                     >
@@ -3366,40 +3329,40 @@ const SubdViewReport = () => {
                                     </select>
                                 </div>
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Incident Description / Remarks</label>
+                            <div className="space-y-1.5">
+                                <label className="text-[9px] font-black text-gray-900 uppercase tracking-widest ml-1">Incident Description / Remarks</label>
                                 <textarea required rows={3}
-                                    className="w-full px-5 py-4 bg-white border border-gray-300 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-yellow-100 focus:border-yellow-500 outline-none transition-all resize-none"
+                                    className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-yellow-100 focus:border-yellow-500 outline-none transition-all resize-none"
                                     value={warningDescription}
                                     onChange={(e) => setWarningDescription(e.target.value)}
                                     placeholder="Provide specific details about the incident..."
                                 />
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2.5">
                                 <input
                                     type="checkbox"
                                     id="attach-evidence"
                                     checked={warningEvidence}
                                     onChange={(e) => setWarningEvidence(e.target.checked)}
-                                    className="w-5 h-5 rounded border-gray-300 text-yellow-500 focus:ring-yellow-500"
+                                    className="w-4 h-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-500 cursor-pointer"
                                 />
                                 <label htmlFor="attach-evidence" className="text-xs font-semibold text-gray-700 cursor-pointer">
                                     Attach incident photos from this report as evidence
                                 </label>
                             </div>
-                            <div className="w-full h-[1px] bg-gray-150 my-6" />
-                            <div className="flex gap-4 pt-1">
+                            <div className="w-full h-[1px] bg-gray-150 my-4" />
+                            <div className="flex gap-3 pt-0.5">
                                 <button
                                     type="button"
                                     onClick={() => setIsWarningModalOpen(false)}
-                                    className="flex-1 py-3.5 bg-[#F1F3F6] hover:bg-gray-200 text-gray-700 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all"
+                                    className="flex-1 py-2.5 bg-[#F1F3F6] hover:bg-gray-200 text-gray-700 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={isIssuingWarning}
-                                    className="flex-1 py-3.5 bg-yellow-500 hover:bg-yellow-600 disabled:bg-yellow-200 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                                    className="flex-1 py-2.5 bg-yellow-500 hover:bg-yellow-600 disabled:bg-yellow-200 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                                 >
                                     {isIssuingWarning ? 'Issuing...' : 'ISSUE WARNING'}
                                 </button>
@@ -3796,8 +3759,8 @@ const SubdViewReport = () => {
 
             {/* Registered Pet Detail Modal */}
             {selectedPetDetail && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-10 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="w-full max-w-6xl rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-200 bg-white overflow-hidden flex flex-col max-h-[90vh] border border-gray-100">
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-6 md:p-10 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="w-full h-full sm:h-auto sm:max-h-[90vh] max-w-6xl rounded-none sm:rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-200 bg-[#FAFAF9] overflow-hidden flex flex-col border-none sm:border sm:border-gray-100">
                         <PetDetailPanel
                             pet={selectedPetDetail}
                             onClose={() => {
@@ -3811,8 +3774,8 @@ const SubdViewReport = () => {
 
             {/* False Alarm Dismissal Modal */}
             {isFalseAlarmModalOpen && report && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-300 border border-rose-100">
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-none sm:rounded-[2.5rem] shadow-2xl w-full h-full sm:h-auto max-w-xl overflow-y-auto border-none sm:border border-rose-100 animate-in zoom-in-95 duration-300">
                         <div className="px-8 py-6 border-b border-gray-150 flex justify-between items-center bg-rose-50/50">
                             <div className="flex items-center gap-3">
                                 <Ban className="w-8 h-8 text-rose-600" />
@@ -3881,8 +3844,8 @@ const SubdViewReport = () => {
 
             {/* Verify Incident Modal */}
             {isVerifyModalOpen && report && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-blue-100 max-h-[92vh] flex flex-col">
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-none sm:rounded-[2.5rem] shadow-2xl w-full h-full sm:h-auto max-w-2xl overflow-hidden animate-in zoom-in-95 duration-300 border-none sm:border border-blue-100 sm:max-h-[92vh] flex flex-col">
                         <div className="px-8 py-5 border-b border-gray-150 flex justify-between items-center bg-blue-50/60">
                             <div className="flex items-center gap-3">
                                 <Search className="w-8 h-8 text-blue-600" />

@@ -369,125 +369,315 @@ const SubdHistoryReport = () => {
                             </div>
                         </div>
 
-                        {/* Data Table */}
-                        <DataTable
-                            loading={loading}
-                            data={filteredReports}
-                            emptyMessage="No history reports found."
-                            loadingMessage="Loading history reports..."
-                            onRowClick={(rep) => navigate(`/subd/history/${rep.report_id}`)}
-                            columns={[
-                                {
-                                    header: "ID",
-                                    key: "report_id",
-                                    render: (rep) => (
-                                        <span className="text-xs font-mono text-gray-400">#{rep.report_id.toString().padStart(4, '0')}</span>
-                                    )
-                                },
-                                {
-                                    header: "Category",
-                                    key: "category",
-                                    render: (rep) => (
-                                        <div className="flex items-center space-x-2">
-                                            <span className="w-2 h-2 rounded-full bg-purple-400"></span>
-                                            <span className="text-sm font-bold text-gray-900">{categoryMap[rep.category_id] || 'Other'}</span>
+                        {/* ─── MOBILE CARD VIEW (Block on mobile, hidden on desktop) ─── */}
+                        <div className="block md:hidden space-y-3.5">
+                            {loading ? (
+                                Array.from({ length: 3 }).map((_, i) => (
+                                    <div key={i} className="bg-white rounded-3xl p-4 border border-slate-200 shadow-xs animate-pulse space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="h-4 w-24 bg-slate-100 rounded-lg" />
+                                            <div className="h-5 w-16 bg-slate-100 rounded-full" />
                                         </div>
-                                    )
-                                },
-                                {
-                                    header: "Priority",
-                                    key: "priority",
-                                    render: (rep) => (
-                                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getPriorityColor(rep.priority_level)}`}>
-                                            {rep.priority_level}
-                                        </span>
-                                    )
-                                },
-                                {
-                                    header: "Location",
-                                    key: "location",
-                                    render: (rep) => (
-                                        <div className="flex items-center space-x-1.5 text-gray-500">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                            </svg>
-                                            <span className="text-xs truncate max-w-[150px]">{rep.landmark || 'No landmark'}</span>
+                                        <div className="h-32 w-full bg-slate-100 rounded-2xl" />
+                                        <div className="h-4 w-3/4 bg-slate-100 rounded" />
+                                        <div className="h-3 w-1/2 bg-slate-50 rounded" />
+                                    </div>
+                                ))
+                            ) : filteredReports.length === 0 ? (
+                                <div className="bg-white rounded-3xl p-8 border border-slate-200 text-center shadow-xs space-y-2">
+                                    <div className="w-14 h-14 mx-auto bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600 text-2xl shadow-2xs">
+                                        📜
+                                    </div>
+                                    <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">No History Reports Found</h4>
+                                    <p className="text-xs text-slate-500 font-semibold">Try adjusting your search keyword or status filter</p>
+                                </div>
+                            ) : (
+                                filteredReports.map((rep) => {
+                                    const statText = statusMap[rep.status_id] || 'Unknown';
+                                    const isResolved = [11, 9, 10].includes(rep.status_id);
+                                    const isDeceased = rep.status_id === 12;
+
+                                    const rawImages = (rep.media || []).filter((m: any) => {
+                                        const url = (m.file_url || m.url || '').toLowerCase();
+                                        return (
+                                            m.media_type !== 'Document' &&
+                                            !url.endsWith('.pdf') &&
+                                            !url.endsWith('.docx') &&
+                                            !url.endsWith('.doc')
+                                        );
+                                    });
+
+                                    const sightingImages = rawImages.filter((m: any) => !m.is_evidence);
+                                    const imagesList = sightingImages.length > 0 ? sightingImages : rawImages;
+                                    const firstMedia = imagesList[0] || null;
+                                    const isVideo = firstMedia?.media_type === 'Video' || firstMedia?.file_url?.toLowerCase().match(/\.(mp4|mov|webm)$/i);
+                                    const mediaCount = imagesList.length;
+                                    const priority = rep.priority_level || 'Medium';
+
+                                    const accentBarColor = isResolved 
+                                        ? 'bg-emerald-500' 
+                                        : isDeceased 
+                                        ? 'bg-slate-500' 
+                                        : 'bg-purple-500';
+
+                                    return (
+                                        <div
+                                            key={rep.report_id}
+                                            onClick={() => navigate(`/subd/history/${rep.report_id}`)}
+                                            className="bg-white rounded-3xl p-4 border border-slate-200/90 shadow-sm hover:shadow-md hover:border-purple-300 transition-all duration-300 space-y-3.5 cursor-pointer relative overflow-hidden group active:scale-[0.99] animate-in fade-in slide-in-from-bottom-2"
+                                        >
+                                            {/* Accent colored top line */}
+                                            <div className={`absolute top-0 left-0 right-0 h-1 ${accentBarColor}`} />
+
+                                            {/* Header Row: ID, Category, Priority Badge */}
+                                            <div className="flex items-start justify-between gap-2 pt-1">
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <span className="text-[10px] font-mono font-black text-purple-600 bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-100">
+                                                            #{rep.report_id.toString().padStart(4, '0')}
+                                                        </span>
+                                                        <span className="text-sm font-black text-slate-900 truncate leading-snug group-hover:text-purple-600 transition-colors">
+                                                            {categoryMap[rep.category_id] || 'Incident Report'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shrink-0 ${getPriorityColor(priority)}`}>
+                                                    {priority}
+                                                </span>
+                                            </div>
+
+                                            {/* Animal Photo Preview */}
+                                            {firstMedia ? (
+                                                <div className="w-full h-36 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 relative group-hover:shadow-inner transition-all">
+                                                    {isVideo ? (
+                                                        <video src={firstMedia.file_url} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <img
+                                                            src={firstMedia.file_url}
+                                                            alt="Incident media"
+                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                        />
+                                                    )}
+                                                    {mediaCount > 1 && (
+                                                        <span className="absolute bottom-2 right-2 bg-black/65 backdrop-blur-md text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full border border-white/20 shadow-xs">
+                                                            +{mediaCount - 1} photos
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="w-full h-32 rounded-2xl bg-gradient-to-br from-purple-50 to-indigo-50 flex flex-col items-center justify-center text-purple-400 border border-purple-100">
+                                                    <span className="text-2xl mb-1">🐾</span>
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600">No Photo Uploaded</span>
+                                                </div>
+                                            )}
+
+                                            {/* Status Badge & Outcome Status */}
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className={isResolved ? 'text-emerald-500' : isDeceased ? 'text-slate-500' : 'text-purple-500'}>
+                                                        {getStatusIcon(rep.status_id)}
+                                                    </span>
+                                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider ${getStatusColor(statText)}`}>
+                                                        {statText}
+                                                    </span>
+                                                </div>
+                                                <span className="text-[10px] text-gray-400 font-bold">
+                                                    <RelativeTimestamp date={rep.created_at} />
+                                                </span>
+                                            </div>
+
+                                            {/* Location & Details Box */}
+                                            <div className="bg-slate-50/90 rounded-2xl p-3 border border-slate-100 text-xs space-y-1.5">
+                                                <div className="flex items-center gap-1.5 text-slate-700 font-bold text-[11px]">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-purple-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                    </svg>
+                                                    <span className="truncate">{rep.landmark || 'No landmark specified'}</span>
+                                                </div>
+                                                {rep.description && (
+                                                    <p className="text-slate-500 text-[11px] line-clamp-2 leading-relaxed font-medium">
+                                                        {rep.description}
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            {/* Reporter & Action Row */}
+                                            <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs" onClick={(e) => e.stopPropagation()}>
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                    <div className="w-8 h-8 rounded-full overflow-hidden bg-purple-100 flex items-center justify-center border border-purple-200 shrink-0 shadow-2xs ring-1 ring-purple-100">
+                                                        {rep.reporter_photo ? (
+                                                            <img
+                                                                src={getProfilePicture(rep.reporter_photo)}
+                                                                alt={rep.reporter_name || 'Reporter'}
+                                                                className="w-full h-full object-cover"
+                                                                onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR; }}
+                                                            />
+                                                        ) : (
+                                                            <span className="text-xs font-black text-purple-700">
+                                                                {(rep.reporter_name || 'U').charAt(0).toUpperCase()}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="min-w-0 flex flex-col">
+                                                        <span className="text-[11px] font-black text-slate-800 truncate leading-tight">
+                                                            {rep.reporter_name || `Resident #${rep.user_id}`}
+                                                        </span>
+                                                        <span className="text-[9.5px] font-semibold text-slate-400 leading-tight">
+                                                            Reported by Resident
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <ReportChatBadge
+                                                        reportId={rep.report_id}
+                                                        currentUserId={currentUser?.user_id}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedChatReport(rep);
+                                                            setIsChatOpen(true);
+                                                        }}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => navigate(`/subd/history/${rep.report_id}`)}
+                                                        className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-black shadow-xs transition-all flex items-center gap-1 cursor-pointer active:scale-95"
+                                                    >
+                                                        <span>View</span>
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
-                                    )
-                                },
-                                {
-                                    header: "Outcome Status",
-                                    key: "status",
-                                    render: (rep) => (
-                                        <div className="flex items-center gap-2">
-                                            <span className={`${[11, 9, 10].includes(rep.status_id) ? 'text-green-500' : [8, 7].includes(rep.status_id) ? 'text-amber-500' : rep.status_id === 12 ? 'text-gray-500' : 'text-red-500'}`}>
-                                                {getStatusIcon(rep.status_id)}
+                                    );
+                                })
+                            )}
+                        </div>
+
+                        {/* ─── DESKTOP DATA TABLE (Hidden on mobile) ─── */}
+                        <div className="hidden md:block">
+                            <DataTable
+                                loading={loading}
+                                data={filteredReports}
+                                emptyMessage="No history reports found."
+                                loadingMessage="Loading history reports..."
+                                onRowClick={(rep) => navigate(`/subd/history/${rep.report_id}`)}
+                                columns={[
+                                    {
+                                        header: "ID",
+                                        key: "report_id",
+                                        render: (rep) => (
+                                            <span className="text-xs font-mono text-gray-400">#{rep.report_id.toString().padStart(4, '0')}</span>
+                                        )
+                                    },
+                                    {
+                                        header: "Category",
+                                        key: "category",
+                                        render: (rep) => (
+                                            <div className="flex items-center space-x-2">
+                                                <span className="w-2 h-2 rounded-full bg-purple-400"></span>
+                                                <span className="text-sm font-bold text-gray-900">{categoryMap[rep.category_id] || 'Other'}</span>
+                                            </div>
+                                        )
+                                    },
+                                    {
+                                        header: "Priority",
+                                        key: "priority",
+                                        render: (rep) => (
+                                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getPriorityColor(rep.priority_level)}`}>
+                                                {rep.priority_level}
                                             </span>
-                                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || '')}`}>
-                                                {statusMap[rep.status_id] || 'Unknown'}
-                                            </span>
-                                        </div>
-                                    )
-                                },
-                                {
-                                    header: "Reported",
-                                    key: "created_at",
-                                    render: (rep) => (
-                                        <span className="text-xs text-gray-400">
-                                            <RelativeTimestamp date={rep.created_at} />
-                                        </span>
-                                    )
-                                },
-                                {
-                                    header: "Submitted By",
-                                    key: "reporter",
-                                    render: (rep) => (
-                                         <div className="flex items-center space-x-2">
-                                             <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center border border-gray-200 shrink-0">
-                                                 {rep.reporter_photo ? (
-                                                     <img src={getProfilePicture(rep.reporter_photo)} alt={rep.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
-                                                 ) : (
-                                                     <span className="text-[10px] text-gray-500 font-bold">{(rep.reporter_name || 'U').charAt(0).toUpperCase()}</span>
-                                                 )}
-                                             </div>
-                                             <span className="text-xs font-semibold text-gray-700">{rep.reporter_name || `User ${rep.user_id}`}</span>
-                                         </div>
-                                    )
-                                },
-                                {
-                                    header: "Action",
-                                    key: "action",
-                                    className: "text-right",
-                                    render: (rep) => (
-                                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                                            <ReportChatBadge
-                                                reportId={rep.report_id}
-                                                currentUserId={currentUser?.user_id}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setSelectedChatReport(rep);
-                                                    setIsChatOpen(true);
-                                                }}
-                                            />
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    navigate(`/subd/history/${rep.report_id}`);
-                                                }}
-                                                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-purple-600 bg-purple-50 border border-purple-100 rounded-lg hover:bg-purple-100 transition-all uppercase tracking-widest cursor-pointer"
-                                            >
+                                        )
+                                    },
+                                    {
+                                        header: "Location",
+                                        key: "location",
+                                        render: (rep) => (
+                                            <div className="flex items-center space-x-1.5 text-gray-500">
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                                 </svg>
-                                                View
-                                            </button>
-                                        </div>
-                                    )
-                                }
-                            ]}
-                        />
+                                                <span className="text-xs truncate max-w-[150px]">{rep.landmark || 'No landmark'}</span>
+                                            </div>
+                                        )
+                                    },
+                                    {
+                                        header: "Outcome Status",
+                                        key: "status",
+                                        render: (rep) => (
+                                            <div className="flex items-center gap-2">
+                                                <span className={`${[11, 9, 10].includes(rep.status_id) ? 'text-green-500' : [8, 7].includes(rep.status_id) ? 'text-amber-500' : rep.status_id === 12 ? 'text-gray-500' : 'text-red-500'}`}>
+                                                    {getStatusIcon(rep.status_id)}
+                                                </span>
+                                                <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || '')}`}>
+                                                    {statusMap[rep.status_id] || 'Unknown'}
+                                                </span>
+                                            </div>
+                                        )
+                                    },
+                                    {
+                                        header: "Reported",
+                                        key: "created_at",
+                                        render: (rep) => (
+                                            <span className="text-xs text-gray-400">
+                                                <RelativeTimestamp date={rep.created_at} />
+                                            </span>
+                                        )
+                                    },
+                                    {
+                                        header: "Submitted By",
+                                        key: "reporter",
+                                        render: (rep) => (
+                                             <div className="flex items-center space-x-2">
+                                                 <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center border border-gray-200 shrink-0">
+                                                     {rep.reporter_photo ? (
+                                                         <img src={getProfilePicture(rep.reporter_photo)} alt={rep.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                     ) : (
+                                                         <span className="text-[10px] text-gray-500 font-bold">{(rep.reporter_name || 'U').charAt(0).toUpperCase()}</span>
+                                                     )}
+                                                 </div>
+                                                 <span className="text-xs font-semibold text-gray-700">{rep.reporter_name || `User ${rep.user_id}`}</span>
+                                             </div>
+                                        )
+                                    },
+                                    {
+                                        header: "Action",
+                                        key: "action",
+                                        className: "text-right",
+                                        render: (rep) => (
+                                            <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                                                <ReportChatBadge
+                                                    reportId={rep.report_id}
+                                                    currentUserId={currentUser?.user_id}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedChatReport(rep);
+                                                        setIsChatOpen(true);
+                                                    }}
+                                                />
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        navigate(`/subd/history/${rep.report_id}`);
+                                                    }}
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-purple-600 bg-purple-50 border border-purple-100 rounded-lg hover:bg-purple-100 transition-all uppercase tracking-widest cursor-pointer"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                    </svg>
+                                                    View
+                                                </button>
+                                            </div>
+                                        )
+                                    }
+                                ]}
+                            />
+                        </div>
 
                         {/* Info Banner */}
                         <div className="bg-purple-50/60 border border-purple-100 rounded-2xl p-5 flex items-start gap-4">

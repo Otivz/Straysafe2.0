@@ -2,8 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
-import api, { clearAuthStorage } from '../../utils/api';
+import api from '../../utils/api';
 import { useUnreadMessageCount } from '../../utils/useUnreadMessageCount';
 import type { ChatThreadSummary } from '../../utils/useUnreadMessageCount';
 import MessagesDropdown from '../Chat/MessagesDropdown';
@@ -74,7 +73,6 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
     const [selectedNotifForDetail, setSelectedNotifForDetail] = useState<NotificationItem | null>(null);
     const [isMessagesOpen, setIsMessagesOpen] = useState(false);
     const [activeChatThread, setActiveChatThread] = useState<ChatThreadSummary | null>(null);
-    const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [notifFilter, setNotifFilter] = useState<'all' | 'unread'>('all');
     const [isLoadingNotifs, setIsLoadingNotifs] = useState(false);
     const [isMarkingAll, setIsMarkingAll] = useState(false);
@@ -90,7 +88,6 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
 
     const notifRef = useRef<HTMLDivElement>(null);
     const messagesRef = useRef<HTMLDivElement>(null);
-    const profileRef = useRef<HTMLDivElement>(null);
 
     const { unreadCount: unreadMessageCount, threads: messageThreads, loading: isMessagesLoading, refreshThreads } = useUnreadMessageCount(user?.user_id);
 
@@ -138,14 +135,14 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
     // Handle outside clicks and Escape key to close dropdowns
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
+            const target = event.target as Element | null;
             if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
                 setIsNotifOpen(false);
             }
-            if (messagesRef.current && !messagesRef.current.contains(event.target as Node)) {
+            const isInsideMessages = (messagesRef.current && messagesRef.current.contains(event.target as Node)) ||
+                                     Boolean(target?.closest?.('[data-messages-dropdown="true"]'));
+            if (!isInsideMessages) {
                 setIsMessagesOpen(false);
-            }
-            if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
-                setIsProfileOpen(false);
             }
         };
 
@@ -153,7 +150,6 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
             if (event.key === 'Escape') {
                 setIsNotifOpen(false);
                 setIsMessagesOpen(false);
-                setIsProfileOpen(false);
             }
         };
 
@@ -164,11 +160,6 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
             document.removeEventListener('keydown', handleKeyDown);
         };
     }, []);
-
-    const handleLogout = () => {
-        clearAuthStorage();
-        navigate('/staff/login');
-    };
 
     // Mark all notifications as read
     const handleMarkAllRead = async () => {
@@ -375,26 +366,26 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
         <header className="h-16 sm:h-20 bg-white/95 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-3 sm:px-6 lg:px-8 sticky top-0 z-30 w-full shadow-sm">
 
             {/* Left Content Area */}
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-1 sm:mr-3">
+            <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-1 mr-1 sm:mr-3">
                 {/* Mobile: StraySafe Logo + Brand + Subdivision Location Subtitle */}
-                <Link to="/subd/dashboard" className="md:hidden flex items-center gap-2 group shrink-0 select-none min-w-0 max-w-[62vw] xs:max-w-[68vw]">
+                <Link to="/subd/dashboard" className="md:hidden flex items-center gap-1.5 group shrink-0 select-none min-w-0 max-w-[58vw] xs:max-w-[62vw]">
                     <img
                         src="/SSLOGO.png"
                         alt="StraySafe Logo"
-                        className="h-9 w-auto group-hover:scale-105 transition-transform shrink-0 drop-shadow-xs"
+                        className="h-7.5 w-auto group-hover:scale-105 transition-transform shrink-0 drop-shadow-xs"
                     />
                     <div className="flex flex-col min-w-0 justify-center">
-                        <div className="flex items-center gap-1.5 leading-none">
-                            <span className="font-black text-base tracking-tight text-slate-900 uppercase leading-none">
+                        <div className="flex items-center gap-1 leading-none">
+                            <span className="font-black text-sm tracking-tight text-slate-900 uppercase leading-none">
                                 STRAYSAFE
                             </span>
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-orange-100 text-[#F97316] text-[8.5px] font-black uppercase tracking-wider leading-none">
+                            <span className="inline-flex items-center px-1 py-0.2 rounded-full bg-orange-100 text-[#F97316] text-[7.5px] font-black uppercase tracking-wider leading-none">
                                 Subd
                             </span>
                         </div>
-                        <div className="flex items-center gap-1 mt-1 min-w-0">
-                            <span className="text-[10.5px] sm:text-[11px] font-black text-slate-800 tracking-tight leading-none truncate max-w-[190px] min-[390px]:max-w-[230px]">
-                                {user?.subdivision_name ? `${user.subdivision_name}, Sta. Maria, Bulacan` : 'Selera Homes, Sta. Maria, Bulacan'}
+                        <div className="flex items-center mt-0.5 min-w-0">
+                            <span className="text-[9.5px] font-bold text-slate-500 tracking-tight leading-none truncate max-w-[140px] xs:max-w-[180px]">
+                                {user?.subdivision_name ? `${user.subdivision_name}, Sta. Maria` : 'Selera Homes, Sta. Maria'}
                             </span>
                         </div>
                     </div>
@@ -409,16 +400,16 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
             {/* Right Side Actions */}
             <div className="flex items-center gap-1 sm:gap-2.5 ml-auto shrink-0">
 
-                {/* QR Scanner (Mobile Only) */}
+                {/* QR Scanner (Mobile & Desktop) */}
                 <button
                     type="button"
                     onClick={() => setIsQRScannerOpen(true)}
-                    className="md:hidden p-2 text-[#4a3b28] hover:text-[#F97316] transition-all flex items-center justify-center active:scale-95 cursor-pointer"
+                    className="p-2 sm:p-2.5 rounded-xl transition-all flex items-center justify-center active:scale-95 cursor-pointer border border-transparent text-[#4a3b28] sm:text-slate-500 hover:text-[#F97316] hover:bg-orange-50/70 hover:border-orange-100/70"
                     title="Scan Pet QR Collar Tag"
                     aria-label="Open QR Scanner"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5.5 h-5.5 sm:w-5 sm:h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                     </svg>
                 </button>
 
@@ -434,20 +425,20 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                             setIsMessagesOpen(!isMessagesOpen);
                             if (isNotifOpen) setIsNotifOpen(false);
                         }}
-                        className={`relative p-2 sm:p-0 sm:w-10 sm:h-10 sm:min-w-[40px] sm:min-h-[40px] sm:rounded-xl transition-all flex items-center justify-center group cursor-pointer sm:border ${isMessagesOpen
-                                ? 'text-[#F97316] sm:bg-orange-50 sm:border-orange-200/80 sm:shadow-xs'
-                                : 'text-[#4a3b28] hover:text-[#F97316] sm:border-transparent sm:text-slate-500 sm:hover:text-[#F97316] sm:hover:bg-orange-50/70 sm:hover:border-orange-100/70'
+                        className={`relative p-2 sm:p-2.5 rounded-xl transition-all flex items-center justify-center group cursor-pointer border ${isMessagesOpen
+                                ? 'text-[#F97316] bg-orange-50 border-orange-200/80 shadow-xs'
+                                : 'text-[#4a3b28] border-transparent sm:text-slate-500 hover:text-[#F97316] hover:bg-orange-50/70 hover:border-orange-100/70'
                             }`}
                         title="Case Messages & Look-Alike Inquiries"
                         aria-label="Messages"
                     >
-                        <svg className="w-6 h-6 sm:w-5.5 sm:h-5.5 transition-transform group-hover:scale-105" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+                        <svg className="w-5.5 h-5.5 sm:w-5 sm:h-5 transition-transform group-hover:scale-105" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
 
                         {/* Unread message badge */}
                         {unreadMessageCount > 0 && (
-                            <span className="absolute top-1 right-1 sm:-top-1 sm:-right-1 min-w-[16px] sm:min-w-[20px] h-[16px] sm:h-[20px] px-0.5 sm:px-1 bg-[#F97316] text-white text-[8px] sm:text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-white shadow-xs animate-pulse">
+                            <span className="absolute top-0.5 right-0.5 sm:-top-1 sm:-right-1 min-w-[18px] sm:min-w-[20px] h-[18px] sm:h-[20px] px-1 bg-[#F97316] text-white text-[9px] sm:text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-white shadow-xs animate-pulse">
                                 {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
                             </span>
                         )}
@@ -475,20 +466,20 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                             setIsNotifOpen(!isNotifOpen);
                             if (isMessagesOpen) setIsMessagesOpen(false);
                         }}
-                        className={`relative p-2 sm:p-0 sm:w-10 sm:h-10 sm:min-w-[40px] sm:min-h-[40px] sm:rounded-xl transition-all flex items-center justify-center group cursor-pointer sm:border ${isNotifOpen
-                                ? 'text-[#F97316] sm:bg-orange-50 sm:border-orange-200/80 sm:shadow-xs'
-                                : 'text-[#4a3b28] hover:text-[#F97316] sm:border-transparent sm:text-slate-500 sm:hover:text-[#F97316] sm:hover:bg-orange-50/70 sm:hover:border-orange-100/70'
+                        className={`relative p-2 sm:p-2.5 rounded-xl transition-all flex items-center justify-center group cursor-pointer border ${isNotifOpen
+                                ? 'text-[#F97316] bg-orange-50 border-orange-200/80 shadow-xs'
+                                : 'text-[#4a3b28] border-transparent sm:text-slate-500 hover:text-[#F97316] hover:bg-orange-50/70 hover:border-orange-100/70'
                             }`}
                         title="Notifications"
                         aria-label="Notifications"
                     >
-                        <svg className="w-6 h-6 sm:w-5.5 sm:h-5.5 transition-transform group-hover:scale-105" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                        <svg className="w-5.5 h-5.5 sm:w-5 sm:h-5 transition-transform group-hover:scale-105" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                         </svg>
 
                         {/* Unread badge */}
                         {unreadCount > 0 && (
-                            <span className="absolute top-1 right-1 sm:-top-1 sm:-right-1 min-w-[18px] sm:min-w-[20px] h-[18px] sm:h-[20px] px-1 bg-[#EF4444] text-white text-[9px] sm:text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-white shadow-xs animate-pulse">
+                            <span className="absolute top-0.5 right-0.5 sm:-top-1 sm:-right-1 min-w-[18px] sm:min-w-[20px] h-[18px] sm:h-[20px] px-1 bg-[#EF4444] text-white text-[9px] sm:text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-white shadow-xs animate-pulse">
                                 {unreadCount > 9 ? '9+' : unreadCount}
                             </span>
                         )}
@@ -754,81 +745,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                     })()}
                 </div>
 
-                {/* Vertical Divider (Hidden on mobile to save space) */}
-                <div className="hidden sm:block h-7 w-px bg-slate-200 mx-1"></div>
 
-                {/* Profile Section with Dropdown */}
-                <div className="relative hidden sm:block" ref={profileRef}>
-                    <button
-                        onClick={() => setIsProfileOpen(!isProfileOpen)}
-                        className="flex items-center space-x-0 sm:space-x-3 pl-1 sm:pl-3 pr-0.5 py-1 hover:bg-slate-50/80 rounded-2xl transition-all cursor-pointer group min-w-[40px] min-h-[40px] justify-center"
-                        aria-label="User Profile Menu"
-                    >
-                        <div className="flex flex-col text-right hidden lg:block">
-                            <p className="text-sm font-black text-slate-900 leading-tight group-hover:text-[#F97316] transition-colors">{user.name || 'Staff User'}</p>
-                            <p className="text-[11px] font-bold text-slate-500 mt-0.5 uppercase tracking-wide">Subdivision Leader</p>
-                        </div>
-                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-white shadow-sm ring-1 ring-slate-200/90 group-hover:ring-2 group-hover:ring-[#F97316]/40 overflow-hidden bg-slate-100 flex items-center justify-center transition-all">
-                            <img
-                                src={getProfilePicture(user.profile_picture)}
-                                alt={user.name || 'User'}
-                                className="w-full h-full object-cover"
-                                onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
-                            />
-                        </div>
-                    </button>
-
-                    {/* Profile Dropdown Menu */}
-                    {isProfileOpen && (
-                        <div className="absolute right-0 mt-2 w-56 max-w-[calc(100vw-24px)] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
-                            <div className="px-4 py-3 border-b border-gray-100 bg-slate-50/70">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Signed in as</p>
-                                <p className="text-xs font-bold text-slate-800 truncate mt-0.5">{user.email}</p>
-                            </div>
-
-                            <div className="p-1">
-                                <button
-                                    onClick={() => { setIsProfileOpen(false); navigate('/subd/profile'); }}
-                                    className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-gray-600 hover:text-[#F97316] hover:bg-orange-50 rounded-xl transition-all group/item"
-                                >
-                                    <div className="p-1.5 bg-gray-100 rounded-lg text-gray-400 group-hover/item:bg-orange-100 group-hover/item:text-[#F97316] transition-colors">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                        </svg>
-                                    </div>
-                                    <span className="font-semibold">View Profile</span>
-                                </button>
-
-                                <button
-                                    onClick={() => { setIsProfileOpen(false); navigate('/subd/settings'); }}
-                                    className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-gray-600 hover:text-[#F97316] hover:bg-orange-50 rounded-xl transition-all group/item"
-                                >
-                                    <div className="p-1.5 bg-gray-100 rounded-lg text-gray-400 group-hover/item:bg-orange-100 group-hover/item:text-[#F97316] transition-colors">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        </svg>
-                                    </div>
-                                    <span className="font-semibold">Settings</span>
-                                </button>
-                            </div>
-
-                            <div className="p-1 border-t border-gray-50 mt-1">
-                                <button
-                                    onClick={handleLogout}
-                                    className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-xl transition-all group/item"
-                                >
-                                    <div className="p-1.5 bg-red-100/50 rounded-lg text-red-500 group-hover/item:bg-red-100 transition-colors">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                                        </svg>
-                                    </div>
-                                    <span className="font-bold uppercase tracking-wider text-xs">Logout</span>
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
 
                 {/* Hamburger Menu Button (Mobile Far Right - Matching Citizen Design) */}
                 {onMenuToggle && (

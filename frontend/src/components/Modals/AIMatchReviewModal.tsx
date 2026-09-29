@@ -160,8 +160,8 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl shadow-2xl border border-gray-100 w-full max-w-5xl my-8 overflow-hidden flex flex-col max-h-[92vh]">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
+            <div className="bg-white rounded-none sm:rounded-3xl shadow-2xl border-none sm:border sm:border-gray-100 w-full h-full sm:h-auto max-w-5xl sm:my-8 overflow-hidden flex flex-col sm:max-h-[92vh]">
                 
                 {/* ── Modal Header ── */}
                 <div className="px-8 py-5 border-b border-gray-100 bg-gradient-to-r from-orange-50/50 via-white to-amber-50/50 flex flex-wrap items-center justify-between gap-4">
@@ -942,10 +942,10 @@ Please review the comparison photos above and let us know if this is your pet.`;
                 );
             })()}
 
-            {/* Nested Pet Details Modal */}
+            {/* Nested Pet Details Modal / Fullscreen on Mobile */}
             {selectedPetRecord && (
-                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 sm:p-10 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="w-full max-w-6xl rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-200 bg-white overflow-hidden flex flex-col max-h-[90vh] border border-gray-100">
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-0 sm:p-6 md:p-10 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="w-full h-full sm:h-auto sm:max-h-[90vh] max-w-6xl rounded-none sm:rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-200 bg-[#FAFAF9] overflow-hidden flex flex-col border-none sm:border sm:border-gray-100">
                         <PetDetailPanel
                             pet={selectedPetRecord}
                             onClose={() => setSelectedPetRecord(null)}
